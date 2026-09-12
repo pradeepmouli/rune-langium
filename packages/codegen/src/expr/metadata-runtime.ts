@@ -24,6 +24,10 @@ export interface MetadataAnnotatedNode {
 
 export type FieldMetadataKind = 'field' | 'reference';
 
+export function metadataType(type: string, kind: FieldMetadataKind | undefined): string {
+  return kind ? `${kind === 'reference' ? 'RuneReferenceWithMeta' : 'RuneFieldWithMeta'}<${type}>` : type;
+}
+
 export function unwrapMetadata(value: string, many: boolean): string {
   return many ? `(${value} ?? []).map((field) => field.value).filter((value) => value != null)` : `(${value})?.value`;
 }

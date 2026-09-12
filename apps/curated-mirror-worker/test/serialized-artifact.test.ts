@@ -87,12 +87,12 @@ describe('buildSerializedWorkspaceArtifact — AppleDouble filter', () => {
     const fakeAppleDoubleBytes = 'X'.repeat(163);
 
     const tarBytes = makeUstarTar([
-      { path: 'wrap/._a.rosetta', content: fakeAppleDoubleBytes },
-      { path: 'wrap/a.rosetta', content: realSource.replace('Foo', 'A') },
-      { path: 'wrap/._b.rosetta', content: fakeAppleDoubleBytes },
-      { path: 'wrap/b.rosetta', content: realSource.replace('Foo', 'B') },
-      { path: 'wrap/._c.rosetta', content: fakeAppleDoubleBytes },
-      { path: 'wrap/c.rosetta', content: realSource.replace('Foo', 'C') }
+      { path: 'wrap/rosetta-source/src/main/rosetta/._a.rosetta', content: fakeAppleDoubleBytes },
+      { path: 'wrap/rosetta-source/src/main/rosetta/a.rosetta', content: realSource.replace('Foo', 'A') },
+      { path: 'wrap/rosetta-source/src/main/rosetta/._b.rosetta', content: fakeAppleDoubleBytes },
+      { path: 'wrap/rosetta-source/src/main/rosetta/b.rosetta', content: realSource.replace('Foo', 'B') },
+      { path: 'wrap/rosetta-source/src/main/rosetta/._c.rosetta', content: fakeAppleDoubleBytes },
+      { path: 'wrap/rosetta-source/src/main/rosetta/c.rosetta', content: realSource.replace('Foo', 'C') }
     ]);
 
     const result = await buildSerializedWorkspaceArtifact('cdm', '2026-05-19', tarBytes);
@@ -100,17 +100,15 @@ describe('buildSerializedWorkspaceArtifact — AppleDouble filter', () => {
     expect(result.documentCount, 'expected 3 real docs, not 6 (companions filtered)').toBe(3);
   });
 
-  it('still emits a document for a real file that happens to start with `._` is impossible (filter is on basename)', () => {
-    // Sanity: the filter MUST be basename-only, not path-substring,
-    // so directory names containing `._` (legitimate but unusual)
-    // don't accidentally exclude real files. We assert the behaviour
-    // indirectly: the filter only triggers when the basename starts
-    // with `._`.
-    //
-    // A real Rosetta file basename can't start with `._` because
-    // Rosetta module names can't either, so we don't have a positive
-    // test for "real `._name.rosetta` survives" — there's no such
-    // legitimate case. This test documents the design choice.
-    expect(true).toBe(true);
+  it('excludes upstream tests and rejects production files with parse errors', async () => {
+    const root = 'wrap/rosetta-source/src/main/rosetta/';
+    const good = { path: root + 'good.rosetta', content: 'namespace example\ntype Good:\n value string (1..1)' };
+    const ignored = { path: 'wrap/tests/src/test/resources/bad.rosetta', content: 'not Rune' };
+    expect((await buildSerializedWorkspaceArtifact('cdm', 'test', makeUstarTar([good, ignored]))).documentCount).toBe(
+      1
+    );
+    await expect(
+      buildSerializedWorkspaceArtifact('cdm', 'test', makeUstarTar([{ ...ignored, path: root + 'bad.rosetta' }]))
+    ).rejects.toThrow('Cannot serialize invalid documents');
   });
 });

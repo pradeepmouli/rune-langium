@@ -14,6 +14,7 @@
  */
 
 import { z } from 'zod';
+export { isCuratedSourceFile } from './source-files.js';
 
 /** Locked enumeration of curated model identifiers. */
 export const CuratedModelIdSchema = z.enum(['cdm', 'fpml', 'rune-dsl']);
@@ -126,7 +127,8 @@ export const CuratedManifestSchema = z.object({
     })
     .optional(),
   /** Per-namespace dependency graph + export list + artifact key. deps are DIRECT cross-namespace edges; consumers walk the transitive closure. */
-  namespaces: z.record(z.string(), CuratedNamespaceEntrySchema).optional()
+  namespaces: z.record(z.string(), CuratedNamespaceEntrySchema).optional(),
+  dependencies: z.partialRecord(CuratedModelIdSchema, z.string()).optional()
 });
 export type CuratedManifest = z.infer<typeof CuratedManifestSchema>;
 
@@ -144,3 +146,5 @@ export function parseSerializedWorkspaceArtifact(
   if (r.success) return { ok: true, artifact: r.data };
   return { ok: false, reason: r.error.message };
 }
+
+export { computeNamespaceGraph, type SerializedDoc, type NamespaceGraphEntry } from './namespace-graph.js';

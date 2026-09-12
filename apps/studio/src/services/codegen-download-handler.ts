@@ -5,6 +5,7 @@
 /** Shared download pipeline for Pages requests and dedicated browser workers. */
 
 import JSZip from 'jszip';
+import type { CuratedManifest } from '@rune-langium/curated-schema';
 import {
   IMPLEMENTED_TARGETS,
   TARGET_DESCRIPTORS,
@@ -397,7 +398,7 @@ async function loadAllDocuments(
   curatedFetcher: ((url: string, init?: RequestInit) => Promise<Response>) | undefined,
   requestedNamespaces: readonly string[],
   curatedDocs: ReadonlyArray<{ uri: string; serializedModel: string }>
-): Promise<{ docs: import('langium').LangiumDocument[]; curatedError?: Response }> {
+): Promise<{ docs: import('langium').LangiumDocument[]; curatedError?: Response; namespaces?: string[] }> {
   const [{ createRuneDslServices, hydrateModelDocuments }, { EmptyFileSystem, URI }] = await Promise.all([
     import('@rune-langium/core'),
     import('langium')
@@ -440,9 +441,12 @@ async function loadAllDocuments(
   // avoids loading the whole serialized workspace artifact (which OOMs on
   // CDM at 128 MiB) — the manifest records the dependency graph so we walk
   // it here without fetching+parsing any documents upfront.
+  let namespaces: string[] | undefined;
   if (curatedBundles.length > 0) {
-    for (const bundle of curatedBundles) {
-      try {
+    try {
+      const bundles = new Map(curatedBundles.map((bundle) => [bundle.id, bundle]));
+      const manifests = new Map<string, CuratedManifest>();
+      for (const bundle of bundles.values()) {
         const manifest = await fetchCuratedManifest(bundle.id, bundle.version, curatedFetcher);
         if (!manifest?.namespaces || Object.keys(manifest.namespaces).length === 0) {
           return {
@@ -458,53 +462,57 @@ async function loadAllDocuments(
             )
           };
         }
-        const nsGraph = manifest.namespaces;
-        // Empty seeds (no request `namespaces` and no user imports) preserves the
-        // "no filter → emit everything" contract: load every namespace in the
-        // bundle. A scoped request (the studio's normal flow always sends the
-        // dependency-closed `namespaces`) loads only its transitive closure.
-        const closure = seeds.size > 0 ? closeNamespacesFromManifest(seeds, nsGraph) : new Set(Object.keys(nsGraph));
-        const closureNs = [...closure].filter((ns) => nsGraph[ns]);
-        const FETCH_CONCURRENCY = 8;
-        // Fetch windows stay concurrent for network efficiency, but ALL
-        // fetched entries are hydrated together in one batch AFTER every
-        // fetch completes — cross-namespace references need every sibling
-        // in the closure registered before any of them is deserialized for
-        // the final time (see hydrateModelDocuments' own doc comment).
-        // Hydrating window-by-window would reintroduce the same
-        // order-dependent bug this is fixing, just at a coarser grain.
-        const fetchedEntries: Array<{ uri: import('langium').URI; json: string }> = [];
-        for (let i = 0; i < closureNs.length; i += FETCH_CONCURRENCY) {
-          const window = closureNs.slice(i, i + FETCH_CONCURRENCY);
-          const fetched = await Promise.all(
-            window.map((ns) => fetchCuratedNamespace(bundle.id, bundle.version, nsGraph[ns]!.artifact, curatedFetcher))
-          );
-          for (const nsDocs of fetched) {
-            for (const cd of nsDocs) {
-              fetchedEntries.push({ uri: curatedKeyToUri(cd.uri, URI), json: cd.serializedModel });
-            }
-          }
+        manifests.set(bundle.id, manifest);
+        for (const [id, version] of Object.entries(manifest.dependencies ?? {})) {
+          if (!bundles.has(id)) bundles.set(id, { id, version });
         }
-        const results = hydrateModelDocuments({ RuneDsl, shared: RuneDsl.shared }, fetchedEntries);
-        docs.push(...results.map((r) => r.document));
-      } catch (err) {
-        if (err instanceof CuratedBundleUnavailableError) {
-          return {
-            docs: [],
-            curatedError: new Response(
-              JSON.stringify({
-                ok: false,
-                error: 'curated_bundle_unavailable',
-                bundleId: err.bundleId,
-                version: err.version,
-                upstreamStatus: err.status
-              }),
-              { status: 502, headers: { 'Content-Type': 'application/json' } }
-            )
-          };
-        }
-        throw err;
       }
+      const graph = Object.assign({}, ...[...manifests.values()].map((manifest) => manifest.namespaces)) as NonNullable<
+        CuratedManifest['namespaces']
+      >;
+      const roots =
+        seeds.size > 0
+          ? seeds
+          : new Set(curatedBundles.flatMap((bundle) => Object.keys(manifests.get(bundle.id)!.namespaces!)));
+      const closure = closeNamespacesFromManifest(roots, graph);
+      namespaces = [...new Set([...requestedNamespaces, ...closure])];
+      const fetchedEntries: Array<{ uri: import('langium').URI; json: string }> = [];
+      for (const [id, manifest] of manifests) {
+        const selected = [...closure].filter((ns) => manifest.namespaces?.[ns]);
+        for (let i = 0; i < selected.length; i += 8) {
+          const fetched = await Promise.all(
+            selected
+              .slice(i, i + 8)
+              .map((ns) =>
+                fetchCuratedNamespace(id, bundles.get(id)!.version, manifest.namespaces![ns]!.artifact, curatedFetcher)
+              )
+          );
+          for (const entries of fetched)
+            for (const entry of entries) {
+              fetchedEntries.push({ uri: curatedKeyToUri(entry.uri, URI), json: entry.serializedModel });
+            }
+        }
+      }
+      docs.push(
+        ...hydrateModelDocuments({ RuneDsl, shared: RuneDsl.shared }, fetchedEntries).map((result) => result.document)
+      );
+    } catch (err) {
+      if (err instanceof CuratedBundleUnavailableError) {
+        return {
+          docs: [],
+          curatedError: new Response(
+            JSON.stringify({
+              ok: false,
+              error: 'curated_bundle_unavailable',
+              bundleId: err.bundleId,
+              version: err.version,
+              upstreamStatus: err.status
+            }),
+            { status: 502, headers: { 'Content-Type': 'application/json' } }
+          )
+        };
+      }
+      throw err;
     }
   } else if (curatedDocs.length > 0) {
     // Path A fallback — no bundle info was supplied at all, so there's no
@@ -539,7 +547,7 @@ async function loadAllDocuments(
     await builder.build(userDocs, { validation: false });
   }
 
-  return { docs };
+  return { docs, namespaces };
 }
 
 function hasParserErrors(docs: ReadonlyArray<import('langium').LangiumDocument>): GeneratorDiagnostic[] {
@@ -710,6 +718,7 @@ export const handleCodegenDownload = withInstrumentation(
           : undefined;
 
       let documents: import('langium').LangiumDocument[];
+      let resolvedNamespaces: string[] | undefined;
       // Set whenever this request is consuming a cache entry (whether it
       // just registered it or coalesced onto an existing one) — released in
       // the outer `finally` below, which now spans from registration all the
@@ -852,6 +861,7 @@ export const handleCodegenDownload = withInstrumentation(
             return result.curatedError.clone();
           }
           documents = result.docs;
+          resolvedNamespaces = result.namespaces;
         } else {
           // A non-cacheable request (has user files, so its own document set
           // can't safely be reused by a later request) can still compete for
@@ -889,6 +899,7 @@ export const handleCodegenDownload = withInstrumentation(
           );
           if (result.curatedError) return result.curatedError;
           documents = result.docs;
+          resolvedNamespaces = result.namespaces;
         }
 
         const parseErrors = hasParserErrors(documents);
@@ -905,6 +916,7 @@ export const handleCodegenDownload = withInstrumentation(
         // is only set when a caller wants to override the server's choice.
         const { generate } = await import('@rune-langium/codegen/export');
         const generatorOptions = applyPagesFunctionDefaults(body);
+        if (resolvedNamespaces && body.namespaces) generatorOptions.namespaces = resolvedNamespaces;
         const outputs = await generate(documents, generatorOptions);
 
         const errors = fatalDiagnostics(outputs);

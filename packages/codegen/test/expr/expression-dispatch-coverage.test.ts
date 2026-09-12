@@ -52,6 +52,7 @@ const fixtures = {
   ReduceOperation: 'a reduce x, y [x + y]',
   SwitchOperation: 'a switch true then b, default c',
   AsKeyOperation: 'a as-key',
+  AsOperation: 'a as Foo',
   RosettaImplicitVariable: 'item',
   ThenOperation: 'a then item',
   RosettaOnlyExistsExpression: '(a, b) only exists',

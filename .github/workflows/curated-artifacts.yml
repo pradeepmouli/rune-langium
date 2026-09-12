@@ -43,7 +43,7 @@ jobs:
         run: pnpm install --frozen-lockfile
 
       - name: Build core (required for Langium services)
-        run: pnpm --filter '@rune-langium/core...' run build
+        run: pnpm --filter '@rune-langium/core...' --filter '@rune-langium/curated-schema' run build
 
       - name: Build serialized artifacts
         run: node --max-old-space-size=4096 scripts/build-serialized-artifacts.mjs

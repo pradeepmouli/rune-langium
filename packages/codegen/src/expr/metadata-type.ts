@@ -2,6 +2,7 @@
 // Copyright (c) 2026 Pradeep Mouli
 
 import {
+  getOperationArgument,
   isAttribute,
   isInlineFunction,
   isSwitchCaseOrDefault,
@@ -11,12 +12,13 @@ import {
   isClosureParameter,
   isRosettaFunction,
   isShortcutDeclaration,
-  type RosettaExpression
+  type RosettaExpression,
+  type RosettaType
 } from '@rune-langium/core';
 import { AstUtils } from 'langium';
 import { functionAttribute, functionOutput } from '../types/func.js';
 import { fieldMetadataKind, type FieldMetadataKind } from './metadata-runtime.js';
-import { choiceOptionPaths, expressionType } from './navigation.js';
+import { choiceOptionPaths, expressionType, typeFeatures, featureName, resolveType } from './navigation.js';
 
 function mergeMetadataKinds(
   left: FieldMetadataKind | undefined,
@@ -33,6 +35,25 @@ export function expressionMetadataKind(
   if (!expr || seen.has(expr)) return undefined;
   const next = new Set(seen).add(expr);
   switch (expr.$type) {
+    case 'AsOperation': {
+      const argument = getOperationArgument(expr);
+      const input = expressionType(argument);
+      if (!isChoice(input)) return expressionMetadataKind(argument, next);
+      const target = expr.type.ref;
+      if (!target) return undefined;
+      return choiceOptionPaths(input, target, true).reduce<FieldMetadataKind | undefined>((kind, path) => {
+        let type: RosettaType | undefined = input;
+        let selected;
+        for (const name of path) {
+          selected = typeFeatures(type).find((feature) => featureName(feature) === name);
+          type = resolveType(selected?.typeCall);
+        }
+        return mergeMetadataKinds(
+          kind,
+          selected && 'annotations' in selected ? fieldMetadataKind(selected) : undefined
+        );
+      }, undefined);
+    }
     case 'RosettaSymbolReference': {
       const func = AstUtils.getContainerOfType(expr, isRosettaFunction);
       const target = expr.symbol.ref ?? (func ? functionAttribute(func, expr.symbol.$refText) : undefined);

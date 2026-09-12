@@ -2,17 +2,21 @@
 // Copyright (c) 2026 Pradeep Mouli
 
 import {
+  getOperationArgument,
+  resolveTypeAliases,
   isChoice,
   isData,
   isRosettaEnumValue,
   isSwitchOperation,
   type RosettaExpression,
+  type AsOperation,
   type RosettaType,
   type SwitchOperation
 } from '@rune-langium/core';
 import {
   choiceOptionPaths,
   expressionType,
+  expressionIsMany,
   featureIsRequired,
   featureName,
   renderFeaturePath,
@@ -71,6 +75,48 @@ function choiceGuard(value: string, choice: RosettaType): string {
   const keys = typeFeatures(choice).map((feature) => JSON.stringify(featureName(feature)));
   if (keys.length === 0) return 'false';
   return `${isObject(value)} && [${keys.map((key) => `${key} in ${value}`).join(', ')}].filter(Boolean).length === 1`;
+}
+
+/** Select declared choice arms or narrow a data value using the shared runtime guards. */
+function typeSelection(value: string, inputType: RosettaType, target: RosettaType, exactChoice = false) {
+  const paths = isChoice(inputType) ? choiceOptionPaths(inputType, target, exactChoice) : [];
+  if (isChoice(inputType) && paths.length === 0) return undefined;
+  const narrowedType = resolveTypeAliases(target) ?? target;
+  if (exactChoice && isData(inputType) && (!isData(narrowedType) || !typeMatches(narrowedType, inputType)))
+    return undefined;
+  const selected = paths.length > 0 ? paths.map((path) => renderFeaturePath(value, path)).join(' ?? ') : value;
+  return {
+    selected,
+    guard:
+      paths.length > 0
+        ? `(${selected}) != null`
+        : isData(narrowedType)
+          ? dataGuard(value, narrowedType, inputType)
+          : choiceGuard(value, narrowedType),
+    projected: paths.length > 0 && paths.every((path) => path.length > 0)
+  };
+}
+
+export function renderAsExpression(
+  expression: AsOperation,
+  options: SwitchExpressionRenderOptions
+): string | undefined {
+  const input = getOperationArgument(expression);
+  const inputType = expressionType(input);
+  const target = expression.type.ref;
+  const selected = inputType && target ? typeSelection('__as', inputType, target, true) : undefined;
+  if (!selected) {
+    options.report?.(`Cannot narrow '${typeName(inputType)}' to '${target?.name ?? expression.type.$refText}'`);
+    return undefined;
+  }
+  const argument = expression.argument
+    ? options.renderExpression(expression.argument)
+    : (options.selfName ?? 'undefined');
+  const value = options.selector ? options.selector.unwrap('__source') : '__source';
+  const single = `((__as) => ${selected.guard} ? ${selected.projected || !options.selector ? selected.selected : '__source'} : undefined)(${value})`;
+  return expressionIsMany(expression)
+    ? `((__values) => (__values ?? []).flatMap((__source) => { const __result = ${single}; return __result == null ? [] : [__result]; }))(${argument})`
+    : `((__source) => ${single})(${argument})`;
 }
 
 function primitiveSwitch(
@@ -133,19 +179,12 @@ function objectSwitch(
       }
       continue;
     }
-    const paths = isChoice(inputType) ? choiceOptionPaths(inputType, target) : [];
-    if (isChoice(inputType) && paths.length === 0) {
+    const selection = typeSelection('__sw', inputType, target);
+    if (!selection) {
       options.report?.(`No declared Choice option path from '${inputType.name}' to '${typeName(target)}'`);
       continue;
     }
-    const selected = paths.length > 0 ? paths.map((path) => renderFeaturePath('__sw', path)).join(' ?? ') : '__sw';
-    const guard =
-      paths.length > 0
-        ? `${selected} != null`
-        : isData(target)
-          ? dataGuard('__sw', target, inputType)
-          : choiceGuard('__sw', target);
-    const projected = paths.length > 0 && paths.every((path) => path.length > 0);
+    const { selected, guard, projected } = selection;
     const branch = options.renderExpression(currentCase.expression, { selfName: '__item', projected });
     lines.push(`  if (${guard}) {`);
     lines.push(`    const __item = ${!projected && options.selector?.name ? options.selector?.name : selected};`);

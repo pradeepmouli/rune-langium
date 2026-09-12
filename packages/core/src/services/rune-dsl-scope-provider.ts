@@ -2,10 +2,12 @@
 // Copyright (c) 2026 Pradeep Mouli
 
 import type { AstNode, AstNodeDescription, ReferenceInfo, Scope, LangiumCoreServices } from 'langium';
-import { AstUtils, EMPTY_SCOPE, DefaultScopeProvider, MapScope } from 'langium';
+import { AstUtils, EMPTY_SCOPE, DefaultScopeProvider, MapScope, stream } from 'langium';
 import { getFunctionSignature, getOperationArgument, resolveOperationType } from '../utils/expression-utils.js';
 import { qualifiedExportPath } from '../naming/qualified-export-path.js';
+import { getChoiceOptionPaths, choiceOptionFieldName } from '../utils/choice-utils.js';
 import {
+  isAsOperation,
   isData,
   isRosettaFunction,
   isRosettaEnumeration,
@@ -96,24 +98,31 @@ import type {
 class AliasResolvingScope implements Scope {
   constructor(
     private readonly base: Scope,
-    private readonly aliasMap: Map<string, string[]>
+    private readonly aliasMap: Map<string, string[]>,
+    private readonly namespaces: string[] = [],
+    private readonly imports: Map<string, string> = new Map()
   ) {}
 
   getElement(name: string): AstNodeDescription | undefined {
+    if (!name.includes('.')) {
+      const explicit = this.imports.get(name);
+      if (explicit) {
+        const result = this.base.getElement(explicit);
+        if (result) return result;
+      }
+      for (const namespace of this.namespaces) {
+        const result = this.base.getElement(`${namespace}.${name}`);
+        if (result) return result;
+      }
+    }
     const direct = this.base.getElement(name);
     if (direct) return direct;
     return this.resolveViaAlias(name, (expanded) => this.base.getElement(expanded));
   }
 
   getElements(name: string): import('langium').Stream<AstNodeDescription> {
-    const direct = this.base.getElements(name);
-    // Check if the alias expansion yields anything
-    const expanded = this.resolveViaAlias(name, (exp) => this.base.getElement(exp));
-    if (expanded) {
-      // stream() is available from langium
-      return direct;
-    }
-    return direct;
+    const result = this.getElement(name);
+    return stream(result ? [result] : []);
   }
 
   getAllElements(): import('langium').Stream<AstNodeDescription> {
@@ -161,6 +170,30 @@ export class RuneDslScopeProvider extends DefaultScopeProvider {
   override getScope(context: ReferenceInfo): Scope {
     const container = context.container;
     const property = context.property;
+
+    if (isAsOperation(container) && property === 'type') {
+      const argument = getOperationArgument(container);
+      const input = argument ? this.resolveExpressionType(argument) : undefined;
+      if (isChoice(input)) {
+        const options = getChoiceOptionPaths(input).flatMap((path) => {
+          const type = path[path.length - 1]!.typeCall.type.ref;
+          if (!type) return [];
+          const model = AstUtils.getContainerOfType(
+            type,
+            (node): node is RosettaModel => node.$type === 'RosettaModel'
+          );
+          return [
+            this.createDescription(type, type.name),
+            this.createDescription(type, qualifiedExportPath(model?.name ?? '', type.name))
+          ];
+        });
+        const model = AstUtils.getContainerOfType(
+          container,
+          (node): node is RosettaModel => node.$type === 'RosettaModel'
+        );
+        return new AliasResolvingScope(new MapScope(options), this.buildImportAliasMap(model?.imports ?? []));
+      }
+    }
 
     // Case 1: RosettaFeatureCall.feature — resolve to attributes of receiver type
     if (isRosettaFeatureCall(container) && property === 'feature') {
@@ -412,7 +445,11 @@ export class RuneDslScopeProvider extends DefaultScopeProvider {
       return undefined;
     }
 
-    return resolveOperationType(expr, (expression) => this.resolveExpressionType(expression));
+    return resolveOperationType(
+      expr,
+      (expression) => this.resolveExpressionType(expression),
+      (type) => (isData(type) || isChoice(type) || isRosettaRecordType(type) ? type : undefined)
+    );
   }
 
   /**
@@ -679,11 +716,7 @@ export class RuneDslScopeProvider extends DefaultScopeProvider {
     }
     const descriptions: AstNodeDescription[] = [
       ...attrs.map((a) => this.createDescription(a, a.name)),
-      ...inheritedOptions.map((o) => {
-        const refText = o.typeCall?.type?.$refText ?? '';
-        const simpleName = refText.includes('.') ? refText.split('.').pop()! : refText;
-        return this.createDescription(o, simpleName);
-      })
+      ...inheritedOptions.flatMap((option) => this.choiceOptionDescriptions(option))
     ];
     return new MapScope(descriptions);
   }
@@ -693,15 +726,13 @@ export class RuneDslScopeProvider extends DefaultScopeProvider {
    * e.g. `choice Payout: InterestRatePayout` → exposes "InterestRatePayout" → ChoiceOption node.
    */
   private getChoiceOptionScope(choice: Choice): Scope {
-    const descriptions: AstNodeDescription[] = [];
-    for (const option of choice.attributes) {
-      const refText = option.typeCall?.type?.$refText;
-      if (!refText) continue;
-      // Use only the simple (unqualified) name for the scope key
-      const simpleName = refText.includes('.') ? refText.split('.').pop()! : refText;
-      descriptions.push(this.createDescription(option, simpleName));
-    }
-    return descriptions.length > 0 ? new MapScope(descriptions) : EMPTY_SCOPE;
+    return new MapScope(choice.attributes.flatMap((option) => this.choiceOptionDescriptions(option)));
+  }
+
+  private choiceOptionDescriptions(option: ChoiceOption): AstNodeDescription[] {
+    const name = option.typeCall.type.$refText.split('.').pop();
+    if (!name) return [];
+    return [...new Set([name, choiceOptionFieldName(name)])].map((key) => this.createDescription(option, key));
   }
 
   // ── Case implementations ────────────────────────────────────────────
@@ -770,14 +801,9 @@ export class RuneDslScopeProvider extends DefaultScopeProvider {
     if (allFeatures.length === 0) {
       return this.getAllAttributesScope(node);
     }
-    const descriptions = allFeatures.map((f) => {
-      if (isChoiceOption(f)) {
-        const refText = f.typeCall?.type?.$refText ?? '';
-        const simpleName = refText.includes('.') ? refText.split('.').pop()! : refText;
-        return this.createDescription(f, simpleName);
-      }
-      return this.createDescription(f, f.name);
-    });
+    const descriptions = allFeatures.flatMap((feature) =>
+      isChoiceOption(feature) ? this.choiceOptionDescriptions(feature) : [this.createDescription(feature, feature.name)]
+    );
     return new MapScope(descriptions);
   }
 
@@ -1007,7 +1033,7 @@ export class RuneDslScopeProvider extends DefaultScopeProvider {
 
       if (argument) {
         const itemType = this.resolveCollectionElementType(argument);
-        if (itemType) {
+        if (isData(itemType)) {
           const attrs = this.collectDataAttributes(itemType);
           for (const a of attrs) {
             extra.push(this.createDescription(a, a.name));
@@ -1056,10 +1082,8 @@ export class RuneDslScopeProvider extends DefaultScopeProvider {
    * Resolve the element type of a collection expression.
    * e.g. `list -> field` where field is a list of Data → returns the Data element type.
    */
-  private resolveCollectionElementType(expr: RosettaExpression): Data | undefined {
-    const t = this.resolveExpressionType(expr);
-    if (t && isData(t)) return t;
-    return undefined;
+  private resolveCollectionElementType(expr: RosettaExpression): Data | Choice | RosettaRecordType | undefined {
+    return this.resolveExpressionType(expr);
   }
 
   /**
@@ -1255,11 +1279,18 @@ export class RuneDslScopeProvider extends DefaultScopeProvider {
     const model = AstUtils.getContainerOfType(context.container, (n): n is RosettaModel => n.$type === 'RosettaModel');
     if (!model) return base;
 
-    // Build alias → namespace list from the document's imports.
-    const aliasMap = this.buildImportAliasMap(model.imports);
-    if (aliasMap.size === 0) return base;
-
-    return new AliasResolvingScope(base, aliasMap);
+    const namespaces = [
+      model.name,
+      ...model.imports
+        .filter((entry) => !entry.namespaceAlias && entry.importedNamespace.endsWith('.*'))
+        .map((entry) => entry.importedNamespace.slice(0, -2))
+    ];
+    const imports = new Map(
+      model.imports
+        .filter((entry) => !entry.namespaceAlias && !entry.importedNamespace.endsWith('.*'))
+        .map((entry) => [entry.importedNamespace.split('.').pop()!, entry.importedNamespace])
+    );
+    return new AliasResolvingScope(base, this.buildImportAliasMap(model.imports), namespaces, imports);
   }
 
   /**

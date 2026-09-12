@@ -13,6 +13,16 @@ const regen: RenderChild = (c) => {
 };
 
 describe('renderNode — implemented scalars', () => {
+  it('renders schema declarations and their annotations', () => {
+    expect(
+      regen({
+        $type: 'Schema',
+        name: 'FpML',
+        format: { $refText: 'XML' },
+        annotations: [{ $type: 'AnnotationRef', annotation: { $refText: 'namespace' }, qualifiers: [] }]
+      } as never)
+    ).toBe('schema FpML XML\n  [namespace]');
+  });
   it('emits a Data header with extends and definition', () => {
     const node = {
       $type: 'Data',

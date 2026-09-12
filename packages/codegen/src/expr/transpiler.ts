@@ -5,6 +5,7 @@ import {
   fieldMetadataKind,
   hasFieldMetadata,
   metadataName,
+  metadataType,
   unwrapMetadata,
   type FieldMetadataKind
 } from './metadata-runtime.js';
@@ -13,7 +14,7 @@ import { normalizeCardinalityValue } from './cardinality.js';
 import { decodeCardinality } from '../emit/base-namespace-emitter.js';
 import { expressionMetadataKind } from './metadata-type.js';
 import { functionOutput, resolveFuncValueTypeTs, type FuncTypeNameResolver } from '../types/func.js';
-import { renderSwitchExpression } from './switch-expression.js';
+import { renderAsExpression, renderSwitchExpression } from './switch-expression.js';
 import { renderOnlyExists } from './only-exists.js';
 import { arrowBody, freshLocal, inlineContext } from './inline-function.js';
 import { renderCardinalityOperation } from './cardinality-operations.js';
@@ -25,6 +26,7 @@ import { renderResolvedFunctionCall } from './function-call.js';
 import { renderCollectionOperation } from './collection-operations.js';
 import { callableExportName, type CallableDeclaration } from '../emit/callable-names.js';
 import {
+  getOperationArgument,
   isOneOfOperation,
   isChoiceOperation,
   isRosettaExistsExpression,
@@ -1342,6 +1344,31 @@ export function transpileExpression(
 ): string {
   if (!expr) {
     return diagnosticFallback(`Null expression in '${ctx.conditionName}'`);
+  }
+
+  if (expr.$type === 'AsOperation') {
+    const kind = expressionMetadataKind(expr);
+    const inputKind = expressionMetadataKind(getOperationArgument(expr));
+    let result = renderAsExpression(expr, {
+      selfName: ctx.selfName,
+      renderExpression: (node) => transpileExpression(node, { ...ctx, preserveMetadata: true }),
+      ...(inputKind
+        ? { selector: { name: '__asSource', unwrap: (value: string) => unwrapMetadata(value, false) } }
+        : {}),
+      report: (message) => ctx.diagnostics.push({ severity: 'error', code: 'invalid-type-narrowing', message })
+    });
+    if (result === undefined) return diagnosticFallback(`Invalid narrowing in '${ctx.conditionName}'`);
+    const target = expressionType(expr);
+    if (
+      ctx.emitMode.startsWith('ts-') &&
+      target?.$type === 'Data' &&
+      expressionType(getOperationArgument(expr))?.$type === 'Data'
+    ) {
+      const shape = ctx.typeNameResolver?.(target, `${target.name}Shape`) ?? `${target.name}Shape`;
+      const valueType = metadataType(`RuneFuncData<${shape}>`, kind);
+      result = `(${result} as ${expressionIsMany(expr) ? `${valueType}[]` : `${valueType} | undefined`})`;
+    }
+    return kind && !ctx.preserveMetadata ? unwrapMetadata(result, expressionIsMany(expr)) : result;
   }
 
   // Literals (T067)

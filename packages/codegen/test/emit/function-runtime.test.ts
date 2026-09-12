@@ -45,6 +45,139 @@ async function compile(source: string | string[], typeAssertions = '') {
 }
 
 describe('generated TypeScript function execution', () => {
+  it('retains metadata when narrowing data subtypes', async () => {
+    const funcs = await compile(`namespace test.dataMetaNarrow
+ type Base:
+  name string (1..1)
+ type Loan extends Base:
+  amount int (1..1)
+ func Pick:
+  inputs: value Base (1..1)
+   [metadata scheme]
+  output: result Loan (0..1)
+   [metadata scheme]
+  set result: value as Loan
+ func Plain:
+  inputs: value Base (1..1)
+   [metadata scheme]
+  output: result int (0..1)
+  set result: value as Loan -> amount
+`);
+    const value = { value: { name: 'L', amount: 7 }, meta: { scheme: 'urn:loan' } };
+    expect(funcs.Pick!({ value })).toEqual(value);
+    expect(funcs.Plain!({ value })).toBe(7);
+    expect(funcs.Pick!({ value: { value: { name: 'B' }, meta: {} } })).toBeUndefined();
+  });
+  it('preserves selected choice metadata in scalar, collection, and headless narrowing', async () => {
+    const funcs = await compile(`namespace test.metaNarrow
+ typeAlias Code: string
+ typeAlias Other: string
+ choice Codes:
+  Code
+   [metadata scheme]
+  Other
+ func Pick:
+  inputs: value Codes (1..1)
+  output: result Code (0..1)
+   [metadata scheme]
+  set result: value as Code
+ func Plain:
+  inputs: value Codes (1..1)
+  output: result Code (0..1)
+  set result: value as Code
+ func Many:
+  inputs: values Codes (0..*)
+  output: result Code (0..*)
+   [metadata scheme]
+  set result: values as Code
+ func Pipe:
+  inputs: value Codes (1..1)
+   [metadata scheme]
+  output: result Code (0..1)
+   [metadata scheme]
+  set result: value then as Code
+`);
+    const code = { value: 'A', meta: { scheme: 'urn:code' } };
+    const value = { code };
+    expect(funcs.Pick!({ value })).toEqual(code);
+    expect(funcs.Plain!({ value })).toBe('A');
+    expect(funcs.Many!({ values: [value, { other: 'B' }] })).toEqual([code]);
+    expect(funcs.Pipe!({ value: { value, meta: { scheme: 'urn:outer' } } })).toEqual(code);
+  });
+
+  it('narrows nested choice arms with as, filters collections, and preserves pipeline inputs', async () => {
+    const funcs = await compile(`namespace test.narrow
+ type Loan:
+  amount int (1..1)
+ type Bond:
+  coupon int (1..1)
+ choice Inner:
+  Loan
+  Bond
+ choice Outer:
+  Inner
+  Bond
+ func Pick:
+  inputs: value Outer (0..1)
+  output: result int (0..1)
+  set result: value as Loan -> amount
+ func Total:
+  inputs: values Outer (0..*)
+  output: result int (1..1)
+  set result: values as Loan -> amount sum
+ func Pipe:
+  inputs: value Outer (1..1)
+  output: result int (0..1)
+  set result: value then as Loan -> amount
+ func Pass:
+  inputs: value Outer (1..1)
+  output: result int (0..1)
+  set result: Pick(value)
+`);
+    const loan = { inner: { loan: { amount: 7 } } };
+    const bond = { bond: { coupon: 3 } };
+    expect(funcs.Pick!({ value: loan })).toBe(7);
+    expect(funcs.Pick!({ value: bond })).toBeUndefined();
+    expect(funcs.Pick!({})).toBeUndefined();
+    expect(funcs.Total!({ values: [loan, bond, loan] })).toBe(14);
+    expect(funcs.Total!({ values: [] })).toBe(0);
+    expect(funcs.Pipe!({ value: loan })).toBe(7);
+    expect(funcs.Pass!({ value: loan })).toBe(7);
+  });
+
+  it('keeps same-base aliases distinct when narrowing a choice', async () => {
+    const funcs = await compile(`namespace test.aliasNarrow
+ typeAlias CodeA: string
+ typeAlias CodeB: string
+ choice Codes:
+  CodeA
+  CodeB
+ func Pick:
+  inputs: value Codes (1..1)
+  output: result string (0..1)
+  set result: value as CodeB
+`);
+    expect(funcs.Pick!({ value: { codeB: 'B' } })).toBe('B');
+    expect(funcs.Pick!({ value: { codeA: 'A' } })).toBeUndefined();
+  });
+
+  it('narrows data subtypes and leaves unmatched values absent', async () => {
+    const funcs = await compile(`namespace test.dataNarrow
+ type Base:
+  name string (1..1)
+ type Loan extends Base:
+  amount int (1..1)
+ type Bond extends Base:
+  coupon int (1..1)
+ func Pick:
+  inputs: value Base (1..1)
+  output: result int (0..1)
+  set result: value as Loan -> amount
+`);
+    expect(funcs.Pick!({ value: { name: 'L', amount: 7 } })).toBe(7);
+    expect(funcs.Pick!({ value: { name: 'B', coupon: 3 } })).toBeUndefined();
+  });
+
   it.each(
     ['', 'scheme', 'reference'].flatMap((annotation) =>
       (

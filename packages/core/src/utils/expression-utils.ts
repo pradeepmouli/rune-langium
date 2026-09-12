@@ -5,7 +5,9 @@ import {
   isInlineFunction,
   isRosettaExpression,
   isRosettaFunction,
+  isRosettaTypeAlias,
   type RosettaExpression,
+  type RosettaType,
   type RosettaFunction
 } from '../generated/ast.js';
 import { qualifiedExportPath } from '../naming/qualified-export-path.js';
@@ -16,6 +18,19 @@ import type { AstNode } from 'langium';
  * Uses a WeakMap to avoid mutating AST nodes directly.
  */
 const generatedInputs = new WeakMap<RosettaExpression, boolean>();
+
+/** Resolve a declared type without looping through recursive aliases. */
+export function resolveTypeAliases(
+  type: RosettaType | undefined,
+  seen = new Set<RosettaType>()
+): RosettaType | undefined {
+  while (type && isRosettaTypeAlias(type)) {
+    if (seen.has(type)) return undefined;
+    seen.add(type);
+    type = type.typeCall.type.ref;
+  }
+  return type;
+}
 
 /**
  * Check if an expression node has a generated (synthetic) input marker.
@@ -83,10 +98,15 @@ export function getOperationArgument(expr: RosettaExpression): RosettaExpression
 /** Shared operator result-type propagation; symbol lookup belongs to the caller. */
 export function resolveOperationType<T>(
   expr: RosettaExpression,
-  resolve: (expression: RosettaExpression) => T | undefined
+  resolve: (expression: RosettaExpression) => T | undefined,
+  resolveType?: (type: RosettaType) => T | undefined
 ): T | undefined {
   const from = (expression: RosettaExpression | undefined) => (expression ? resolve(expression) : undefined);
   switch (expr.$type) {
+    case 'AsOperation': {
+      const type = resolveTypeAliases(expr.type.ref);
+      return type ? resolveType?.(type) : undefined;
+    }
     case 'FilterOperation':
     case 'SortOperation':
     case 'DistinctOperation':

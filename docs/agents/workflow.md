@@ -25,6 +25,10 @@ pnpm --filter @rune-langium/codegen run generate:sql-node-types
 ```
 
 Run only the generators affected by the change.
+The current Langium CLI's JSON-schema validation fails with `Invalid URL` on
+Node 24/26. Node 22.13.0 was verified for grammar generation. When the CLI asks
+whether to delete additional generated files, retain `domain.ts` and
+`zod-schemas.ts`; their separate generators own them.
 `langium-zod` is exactly pinned in workspace overrides and core/visual-editor
 manifests; update those together if deliberately upgrading the generator.
 SQL node types derive from the exactly pinned `@l1xnan/tree-sitter-sql` grammar.
@@ -33,6 +37,7 @@ SQL node types derive from the exactly pinned `@l1xnan/tree-sitter-sql` grammar.
 
 - Use Vitest for public APIs and shared architecture seams. Prefer focused package checks for isolated changes; broaden for affected consumers.
 - Real CDM/Rune/FpML fixtures live under hidden `.resources/`. Prefer them for corpus repros, and guard or skip corpus-dependent tests when absent.
+- Verify fixture revisions before claiming upstream parity. The September 12 refresh found a February Rune reference checkout; current production CDM/FpML needed `as` narrowing and schema declarations. A successful parse or ZIP download does not establish that the entire generated corpus passes strict TypeScript compilation.
 - Studio Playwright tests must wait for visible readiness, not `networkidle`, when workers or LSP traffic remain active.
 - Production smoke: `pnpm --filter @rune-langium/studio run test:prod-smoke`. Endpoint and fuller UX checks are documented in [TESTING.md](../TESTING.md).
 - Tailwind IntelliSense uses `.vscode/settings.json`: `tailwindCSS.experimental.configFile` maps `apps/studio/src/app.css` to Studio, design-system, and visual-editor source trees.

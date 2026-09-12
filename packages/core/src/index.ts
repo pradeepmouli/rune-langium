@@ -64,13 +64,20 @@ export type { HydrateServices, HydrateOptions } from './serializer/hydrate-model
 
 // Utility functions
 export { isOptional, isSingular, isPlural, isRequired, toConstraintString } from './utils/cardinality-utils.js';
-export { getOptions, getEffectiveConditions } from './utils/choice-utils.js';
+export {
+  getOptions,
+  getEffectiveConditions,
+  getChoiceOptionPaths,
+  choiceOptionFieldName
+} from './utils/choice-utils.js';
+export { assertValidDocuments } from './serializer/assert-valid-documents.js';
 export {
   hasGeneratedInput,
   setGeneratedInputIfAbsent,
   getFunctionSignature,
   getOperationArgument,
   resolveOperationType,
+  resolveTypeAliases,
   getFunctionInputs,
   getFunctionOutput
 } from './utils/expression-utils.js';

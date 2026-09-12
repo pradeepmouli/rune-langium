@@ -81,7 +81,18 @@ type AnyNode = Record<string, unknown> & { $type: string };
  * otherwise `-> type` is emitted where the source had `-> ^type`, and the
  * rendered text fails to reparse (`P1` corpus sweep finding).
  */
-const VALID_ID_EXCEPTIONS = new Set(['condition', 'source', 'value', 'version', 'pattern', 'scope', 'min', 'max']);
+const VALID_ID_EXCEPTIONS = new Set([
+  'condition',
+  'source',
+  'value',
+  'version',
+  'pattern',
+  'scope',
+  'definition',
+  'standard',
+  'min',
+  'max'
+]);
 const RESERVED_KEYWORDS = new Set(
   [
     'structured_provision',
@@ -204,6 +215,7 @@ const RESERVED_KEYWORDS = new Set(
     'tag',
     'for',
     'as',
+    'schema',
     'or',
     'is',
     'if',
@@ -486,6 +498,8 @@ function dispatchExtended(node: AnyNode, _p: number, atRoot = false): string {
       const suffix = entries ? ` { ${entries} }` : '';
       return `${r(node['argument'], PREC_POSTFIX)} with-meta${suffix}`;
     }
+    case 'AsOperation':
+      return `${argPrefix(node)}as ${refText(node['type'])}`;
     case 'AsKeyOperation':
       return `${r(node['argument'], 1)} as-key`;
     case 'RosettaConditionalExpression': {

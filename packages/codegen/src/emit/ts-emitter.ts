@@ -9,6 +9,7 @@ import { renderFuncAssignment } from './func-assignment.js';
 import { renderCardinalityChecks, normalizeCardinalityValue } from '../expr/cardinality.js';
 import {
   fieldMetadataKind,
+  metadataType,
   hasFieldMetadata,
   hasTypeMetadata,
   metadataRuntimeSource,
@@ -37,6 +38,7 @@ import {
 import {
   isChoice,
   isAttribute,
+  isChoiceOption,
   isRosettaFunction,
   isRosettaExternalFunction,
   isRosettaRule,
@@ -694,8 +696,7 @@ export class TsNamespaceEmitter extends BaseNamespaceEmitter {
       },
       this.ctx.namespace
     );
-    const metadata = fieldMetadataKind(attr);
-    return metadata ? `${metadata === 'reference' ? 'RuneReferenceWithMeta' : 'RuneFieldWithMeta'}<${type}>` : type;
+    return metadataType(type, fieldMetadataKind(attr));
   }
 
   /**
@@ -1223,7 +1224,10 @@ export class TsNamespaceEmitter extends BaseNamespaceEmitter {
         const optionTypeName = optionTypeRef?.ref?.name ?? optionTypeRef?.$refText ?? '?';
         const fieldName = choiceOptionFieldName(optionTypeName);
         // VALUE TYPE: chases through any RosettaTypeAlias chain.
-        const valueType = this.resolveChoiceOptionTypeExpr(option.typeCall, fieldName);
+        const valueType = metadataType(
+          this.resolveChoiceOptionTypeExpr(option.typeCall, fieldName),
+          fieldMetadataKind(option)
+        );
         return `{ ${fieldName}: ${valueType} }`;
       })
       .join(' | ');
@@ -1261,7 +1265,10 @@ export class TsNamespaceEmitter extends BaseNamespaceEmitter {
         const fieldName = choiceOptionFieldName(optionTypeName);
         // VALUE TYPE: chases through any RosettaTypeAlias chain; Data targets
         // resolve to `<Name>Shape`.
-        const valueType = this.resolveChoiceOptionShapeTypeExpr(option.typeCall, fieldName);
+        const valueType = metadataType(
+          this.resolveChoiceOptionShapeTypeExpr(option.typeCall, fieldName),
+          fieldMetadataKind(option)
+        );
         return `{ ${fieldName}: ${valueType} }`;
       })
       .join(' | ');
@@ -1451,7 +1458,7 @@ export class TsNamespaceEmitter extends BaseNamespaceEmitter {
    */
   private usesMetadata(): boolean {
     const declarationUsesMetadata = (node: AstNode | undefined): boolean =>
-      (isAttribute(node) && hasFieldMetadata(node)) ||
+      ((isAttribute(node) || isChoiceOption(node)) && hasFieldMetadata(node)) ||
       (isData(node) && hasTypeMetadata(node)) ||
       (isRosettaFunction(node) &&
         (functionInputs(node).some(hasFieldMetadata) || hasFieldMetadata(functionOutput(node))));

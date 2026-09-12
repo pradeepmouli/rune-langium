@@ -63,7 +63,11 @@ RosettaRootElement:
     | RosettaSynonymSource | RosettaRule | RosettaMetaType
     | RosettaExternalRuleSource
     | RosettaReport | RosettaTypeAlias
-    | Annotation | Data | Choice | RosettaFunction
+    | Annotation | Data | Choice | RosettaFunction | Schema
+;
+
+Schema:
+    'schema' RosettaNamed format=[RosettaEnumValue:ValidID] Annotations*
 ;
 
 RosettaScope:
@@ -356,7 +360,7 @@ UnaryOperation infers RosettaExpression:
     PrimaryExpression (
         (
             {infer RosettaFeatureCall.receiver=current} '->' feature=[RosettaFeature:ValidID]?
-            | {infer RosettaDeepFeatureCall.receiver=current} '->>' feature=[Attribute:ValidID]?
+            | {infer RosettaDeepFeatureCall.receiver=current} '->>' feature=[RosettaFeature:ValidID]?
             | {infer RosettaExistsExpression.argument=current} modifier=ExistsModifier? operator='exists'
             | {infer RosettaAbsentExpression.argument=current} 'is' operator='absent'
             | {infer RosettaOnlyElement.argument=current} operator='only-element'
@@ -376,6 +380,7 @@ UnaryOperation infers RosettaExpression:
             | {infer ToIntOperation.argument=current} operator='to-int'
             | {infer ToTimeOperation.argument=current} operator='to-time'
             | {infer ToEnumOperation.argument=current} operator='to-enum' enumeration=[RosettaEnumeration:QualifiedName]
+            | {infer AsOperation.argument=current} operator='as' type=[RosettaType:QualifiedName]
             | {infer ToDateOperation.argument=current} operator='to-date'
             | {infer ToDateTimeOperation.argument=current} operator='to-date-time'
             | {infer ToZonedDateTimeOperation.argument=current} operator='to-zoned-date-time'
@@ -429,6 +434,7 @@ PrimaryExpression infers RosettaExpression:
     | {infer ToIntOperation} operator='to-int'
     | {infer ToTimeOperation} operator='to-time'
     | {infer ToEnumOperation} operator='to-enum' enumeration=[RosettaEnumeration:QualifiedName]
+    | {infer AsOperation} operator='as' type=[RosettaType:QualifiedName]
     | {infer ToDateOperation} operator='to-date'
     | {infer ToDateTimeOperation} operator='to-date-time'
     | {infer ToZonedDateTimeOperation} operator='to-zoned-date-time'
@@ -899,5 +905,5 @@ TypeParameterValidID returns string:
 ;
 
 ValidID returns string:
-    ID | 'condition' | 'source' | 'value' | 'version' | 'pattern' | 'scope'
+    ID | 'condition' | 'source' | 'value' | 'version' | 'pattern' | 'scope' | 'definition' | 'standard'
 ;

@@ -25,7 +25,9 @@ export const ValidIDSchema = z.union([
   z.literal('value'),
   z.literal('version'),
   z.literal('pattern'),
-  z.literal('scope')
+  z.literal('scope'),
+  z.literal('definition'),
+  z.literal('standard')
 ]);
 
 export const IntegerSchema = z.bigint();
@@ -131,6 +133,13 @@ export const AsKeyOperationSchema = z.looseObject({
   $type: z.literal('AsKeyOperation'),
   argument: z.lazy(() => RosettaExpressionSchema),
   operator: z.literal('as-key')
+});
+
+export const AsOperationSchema = z.looseObject({
+  $type: z.literal('AsOperation'),
+  argument: z.lazy(() => RosettaExpressionSchema).optional(),
+  operator: z.literal('as'),
+  type: ReferenceSchema
 });
 
 export const RosettaSegmentRefSchema = z.looseObject({
@@ -819,6 +828,13 @@ export const RosettaTypeAliasSchema = z.looseObject({
   typeCall: TypeCallSchema
 });
 
+export const SchemaSchema = z.looseObject({
+  $type: z.literal('Schema'),
+  name: ValidIDSchema,
+  format: ReferenceSchema,
+  annotations: z.array(AnnotationRefSchema)
+});
+
 export const ShortcutDeclarationSchema = z.looseObject({
   $type: z.literal('ShortcutDeclaration'),
   name: ValidIDSchema,
@@ -983,6 +999,7 @@ export const RosettaExpressionSchema = z.discriminatedUnion('$type', [
   ToIntOperationSchema,
   ToTimeOperationSchema,
   ToEnumOperationSchema,
+  AsOperationSchema,
   ToDateOperationSchema,
   ToDateTimeOperationSchema,
   ToZonedDateTimeOperationSchema,
@@ -1049,6 +1066,7 @@ export const RosettaMapTestExpressionSchema = z.discriminatedUnion('$type', [
 ]);
 
 export const RosettaRootElementSchema = z.discriminatedUnion('$type', [
+  SchemaSchema,
   AnnotationSchema,
   DataSchema,
   ChoiceSchema,
@@ -1121,6 +1139,7 @@ export const AstNodeSchema = z.discriminatedUnion('$type', [
   AnnotationRefSchema,
   ArithmeticOperationSchema,
   AsKeyOperationSchema,
+  AsOperationSchema,
   RosettaSegmentRefSchema,
   RegulatoryDocumentReferenceSchema,
   DocumentRationaleSchema,
@@ -1217,6 +1236,7 @@ export const AstNodeSchema = z.discriminatedUnion('$type', [
   RosettaStringLiteralSchema,
   RosettaSynonymSourceSchema,
   RosettaTypeAliasSchema,
+  SchemaSchema,
   ShortcutDeclarationSchema,
   SortOperationSchema,
   SumOperationSchema,
@@ -1315,6 +1335,16 @@ export function createAnnotationRefSchema(refs: AnnotationRefSchemaRefs = {}) {
   return AnnotationRefSchema.safeExtend({
     annotation: ReferenceSchema.extend({ $refText: zRef(() => refs.Annotation ?? []) }),
     attribute: ReferenceSchema.extend({ $refText: zRef(() => refs.Attribute ?? []) }).optional()
+  });
+}
+
+export interface AsOperationSchemaRefs {
+  RosettaType?: string[];
+}
+
+export function createAsOperationSchema(refs: AsOperationSchemaRefs = {}) {
+  return AsOperationSchema.safeExtend({
+    type: ReferenceSchema.extend({ $refText: zRef(() => refs.RosettaType ?? []) })
   });
 }
 
@@ -1441,12 +1471,12 @@ export function createRosettaCorpusSchema(refs: RosettaCorpusSchemaRefs = {}) {
 }
 
 export interface RosettaDeepFeatureCallSchemaRefs {
-  Attribute?: string[];
+  RosettaFeature?: string[];
 }
 
 export function createRosettaDeepFeatureCallSchema(refs: RosettaDeepFeatureCallSchemaRefs = {}) {
   return RosettaDeepFeatureCallSchema.safeExtend({
-    feature: ReferenceSchema.extend({ $refText: zRef(() => refs.Attribute ?? []) }).optional()
+    feature: ReferenceSchema.extend({ $refText: zRef(() => refs.RosettaFeature ?? []) }).optional()
   });
 }
 
@@ -1585,6 +1615,16 @@ export interface RosettaSynonymSourceSchemaRefs {
 export function createRosettaSynonymSourceSchema(refs: RosettaSynonymSourceSchemaRefs = {}) {
   return RosettaSynonymSourceSchema.safeExtend({
     superSources: z.array(ReferenceSchema.extend({ $refText: zRef(() => refs.RosettaSynonymSource ?? []) }))
+  });
+}
+
+export interface SchemaSchemaRefs {
+  RosettaEnumValue?: string[];
+}
+
+export function createSchemaSchema(refs: SchemaSchemaRefs = {}) {
+  return SchemaSchema.safeExtend({
+    format: ReferenceSchema.extend({ $refText: zRef(() => refs.RosettaEnumValue ?? []) })
   });
 }
 

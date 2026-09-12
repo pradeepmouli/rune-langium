@@ -24,7 +24,9 @@ export const ValidIDSchema = z.union([
   z.literal('value'),
   z.literal('version'),
   z.literal('pattern'),
-  z.literal('scope')
+  z.literal('scope'),
+  z.literal('definition'),
+  z.literal('standard')
 ]);
 
 export const IntegerSchema = z.bigint();
@@ -259,6 +261,13 @@ export const AsKeyOperationSchema = z.looseObject({
   $type: z.literal('AsKeyOperation'),
   argument: z.lazy(() => RosettaExpressionSchema),
   operator: z.literal('as-key')
+});
+
+export const AsOperationSchema = z.looseObject({
+  $type: z.literal('AsOperation'),
+  argument: z.lazy(() => RosettaExpressionSchema).optional(),
+  operator: z.literal('as'),
+  type: ReferenceSchema
 });
 
 export const ChoiceOptionSchema = z.looseObject({
@@ -857,6 +866,13 @@ export const RosettaTypeAliasSchema = z.looseObject({
   conditions: z.array(ConditionSchema)
 });
 
+export const SchemaSchema = z.looseObject({
+  $type: z.literal('Schema'),
+  name: ValidIDSchema,
+  format: ReferenceSchema,
+  annotations: z.array(AnnotationRefSchema)
+});
+
 export const SortOperationSchema = z.looseObject({
   $type: z.literal('SortOperation'),
   argument: z.lazy(() => RosettaExpressionSchema).optional(),
@@ -1014,6 +1030,7 @@ export const RosettaExpressionSchema = z.discriminatedUnion('$type', [
   ToIntOperationSchema,
   ToTimeOperationSchema,
   ToEnumOperationSchema,
+  AsOperationSchema,
   ToDateOperationSchema,
   ToDateTimeOperationSchema,
   ToZonedDateTimeOperationSchema,
@@ -1080,6 +1097,7 @@ export const RosettaMapTestExpressionSchema = z.discriminatedUnion('$type', [
 ]);
 
 export const RosettaRootElementSchema = z.discriminatedUnion('$type', [
+  SchemaSchema,
   AnnotationSchema,
   DataSchema,
   ChoiceSchema,
@@ -1165,6 +1183,7 @@ export const AstNodeSchema = z.discriminatedUnion('$type', [
   AnnotationPathAttributeReferenceSchema,
   ArithmeticOperationSchema,
   AsKeyOperationSchema,
+  AsOperationSchema,
   ChoiceOptionSchema,
   RosettaClassSynonymSchema,
   ChoiceSchema,
@@ -1249,6 +1268,7 @@ export const AstNodeSchema = z.discriminatedUnion('$type', [
   RosettaStringLiteralSchema,
   RosettaSynonymSourceSchema,
   RosettaTypeAliasSchema,
+  SchemaSchema,
   SortOperationSchema,
   SumOperationSchema,
   SwitchCaseGuardSchema,

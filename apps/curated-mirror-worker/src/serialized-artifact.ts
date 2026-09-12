@@ -1,7 +1,8 @@
 // SPDX-License-Identifier: FSL-1.1-ALv2
 // Copyright (c) 2026 Pradeep Mouli
 
-import { createRuneDslServices, serializeRuneModel } from '@rune-langium/core';
+import { createRuneDslServices, serializeRuneModel, assertValidDocuments } from '@rune-langium/core';
+import { isCuratedSourceFile } from '@rune-langium/curated-schema';
 import type { CuratedModelId, CuratedSerializedWorkspaceArtifact } from '@rune-langium/curated-schema';
 import { URI } from 'langium';
 import { gzip, inflate } from 'pako';
@@ -36,7 +37,9 @@ export async function buildSerializedWorkspaceArtifact(
   version: string,
   archiveBytes: Uint8Array
 ): Promise<SerializedArtifactBuildResult> {
-  const rosettaFiles = readRosettaFilesFromTarGz(archiveBytes);
+  const rosettaFiles = readRosettaFilesFromTarGz(archiveBytes).filter((file) =>
+    isCuratedSourceFile(modelId, file.path)
+  );
   if (rosettaFiles.length === 0) {
     throw new Error(`curated source ${modelId}@${version} contained no .rosetta files`);
   }
@@ -45,6 +48,7 @@ export async function buildSerializedWorkspaceArtifact(
     factory.fromString(file.content, URI.parse(`[${modelId}]/${file.path}`))
   );
   await builder.build(documents, { validation: false });
+  assertValidDocuments(documents);
 
   const perDocArray = documents.map((document, index) => {
     const model = document.parseResult.value;

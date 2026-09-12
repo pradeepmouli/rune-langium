@@ -20,6 +20,7 @@
 
 import type { z } from 'zod';
 import {
+  SchemaSchema,
   DataSchema,
   AttributeSchema,
   ChoiceSchema,
@@ -43,6 +44,7 @@ import {
 
 /** Every `$type` this map keys, in the order render-core's dispatcher checks them. */
 export const RENDERER_HANDLED_TYPES = [
+  'Schema',
   'Data',
   'Attribute',
   'Choice',
@@ -63,6 +65,7 @@ export const RENDERER_HANDLED_TYPES = [
 
 /** `$type` → generated schema, covering every renderer-handled type and every top-level type. */
 export const SCHEMA_BY_TYPE: Record<string, z.ZodTypeAny> = {
+  Schema: SchemaSchema,
   Data: DataSchema,
   Attribute: AttributeSchema,
   Choice: ChoiceSchema,

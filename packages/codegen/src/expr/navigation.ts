@@ -2,14 +2,15 @@
 // Copyright (c) 2026 Pradeep Mouli
 import {
   getOperationArgument,
+  getChoiceOptionPaths,
   resolveOperationType,
+  resolveTypeAliases,
   isAttribute,
   isChoice,
   isChoiceOption,
   isData,
   isRosettaRecordFeature,
   isRosettaRecordType,
-  isRosettaTypeAlias,
   isRosettaSymbolReference,
   isRosettaFeatureCall,
   isRosettaDeepFeatureCall,
@@ -45,11 +46,7 @@ import { functionOutput } from '../types/func.js';
 type Feature = Attribute | ChoiceOption | RosettaRecordFeature;
 
 export function resolveType(call: TypeCall | undefined, seen: Set<RosettaType> = new Set()): RosettaType | undefined {
-  const type = call?.type?.ref;
-  if (!type || seen.has(type)) return undefined;
-  if (!isRosettaTypeAlias(type)) return type;
-  seen.add(type);
-  return resolveType(type.typeCall, seen);
+  return resolveTypeAliases(call?.type?.ref, seen);
 }
 
 function featureIsMany(feature: Feature | undefined): boolean {
@@ -106,6 +103,7 @@ export function expressionIsMany(
   const from = (value: RosettaExpression | undefined) => expressionIsMany(value, visiting);
   try {
     if (isRosettaOnlyElement(expr)) return false;
+    if (expr.$type === 'AsOperation') return from(getOperationArgument(expr));
     if (
       isFilterOperation(expr) ||
       isMapOperation(expr) ||
@@ -202,7 +200,7 @@ export function expressionType(
       const ref = expr.feature?.ref;
       if (isAttribute(ref) || isChoiceOption(ref) || isRosettaRecordFeature(ref)) return resolveType(ref.typeCall);
     }
-    return resolveOperationType(expr, from);
+    return resolveOperationType(expr, from, (type) => type);
   } finally {
     visiting.delete(expr);
   }
@@ -264,23 +262,14 @@ export function typeMatches(
 }
 
 /** Find paths from a Choice's declared option keys to a guarded type. */
-export function choiceOptionPaths(choice: Choice, goal: RosettaType): string[][] {
-  const paths: string[][] = [];
-  const visit = (type: RosettaType | undefined, prefix: string[], seen: Set<RosettaType>): void => {
-    if (!type || seen.has(type)) return;
-    const nextSeen = new Set(seen).add(type);
-    for (const feature of typeFeatures(type)) {
-      const featureType = resolveType(feature.typeCall);
-      if (!featureType) continue;
-      const path = [...prefix, featureName(feature)];
-      if (typeMatches(featureType, goal)) paths.push(path);
-      // Choice dispatch follows only declared Choice option links. Walking
-      // arbitrary Data fields turns a type guard into unrelated deep paths.
-      if (isChoice(featureType)) visit(featureType, path, nextSeen);
-    }
-  };
-  if (typeMatches(choice, goal)) paths.push([]);
-  visit(choice, [], new Set());
+export function choiceOptionPaths(choice: Choice, goal: RosettaType, exact = false): string[][] {
+  const paths = getChoiceOptionPaths(choice)
+    .filter((path) => {
+      const declared = path[path.length - 1]!.typeCall.type.ref;
+      return exact ? declared === goal : typeMatches(resolveTypeAliases(declared), goal);
+    })
+    .map((path) => path.map(featureName));
+  if (!exact && typeMatches(choice, goal)) paths.unshift([]);
   return [...new Map(paths.map((path) => [path.join('\u0000'), path])).values()];
 }
 

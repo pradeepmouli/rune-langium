@@ -88,6 +88,7 @@ for model_dir in "$ARTIFACT_DIR"/*/; do
       documentCount: $docs,
       langiumVersion: $langiumVersion
     } |
+    .dependencies = ($meta[0].dependencies // {}) |
     if (($meta[0].namespaces // {}) | length) > 0 then
       .schemaVersion = 2 | .namespaces = $meta[0].namespaces
     else . end' > "$manifest_file"

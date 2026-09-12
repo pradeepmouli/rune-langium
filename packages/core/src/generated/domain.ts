@@ -1,4 +1,4 @@
-import * as ast from './ast.js';
+import type * as ast from './ast.js';
 import type { Dehydrated } from '../serializer/dehydrated.js';
 
 export * from './ast.js';
@@ -119,6 +119,13 @@ export namespace AnnotationRef {
     const [item] = node.qualifiers.splice(from, 1);
     if (item === undefined) return;
     node.qualifiers.splice(to, 0, item);
+  }
+}
+
+export type AsOperation = ast.AsOperation;
+export namespace AsOperation {
+  export function setType(node: Dehydrated<ast.AsOperation>, refText: string): void {
+    node.type = { $refText: refText };
   }
 }
 
@@ -2596,6 +2603,42 @@ export namespace RuleReferenceAnnotation {
   }
   export function clearReportingRule(node: Dehydrated<ast.RuleReferenceAnnotation>): void {
     node.reportingRule = undefined;
+  }
+}
+
+export type Schema = ast.Schema;
+export namespace Schema {
+  export function setFormat(node: Dehydrated<ast.Schema>, refText: string): void {
+    node.format = { $refText: refText };
+  }
+  export function getAnnotations(node: Dehydrated<ast.Schema>): Dehydrated<ast.AnnotationRef>[] {
+    return node.annotations;
+  }
+  export function addAnnotation(node: Dehydrated<ast.Schema>, annotation: Dehydrated<ast.AnnotationRef>): void {
+    node.annotations.push(annotation);
+  }
+  export function insertAnnotationAt(
+    node: Dehydrated<ast.Schema>,
+    index: number,
+    annotation: Dehydrated<ast.AnnotationRef>
+  ): void {
+    node.annotations.splice(index, 0, annotation);
+  }
+  export function removeAnnotationAt(node: Dehydrated<ast.Schema>, index: number): void {
+    node.annotations.splice(index, 1);
+  }
+  export function setAnnotationAt(
+    node: Dehydrated<ast.Schema>,
+    index: number,
+    annotation: Dehydrated<ast.AnnotationRef>
+  ): void {
+    node.annotations[index] = annotation;
+  }
+  export function moveAnnotationAt(node: Dehydrated<ast.Schema>, from: number, to: number): void {
+    if (from < 0 || from >= node.annotations.length) return;
+    const [item] = node.annotations.splice(from, 1);
+    if (item === undefined) return;
+    node.annotations.splice(to, 0, item);
   }
 }
 

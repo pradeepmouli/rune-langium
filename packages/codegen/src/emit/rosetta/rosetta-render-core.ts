@@ -20,6 +20,7 @@ import type {
   Attribute,
   Choice,
   ChoiceOption,
+  Schema,
   RosettaEnumeration,
   RosettaEnumValue,
   RosettaCardinality
@@ -116,6 +117,13 @@ function renderInlineChildren(items: ReadonlyArray<unknown> | undefined, renderC
 }
 
 // --- per-construct renderers ----------------------------------------------
+
+function renderSchema(schema: Dehydrated<Schema>, renderChild: RenderChild): string {
+  return [
+    `schema ${schema.name} ${refText(schema.format) ?? ''}`,
+    ...schema.annotations.map((annotation) => indentBlock(renderChild(annotation)))
+  ].join('\n');
+}
 
 function renderAttribute(a: Dehydrated<Attribute>, renderChild: RenderChild): string {
   const head: string[] = [];
@@ -496,6 +504,8 @@ function childList(...arrays: Array<ReadonlyArray<unknown> | undefined>): Dehydr
 
 export function renderNode(node: DehydratedNode, renderChild: RenderChild, opts?: RenderOpts): string | null {
   switch ((node as { $type: string }).$type) {
+    case 'Schema':
+      return renderSchema(node as Dehydrated<Schema>, renderChild);
     case 'Data':
       return renderData(node as Dehydrated<Data>, renderChild);
     case 'Attribute':

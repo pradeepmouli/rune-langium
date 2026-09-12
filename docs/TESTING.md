@@ -110,6 +110,14 @@ script behavior. The publisher reads the build's Langium version from
 `artifact-meta.json`, retains full Wrangler errors, and fails if manifest fetching
 fails.
 
+Artifact builds select production model directories through
+`@rune-langium/curated-schema`, link all three bundles together, and reject parser
+or lexer errors before publication. Namespace URLs include the artifact hash so
+same-day rebuilds do not reuse immutable cached URLs. The manifest's
+`dependencies` field lets download workers discover required companion bundles.
+An R2 authentication failure requires repairing the workflow credentials; a
+successful local build does not mean the published manifests changed.
+
 ### Operational note
 
 If we want a published status page later, the clean next step is to have
