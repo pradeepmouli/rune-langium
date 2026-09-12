@@ -3,6 +3,8 @@
 
 /// <reference lib="webworker" />
 
+import { Temporal } from '@js-temporal/polyfill';
+
 /**
  * Dedicated worker for running @rune-langium/codegen off the main thread.
  * Accepts code-preview and form-preview messages, tracks the latest request
@@ -755,13 +757,14 @@ function runInWorkerSandbox(
   // react-doctor-disable-next-line react-doctor/no-eval
   const wrapper = new Function(
     argName,
+    'Temporal',
     'fetch',
     'WebSocket',
     'XMLHttpRequest',
     'importScripts',
     `${includeRuntimeHelpers ? `${RUNTIME_HELPER_JS_SOURCE}\n\n` : ''}${jsSource}\nreturn ${returnExpr};`
   );
-  return wrapper(argValue, undefined, undefined, undefined, undefined);
+  return wrapper(argValue, Temporal, undefined, undefined, undefined, undefined);
 }
 
 interface GeneratedModuleRecord {
@@ -820,7 +823,8 @@ function createGeneratedModuleLoader(outputs: readonly GeneratorOutput[]): {
     modules.set(path, module);
     const runtime: GeneratedModuleRuntime = {
       module,
-      require: (specifier) => load(resolveGeneratedModulePath(path, specifier))
+      require: (specifier) =>
+        specifier === '@js-temporal/polyfill' ? { Temporal } : load(resolveGeneratedModulePath(path, specifier))
     };
     const javascript = transpileGeneratedTypeScript(source, path);
     runInWorkerSandbox(
@@ -872,10 +876,12 @@ async function executeFunction(funcName: string, inputs: Record<string, unknown>
     // have a namespace-qualified name to give.
     let selectedModulePath: string | undefined;
     let selectedTargetId = funcName;
+    let selectedExportName: string | undefined;
     for (const result of results) {
       const ns = result.relativePath.replace(/\//g, '.').replace(/\.ts$/, '');
       const func = result.funcs.find((f) => f.name === funcName || `${ns}.${f.name}` === funcName);
       if (func) {
+        selectedExportName = func.exportName ?? func.name;
         selectedModulePath = result.relativePath;
         selectedTargetId = `${ns}.${func.name}`;
         break;
@@ -898,7 +904,7 @@ async function executeFunction(funcName: string, inputs: Record<string, unknown>
     // comment.
     const modules = createGeneratedModuleLoader(results);
     const exports = modules.load(selectedModulePath);
-    const bareName = funcName.includes('.') ? funcName.slice(funcName.lastIndexOf('.') + 1) : funcName;
+    const bareName = selectedExportName ?? funcName;
     const functionValue = exports[bareName];
     if (typeof functionValue !== 'function') {
       throw new Error(`Generated module '${selectedModulePath}' does not export function '${bareName}'.`);

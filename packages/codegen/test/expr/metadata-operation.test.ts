@@ -84,7 +84,7 @@ describe('metadata expression rendering', () => {
       'input',
       `${metadataRuntimeSource(false)}; return runeWithMeta(input.value, { location: undefined })`
     ) as (input: { value: undefined }) => unknown;
-    expect(evaluateUndefined({ value: undefined })).toEqual({ value: undefined, meta: { location: undefined } });
+    expect(evaluateUndefined({ value: undefined })).toBeUndefined();
 
     const evaluateArray = Function(
       'input',

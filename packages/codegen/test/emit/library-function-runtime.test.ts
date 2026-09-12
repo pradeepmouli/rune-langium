@@ -1,7 +1,8 @@
 // SPDX-License-Identifier: MIT
 // Copyright (c) 2026 Pradeep Mouli
 
-import { mkdtempSync, mkdirSync, writeFileSync, rmSync } from 'node:fs';
+import { generatedDirectory } from '../helpers/generated-directory.js';
+import { mkdirSync, writeFileSync, rmSync } from 'node:fs';
 import { createRequire } from 'node:module';
 import { tmpdir } from 'node:os';
 import { join, dirname } from 'node:path';
@@ -57,7 +58,7 @@ func External:
       expect(docs.flatMap((doc) => doc.parseResult.parserErrors)).toEqual([]);
       const outputs = await generate(docs, { target: 'typescript', typescript: { layout } });
       expect(outputs.flatMap((output) => output.diagnostics.filter((d) => d.severity === 'error'))).toEqual([]);
-      const directory = mkdtempSync(join(tmpdir(), 'rune-library-runtime-'));
+      const directory = generatedDirectory(join(tmpdir(), 'rune-library-runtime-'));
       try {
         writeFileSync(join(directory, 'package.json'), '{"type":"commonjs"}');
         const files = outputs.map((output) => {

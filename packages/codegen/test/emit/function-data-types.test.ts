@@ -1,7 +1,9 @@
 // SPDX-License-Identifier: MIT
 // Copyright (c) 2026 Pradeep Mouli
 
-import { mkdtempSync, mkdirSync, writeFileSync, rmSync } from 'node:fs';
+import { generatedDirectory } from '../helpers/generated-directory.js';
+import { createRequire } from 'node:module';
+import { mkdirSync, writeFileSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join, dirname } from 'node:path';
 import { describe, expect, it } from 'vitest';
@@ -24,7 +26,7 @@ async function compile(source: string, assertions: string): Promise<Record<strin
     outputs.flatMap((output) => output.diagnostics.filter((diagnostic) => diagnostic.severity === 'error'))
   ).toEqual([]);
   const code = outputs[0]!.content;
-  const fileName = '/generated-function-data-types.ts';
+  const fileName = new URL('./generated-function-data-types.ts', import.meta.url).pathname;
   const options: ts.CompilerOptions = {
     strict: true,
     noEmit: true,
@@ -45,7 +47,7 @@ async function compile(source: string, assertions: string): Promise<Record<strin
     compilerOptions: { target: ts.ScriptTarget.ES2022, module: ts.ModuleKind.CommonJS }
   }).outputText;
   const exports: Record<string, (input: unknown) => unknown> = {};
-  new Function('exports', js)(exports);
+  new Function('exports', 'require', js)(exports, createRequire(import.meta.url));
   return exports;
 }
 
@@ -215,7 +217,7 @@ func ReadValue:
       expect(docs.flatMap((doc) => doc.parseResult.parserErrors)).toEqual([]);
       const outputs = await generate(docs, { target: 'typescript', typescript: { layout } });
       expect(outputs.flatMap((out) => out.diagnostics.filter((d) => d.severity === 'error'))).toEqual([]);
-      const directory = mkdtempSync(join(tmpdir(), 'rune-function-types-'));
+      const directory = generatedDirectory(join(tmpdir(), 'rune-function-types-'));
       try {
         const files = outputs.map((output) => {
           const path = join(directory, output.relativePath);

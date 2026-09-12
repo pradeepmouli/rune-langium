@@ -48,7 +48,8 @@
  * close that remaining gap.
  */
 
-import { mkdtemp, writeFile, mkdir } from 'node:fs/promises';
+import { generatedDirectory } from '../helpers/generated-directory.js';
+import { writeFile, mkdir } from 'node:fs/promises';
 import { join, dirname } from 'node:path';
 import { tmpdir } from 'node:os';
 import { pathToFileURL } from 'node:url';
@@ -245,7 +246,7 @@ describe('ts-emitter — Data extends Choice: TYPE surface compiles under real t
     const doc = await parseSource(FIXTURE);
     const model = walkNamespace([doc], 'test.tsDataExtendsChoice');
     const output = emitNamespace(model, {});
-    const diagnostics = typeCheckFile('/virtual/basket-constituent.ts', output.content);
+    const diagnostics = typeCheckFile(new URL('./basket-constituent.ts', import.meta.url).pathname, output.content);
     expect(diagnostics).toEqual([]);
   });
 
@@ -273,7 +274,10 @@ function readBare(x: BasketConstituentShape): number {
   return x.weight ?? 0;
 }
 `;
-    const diagnostics = typeCheckFile('/virtual/basket-constituent-probe.ts', output.content + probe);
+    const diagnostics = typeCheckFile(
+      new URL('./basket-constituent-probe.ts', import.meta.url).pathname,
+      output.content + probe
+    );
     expect(diagnostics).toEqual([]);
   });
 });
@@ -291,7 +295,7 @@ describe('ts-emitter — Data extends Choice (emitted-runtime behavior, real exe
     const outputs = await generate(doc, { target: 'typescript' });
     expect(outputs.length).toBeGreaterThan(0);
 
-    const tmpDir = await mkdtemp(join(tmpdir(), 'rune-codegen-ts-data-extends-choice-'));
+    const tmpDir = await generatedDirectory(join(tmpdir(), 'rune-codegen-ts-data-extends-choice-'));
     let modulePath = '';
     for (const output of outputs) {
       const outPath = join(tmpDir, output.relativePath);

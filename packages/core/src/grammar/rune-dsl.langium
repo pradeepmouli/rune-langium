@@ -22,7 +22,7 @@ type RosettaSymbol = Attribute | ShortcutDeclaration
     | RosettaFunction | RosettaExternalFunction | RosettaRule
     | TypeParameter | RosettaMetaType | ClosureParameter
     | RosettaEnumeration | RosettaEnumValue | RosettaParameter
-    | Data | Choice;
+    | Data | Choice | ChoiceOption | RosettaRecordType | RosettaBasicType;
 
 type RosettaCallableWithArgs = RosettaFunction
     | RosettaExternalFunction | RosettaRule;
@@ -34,7 +34,7 @@ type RosettaTypedFeature = Attribute | RosettaRecordFeature | RosettaMetaType;
 
 type AssignPathRoot = Attribute | ShortcutDeclaration;
 
-type SwitchCaseTarget = Data | Choice | RosettaEnumValue | RosettaEnumeration;
+type SwitchCaseTarget = RosettaType | RosettaEnumValue;
 
 type DataOrChoice = Data | Choice;
 

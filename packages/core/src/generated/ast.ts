@@ -4503,14 +4503,17 @@ export function isRosettaSuperCall(item: unknown): item is RosettaSuperCall {
 export type RosettaSymbol =
   | Attribute
   | Choice
+  | ChoiceOption
   | ClosureParameter
   | Data
+  | RosettaBasicType
   | RosettaEnumValue
   | RosettaEnumeration
   | RosettaExternalFunction
   | RosettaFunction
   | RosettaMetaType
   | RosettaParameter
+  | RosettaRecordType
   | RosettaRule
   | ShortcutDeclaration
   | TypeParameter;
@@ -4997,7 +5000,7 @@ export function isSwitchCaseOrDefault(item: unknown): item is SwitchCaseOrDefaul
   return reflection.isInstance(item, SwitchCaseOrDefault.$type);
 }
 
-export type SwitchCaseTarget = Choice | Data | RosettaEnumValue | RosettaEnumeration;
+export type SwitchCaseTarget = RosettaEnumValue | RosettaType;
 
 export const SwitchCaseTarget = {
   $type: 'SwitchCaseTarget'
@@ -6313,13 +6316,7 @@ export class RuneDslAstReflection extends langium.AbstractAstReflection {
           optional: true
         }
       },
-      superTypes: [
-        DataOrChoice.$type,
-        RosettaRootElement.$type,
-        RosettaSymbol.$type,
-        RosettaType.$type,
-        SwitchCaseTarget.$type
-      ]
+      superTypes: [DataOrChoice.$type, RosettaRootElement.$type, RosettaSymbol.$type, RosettaType.$type]
     },
     ChoiceOperation: {
       name: ChoiceOperation.$type,
@@ -6378,7 +6375,7 @@ export class RuneDslAstReflection extends langium.AbstractAstReflection {
           name: ChoiceOption.typeCall
         }
       },
-      superTypes: [AttributeOrChoiceOption.$type, RosettaFeature.$type]
+      superTypes: [AttributeOrChoiceOption.$type, RosettaFeature.$type, RosettaSymbol.$type]
     },
     ClosureParameter: {
       name: ClosureParameter.$type,
@@ -6495,13 +6492,7 @@ export class RuneDslAstReflection extends langium.AbstractAstReflection {
           optional: true
         }
       },
-      superTypes: [
-        DataOrChoice.$type,
-        RosettaRootElement.$type,
-        RosettaSymbol.$type,
-        RosettaType.$type,
-        SwitchCaseTarget.$type
-      ]
+      superTypes: [DataOrChoice.$type, RosettaRootElement.$type, RosettaSymbol.$type, RosettaType.$type]
     },
     DataOrChoice: {
       name: DataOrChoice.$type,
@@ -6899,7 +6890,7 @@ export class RuneDslAstReflection extends langium.AbstractAstReflection {
           optional: true
         }
       },
-      superTypes: [RosettaRootElement.$type, RosettaType.$type]
+      superTypes: [RosettaRootElement.$type, RosettaSymbol.$type, RosettaType.$type]
     },
     RosettaBody: {
       name: RosettaBody.$type,
@@ -7266,7 +7257,7 @@ export class RuneDslAstReflection extends langium.AbstractAstReflection {
           optional: true
         }
       },
-      superTypes: [RosettaRootElement.$type, RosettaSymbol.$type, RosettaType.$type, SwitchCaseTarget.$type]
+      superTypes: [RosettaRootElement.$type, RosettaSymbol.$type, RosettaType.$type]
     },
     RosettaExistsExpression: {
       name: RosettaExistsExpression.$type,
@@ -7830,7 +7821,7 @@ export class RuneDslAstReflection extends langium.AbstractAstReflection {
           name: RosettaRecordType.name
         }
       },
-      superTypes: [RosettaRootElement.$type, RosettaType.$type]
+      superTypes: [RosettaRootElement.$type, RosettaSymbol.$type, RosettaType.$type]
     },
     RosettaReport: {
       name: RosettaReport.$type,
@@ -8107,7 +8098,7 @@ export class RuneDslAstReflection extends langium.AbstractAstReflection {
     RosettaType: {
       name: RosettaType.$type,
       properties: {},
-      superTypes: []
+      superTypes: [SwitchCaseTarget.$type]
     },
     RosettaTypeAlias: {
       name: RosettaTypeAlias.$type,

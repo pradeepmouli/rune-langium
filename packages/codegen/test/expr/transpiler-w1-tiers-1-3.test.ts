@@ -19,6 +19,7 @@
  * hand-built fake AST nodes) so the fixtures exercise the actual grammar.
  */
 
+import { RUNTIME_HELPER_JS_SOURCE } from '../../src/helpers.js';
 import { describe, it, expect } from 'vitest';
 import { parseExpression, type RosettaEnumeration, type RosettaEnumValue } from '@rune-langium/core';
 import { transpileExpression, type ExpressionTranspilerContext } from '../../src/expr/transpiler.js';
@@ -95,7 +96,7 @@ describe('W1 Tier 2 — simple mappings', () => {
   it('DefaultOperation falls back for null and empty collections', () => {
     const expr = parse('a default b');
     const ctx = makeCtx();
-    const evaluate = Function('data', `return ${transpileExpression(expr, ctx)}`);
+    const evaluate = Function('data', `${RUNTIME_HELPER_JS_SOURCE}\nreturn ${transpileExpression(expr, ctx)}`);
     expect(evaluate({ a: [], b: [2] })).toEqual([2]);
     expect(evaluate({ a: 0, b: 2 })).toBe(0);
     expect(evaluate({ a: null, b: 2 })).toBe(2);
@@ -117,14 +118,14 @@ describe('W1 Tier 2 — simple mappings', () => {
     const expr = parse('items only-element');
     const ctx = makeCtx();
     expect(transpileExpression(expr, ctx)).toBe(
-      '((__oe) => (__oe.length === 1 ? __oe[0] : undefined))(data.items ?? [])'
+      '((__oe) => (__oe.length === 1 ? __oe[0] : undefined))(runeList(data.items))'
     );
   });
 
   it('ReduceOperation: .reduce with two-parameter lambda plumbing', () => {
     const expr = parse('items reduce a, b [a + b]');
     const ctx = makeCtx();
-    const evaluate = Function('data', `return ${transpileExpression(expr, ctx)}`);
+    const evaluate = Function('data', `${RUNTIME_HELPER_JS_SOURCE}\nreturn ${transpileExpression(expr, ctx)}`);
     expect(evaluate({ items: [1, 2, 3] })).toBe(6);
     expect(evaluate({ items: [] })).toBeUndefined();
   });
@@ -166,7 +167,7 @@ describe('W1 Tier 3 — conversions', () => {
       };
       const ctx = makeCtx();
       expect(transpileExpression(expr, ctx)).toBe(
-        "((__e) => (['Red', 'Green', 'Blue'].includes(__e) ? __e : undefined))(data.code)"
+        "((__e) => (['Red', 'Green', 'Blue']).find((value) => value === __e))(data.code)"
       );
     });
   });

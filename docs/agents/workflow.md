@@ -38,6 +38,7 @@ SQL node types derive from the exactly pinned `@l1xnan/tree-sitter-sql` grammar.
 ## Testing and Editor Setup
 
 - Use Vitest for public APIs and shared architecture seams. Prefer focused package checks for isolated changes; broaden for affected consumers.
+- Full TypeScript corpus verification: build core, curated-schema, and codegen, then run `pnpm run verify:codegen-corpus`. The check pins upstream commits in `scripts/fixtures/codegen-corpus.json`, reuses the production artifact builder and cached archives, and strictly compiles every generated file. To check a browser download, run `pnpm run verify:codegen-corpus --zip /absolute/path/typescript-output.zip`. Dependencies must be installed; the check uses the real Temporal package. Caches and serialized artifacts stay under ignored `dist/`.
 - Real CDM/Rune/FpML fixtures live under hidden `.resources/`. Prefer them for corpus repros, and guard or skip corpus-dependent tests when absent.
 - Verify fixture revisions before claiming upstream parity. The September 12 refresh found a February Rune reference checkout; current production CDM/FpML needed `as` narrowing and schema declarations. A successful parse or ZIP download does not establish that the entire generated corpus passes strict TypeScript compilation.
 - Studio Playwright tests must wait for visible readiness, not `networkidle`, when workers or LSP traffic remain active.

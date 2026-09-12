@@ -3,6 +3,10 @@
 
 import { metadataRuntimeSource } from './expr/metadata-runtime.js';
 import { valueEqualitySource } from './expr/value-equality.js';
+import { binaryRuntimeSource } from './expr/binary-runtime.js';
+import { temporalRuntimeSource } from './expr/temporal-runtime.js';
+import { functionDataRuntimeSource } from './expr/function-data-runtime.js';
+import { collectionRuntimeSource } from './expr/collection-runtime.js';
 
 /**
  * Source text of the runtime helper functions that are
@@ -13,6 +17,14 @@ import { valueEqualitySource } from './expr/value-equality.js';
  */
 export const RUNTIME_HELPER_SOURCE: string =
   `// --- rune-codegen runtime helpers (inlined) ---\n` +
+  temporalRuntimeSource(true) +
+  '\n' +
+  functionDataRuntimeSource(true) +
+  '\n' +
+  binaryRuntimeSource(true) +
+  '\n' +
+  collectionRuntimeSource(true) +
+  '\n\n' +
   valueEqualitySource(true) +
   '\n\n' +
   `const runeCheckOneOf = (values: unknown[]): boolean =>\n` +
@@ -20,7 +32,7 @@ export const RUNTIME_HELPER_SOURCE: string =
   `\n` +
   `const runeCount = (value: unknown): number => Array.isArray(value) ? value.length : value == null ? 0 : 1;\n` +
   `\n` +
-  `const runeAttrExists = (v: unknown): boolean =>\n` +
+  `const runeAttrExists = <T>(v: T): v is NonNullable<T> & (T extends readonly (infer I)[] ? readonly [I, ...I[]] : unknown) =>\n` +
   `  v !== undefined && v !== null && !(Array.isArray(v) && v.length === 0);\n` +
   `\n` +
   `const runeToDate = (v: unknown): string | undefined =>\n` +
@@ -47,6 +59,14 @@ export const RUNTIME_HELPER_SOURCE: string =
  * also need to be annotation-free so no TypeScript constructs reach the JS engine.
  */
 export const RUNTIME_HELPER_JS_SOURCE: string =
+  temporalRuntimeSource(false) +
+  '\n' +
+  functionDataRuntimeSource(false) +
+  '\n' +
+  binaryRuntimeSource(false) +
+  '\n' +
+  collectionRuntimeSource(false) +
+  '\n\n' +
   metadataRuntimeSource(false) +
   '\n\n' +
   `// --- rune-codegen runtime helpers (inlined) ---\n` +
@@ -102,7 +122,9 @@ export const runeCount = (value: unknown): number => (Array.isArray(value) ? val
  * Used for: exists, is absent conditions.
  * FR-021, SC-003.
  */
-export const runeAttrExists = (v: unknown): boolean =>
+export const runeAttrExists = <T>(
+  v: T
+): v is NonNullable<T> & (T extends readonly (infer I)[] ? readonly [I, ...I[]] : unknown) =>
   v !== undefined && v !== null && !(Array.isArray(v) && v.length === 0);
 
 /**
@@ -150,6 +172,14 @@ export const runeToZonedDateTime = (v: unknown): string | undefined =>
  * concatenating per-namespace files into a single-file bundle.
  */
 export const RUNE_HELPER_NAMES = [
+  'runeList',
+  'runeSingle',
+  'runeBinary',
+  'runeCompare',
+  'runeOrder',
+  'runeDateField',
+  'runeDateConstruct',
+  'runeToFuncData',
   'runeCheckOneOf',
   'runeCount',
   'runeValueEquals',
@@ -173,6 +203,10 @@ export const RUNE_HELPER_NAMES = [
  * exact and independent of how this module's own source is written.
  */
 export const RUNTIME_SIDECAR_HELPER_LINES: readonly string[] = [
+  temporalRuntimeSource(true, true),
+  functionDataRuntimeSource(true, true),
+  binaryRuntimeSource(true, true),
+  collectionRuntimeSource(true, true),
   valueEqualitySource(true, true),
   '',
   `export const runeCheckOneOf = (values: unknown[]): boolean =>`,
@@ -180,7 +214,7 @@ export const RUNTIME_SIDECAR_HELPER_LINES: readonly string[] = [
   ``,
   `export const runeCount = (value: unknown): number => Array.isArray(value) ? value.length : value == null ? 0 : 1;`,
   ``,
-  `export const runeAttrExists = (v: unknown): boolean =>`,
+  `export const runeAttrExists = <T>(v: T): v is NonNullable<T> & (T extends readonly (infer I)[] ? readonly [I, ...I[]] : unknown) =>`,
   `  v !== undefined && v !== null && !(Array.isArray(v) && v.length === 0);`,
   ``,
   `export const runeToDate = (v: unknown): string | undefined =>`,
@@ -207,5 +241,5 @@ export const RUNTIME_SIDECAR_HELPER_LINES: readonly string[] = [
  * names (Zod also imports `runeExtendChoice`).
  */
 export function buildRuntimeHelperImportLine(from: string, extra: readonly string[] = []): string {
-  return `import { ${[...RUNE_HELPER_NAMES, ...extra].join(', ')} } from '${from}';`;
+  return `import { ${[...RUNE_HELPER_NAMES, 'type RuneFuncData', ...extra].join(', ')} } from '${from}';`;
 }

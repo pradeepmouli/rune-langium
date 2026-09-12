@@ -270,6 +270,9 @@ importers:
       '@hookform/resolvers':
         specifier: ^5.9.1
         version: 5.9.1(@standard-schema/spec@1.1.0)(ajv-formats@2.1.1(ajv@8.20.0))(ajv@8.20.0)(react-hook-form@7.87.0(react@19.2.8))(zod@4.5.4)
+      '@js-temporal/polyfill':
+        specifier: ^0.5.1
+        version: 0.5.1
       '@l1xnan/tree-sitter-sql':
         specifier: 0.4.7
         version: 0.4.7(tree-sitter@0.25.0)
@@ -498,6 +501,9 @@ importers:
 
   packages/codegen:
     dependencies:
+      '@js-temporal/polyfill':
+        specifier: ^0.5.1
+        version: 0.5.1
       '@l1xnan/tree-sitter-sql':
         specifier: 0.4.7
         version: 0.4.7(tree-sitter@0.25.0)
@@ -529,9 +535,6 @@ importers:
         specifier: ^2.9.0
         version: 2.9.0
     devDependencies:
-      '@js-temporal/polyfill':
-        specifier: ^0.5.1
-        version: 0.5.1
       '@types/json-schema':
         specifier: ^7.0.15
         version: 7.0.15

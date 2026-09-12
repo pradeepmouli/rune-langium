@@ -21,10 +21,11 @@
  * FR-023: Generated Zod schemas must compile with tsc.
  */
 
+import { generatedDirectory } from './helpers/generated-directory.js';
 import { execFile } from 'node:child_process';
 import { promisify } from 'node:util';
 import { existsSync, readdirSync, readFileSync } from 'node:fs';
-import { mkdtemp, writeFile, mkdir, readFile } from 'node:fs/promises';
+import { writeFile, mkdir, readFile } from 'node:fs/promises';
 import { join, resolve, dirname } from 'node:path';
 import { tmpdir } from 'node:os';
 import { describe, it, expect } from 'vitest';
@@ -136,7 +137,7 @@ describe('cdm-smoke: Zod target', () => {
     expect(outputs.length).toBeGreaterThan(0);
 
     // Write outputs to a temp dir
-    const tmpDir = await mkdtemp(join(tmpdir(), 'rune-codegen-smoke-'));
+    const tmpDir = await generatedDirectory(join(tmpdir(), 'rune-codegen-smoke-'));
 
     for (const output of outputs) {
       const outPath = join(tmpDir, output.relativePath);
@@ -295,7 +296,7 @@ describe('cdm-smoke: typescript target', () => {
     }
 
     // Write outputs to a temp dir
-    const tmpDir = await mkdtemp(join(tmpdir(), 'rune-codegen-ts-smoke-'));
+    const tmpDir = await generatedDirectory(join(tmpdir(), 'rune-codegen-ts-smoke-'));
 
     for (const output of outputs) {
       const outPath = join(tmpDir, output.relativePath);

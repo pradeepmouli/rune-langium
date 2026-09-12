@@ -895,6 +895,33 @@ describe('codegen-worker previewGenerateCache (executeFunction)', () => {
     });
   });
 
+  it('executes the emitted export name and supplies Temporal to generated modules', async () => {
+    generateMock.mockReturnValue([
+      {
+        relativePath: 'alpha.ts',
+        content: `import { Temporal } from '@js-temporal/polyfill';
+        export function DateFunction(input) { return Temporal.PlainDate.from(input.value).year; }`,
+        diagnostics: [],
+        funcs: [{ name: 'Date', exportName: 'DateFunction', fileContents: '' }]
+      }
+    ]);
+    const { scope, dispatch } = await loadWorkerModule();
+    dispatch({
+      type: 'preview:setFiles',
+      files: [{ uri: 'file:///dates.rosetta', content: 'namespace "alpha"' }],
+      requestId: 'date:1'
+    });
+    await flushWorker();
+    dispatch({ type: 'preview:execute', funcName: 'alpha.Date', inputs: { value: '2024-02-29' }, requestId: 'date:2' });
+    await flushWorker();
+    expect(scope.postMessage).toHaveBeenLastCalledWith({
+      type: 'preview:execute-result',
+      requestId: 'date:2',
+      funcName: 'alpha.Date',
+      output: 2024
+    });
+  });
+
   it('resolves imports between generated namespace modules', async () => {
     generateMock.mockReturnValue([
       {

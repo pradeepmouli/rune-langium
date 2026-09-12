@@ -13,6 +13,8 @@
 //
 // Outputs to dist/curated-artifacts/<modelId>/ for R2 upload via wrangler.
 
+import { parseArgs } from 'node:util';
+import { join } from 'node:path';
 import { createHash } from 'node:crypto';
 import { writeFile, mkdir, readFile } from 'node:fs/promises';
 import { gunzipSync, gzipSync } from 'node:zlib';
@@ -23,16 +25,21 @@ const corePkgDir = new URL('../packages/core/', import.meta.url);
 const langiumIndex = new URL('node_modules/langium/lib/index.js', corePkgDir);
 const { URI } = await import(langiumIndex);
 
-const SOURCES = [
-  { id: 'cdm', owner: 'REGnosys', repo: 'rosetta-cdm', ref: 'master' },
-  { id: 'fpml', owner: 'rosetta-models', repo: 'rune-fpml', ref: 'master' },
-  { id: 'rune-dsl', owner: 'finos', repo: 'rune-dsl', ref: 'main' }
-];
+const { values: options } = parseArgs({
+  options: { sources: { type: 'string' }, 'out-dir': { type: 'string' }, 'cache-dir': { type: 'string' } }
+});
+const SOURCES = options.sources
+  ? JSON.parse(await readFile(options.sources, 'utf8'))
+  : [
+      { id: 'cdm', owner: 'REGnosys', repo: 'rosetta-cdm', ref: 'master' },
+      { id: 'fpml', owner: 'rosetta-models', repo: 'rune-fpml', ref: 'master' },
+      { id: 'rune-dsl', owner: 'finos', repo: 'rune-dsl', ref: 'main' }
+    ];
 
 const LANGIUM_VERSION = JSON.parse(
   await readFile(new URL('node_modules/langium/package.json', corePkgDir), 'utf8')
 ).version;
-const OUT_DIR = 'dist/curated-artifacts';
+const OUT_DIR = options['out-dir'] ?? 'dist/curated-artifacts';
 // Public base for absolute artifact URLs in the manifest (matches archiveUrl +
 // artifacts.serializedWorkspace.url). Per-namespace `artifact` values MUST be
 // absolute so any consumer can fetch them directly without prefixing — relative
@@ -44,11 +51,28 @@ function sha256Hex(bytes) {
 }
 
 async function downloadArchive(source) {
-  const url = `https://codeload.github.com/${source.owner}/${source.repo}/tar.gz/refs/heads/${source.ref}`;
+  const cache =
+    options['cache-dir'] && source.commit
+      ? join(options['cache-dir'], `${source.id}-${source.commit}.tar.gz`)
+      : undefined;
+  if (cache) {
+    try {
+      return new Uint8Array(await readFile(cache));
+    } catch (error) {
+      if (error.code !== 'ENOENT') throw error;
+    }
+  }
+  const ref = source.commit ?? `refs/heads/${source.ref}`;
+  const url = `https://codeload.github.com/${source.owner}/${source.repo}/tar.gz/${ref}`;
   console.log(`  Downloading ${url}`);
   const res = await fetch(url);
   if (!res.ok) throw new Error(`HTTP ${res.status} for ${url}`);
-  return new Uint8Array(await res.arrayBuffer());
+  const bytes = new Uint8Array(await res.arrayBuffer());
+  if (cache) {
+    await mkdir(options['cache-dir'], { recursive: true });
+    await writeFile(cache, bytes);
+  }
+  return bytes;
 }
 
 function readTarString(block, start, end) {
@@ -311,6 +335,7 @@ async function main() {
         JSON.stringify(
           {
             modelId: source.id,
+            upstreamCommit: source.commit,
             langiumVersion: LANGIUM_VERSION,
             version,
             sha256: result.sha256,

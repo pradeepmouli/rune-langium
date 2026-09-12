@@ -2,7 +2,7 @@
 // Copyright (c) 2026 Pradeep Mouli
 
 import type { AstNode } from 'langium';
-import { fieldMetadataKind, type FieldMetadataKind } from '../expr/metadata-runtime.js';
+import { isMetadataFeature, fieldMetadataKind, type FieldMetadataKind } from '../expr/metadata-runtime.js';
 import { featureName } from '../expr/navigation.js';
 import {
   getFunctionSignature as functionSignature,
@@ -63,6 +63,7 @@ export interface RuneFuncAssignmentPathSegment {
   name: string;
   many: boolean;
   choiceOption?: boolean;
+  metadataEntry?: string;
   metadataKind?: FieldMetadataKind;
 }
 
@@ -498,8 +499,9 @@ export function extractFuncs(
               ? featureName(target)
               : (segment.feature.ref?.name ?? segment.feature.$refText),
             ...(isChoiceOption(target) ? { choiceOption: true } : {}),
+            ...(isMetadataFeature(target) ? { metadataEntry: segment.feature.$refText } : {}),
             many: isAttribute(target) && (target.card.unbounded || (target.card.sup ?? 1) > 1),
-            metadataKind: isAttribute(target) ? fieldMetadataKind(target) : undefined
+            metadataKind: isAttribute(target) || isChoiceOption(target) ? fieldMetadataKind(target) : undefined
           });
         }
         return {
@@ -508,9 +510,11 @@ export function extractFuncs(
           target: operation.assignRoot.ref?.name ?? operation.assignRoot.$refText,
           rootMany: isAttribute(root) && (root.card.unbounded || (root.card.sup ?? 1) > 1),
           rootMetadataKind: isAttribute(root) ? fieldMetadataKind(root) : undefined,
-          metadataKind: isAttribute(target) ? fieldMetadataKind(target) : undefined,
+          metadataKind: isAttribute(target) || isChoiceOption(target) ? fieldMetadataKind(target) : undefined,
           targetMany: isAttribute(target) ? target.card.unbounded || (target.card.sup ?? 1) > 1 : undefined,
-          ...(path.length > 0 && isAttribute(target) ? { targetCardinality: extractParam(target).cardinality } : {}),
+          ...(path.length > 0 && (isAttribute(target) || isChoiceOption(target))
+            ? { targetCardinality: isAttribute(target) ? extractParam(target).cardinality : { lower: 1, upper: 1 } }
+            : {}),
           path
         };
       });

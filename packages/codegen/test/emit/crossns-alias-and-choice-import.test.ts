@@ -30,6 +30,7 @@
  * become `target`).
  */
 
+import { generatedDirectory } from '../helpers/generated-directory.js';
 import { readFileSync, readdirSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { createRuneDslServices } from '@rune-langium/core';
@@ -133,7 +134,7 @@ describe('ts-emitter — cross-namespace alias-chased & Choice-option import tra
     const outputs = await generate(docs, { target: 'typescript' });
     expect(outputs.length).toBeGreaterThanOrEqual(2);
 
-    const { mkdtemp, writeFile, mkdir } = await import('node:fs/promises');
+    const { writeFile, mkdir } = await import('node:fs/promises');
     const { join, dirname } = await import('node:path');
     const { tmpdir } = await import('node:os');
     // TypeScript 7's default export dropped the classic synchronous
@@ -142,7 +143,7 @@ describe('ts-emitter — cross-namespace alias-chased & Choice-option import tra
     // choice-typed-attribute-crossns.test.ts's precedent.
     const ts = (await import('typescript-classic')).default;
 
-    const tmpDir = await mkdtemp(join(tmpdir(), 'rune-codegen-crossns-alias-choice-'));
+    const tmpDir = await generatedDirectory(join(tmpdir(), 'rune-codegen-crossns-alias-choice-'));
     let holderPath = '';
     for (const output of outputs) {
       const outPath = join(tmpDir, output.relativePath);

@@ -188,6 +188,8 @@ export interface GeneratorDiagnostic {
  * FR-028–FR-032 (function declarations, US6).
  */
 export interface GeneratedFunc {
+  /** Actual module export when the Rune name collides with a type declaration. */
+  exportName?: string;
   /** The func's identifier as declared in the Rune model. */
   name: string;
   /**

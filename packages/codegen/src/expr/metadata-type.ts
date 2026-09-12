@@ -4,11 +4,13 @@
 import {
   getOperationArgument,
   isAttribute,
+  isChoiceOption,
   isInlineFunction,
   isSwitchCaseOrDefault,
   isSwitchOperation,
   isChoice,
-  isData,
+  isRosettaType,
+  type Choice,
   isClosureParameter,
   isRosettaFunction,
   isShortcutDeclaration,
@@ -27,6 +29,18 @@ function mergeMetadataKinds(
   return left === 'reference' || right === 'reference' ? 'reference' : (left ?? right);
 }
 
+export function choiceSelectionMetadata(choice: Choice, target: RosettaType): FieldMetadataKind | undefined {
+  return choiceOptionPaths(choice, target).reduce<FieldMetadataKind | undefined>((kind, path) => {
+    let type: RosettaType | undefined = choice;
+    let selected;
+    for (const name of path) {
+      selected = typeFeatures(type).find((feature) => featureName(feature) === name);
+      type = resolveType(selected?.typeCall);
+    }
+    return mergeMetadataKinds(kind, selected && 'annotations' in selected ? fieldMetadataKind(selected) : undefined);
+  }, undefined);
+}
+
 /** Identify wrappers from declarations, without inspecting ambiguous `value` fields. */
 export function expressionMetadataKind(
   expr: RosettaExpression | undefined,
@@ -41,26 +55,15 @@ export function expressionMetadataKind(
       if (!isChoice(input)) return expressionMetadataKind(argument, next);
       const target = expr.type.ref;
       if (!target) return undefined;
-      return choiceOptionPaths(input, target, true).reduce<FieldMetadataKind | undefined>((kind, path) => {
-        let type: RosettaType | undefined = input;
-        let selected;
-        for (const name of path) {
-          selected = typeFeatures(type).find((feature) => featureName(feature) === name);
-          type = resolveType(selected?.typeCall);
-        }
-        return mergeMetadataKinds(
-          kind,
-          selected && 'annotations' in selected ? fieldMetadataKind(selected) : undefined
-        );
-      }, undefined);
+      return choiceSelectionMetadata(input, target);
     }
     case 'RosettaSymbolReference': {
       const func = AstUtils.getContainerOfType(expr, isRosettaFunction);
       const target = expr.symbol.ref ?? (func ? functionAttribute(func, expr.symbol.$refText) : undefined);
-      if (isAttribute(target)) return fieldMetadataKind(target);
+      if (isAttribute(target) || isChoiceOption(target)) return fieldMetadataKind(target);
       if (isClosureParameter(target)) {
         const operation = target.$container.$container;
-        return 'argument' in operation ? expressionMetadataKind(operation.argument, next) : undefined;
+        return expressionMetadataKind(getOperationArgument(operation), next);
       }
       if (isRosettaFunction(target)) return fieldMetadataKind(functionOutput(target));
       if (isShortcutDeclaration(target)) return expressionMetadataKind(target.expression, next);
@@ -69,23 +72,25 @@ export function expressionMetadataKind(
     case 'RosettaFeatureCall':
     case 'RosettaDeepFeatureCall': {
       const feature = expr.feature?.ref;
-      return isAttribute(feature) ? fieldMetadataKind(feature) : undefined;
+      return isAttribute(feature) || isChoiceOption(feature) ? fieldMetadataKind(feature) : undefined;
     }
     case 'RosettaImplicitVariable': {
       const owner = AstUtils.getContainerOfType(expr, (node) => isInlineFunction(node) || isSwitchCaseOrDefault(node));
       const operation = owner?.$container;
       if (isSwitchCaseOrDefault(owner) && isSwitchOperation(operation)) {
-        const inputType = expressionType(operation.argument);
+        const inputType = expressionType(getOperationArgument(operation));
         const target = owner.guard?.referenceGuard?.ref;
         if (
           isChoice(inputType) &&
-          (isData(target) || isChoice(target)) &&
+          isRosettaType(target) &&
           !choiceOptionPaths(inputType, target).some((path) => path.length === 0)
         )
-          return undefined;
-        return expressionMetadataKind(operation.argument, next);
+          return choiceSelectionMetadata(inputType, target);
+        return expressionMetadataKind(getOperationArgument(operation), next);
       }
-      return operation && 'argument' in operation ? expressionMetadataKind(operation.argument, next) : undefined;
+      return operation && 'argument' in operation
+        ? expressionMetadataKind(getOperationArgument(operation), next)
+        : undefined;
     }
     case 'RosettaSuperCall': {
       const parent = AstUtils.getContainerOfType(expr, isRosettaFunction)?.superFunction?.ref;
@@ -107,7 +112,7 @@ export function expressionMetadataKind(
     case 'ReduceOperation':
     case 'ThenOperation':
     case 'MapOperation':
-      return expressionMetadataKind(expr.function ? expr.function.body : expr.argument, next);
+      return expressionMetadataKind(expr.function ? expr.function.body : getOperationArgument(expr), next);
     case 'FilterOperation':
     case 'FirstOperation':
     case 'LastOperation':
@@ -118,7 +123,7 @@ export function expressionMetadataKind(
     case 'FlattenOperation':
     case 'MinOperation':
     case 'MaxOperation':
-      return expr.argument ? expressionMetadataKind(expr.argument, next) : undefined;
+      return expressionMetadataKind(getOperationArgument(expr), next);
     case 'SwitchOperation':
       return expr.cases.reduce<FieldMetadataKind | undefined>(
         (kind, branch) => mergeMetadataKinds(kind, expressionMetadataKind(branch.expression, next)),

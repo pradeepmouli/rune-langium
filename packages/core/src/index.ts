@@ -95,3 +95,5 @@ export { namespaceFromSource, namespaceFromModelName } from './naming/namespace.
 
 // Collection utilities
 export { indexById, fromIndex } from './collections/index-by-id.js';
+
+export { getEnumValues } from './utils/enum-utils.js';

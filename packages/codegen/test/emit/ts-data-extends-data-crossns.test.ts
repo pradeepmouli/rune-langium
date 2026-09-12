@@ -21,8 +21,9 @@
  * data-extends-data-crossns/).
  */
 
+import { generatedDirectory } from '../helpers/generated-directory.js';
 import { readFileSync, readdirSync } from 'node:fs';
-import { mkdtemp, writeFile, mkdir } from 'node:fs/promises';
+import { writeFile, mkdir } from 'node:fs/promises';
 import { join, dirname, resolve } from 'node:path';
 import { tmpdir } from 'node:os';
 import { createRuneDslServices } from '@rune-langium/core';
@@ -103,7 +104,7 @@ describe('TS emitter — cross-namespace Data extends Data', () => {
     const outputs = await generate(docs, { target: 'typescript' });
     expect(outputs.length).toBeGreaterThanOrEqual(2);
 
-    const tmpDir = await mkdtemp(join(tmpdir(), 'rune-codegen-ded-crossns-'));
+    const tmpDir = await generatedDirectory(join(tmpdir(), 'rune-codegen-ded-crossns-'));
     let productPath = '';
     for (const output of outputs) {
       const outPath = join(tmpDir, output.relativePath);

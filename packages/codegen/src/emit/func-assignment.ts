@@ -1,10 +1,11 @@
 // SPDX-License-Identifier: MIT
 // Copyright (c) 2026 Pradeep Mouli
 
+import { metadataPropertyPath } from '../expr/metadata-runtime.js';
 import { expressionMetadataKind } from '../expr/metadata-type.js';
 import { renderCardinalityChecks } from '../expr/cardinality.js';
 import { freshLocal } from '../expr/inline-function.js';
-import { isRosettaExpression, isListLiteral } from '@rune-langium/core';
+import { isRosettaExpression } from '@rune-langium/core';
 import type { FuncBodyContext, RuneFuncAssignment } from '../types/func.js';
 
 export function renderFuncAssignment(
@@ -17,13 +18,7 @@ export function renderFuncAssignment(
   let target = root;
   const lines: string[] = [];
   const targetMany = assignment.targetMany ?? (path.length === 0 && ctx.outputAccumulator === 'array');
-  let expr =
-    !targetMany && isListLiteral(assignment.exprNode) && assignment.exprNode.elements.length === 0
-      ? 'undefined'
-      : renderExpression(assignment.exprNode);
-  if (targetMany) {
-    expr = `((value) => value == null ? [] : Array.isArray(value) ? value : [value])(${expr})`;
-  }
+  let expr = `${targetMany ? 'runeList' : 'runeSingle'}(${renderExpression(assignment.exprNode)})`;
   const bounds = assignment.targetCardinality;
   const checksFor = (value: string, arraySize?: string) =>
     bounds
@@ -65,6 +60,16 @@ export function renderFuncAssignment(
         target = item;
       } else {
         lines.push(`  ${target} ??= ${initial} as NonNullable<typeof ${target}>;`);
+      }
+      if (segment.metadataEntry) {
+        const path = metadataPropertyPath(segment.metadataEntry);
+        for (const [index, name] of path.entries()) {
+          target += `.${name}`;
+          if (index < path.length - 1) lines.push(`  ${target} ??= {};`);
+        }
+        metadataKind = undefined;
+        many = false;
+        continue;
       }
       if (metadataKind) {
         target += '.value';

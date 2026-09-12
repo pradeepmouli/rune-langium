@@ -1130,7 +1130,10 @@ export const RosettaSymbolSchema = z.discriminatedUnion('$type', [
   RosettaEnumValueSchema,
   RosettaParameterSchema,
   DataSchema,
-  ChoiceSchema
+  ChoiceSchema,
+  ChoiceOptionSchema,
+  RosettaRecordTypeSchema,
+  RosettaBasicTypeSchema
 ]);
 
 export const RosettaTypeSchema = z.discriminatedUnion('$type', [
@@ -1151,8 +1154,11 @@ export const RosettaTypedFeatureSchema = z.discriminatedUnion('$type', [
 export const SwitchCaseTargetSchema = z.discriminatedUnion('$type', [
   DataSchema,
   ChoiceSchema,
-  RosettaEnumValueSchema,
-  RosettaEnumerationSchema
+  RosettaBasicTypeSchema,
+  RosettaRecordTypeSchema,
+  RosettaEnumerationSchema,
+  RosettaTypeAliasSchema,
+  RosettaEnumValueSchema
 ]);
 
 export const AstNodeSchema = z.discriminatedUnion('$type', [

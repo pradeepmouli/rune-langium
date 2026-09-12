@@ -1,8 +1,10 @@
 // SPDX-License-Identifier: MIT
 // Copyright (c) 2026 Pradeep Mouli
 
+import { Temporal } from '@js-temporal/polyfill';
 import { describe, it, expect } from 'vitest';
 import { parseWorkspace, isData, type Data } from '@rune-langium/core';
+import { RUNTIME_HELPER_JS_SOURCE } from '../../src/helpers.js';
 import { getActiveConditionPredicates } from '../../src/instances/condition-predicates.js';
 
 async function parseSingleNamespaceDataByName(source: string): Promise<Map<string, Data>> {
@@ -35,9 +37,22 @@ describe('getActiveConditionPredicates', () => {
     expect(predicates).toHaveLength(1);
     expect(predicates[0]?.name).toBe('PositiveQuantity');
 
-    const check = new Function('data', `return (${predicates[0]!.predicate});`);
+    const check = new Function('data', `${RUNTIME_HELPER_JS_SOURCE}\nreturn (${predicates[0]!.predicate});`);
     expect(check({ quantity: 5 })).toBe(true);
     expect(check({ quantity: -1 })).toBe(false);
+  });
+
+  it('reads calendar fields from ISO strings in JavaScript validation', async () => {
+    const types = await parseSingleNamespaceDataByName(`namespace test.calendar
+recordType date {year int month int day int}
+type Event:
+ date date (1..1)
+ condition Current: date -> year = 2026
+`);
+    const { predicate } = getActiveConditionPredicates(types.get('Event')!)[0]!;
+    const check = new Function('data', 'Temporal', `${RUNTIME_HELPER_JS_SOURCE}\nreturn (${predicate});`);
+    expect(check({ date: '2026-09-12' }, Temporal)).toBe(true);
+    expect(check({ date: '2025-09-12' }, Temporal)).toBe(false);
   });
 
   it('returns an empty array for a type with no conditions', async () => {

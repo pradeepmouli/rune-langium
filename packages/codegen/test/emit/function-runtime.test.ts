@@ -5,6 +5,8 @@ import { createRuneDslServices } from '@rune-langium/core';
 import { URI } from 'langium';
 import ts from 'typescript-classic';
 import { resolve } from 'node:path';
+import { createRequire } from 'node:module';
+import { Temporal } from '@js-temporal/polyfill';
 import { generate } from '../../src/export.js';
 
 async function compile(source: string | string[], typeAssertions = '') {
@@ -17,7 +19,7 @@ async function compile(source: string | string[], typeAssertions = '') {
   );
   await RuneDsl.shared.workspace.DocumentBuilder.build(docs);
   for (const doc of docs) expect(doc.parseResult.parserErrors).toEqual([]);
-  const outputs = await generate(docs, { target: 'typescript' });
+  const outputs = await generate(docs, { target: 'typescript', typescript: { layout: 'single-file' } });
   expect(outputs.flatMap((output) => output.diagnostics.filter((d) => d.severity === 'error'))).toEqual([]);
   const code = outputs[0]!.content;
   const fileName = resolve(import.meta.dirname, 'generated-function-runtime.ts');
@@ -40,11 +42,289 @@ async function compile(source: string | string[], typeAssertions = '') {
     compilerOptions: { target: ts.ScriptTarget.ES2022, module: ts.ModuleKind.CommonJS }
   }).outputText;
   const exports: Record<string, (input: Record<string, unknown>) => unknown> = {};
-  new Function('exports', js)(exports);
+  new Function('exports', 'require', js)(exports, createRequire(import.meta.url));
   return exports;
 }
 
 describe('generated TypeScript function execution', () => {
+  it('keeps constructor fields ahead of metadata keywords and converts scalar fields to lists', async () => {
+    const funcs = await compile(`namespace test.address
+annotation metadata:
+ address string (0..1)
+type Address:
+ country string (1..1)
+type Contact:
+ address Address (0..*)
+func Build:
+ output: result Contact (1..1)
+ set result: Contact {address: Address {country: "US"}}
+`);
+    expect(funcs.Build!({})).toEqual({ address: [{ country: 'US' }] });
+  });
+
+  it('selects nested Choice paths through reference metadata', async () => {
+    const funcs = await compile(`namespace test.paths
+type Basket:
+ amount int (1..1)
+type Cash:
+ currency string (1..1)
+choice Observable:
+ Basket
+ Cash
+choice Underlier:
+ Observable
+  [metadata reference]
+func Amount:
+ inputs: underlier Underlier (1..1)
+ output: result int (0..1)
+ set result: (underlier as Basket) -> amount
+`);
+    expect(funcs.Amount!({ underlier: { observable: { value: { basket: { amount: 7 } } } } })).toBe(7);
+    expect(funcs.Amount!({ underlier: { observable: { externalReference: 'unresolved' } } })).toBeUndefined();
+    expect(funcs.Amount!({ underlier: { observable: { value: { cash: { currency: 'USD' } } } } })).toBeUndefined();
+  });
+
+  it('uses the declared Choice arm ahead of same-named imported aliases', async () => {
+    const funcs = await compile([
+      `namespace test.aliases
+typeAlias Rate: string`,
+      `namespace test.rates
+import test.aliases.*
+type Rate:
+ amount int (1..1)
+type Fixed:
+ amount int (1..1)
+choice Index:
+ Rate
+ Fixed
+func Amount:
+ inputs: index Index (1..1)
+ output: result int (1..1)
+ set result: index switch Rate then amount, default 0
+`
+    ]);
+    expect(funcs.Amount!({ index: { rate: { amount: 7 } } })).toBe(7);
+    expect(funcs.Amount!({ index: { fixed: { amount: 2 } } })).toBe(0);
+  });
+
+  it('retains element types through nested collection projections', async () => {
+    const funcs = await compile(`namespace test.nested
+type Link:
+ value string (1..1)
+ scheme string (1..1)
+type Party:
+ links Link (0..*)
+type Identifier:
+ value string (1..1)
+  [metadata scheme]
+func Map:
+ inputs: parties Party (0..*)
+ output: result Identifier (0..*)
+ set result: parties extract links extract Identifier {value: value with-meta {scheme: scheme}}
+`);
+    expect(funcs.Map!({ parties: [{ links: [{ value: 'id', scheme: 'uri' }] }, {}] })).toEqual([
+      { value: { value: 'id', meta: { scheme: 'uri' } } }
+    ]);
+  });
+
+  it('propagates empty arithmetic and orders absent sort keys consistently', async () => {
+    const funcs = await compile(`namespace test.operators
+type Entry:
+ key int (0..1)
+func Add:
+ inputs: a int (0..*) b int (0..1)
+ output: result int (0..1)
+ set result: a + b
+func Ordered:
+ inputs: entries Entry (0..*)
+ output: result Entry (0..*)
+ set result: entries sort [key]
+func Minimum:
+ inputs: entries Entry (0..*)
+ output: result Entry (0..1)
+ set result: entries min [key]
+func Maximum:
+ inputs: entries Entry (0..*)
+ output: result Entry (0..1)
+ set result: entries max [key]
+`);
+    expect(funcs.Add!({ a: [2], b: 3 })).toBe(5);
+    expect(funcs.Add!({ a: [2, 4], b: 3 })).toBeUndefined();
+    expect(funcs.Add!({ a: [], b: 3 })).toBeUndefined();
+    const entries = [{}, { key: 3 }, { key: 1 }];
+    expect(funcs.Ordered!({ entries })).toEqual([{ key: 1 }, { key: 3 }, {}]);
+    expect(funcs.Minimum!({ entries })).toEqual({ key: 1 });
+    expect(funcs.Maximum!({ entries })).toEqual({ key: 3 });
+  });
+
+  it('emits inherited enums, narrowed fields, and base classes before derived classes', async () => {
+    const funcs = await compile(
+      `namespace test.declarations
+enum BaseKind:
+ Cash
+enum Kind extends BaseKind:
+ Credit
+type Child extends Parent:
+ excluded int (0..0)
+type Parent:
+ excluded int (0..*)
+ bounded int (0..2)
+func Parse:
+ inputs: text string (0..1)
+ output: result Kind (0..1)
+ set result: text to-enum Kind
+`,
+      `const child: ChildShape = {};
+// @ts-expect-error zero cardinality excludes populated fields
+const invalid: ChildShape = {excluded: [1]};`
+    );
+    expect(funcs.Parse!({ text: 'Cash' })).toBe('Cash');
+    expect(funcs.Parse!({ text: 'Credit' })).toBe('Credit');
+    expect(funcs.Parse!({ text: 'Other' })).toBeUndefined();
+    expect(Reflect.construct(funcs.Child!, [{}])).toBeInstanceOf(funcs.Parent!);
+  });
+
+  it('allocates distinct type and function exports without losing calls', async () => {
+    const funcs = await compile(`namespace test.names
+type Value:
+ amount int (1..1)
+func Value:
+ output: result int (1..1)
+ set result: 7
+func ValueFunction:
+ output: result int (1..1)
+ set result: 3
+func Read:
+ output: result int (1..1)
+ set result: Value() + ValueFunction()
+`);
+    expect(funcs.Read!({})).toBe(10);
+    expect(funcs.ValueFunction1!({})).toBe(7);
+    expect(Reflect.construct(funcs.Value!, [{ amount: 2 }])).toHaveProperty('amount', 2);
+  });
+
+  it('constructs reference-only metadata from empty without inventing payloads', async () => {
+    const funcs = await compile(`namespace test.referenceOnly
+type Target:
+ name string (1..1)
+func Reference:
+ inputs: id string (1..1)
+ output: result Target (0..1)
+  [metadata reference]
+ set result: empty with-meta {reference: id}
+`);
+    expect(funcs.Reference!({ id: 'party-1' })).toEqual({ value: undefined, externalReference: 'party-1' });
+  });
+
+  it('resolves explicit calls despite enum members with the same name', async () => {
+    const funcs = await compile(`namespace test.calls
+ enum Operation:
+  Min
+ library function Min(x number, y number) number
+ func Pick:
+  inputs: a number (1..1) b number (1..1)
+  output: result number (1..1)
+  set result: Min(a, b)
+`);
+    expect(funcs.Pick!({ a: 7, b: 3 })).toBe(3);
+  });
+
+  it('flattens extracted collections and enforces scalar assignment bounds', async () => {
+    const funcs = await compile(`namespace test.collection
+ type Box:
+  values int (0..*)
+ func Extract:
+  inputs: boxes Box (0..*)
+  output: result int (0..*)
+  set result: boxes extract values
+ func Single:
+  inputs: values int (0..*)
+  output: result int (0..1)
+  set result: values
+ func Combine:
+  inputs: a int (0..*) b int (0..*)
+  output: result int (0..*)
+  set result: [a, b]
+`);
+    expect(funcs.Extract!({ boxes: [{ values: [1, 2] }, {}, { values: [3] }] })).toEqual([1, 2, 3]);
+    expect(funcs.Single!({ values: [] })).toBeUndefined();
+    expect(funcs.Single!({ values: [7] })).toBe(7);
+    expect(() => funcs.Single!({ values: [1, 2] })).toThrow('Expected at most one value');
+    expect(funcs.Combine!({ a: [1, 2], b: [3] })).toEqual([1, 2, 3]);
+  });
+
+  it('reads and constructs calendar records and converts model Temporal values at calls', async () => {
+    const funcs = await compile(`namespace test.calendar
+ recordType date { day int month int year int }
+ recordType dateTime { date date time time }
+ recordType zonedDateTime { date date time time timezone string }
+ func Year:
+  inputs: value date (0..1)
+  output: result int (0..1)
+  set result: value -> year
+ func MakeDate:
+  inputs: year int (1..1) month int (1..1) day int (1..1)
+  output: date date (0..1)
+  set date: date { year: year, month: month, day: day }
+ func Zoned:
+  inputs: day date (1..1) clock time (1..1) zone string (1..1)
+  output: zonedDateTime zonedDateTime (0..1)
+  set zonedDateTime: zonedDateTime {date: day, time: clock, timezone: zone}
+ func Day:
+  inputs: value zonedDateTime (0..1)
+  output: result date (0..1)
+  set result: value -> date
+ type Event:
+  eventDate date (1..1)
+  condition Current: Year(eventDate) = 2026
+`);
+    expect(funcs.Year!({ value: '2024-02-29' })).toBe(2024);
+    expect(funcs.Year!({})).toBeUndefined();
+    expect(funcs.MakeDate!({ year: 2024, month: 2, day: 29 })).toBe('2024-02-29');
+    expect(() => funcs.MakeDate!({ year: 2023, month: 2, day: 29 })).toThrow();
+    const zoned = funcs.Zoned!({ day: '2026-07-01', clock: '12:00:00', zone: 'America/New_York' });
+    expect(zoned).toBe('2026-07-01T12:00:00-04:00[America/New_York]');
+    expect(funcs.Day!({ value: zoned })).toBe('2026-07-01');
+    const event = Reflect.construct(funcs.Event!, [{ eventDate: Temporal.PlainDate.from('2026-01-01') }]);
+    expect(event.validateCurrent().valid).toBe(true);
+  });
+
+  it('narrows optional values and unwraps metadata collections in validators', async () => {
+    const funcs = await compile(`namespace test.validator
+type Values:
+ values int (0..*)
+  [metadata scheme]
+ limit int (0..1)
+ condition One: values count = 1
+ condition Limit: if limit exists then limit <= 10
+`);
+    const present = Reflect.construct(funcs.Values!, [{ values: [{ value: 7, meta: {} }], limit: 8 }]);
+    expect(present.validateOne().valid).toBe(true);
+    expect(present.validateLimit().valid).toBe(true);
+    const absent = Reflect.construct(funcs.Values!, [{}]);
+    expect(absent.validateOne().valid).toBe(false);
+    expect(absent.validateLimit().valid).toBe(true);
+  });
+
+  it('normalizes empty scalar branches and preserves enum types in constructors', async () => {
+    const funcs = await compile(`namespace test.scalar
+enum Currency:
+ USD
+ EUR
+type Amount:
+ currency Currency (1..1)
+func Build:
+ output: result Amount (1..1)
+ set result: Amount {currency: Currency -> USD}
+func Optional:
+ inputs: value int (1..1)
+ output: result int (0..1)
+ set result: if value > 0 then value else empty
+`);
+    expect(funcs.Build!({})).toEqual({ currency: 'USD' });
+    expect(funcs.Optional!({ value: 2 })).toBe(2);
+    expect(funcs.Optional!({ value: -2 })).toBeUndefined();
+  });
   it('retains metadata when narrowing data subtypes', async () => {
     const funcs = await compile(`namespace test.dataMetaNarrow
  type Base:
@@ -320,8 +600,7 @@ func Retain:
  inputs: value Envelope (1..1)
  output: result Envelope (1..1)
  set result: value`,
-      `import { Temporal } from '@js-temporal/polyfill';
-const input: Parameters<typeof Retain>[0] = {value: {events: [{eventDate: ${JSON.stringify(value)}}]}};
+      `const input: Parameters<typeof Retain>[0] = {value: {events: [{eventDate: ${JSON.stringify(value)}}]}};
 // @ts-expect-error Temporal objects are not wire values.
 const invalid: Parameters<typeof Retain>[0] = {value: {events: [{eventDate: {} as Temporal.${type === 'date' ? 'PlainDate' : type === 'time' ? 'PlainTime' : type === 'dateTime' ? 'PlainDateTime' : 'ZonedDateTime'}}]}};`
     );

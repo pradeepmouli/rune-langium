@@ -14,6 +14,7 @@ import {
   type RosettaExpression
 } from '@rune-langium/core';
 import { URI } from 'langium';
+import { collectionRuntimeSource } from '../../src/expr/collection-runtime.js';
 import ts from 'typescript-classic';
 import { deepFeaturePaths, featureName, expressionIsMany, renderNavigation } from '../../src/expr/navigation.js';
 
@@ -57,7 +58,7 @@ func FindTerms:
 function renderExpression(expression: RosettaExpression): string {
   if (isRosettaImplicitVariable(expression)) return 'input';
   if (isRosettaSymbolReference(expression)) {
-    const name = expression.symbol?.ref?.name ?? expression.symbol?.$refText ?? '?';
+    const name = expression.symbol?.$refText ?? '?';
     return `input[${JSON.stringify(name)}]`;
   }
   if (isRosettaFeatureCall(expression) || isRosettaDeepFeatureCall(expression)) {
@@ -80,7 +81,8 @@ async function parseFunctions() {
 }
 
 function compile(source: string, functionName: string): (input: Record<string, unknown>) => unknown {
-  const fileName = '/generated-navigation.ts';
+  source = collectionRuntimeSource(true) + '\n' + source;
+  const fileName = new URL('./generated-navigation.ts', import.meta.url).pathname;
   const options: ts.CompilerOptions = {
     strict: true,
     noEmit: true,

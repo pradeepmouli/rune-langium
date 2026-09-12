@@ -16,6 +16,7 @@
  * FR-031: Zod and JSON Schema targets silently skip funcs.
  */
 
+import { createRequire } from 'node:module';
 import { readFile } from 'node:fs/promises';
 import { join, resolve } from 'node:path';
 import { describe, it, expect } from 'vitest';
@@ -256,7 +257,7 @@ describe('US6 funcs: constructor-expr (T128)', () => {
       compilerOptions: { target: ts.ScriptTarget.ES2022, module: ts.ModuleKind.CommonJS }
     }).outputText;
     const exports: Record<string, (input: Record<string, unknown>) => unknown> = {};
-    new Function('exports', javascript)(exports);
+    new Function('exports', 'require', javascript)(exports, createRequire(import.meta.url));
     expect(exports[name]!(input)).toEqual(expected);
   });
 });

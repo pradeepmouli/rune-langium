@@ -7,13 +7,16 @@ import {
   isChoice,
   isData,
   isRosettaEnumValue,
+  isRosettaType,
   isSwitchOperation,
   type RosettaExpression,
   type AsOperation,
   type RosettaType,
   type SwitchOperation
 } from '@rune-langium/core';
+import { fieldMetadataKind, unwrapMetadata } from './metadata-runtime.js';
 import {
+  resolveType,
   choiceOptionPaths,
   expressionType,
   expressionIsMany,
@@ -26,11 +29,16 @@ import {
 
 export interface SwitchExpressionRenderOptions {
   /** Render an expression, optionally rebinding the implicit `item`. */
-  renderExpression: (expression: RosettaExpression, options?: { selfName?: string; projected?: boolean }) => string;
+  renderExpression: (
+    expression: RosettaExpression,
+    options?: { selfName?: string; projected?: boolean; target?: RosettaType }
+  ) => string;
   /** Compare an unwrapped payload while retaining the original selector for branch binding. */
   selector?: { name: string; unwrap: (selector: string) => string };
   /** Report an unsupported or unresolved switch case. */
   report?: (message: string) => void;
+  /** Give checked data selections a target-language type predicate. */
+  typeGuard?: (value: string, type: RosettaType, guard: string, wrapped: boolean) => string;
   /** Rendering scope used when a switch omits its explicit argument. */
   selfName?: string;
 }
@@ -84,7 +92,23 @@ function typeSelection(value: string, inputType: RosettaType, target: RosettaTyp
   const narrowedType = resolveTypeAliases(target) ?? target;
   if (exactChoice && isData(inputType) && (!isData(narrowedType) || !typeMatches(narrowedType, inputType)))
     return undefined;
-  const selected = paths.length > 0 ? paths.map((path) => renderFeaturePath(value, path)).join(' ?? ') : value;
+  const selected =
+    paths.length > 0
+      ? paths
+          .map((path) => {
+            let type: RosettaType | undefined = inputType;
+            let result = value;
+            path.forEach((name, index) => {
+              const feature = typeFeatures(type).find((field) => featureName(field) === name);
+              result = renderFeaturePath(result, [name]);
+              if (index < path.length - 1 && feature && 'annotations' in feature && fieldMetadataKind(feature))
+                result = unwrapMetadata(result, false);
+              type = resolveType(feature?.typeCall);
+            });
+            return result;
+          })
+          .join(' ?? ')
+      : value;
   return {
     selected,
     guard:
@@ -113,7 +137,12 @@ export function renderAsExpression(
     ? options.renderExpression(expression.argument)
     : (options.selfName ?? 'undefined');
   const value = options.selector ? options.selector.unwrap('__source') : '__source';
-  const single = `((__as) => ${selected.guard} ? ${selected.projected || !options.selector ? selected.selected : '__source'} : undefined)(${value})`;
+  const guard =
+    isData(inputType) && target && options.typeGuard
+      ? options.typeGuard(options.selector ? '__source' : '__as', target, selected.guard, !!options.selector)
+      : selected.guard;
+  const selectedValue = selected.projected || !options.selector ? selected.selected : '__source';
+  const single = `((__as) => ${guard} ? ${selectedValue} : undefined)(${value})`;
   return expressionIsMany(expression)
     ? `((__values) => (__values ?? []).flatMap((__source) => { const __result = ${single}; return __result == null ? [] : [__result]; }))(${argument})`
     : `((__source) => ${single})(${argument})`;
@@ -166,17 +195,10 @@ function objectSwitch(
   for (const currentCase of operation.cases) {
     if (!currentCase.guard) continue;
     const target = currentCase.guard.referenceGuard?.ref;
-    if (!target || (!isData(target) && !isChoice(target))) {
-      const targetName = referenceName(currentCase.guard.referenceGuard);
-      if (targetName !== undefined) {
-        const branch = options.renderExpression(currentCase.expression, { selfName: '__item' });
-        lines.push(`  if (__sw === ${JSON.stringify(targetName)}) {`);
-        lines.push(`    const __item = ${options.selector?.name ?? '__sw'};`);
-        lines.push(`    return ${branch};`);
-        lines.push('  }');
-      } else {
-        options.report?.(`Unsupported ${typeName(inputType)} switch guard`);
-      }
+    if (!isRosettaType(target)) {
+      options.report?.(
+        `Unsupported ${typeName(inputType)} switch guard '${referenceName(currentCase.guard.referenceGuard)}'`
+      );
       continue;
     }
     const selection = typeSelection('__sw', inputType, target);
@@ -185,9 +207,19 @@ function objectSwitch(
       continue;
     }
     const { selected, guard, projected } = selection;
-    const branch = options.renderExpression(currentCase.expression, { selfName: '__item', projected });
-    lines.push(`  if (${guard}) {`);
-    lines.push(`    const __item = ${!projected && options.selector?.name ? options.selector?.name : selected};`);
+    const branch = options.renderExpression(currentCase.expression, { selfName: '__item', projected, target });
+    let selectedValue = selected;
+    let typedGuard =
+      isData(inputType) && options.typeGuard
+        ? options.typeGuard(options.selector?.name ?? '__sw', target, guard, !!options.selector)
+        : guard;
+    if (projected) {
+      selectedValue = `__selected${operation.cases.indexOf(currentCase)}`;
+      lines.push(`  const ${selectedValue} = ${selected};`);
+      typedGuard = `${selectedValue} != null`;
+    }
+    lines.push(`  if (${typedGuard}) {`);
+    lines.push(`    const __item = ${!projected && options.selector?.name ? options.selector.name : selectedValue};`);
     lines.push(`    return ${branch};`);
     lines.push('  }');
   }
@@ -216,7 +248,7 @@ export function renderSwitchExpression(
   const argument = expression.argument
     ? options.renderExpression(expression.argument)
     : (options.selfName ?? 'undefined');
-  const inputType = expressionType(expression.argument);
+  const inputType = expressionType(getOperationArgument(expression));
   const selector = options.selector ? options.selector.unwrap(options.selector.name) : argument;
   const result =
     inputType && (isChoice(inputType) || isData(inputType))

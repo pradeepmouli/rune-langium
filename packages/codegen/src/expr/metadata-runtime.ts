@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: MIT
 // Copyright (c) 2026 Pradeep Mouli
 
-import type { AnnotationRef } from '@rune-langium/core';
+import { isAttribute, isRosettaMetaType, type AnnotationRef } from '@rune-langium/core';
 
 /** Metadata names defined by the Rune `metadata` annotation. */
 export const metadataNames = new Set(['address', 'id', 'key', 'location', 'reference', 'scheme', 'template']);
@@ -17,6 +17,19 @@ export const metadataName = {
   scheme: 'scheme',
   template: 'template'
 } as const;
+
+export function isMetadataFeature(node: unknown): boolean {
+  return (
+    isRosettaMetaType(node) ||
+    (isAttribute(node) && node.$container.$type === 'Annotation' && node.$container.name === 'metadata')
+  );
+}
+
+export function metadataPropertyPath(name: string): string[] {
+  if (name === 'reference') return ['externalReference'];
+  if (name === 'address') return ['reference', 'reference'];
+  return ['meta', name in metadataName ? metadataName[name as keyof typeof metadataName] : name];
+}
 
 export interface MetadataAnnotatedNode {
   annotations?: readonly AnnotationRef[];
@@ -81,21 +94,22 @@ ${prefix}type RuneReferenceWithMeta<T> = {
 ${prefix}type RuneMetadataInputKind = 'value' | 'field' | 'reference';
 ${prefix}type RuneUnwrapMeta<T> = T extends readonly (infer I)[] ? RuneUnwrapMeta<I>[] : T extends { value?: infer V } ? V : T;
 ${prefix}type RuneWithMetaResult<T, K extends string = string, S extends RuneMetadataInputKind = 'value'> =
+  T extends null | undefined ? [Extract<K, 'address' | 'reference'>] extends [never] ? undefined : RuneReferenceWithMeta<never> :
   S extends 'reference' ? RuneToReferenceResult<RuneUnwrapMeta<T>> :
   S extends 'field' ? [Extract<K, 'address' | 'reference'>] extends [never]
     ? RuneToFieldResult<RuneUnwrapMeta<T>> : RuneToReferenceResult<RuneUnwrapMeta<T>> :
   T extends readonly (infer I)[]
   ? [Extract<K, 'address' | 'reference'>] extends [never]
-    ? [Exclude<K, 'key' | 'template'>] extends [never] ? T : RuneFieldWithMeta<I>[]
-    : RuneReferenceWithMeta<I>[]
+    ? [Exclude<K, 'key' | 'template'>] extends [never] ? T : RuneFieldWithMeta<NonNullable<I>>[]
+    : RuneReferenceWithMeta<NonNullable<I>>[]
   : [Extract<K, 'address' | 'reference'>] extends [never]
     ? [Exclude<K, 'key' | 'template'>] extends [never] ? T : RuneFieldWithMeta<T>
     : RuneReferenceWithMeta<T>;
-${prefix}type RuneAsKeyResult<T> = T extends readonly (infer I)[] ? RuneReferenceWithMeta<I>[] : RuneReferenceWithMeta<T>;
-${prefix}type RuneToFieldResult<T> = T extends readonly (infer I)[] ? RuneFieldWithMeta<I>[] : RuneFieldWithMeta<T>;
-${prefix}type RuneToReferenceResult<T> = T extends readonly (infer I)[] ? RuneReferenceWithMeta<I>[] : RuneReferenceWithMeta<T>;
-${prefix}type RuneToFieldInput<T> = T extends readonly (infer I)[] ? T | RuneFieldWithMeta<I>[] : T | RuneFieldWithMeta<T>;
-${prefix}type RuneToReferenceInput<T> = T extends readonly (infer I)[] ? T | RuneReferenceWithMeta<I>[] : T | RuneReferenceWithMeta<T>;
+${prefix}type RuneAsKeyResult<T> = T extends readonly (infer I)[] ? RuneReferenceWithMeta<NonNullable<I>>[] : RuneReferenceWithMeta<T>;
+${prefix}type RuneToFieldResult<T> = T extends readonly (infer I)[] ? RuneFieldWithMeta<NonNullable<I>>[] : RuneFieldWithMeta<T>;
+${prefix}type RuneToReferenceResult<T> = T extends readonly (infer I)[] ? RuneReferenceWithMeta<NonNullable<I>>[] : RuneReferenceWithMeta<T>;
+${prefix}type RuneToFieldInput<T> = T extends readonly (infer I)[] ? T | RuneFieldWithMeta<NonNullable<I>>[] : T | RuneFieldWithMeta<T>;
+${prefix}type RuneToReferenceInput<T> = T extends readonly (infer I)[] ? T | RuneReferenceWithMeta<NonNullable<I>>[] : T | RuneReferenceWithMeta<T>;
 `
     : '';
   const unknownType = typescript ? ': unknown' : '';
@@ -158,6 +172,7 @@ const runeWithMetaOne = (item${unknownType}, entries${metadataType}, inputKind${
     const target = runeTypeMetaNames.has(name) ? typeMeta : runeReferenceMetaNames.has(name) ? referenceMeta : fieldMeta;
     target[runeReferenceMetaNames.has(name) ? name : runeMetadataNames[name] || name] = entry;
   }
+  if (rawValue == null && Object.keys(referenceMeta).length === 0) return undefined;
   const value = Object.keys(typeMeta).length > 0 && rawValue && typeof rawValue === 'object'
     ? { ...${recordValue}, meta: { ...${recordMeta}, ...typeMeta } }
     : rawValue;
@@ -175,7 +190,7 @@ const runeWithMetaOne = (item${unknownType}, entries${metadataType}, inputKind${
 };
 ${prefix}const runeWithMeta = ${withMetaSignature} => {
   if (Object.keys(entries).length === 0) return value${returnValue};
-  return (Array.isArray(value) ? value.map((item) => runeWithMetaOne(item, entries, inputKind)) : runeWithMetaOne(value, entries, inputKind))${returnValue};
+  return (Array.isArray(value) ? value.flatMap((item) => { const wrapped = runeWithMetaOne(item, entries, inputKind); return wrapped == null ? [] : [wrapped]; }) : runeWithMetaOne(value, entries, inputKind))${returnValue};
 };
 ${prefix}const runeAsKey = ${asKeySignature} => {
   const key = (item${unknownType})${keyResultType} => {
@@ -194,9 +209,9 @@ ${prefix}const runeAsKey = ${asKeySignature} => {
 }
 
 /** Structural value view shared by generated TypeScript function modules. */
-export function runeFuncDataSource(): string {
+export function runeFuncDataSource(exported = false): string {
   return [
-    `type RuneFuncData<T> = T extends readonly (infer I)[]`,
+    `${exported ? 'export ' : ''}type RuneFuncData<T> = T extends readonly (infer I)[]`,
     `  ? RuneFuncData<I>[]`,
     '  : T extends { readonly [Symbol.toStringTag]: `Temporal.${string}` }',
     `    ? string`,

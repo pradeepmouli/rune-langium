@@ -22,6 +22,18 @@ functions enforce declared output bounds at runtime, including absent-only `(0..
 Required metadata assignment fields reject absent values. Metadata helper discovery
 follows linked declarations, including imported constructor and assignment fields.
 
+Generated TypeScript imports `Temporal` from `@js-temporal/polyfill`; install that
+package alongside the generated code. Function inputs and outputs use ISO strings,
+while model classes use Temporal instances. Shared helpers convert class arguments
+at function calls, read calendar fields, construct validated calendar values, and
+perform date arithmetic. Studio supplies the same polyfill to executable previews.
+
+Scalar/list normalization is shared across functions, validators, and previews.
+`extract` and list literals flatten one collection level; scalar assignments reject
+multiple values. Arithmetic returns no value when an operand is absent or has more
+than one value. Ordered comparisons involving absent operands are false. Sorting
+places absent keys last; min/max choose populated keys when present.
+
 Studio function previews resolve inherited and dispatch input signatures.
 `normalizePreviewInputs` adapts plain form values to metadata wrappers using the
 shared type resolver and runtime helpers, including nested and recursive values
@@ -30,7 +42,7 @@ beyond the form renderer's expansion depth.
 Function bodies preserve calls, aliases, assignments, conditions, inheritance,
 and dispatch, including overloads split across namespace files. Core and codegen
 share the base-signature resolver. Qualified calls retain their resolved namespace through imports,
-implicit calls, and `super`. Per-namespace files keep their original exported
+implicit calls, and `super`. Functions sharing a name with a type receive a `NameFunction` export (with a numeric suffix when needed); `GeneratedFunc.exportName` records it while `name` retains the Rune name. Otherwise per-namespace files keep their original exported
 function names; conflicting callable names in barrel and single-file output use
 `__rune$namespace$Name` exports (namespace dots become `$`). Internal aliases use
 `$` so Rune inputs and aliases cannot shadow them.

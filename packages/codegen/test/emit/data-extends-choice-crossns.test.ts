@@ -24,8 +24,9 @@
  * actually resolved and its exports checked).
  */
 
+import { generatedDirectory } from '../helpers/generated-directory.js';
 import { readFileSync, readdirSync } from 'node:fs';
-import { mkdtemp, writeFile, mkdir } from 'node:fs/promises';
+import { writeFile, mkdir } from 'node:fs/promises';
 import { join, dirname, resolve } from 'node:path';
 import { tmpdir } from 'node:os';
 import { createRuneDslServices } from '@rune-langium/core';
@@ -106,7 +107,7 @@ describe('Data-extends-Choice — cross-namespace Choice supertype', () => {
     // resolution maps the emitted `.js` specifiers back to the on-disk
     // `.ts` sources, so a nonexistent imported symbol (the old TS2305
     // break) fails HERE, where a single-file virtual check cannot see it.
-    const tmpDir = await mkdtemp(join(tmpdir(), 'rune-codegen-dec-crossns-'));
+    const tmpDir = await generatedDirectory(join(tmpdir(), 'rune-codegen-dec-crossns-'));
     let productPath = '';
     for (const output of outputs) {
       const outPath = join(tmpDir, output.relativePath);

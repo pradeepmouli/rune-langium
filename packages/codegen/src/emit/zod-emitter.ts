@@ -9,6 +9,23 @@
  * FR-002–FR-009, FR-021 (inline helpers), FR-022 (deterministic output).
  */
 
+import {
+  getEnumValues,
+  getElementNamespace,
+  isChoice,
+  isData,
+  type Choice,
+  type Data,
+  type Attribute,
+  type RosettaEnumeration,
+  type RosettaCardinality,
+  type RosettaTypeAlias,
+  type RosettaRule,
+  type RosettaReport,
+  type Annotation,
+  type RosettaExternalFunction,
+  type TypeCall
+} from '@rune-langium/core';
 import { resolveImportPath, type NamespaceRegistry } from './namespace-registry.js';
 import { emitNamespaceWithContract, type NamespaceEmitterOptions } from './namespace-emitter.js';
 import {
@@ -25,23 +42,6 @@ import { getTargetRelativePath, type NamespaceWalkResult } from './namespace-wal
 import { resolveTypeCallTarget, type TypeIndexEntry, type TypeIndexLookup } from './type-ref-resolver.js';
 import { zodProfile } from './zod-profile.js';
 import { typescriptProfile } from './typescript-profile.js';
-import {
-  getElementNamespace,
-  isChoice,
-  isData,
-  isRosettaEnumeration,
-  type Choice,
-  type Data,
-  type Attribute,
-  type RosettaEnumeration,
-  type RosettaCardinality,
-  type RosettaTypeAlias,
-  type RosettaRule,
-  type RosettaReport,
-  type Annotation,
-  type RosettaExternalFunction,
-  type TypeCall
-} from '@rune-langium/core';
 import { debug } from '../instrument.js';
 import type { GeneratorOptions, GeneratorOutput, SourceMapEntry, GeneratorDiagnostic } from '../types.js';
 import { RUNTIME_HELPER_SOURCE, buildRuntimeHelperImportLine } from '../helpers.js';
@@ -1066,7 +1066,7 @@ export class ZodNamespaceEmitter extends BaseNamespaceEmitter {
     const name = enumNode.name;
     const schemaName = `${name}Schema`;
 
-    const memberNames = enumNode.enumValues.map((v) => v.name);
+    const memberNames = getEnumValues(enumNode).map((v) => v.name);
 
     if (memberNames.length === 0) {
       this.ctx.diagnostics.push({
@@ -1086,9 +1086,9 @@ export class ZodNamespaceEmitter extends BaseNamespaceEmitter {
     ];
 
     // Emit display-name companion if any member has a display name
-    const hasDisplayNames = enumNode.enumValues.some((v) => v.display != null);
+    const hasDisplayNames = getEnumValues(enumNode).some((v) => v.display != null);
     if (hasDisplayNames) {
-      const displayEntries = enumNode.enumValues.map((v) => {
+      const displayEntries = getEnumValues(enumNode).map((v) => {
         // Use single-quoted value (oxfmt singleQuote: true); key unquoted (valid ES5+ property key)
         const displayName =
           v.display != null

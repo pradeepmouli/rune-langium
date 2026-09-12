@@ -11108,6 +11108,24 @@ export const RuneDslGrammar = (): Grammar =>
             "typeRef": {
               "$ref": "#/rules@20"
             }
+          },
+          {
+            "$type": "SimpleType",
+            "typeRef": {
+              "$ref": "#/rules@21"
+            }
+          },
+          {
+            "$type": "SimpleType",
+            "typeRef": {
+              "$ref": "#/rules@43"
+            }
+          },
+          {
+            "$type": "SimpleType",
+            "typeRef": {
+              "$ref": "#/rules@39"
+            }
           }
         ]
       }
@@ -11235,25 +11253,13 @@ export const RuneDslGrammar = (): Grammar =>
           {
             "$type": "SimpleType",
             "typeRef": {
-              "$ref": "#/rules@19"
-            }
-          },
-          {
-            "$type": "SimpleType",
-            "typeRef": {
-              "$ref": "#/rules@20"
+              "$ref": "#/types@0"
             }
           },
           {
             "$type": "SimpleType",
             "typeRef": {
               "$ref": "#/rules@49"
-            }
-          },
-          {
-            "$type": "SimpleType",
-            "typeRef": {
-              "$ref": "#/rules@23/inferredType"
             }
           }
         ]

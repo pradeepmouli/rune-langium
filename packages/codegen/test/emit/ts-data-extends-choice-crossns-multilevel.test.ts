@@ -15,8 +15,9 @@
  * (choice, ns a).
  */
 
+import { generatedDirectory } from '../helpers/generated-directory.js';
 import { readFileSync, readdirSync } from 'node:fs';
-import { mkdtemp, writeFile, mkdir } from 'node:fs/promises';
+import { writeFile, mkdir } from 'node:fs/promises';
 import { join, dirname, resolve } from 'node:path';
 import { tmpdir } from 'node:os';
 import { createRuneDslServices } from '@rune-langium/core';
@@ -86,7 +87,7 @@ describe('TS emitter — multi-level cross-namespace Data-extends-Choice chain',
     const outputs = await generate(docs, { target: 'typescript' });
     expect(outputs.length).toBeGreaterThanOrEqual(3);
 
-    const tmpDir = await mkdtemp(join(tmpdir(), 'rune-codegen-ded-crossns-multilevel-'));
+    const tmpDir = await generatedDirectory(join(tmpdir(), 'rune-codegen-ded-crossns-multilevel-'));
     let cPath = '';
     for (const output of outputs) {
       const outPath = join(tmpDir, output.relativePath);

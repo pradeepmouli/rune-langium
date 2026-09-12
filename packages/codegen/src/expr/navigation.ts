@@ -22,6 +22,7 @@ import {
   isRosettaConditionalExpression,
   isDefaultOperation,
   isInlineFunction,
+  isClosureParameter,
   isFilterOperation,
   isMapOperation,
   isSortOperation,
@@ -40,6 +41,7 @@ import {
   type RosettaRecordFeature,
   type Choice
 } from '@rune-langium/core';
+import { AstUtils } from 'langium';
 import { choiceOptionFieldName } from '../emit/base-namespace-emitter.js';
 import { functionOutput } from '../types/func.js';
 
@@ -49,7 +51,7 @@ export function resolveType(call: TypeCall | undefined, seen: Set<RosettaType> =
   return resolveTypeAliases(call?.type?.ref, seen);
 }
 
-function featureIsMany(feature: Feature | undefined): boolean {
+export function featureIsMany(feature: Feature | undefined): boolean {
   const card = feature && 'card' in feature ? feature.card : undefined;
   return card?.unbounded === true || (card?.sup ?? 1) > 1;
 }
@@ -110,10 +112,10 @@ export function expressionIsMany(
       isSortOperation(expr) ||
       isReverseOperation(expr) ||
       isDistinctOperation(expr) ||
-      isFlattenOperation(expr) ||
-      isListLiteral(expr)
+      isFlattenOperation(expr)
     )
       return true;
+    if (isListLiteral(expr)) return expr.elements.length > 0;
     if (isRosettaDeepFeatureCall(expr)) {
       return from(expr.receiver) || deepNavigationPaths(expr).some((path) => path.some(featureIsMany));
     }
@@ -122,9 +124,19 @@ export function expressionIsMany(
     }
     if (isRosettaSymbolReference(expr)) {
       const ref = expr.symbol?.ref;
+      const owner = AstUtils.getContainerOfType(expr, isInlineFunction);
+      if (owner && isThenOperation(owner.$container)) {
+        const argument = getOperationArgument(owner.$container);
+        if (isClosureParameter(ref) || (isAttribute(ref) && typeFeatures(expressionType(argument)).includes(ref)))
+          return from(argument) || featureIsMany(isAttribute(ref) ? ref : undefined);
+      }
       if (isRosettaFunction(ref)) return featureIsMany(functionOutput(ref));
       if (isShortcutDeclaration(ref)) return from(ref.expression);
       return featureIsMany(ref as Feature | undefined);
+    }
+    if (expr.$type === 'RosettaImplicitVariable') {
+      const owner = AstUtils.getContainerOfType(expr, isInlineFunction);
+      return !!owner && isThenOperation(owner.$container) && from(getOperationArgument(owner.$container));
     }
     if (isThenOperation(expr)) {
       return expr.function ? from(expr.function.body) : from(expr.argument);
@@ -266,7 +278,9 @@ export function choiceOptionPaths(choice: Choice, goal: RosettaType, exact = fal
   const paths = getChoiceOptionPaths(choice)
     .filter((path) => {
       const declared = path[path.length - 1]!.typeCall.type.ref;
-      return exact ? declared === goal : typeMatches(resolveTypeAliases(declared), goal);
+      return (
+        declared === goal || (!exact && typeMatches(resolveTypeAliases(declared), resolveTypeAliases(goal) ?? goal))
+      );
     })
     .map((path) => path.map(featureName));
   if (!exact && typeMatches(choice, goal)) paths.unshift([]);
@@ -288,9 +302,7 @@ export function renderFeaturePath(receiver: string, path: readonly string[], man
       result = `((__value) => ${access})(${result})`;
       continue;
     }
-    const arrayAccess = `__value.flatMap((__item) => { const __next = ${access.replace(/__value/g, '__item')}; return __next == null ? [] : Array.isArray(__next) ? __next : [__next]; })`;
-    const scalarAccess = `(() => { const __next = ${access}; return __next == null ? [] : Array.isArray(__next) ? __next : [__next]; })()`;
-    result = `((__value) => Array.isArray(__value) ? ${arrayAccess} : ${scalarAccess})(${result})`;
+    result = `runeList(${result}).flatMap((__value) => runeList(${access}))`;
   }
   return result;
 }
