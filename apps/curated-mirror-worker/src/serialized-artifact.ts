@@ -12,11 +12,6 @@ import { computeNamespaceGraph, type NamespaceGraphEntry } from './namespace-gra
 const BLOCK = 512;
 const LANGIUM_VERSION = '4.2.2';
 
-const { RuneDsl } = createRuneDslServices();
-const factory = RuneDsl.shared.workspace.LangiumDocumentFactory;
-const builder = RuneDsl.shared.workspace.DocumentBuilder;
-const serializer = RuneDsl.serializer.JsonSerializer;
-
 interface TarEntry {
   path: string;
   size: number;
@@ -43,6 +38,12 @@ export async function buildSerializedWorkspaceArtifact(
   if (rosettaFiles.length === 0) {
     throw new Error(`curated source ${modelId}@${version} contained no .rosetta files`);
   }
+
+  const { RuneDsl } = createRuneDslServices();
+  await RuneDsl.shared.workspace.WorkspaceManager.initializeWorkspace([]);
+  const factory = RuneDsl.shared.workspace.LangiumDocumentFactory;
+  const builder = RuneDsl.shared.workspace.DocumentBuilder;
+  const serializer = RuneDsl.serializer.JsonSerializer;
 
   const documents = rosettaFiles.map((file) =>
     factory.fromString(file.content, URI.parse(`[${modelId}]/${file.path}`))

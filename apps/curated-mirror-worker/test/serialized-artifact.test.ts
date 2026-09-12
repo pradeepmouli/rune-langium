@@ -100,6 +100,21 @@ describe('buildSerializedWorkspaceArtifact — AppleDouble filter', () => {
     expect(result.documentCount, 'expected 3 real docs, not 6 (companions filtered)').toBe(3);
   });
 
+  it('rejects unresolved references even when an earlier artifact supplied the missing declaration', async () => {
+    const root = 'wrap/rosetta-source/src/main/rosetta/';
+    const consumer = {
+      path: root + 'consumer.rosetta',
+      content: 'namespace isolated\ntype Consumer:\n target Target (1..1)'
+    };
+    const target = { path: root + 'target.rosetta', content: 'namespace isolated\ntype Target:' };
+    expect(
+      (await buildSerializedWorkspaceArtifact('cdm', 'complete', makeUstarTar([consumer, target]))).documentCount
+    ).toBe(2);
+    await expect(buildSerializedWorkspaceArtifact('cdm', 'incomplete', makeUstarTar([consumer]))).rejects.toThrow(
+      "Could not resolve reference to RosettaType named 'Target'"
+    );
+  });
+
   it('excludes upstream tests and rejects production files with parse errors', async () => {
     const root = 'wrap/rosetta-source/src/main/rosetta/';
     const good = { path: root + 'good.rosetta', content: 'namespace example\ntype Good:\n value string (1..1)' };
