@@ -47,6 +47,68 @@ async function compile(source: string | string[], typeAssertions = '') {
 describe('generated TypeScript function execution', () => {
   it.each(
     ['', 'scheme', 'reference'].flatMap((annotation) =>
+      (
+        [
+          [1, 2],
+          [0, 2],
+          [2, null],
+          [1, 1],
+          [0, 1],
+          [0, 0]
+        ] as const
+      ).map(([lower, upper]) => ({ annotation, lower, upper }))
+    )
+  )('checks function inputs lower=$lower upper=$upper ($annotation)', async ({ annotation, lower, upper }) => {
+    const many = upper === null || upper > 1;
+    const funcs = await compile(`namespace test.inputBounds
+func Bounded:
+ inputs: values int (${lower}..${upper ?? '*'})
+ ${annotation ? `[metadata ${annotation}]` : ''}
+ output: result int (1..1)
+ set result: 42
+func Call:
+ inputs: values int (0..${many ? '*' : '1'})
+ ${annotation ? `[metadata ${annotation}]` : ''}
+ output: result int (1..1)
+ set result: Bounded(values${many ? ' filter [item = 1]' : ''})`);
+    const wrap = (value: number) =>
+      annotation === 'scheme' ? { value, meta: {} } : annotation === 'reference' ? { value } : value;
+    for (const name of ['Bounded', 'Call']) {
+      const fn = funcs[name]!;
+      if (upper === 0) {
+        expect(fn({})).toBe(42);
+        expect(() => fn({ values: wrap(1) })).toThrow();
+        continue;
+      }
+      const values = many ? Array(Math.max(lower, 1)).fill(1).map(wrap) : wrap(1);
+      const input = Object.freeze({ values });
+      expect(fn(input)).toBe(42);
+      expect(input.values).toBe(values);
+      if (lower > 0) {
+        expect(() => fn({})).toThrow();
+        if (many)
+          expect(() =>
+            fn({
+              values: Array(lower - 1)
+                .fill(1)
+                .map(wrap)
+            })
+          ).toThrow();
+      } else expect(fn({})).toBe(42);
+      if (many && upper !== null)
+        expect(() =>
+          fn({
+            values: Array(upper + 1)
+              .fill(1)
+              .map(wrap)
+          })
+        ).toThrow();
+    }
+    if (many && lower > 0) expect(() => funcs.Call!({ values: [wrap(-1), wrap(-2)] })).toThrow();
+  });
+
+  it.each(
+    ['', 'scheme', 'reference'].flatMap((annotation) =>
       [
         [1, 2],
         [2, 3],

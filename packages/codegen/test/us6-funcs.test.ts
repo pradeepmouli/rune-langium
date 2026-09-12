@@ -21,6 +21,7 @@ import { join, resolve } from 'node:path';
 import { describe, it, expect } from 'vitest';
 import { createRuneDslServices } from '@rune-langium/core';
 import { URI } from 'langium';
+import ts from 'typescript-classic';
 import { generate } from '../src/export.js';
 import { buildFuncCallGraph, findCyclicFuncs, topoSortFuncs } from '../src/types/func.js';
 import type { RuneFunc } from '../src/types/func.js';
@@ -246,14 +247,17 @@ describe('US6 funcs: constructor-expr (T128)', () => {
     expect(actual).toBe(expected);
   });
 
-  it('constructor expression with named fields emits key-value pairs', async () => {
-    const actual = await generateFuncFixture('constructor-expr');
-    expect(actual).toContain('{ x: input.x, y: input.y }');
-  });
-
-  it('constructor expression with implicit-empty emits empty object', async () => {
-    const actual = await generateFuncFixture('constructor-expr');
-    expect(actual).toContain('origin: {}');
+  it.each([
+    ['MakePoint', { x: 3, y: 4 }, { x: 3, y: 4 }],
+    ['MakeEmptyBox', { w: 5 }, { origin: {}, width: 5 }]
+  ] as const)('executes %s constructor values', async (name, input, expected) => {
+    const source = await generateFuncFixture('constructor-expr');
+    const javascript = ts.transpileModule(source, {
+      compilerOptions: { target: ts.ScriptTarget.ES2022, module: ts.ModuleKind.CommonJS }
+    }).outputText;
+    const exports: Record<string, (input: Record<string, unknown>) => unknown> = {};
+    new Function('exports', javascript)(exports);
+    expect(exports[name]!(input)).toEqual(expected);
   });
 });
 

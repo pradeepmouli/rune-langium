@@ -39,6 +39,7 @@ const runeToZonedDateTime = (v: unknown): string | undefined =>
 
 
 export function AddTwo(input: { a: number; b: number }): number {
+  input = { ...input, a: ((value) => { if (value == null) throw new Error("Argument 'a' requires a value"); return value; })(input.a), b: ((value) => { if (value == null) throw new Error("Argument 'b' requires a value"); return value; })(input.b) };
   let result: number | undefined;
   result = input.a + input.b;
   if (result == null) throw new Error("Function 'AddTwo' produced no result");

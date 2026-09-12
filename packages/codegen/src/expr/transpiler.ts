@@ -9,6 +9,8 @@ import {
   type FieldMetadataKind
 } from './metadata-runtime.js';
 import { renderMetadataOperation } from './metadata-operation.js';
+import { normalizeCardinalityValue } from './cardinality.js';
+import { decodeCardinality } from '../emit/base-namespace-emitter.js';
 import { expressionMetadataKind } from './metadata-type.js';
 import { functionOutput, resolveFuncValueTypeTs, type FuncTypeNameResolver } from '../types/func.js';
 import { renderSwitchExpression } from './switch-expression.js';
@@ -1274,10 +1276,15 @@ function prepareFunctionArgument(
         : expressionMetadataKind(argument)
     : ctx.implicitMetadata?.kind;
   if (!argument && sourceKind && !kind) value = unwrapMetadata(value, ctx.implicitMetadata?.many ?? false);
-  if (sourceKind === 'reference' && !kind && !many && (parameter.card?.inf ?? 1) > 0) {
-    value = `((value) => { if (value == null) throw new Error(${JSON.stringify(`Argument '${parameter.name}' requires a value`)}); return value; })(${value})`;
+  if (ctx.emitMode.startsWith('ts-') && (parameter.card || (sourceKind === 'reference' && !kind))) {
+    value = normalizeCardinalityValue(
+      value,
+      parameter.card ? decodeCardinality(parameter.card) : { lower: 1, upper: 1 },
+      `Argument '${parameter.name}'`
+    );
+  } else if (many) {
+    value = `((value) => value == null ? [] : Array.isArray(value) ? value : [value])(${value})`;
   }
-  if (many) value = `((value) => value == null ? [] : Array.isArray(value) ? value : [value])(${value})`;
   if (kind && sourceKind !== kind) {
     const helper = kind === 'reference' ? 'runeToReference' : 'runeToField';
     const inputKind = JSON.stringify(sourceKind ?? 'value');

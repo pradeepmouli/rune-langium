@@ -39,6 +39,7 @@ const runeToZonedDateTime = (v: unknown): string | undefined =>
 
 
 export function CollectItems(input: { value: number }): number[] {
+  input = { ...input, value: ((value) => { if (value == null) throw new Error("Argument 'value' requires a value"); return value; })(input.value) };
   let result: number[] = [];
   {
     const __assignmentValue = ((value) => value == null ? [] : Array.isArray(value) ? value : [value])(input.value);

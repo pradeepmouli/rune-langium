@@ -5,7 +5,8 @@ import { expressionIsMany, typeFeatures } from '../expr/navigation.js';
 import { expressionMetadataKind } from '../expr/metadata-type.js';
 import { groupFuncDispatches, renderFuncDispatchGroup } from './func-dispatch.js';
 import { AstUtils, isMultiReference, type AstNode } from 'langium';
-import { renderFuncAssignment, renderCardinalityChecks } from './func-assignment.js';
+import { renderFuncAssignment } from './func-assignment.js';
+import { renderCardinalityChecks, normalizeCardinalityValue } from '../expr/cardinality.js';
 import {
   fieldMetadataKind,
   hasFieldMetadata,
@@ -1951,6 +1952,12 @@ export class TsNamespaceEmitter extends BaseNamespaceEmitter {
    */
   private static emitFuncBody(func: RuneFunc, ctx: FuncBodyContext): string[] {
     const bodyLines: string[] = [];
+    const checkedInputs = func.inputs.flatMap((parameter) => {
+      const value = `input.${parameter.name}`;
+      const normalized = normalizeCardinalityValue(value, parameter.cardinality, `Argument '${parameter.name}'`);
+      return normalized === value ? [] : [`${parameter.name}: ${normalized}`];
+    });
+    if (checkedInputs.length) bodyLines.push(`  input = { ...input, ${checkedInputs.join(', ')} };`);
 
     if (func.isAbstract) {
       // Same alias-before-precondition ordering as the non-abstract path

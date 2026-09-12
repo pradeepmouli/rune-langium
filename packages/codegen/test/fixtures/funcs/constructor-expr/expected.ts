@@ -107,15 +107,17 @@ type RuneFuncData<T> = T extends readonly (infer I)[]
         : T;
 
 export function MakePoint(input: { x: number; y: number }): RuneFuncData<PointShape> {
+  input = { ...input, x: ((value) => { if (value == null) throw new Error("Argument 'x' requires a value"); return value; })(input.x), y: ((value) => { if (value == null) throw new Error("Argument 'y' requires a value"); return value; })(input.y) };
   let result: RuneFuncData<PointShape> | undefined;
-  result = { x: input.x, y: input.y };
+  result = { x: ((value) => { if (value == null) throw new Error("Argument 'x' requires a value"); return value; })(input.x), y: ((value) => { if (value == null) throw new Error("Argument 'y' requires a value"); return value; })(input.y) };
   if (result == null) throw new Error("Function 'MakePoint' produced no result");
   return result;
 }
 
 export function MakeEmptyBox(input: { w: number }): RuneFuncData<BoxShape> {
+  input = { ...input, w: ((value) => { if (value == null) throw new Error("Argument 'w' requires a value"); return value; })(input.w) };
   let result: RuneFuncData<BoxShape> | undefined;
-  result = { origin: {}, width: input.w };
+  result = { origin: ((value) => { if (value == null) throw new Error("Argument 'origin' requires a value"); return value; })({}), width: ((value) => { if (value == null) throw new Error("Argument 'width' requires a value"); return value; })(input.w) };
   if (result == null) throw new Error("Function 'MakeEmptyBox' produced no result");
   return result;
 }

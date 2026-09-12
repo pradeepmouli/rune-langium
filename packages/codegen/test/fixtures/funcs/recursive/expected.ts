@@ -39,6 +39,7 @@ const runeToZonedDateTime = (v: unknown): string | undefined =>
 
 
 export function Double(input: { n: number }): number {
+  input = { ...input, n: ((value) => { if (value == null) throw new Error("Argument 'n' requires a value"); return value; })(input.n) };
   let result: number | undefined;
   result = input.n + input.n;
   if (result == null) throw new Error("Function 'Double' produced no result");
@@ -46,6 +47,7 @@ export function Double(input: { n: number }): number {
 }
 
 export function Triple(input: { n: number }): number {
+  input = { ...input, n: ((value) => { if (value == null) throw new Error("Argument 'n' requires a value"); return value; })(input.n) };
   let result: number | undefined;
   result = input.n + input.n + input.n;
   if (result == null) throw new Error("Function 'Triple' produced no result");

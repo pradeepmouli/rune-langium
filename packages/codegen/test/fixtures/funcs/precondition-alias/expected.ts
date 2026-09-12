@@ -74,6 +74,7 @@ type RuneFuncData<T> = T extends readonly (infer I)[]
         : T;
 
 export function UsePayload(input: { wrapper: RuneFuncData<WrapperShape> }): string {
+  input = { ...input, wrapper: ((value) => { if (value == null) throw new Error("Argument 'wrapper' requires a value"); return value; })(input.wrapper) };
   let result: string | undefined;
   const payload = input.wrapper?.payload;
   if (!runeAttrExists(payload)) {

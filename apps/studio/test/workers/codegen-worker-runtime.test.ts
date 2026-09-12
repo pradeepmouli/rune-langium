@@ -41,6 +41,44 @@ describe('codegen-worker parsed/emitted function execution', () => {
     vi.unstubAllGlobals();
   });
 
+  it('executes models whose type names match private evaluator bindings', async () => {
+    const { scope, dispatch } = await loadRealWorker();
+    dispatch({
+      type: 'preview:setFiles',
+      requestId: 'bindings:files',
+      files: [
+        {
+          uri: 'file:///bindings.rosetta',
+          content: `namespace bindings
+type __generatedRuntime:
+ value int (1..1)
+type __module:
+ value int (1..1)
+type __functionRuntime:
+ value int (1..1)
+func Read:
+ inputs: value __generatedRuntime (1..1)
+ output: result __module (1..1)
+ set result: __module {value: value -> value}`
+        }
+      ]
+    });
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    dispatch({
+      type: 'preview:execute',
+      funcName: 'bindings.Read',
+      inputs: { value: { value: 7 } },
+      requestId: 'bindings:execute'
+    });
+    await waitForMessage(scope, 'preview:execute-result');
+    expect(scope.postMessage).toHaveBeenLastCalledWith({
+      type: 'preview:execute-result',
+      funcName: 'bindings.Read',
+      requestId: 'bindings:execute',
+      output: { value: 7 }
+    });
+  }, 15_000);
+
   it.each([undefined, 5])(
     'adapts raw inherited metadata inputs, including recursive fields (optional=%s)',
     async (maybe) => {

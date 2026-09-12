@@ -2,35 +2,10 @@
 // Copyright (c) 2026 Pradeep Mouli
 
 import { expressionMetadataKind } from '../expr/metadata-type.js';
+import { renderCardinalityChecks } from '../expr/cardinality.js';
 import { freshLocal } from '../expr/inline-function.js';
 import { isRosettaExpression, isListLiteral } from '@rune-langium/core';
-import type { FuncBodyContext, RuneFuncAssignment, RuneFuncParam } from '../types/func.js';
-
-/** Shared runtime bounds for function outputs and nested assignment values. */
-export function renderCardinalityChecks(
-  value: string,
-  cardinality: RuneFuncParam['cardinality'],
-  many: boolean,
-  minimumError: string,
-  maximumError: string,
-  arraySize = `${value}.length`
-): string[] {
-  const checks: string[] = [];
-  if (cardinality.lower > 0) {
-    const missing = many ? `${arraySize} < ${cardinality.lower}` : `${value} == null`;
-    checks.push(`if (${missing}) throw new Error(${JSON.stringify(minimumError)});`);
-  }
-  const excess =
-    cardinality.upper === null
-      ? undefined
-      : many
-        ? `${arraySize} > ${cardinality.upper}`
-        : cardinality.upper === 0
-          ? `${value} != null`
-          : undefined;
-  if (excess) checks.push(`if (${excess}) throw new Error(${JSON.stringify(maximumError)});`);
-  return checks;
-}
+import type { FuncBodyContext, RuneFuncAssignment } from '../types/func.js';
 
 export function renderFuncAssignment(
   assignment: RuneFuncAssignment,

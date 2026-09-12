@@ -824,10 +824,10 @@ function createGeneratedModuleLoader(outputs: readonly GeneratorOutput[]): {
     };
     const javascript = transpileGeneratedTypeScript(source, path);
     runInWorkerSandbox(
-      `const __module = __generatedRuntime.module;\nconst exports = __module.exports;\nconst require = __generatedRuntime.require;\n${javascript}`,
-      '__generatedRuntime',
+      `const exports = $rune$module.module.exports;\nconst require = $rune$module.require;\n${javascript}`,
+      '$rune$module',
       runtime,
-      '__generatedRuntime.module.exports',
+      '$rune$module.module.exports',
       false
     );
     return module.exports;
@@ -905,9 +905,9 @@ async function executeFunction(funcName: string, inputs: Record<string, unknown>
     }
     const output = runInWorkerSandbox(
       '',
-      '__functionRuntime',
+      '$rune$function',
       { functionValue, inputs, documents, targetId: selectedTargetId, normalizePreviewInputs },
-      '__functionRuntime.functionValue(__functionRuntime.normalizePreviewInputs(__functionRuntime.documents, __functionRuntime.targetId, __functionRuntime.inputs, { field: runeToField, reference: runeToReference }))'
+      '$rune$function.functionValue($rune$function.normalizePreviewInputs($rune$function.documents, $rune$function.targetId, $rune$function.inputs, { field: runeToField, reference: runeToReference }))'
     );
 
     scope.postMessage({
