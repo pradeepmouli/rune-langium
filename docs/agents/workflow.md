@@ -25,6 +25,8 @@ pnpm --filter @rune-langium/codegen run generate:sql-node-types
 ```
 
 Run only the generators affected by the change.
+Domain generation applies the same safe lint fixes as the commit hook before
+formatting, so its type-only imports reproduce in CI.
 The current Langium CLI's JSON-schema validation fails with `Invalid URL` on
 Node 24/26. Node 22.13.0 was verified for grammar generation. When the CLI asks
 whether to delete additional generated files, retain `domain.ts` and
