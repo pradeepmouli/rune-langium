@@ -78,7 +78,7 @@ export const FunctionNode = memo(function FunctionNode({ data, selected, id }: N
     return <BaseFlowNode id={id} kind="func" name={name} className="rune-node-func" selected={selected} />;
   }
 
-  const inputRows = data.inputRows as ReadonlyArray<StructureRow>;
+  const inputRows = data.inputRows;
   const outputRow = data.outputRow;
   const rowsColWidth = data.rowsColWidth;
 

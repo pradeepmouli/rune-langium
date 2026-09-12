@@ -208,7 +208,7 @@ function createDockviewPanelBridge(name: PanelComponentName): React.FC<IDockview
 }
 
 const DOCKVIEW_COMPONENTS: Record<string, React.FC<IDockviewPanelProps>> = Object.fromEntries(
-  PANEL_COMPONENT_NAMES.map((name) => [name, createDockviewPanelBridge(name as PanelComponentName)])
+  PANEL_COMPONENT_NAMES.map((name) => [name, createDockviewPanelBridge(name)])
 );
 
 function applyPanelTabMeta(
@@ -405,7 +405,7 @@ export const DockShell = withInstrumentation(
             onLayoutChangeRef.current({
               version: LAYOUT_SCHEMA_VERSION,
               writtenBy: studioVersionRef.current,
-              dockview: dockviewJson as PanelLayoutRecord['dockview']
+              dockview: dockviewJson
             });
           } catch (err) {
             console.error('[DockShell] Failed to serialize layout change', err);

@@ -196,7 +196,7 @@ const EditorFormPanel = memo(function EditorFormPanel({
   // fallback (callers must pass the node.meta sibling for real nodes).
   const nodeMeta = metaProp ?? FALLBACK_META;
 
-  const inheritedGroups = useInheritedMembers(nodeData as AnyGraphNode | null, allNodes, 20, nodeRepository);
+  const inheritedGroups = useInheritedMembers(nodeData, allNodes, 20, nodeRepository);
 
   // Derive allNodeIds for TypeLink resolution
   const allNodeIds = useMemo(() => allNodes.map((n) => n.id), [allNodes]);
@@ -315,7 +315,7 @@ const EditorFormPanel = memo(function EditorFormPanel({
       case 'data':
         return (
           <DataTypeForm
-            key={nodeId!}
+            key={nodeId}
             nodeId={nodeId!}
             data={nodeData!}
             meta={nodeMeta}
@@ -334,7 +334,7 @@ const EditorFormPanel = memo(function EditorFormPanel({
       case 'enum':
         return (
           <EnumForm
-            key={nodeId!}
+            key={nodeId}
             nodeId={nodeId!}
             data={nodeData!}
             meta={nodeMeta}
@@ -352,7 +352,7 @@ const EditorFormPanel = memo(function EditorFormPanel({
       case 'choice':
         return (
           <ChoiceForm
-            key={nodeId!}
+            key={nodeId}
             nodeId={nodeId!}
             data={nodeData!}
             meta={nodeMeta}
@@ -369,7 +369,7 @@ const EditorFormPanel = memo(function EditorFormPanel({
       case 'func':
         return (
           <FunctionForm
-            key={nodeId!}
+            key={nodeId}
             nodeId={nodeId!}
             data={nodeData!}
             meta={nodeMeta}
@@ -387,7 +387,7 @@ const EditorFormPanel = memo(function EditorFormPanel({
       case 'typeAlias':
         return (
           <TypeAliasForm
-            key={nodeId!}
+            key={nodeId}
             nodeId={nodeId!}
             data={nodeData!}
             meta={nodeMeta}
@@ -408,7 +408,7 @@ const EditorFormPanel = memo(function EditorFormPanel({
       case 'annotation':
         return (
           <OtherForm
-            nodeData={nodeData!}
+            nodeData={nodeData}
             meta={nodeMeta}
             nodeId={nodeId}
             onNavigateToNode={onNavigateToNode}
@@ -420,7 +420,7 @@ const EditorFormPanel = memo(function EditorFormPanel({
       default:
         return (
           <OtherForm
-            nodeData={nodeData!}
+            nodeData={nodeData}
             meta={nodeMeta}
             nodeId={nodeId}
             onNavigateToNode={onNavigateToNode}

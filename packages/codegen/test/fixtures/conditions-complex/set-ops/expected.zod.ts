@@ -5,10 +5,21 @@
 import { z } from 'zod';
 
 // --- rune-codegen runtime helpers (inlined) ---
-const runeCheckOneOf = (values: (unknown | undefined | null)[]): boolean =>
-  values.filter((v) => v !== undefined && v !== null).length === 1;
+const runeValueKey = (value: unknown): string => {
+  if (value == null) return 'null';
+  if (typeof value !== 'object') return typeof value + ':' + String(value);
+  if (Array.isArray(value)) return 'array:' + JSON.stringify(value.map(runeValueKey));
+  const tag = Object.prototype.toString.call(value);
+  if (/^\[object Temporal\.(PlainDate|PlainTime|PlainDateTime|ZonedDateTime|Instant|PlainYearMonth|PlainMonthDay|Duration)\]$/.test(tag)) return tag + ':' + String(value);
+  const fields = value as Record<string, unknown>;
+  return 'object:' + JSON.stringify(Object.keys(fields).sort().filter((key) => fields[key] != null).map((key) => [key, runeValueKey(fields[key])]));
+};
+const runeValueEquals = (left: unknown, right: unknown): boolean => runeValueKey(left) === runeValueKey(right);
 
-const runeCount = (arr: unknown[] | undefined | null): number => arr?.length ?? 0;
+const runeCheckOneOf = (values: unknown[]): boolean =>
+  values.filter((v) => v !== undefined && v !== null && !(Array.isArray(v) && v.length === 0)).length === 1;
+
+const runeCount = (value: unknown): number => Array.isArray(value) ? value.length : value == null ? 0 : 1;
 
 const runeAttrExists = (v: unknown): boolean =>
   v !== undefined && v !== null && !(Array.isArray(v) && v.length === 0);
@@ -37,7 +48,7 @@ export const SetOpsCheckSchema = z
     allowed: z.array(z.string())
   })
   .refine(
-    (data) => !(data.items ?? []).some((v) => (data.allowed ?? []).includes(v)),
+    (data) => ((__left, __right) => { const left = Array.isArray(__left) ? __left : __left == null ? [] : [__left]; const right = Array.isArray(__right) ? __right : __right == null ? [] : [__right]; const keys = new Set(right.map(runeValueKey)); return !left.some((item) => keys.has(runeValueKey(item))); })(data.items, data.allowed),
     'ItemsDisjoint: condition failed in SetOpsCheck'
   );
 export type SetOpsCheck = z.infer<typeof SetOpsCheckSchema>;

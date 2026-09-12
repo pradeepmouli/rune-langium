@@ -655,7 +655,7 @@ export const parseWorkspaceViaRouter = withInstrumentation(
         path: pathInBundle,
         content: '',
         namespace: namespaceByFilePath.get(filePath) ?? '',
-        serializedModelJson: doc.serializedModel as CachedFile['serializedModelJson'],
+        serializedModelJson: doc.serializedModel,
         exports: doc.exports,
         refOnly: true
       };
@@ -715,11 +715,11 @@ export const parseWorkspaceViaRouter = withInstrumentation(
     //      renders from the deserialized models above. Throwing here would
     //      regress test envs that don't ship the parser worker.
     try {
-      const hydrateResponse = (await workerRequest({
+      const hydrateResponse = await workerRequest({
         type: 'hydrate',
         id: `hydrate:${Date.now()}`,
         documents: data.hydrationState.documents
-      })) as HydrateResponse;
+      });
       if (hydrateResponse.type === 'hydrateResult' && !hydrateResponse.ok) {
         throw new Error(`worker hydration failed: ${hydrateResponse.error ?? 'unknown'}`);
       }
@@ -959,7 +959,7 @@ export const mergeModelFiles = withInstrumentation(
         dirty: false,
         readOnly: true,
         // Non-empty string → excluded from userFiles by `!f.serializedModelJson` filter.
-        serializedModelJson: '{}' as CuratedSerializedDocument['modelJson'],
+        serializedModelJson: '{}',
         bundleId: model.source.id,
         bundleVersion: model.commitHash
       });

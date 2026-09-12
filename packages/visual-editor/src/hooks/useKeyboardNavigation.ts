@@ -39,8 +39,8 @@ function collectNodeIds(node: ExpressionNode): string[] {
 
   for (const key of CHILD_FIELDS) {
     const child = n[key];
-    if (child && typeof child === 'object' && '$type' in (child as object)) {
-      result.push(...collectNodeIds(child as ExpressionNode));
+    if (child && typeof child === 'object' && '$type' in child) {
+      result.push(...collectNodeIds(child));
     }
   }
 
@@ -48,8 +48,8 @@ function collectNodeIds(node: ExpressionNode): string[] {
   const func = n['function'] as Record<string, unknown> | undefined;
   if (func) {
     const body = func['body'];
-    if (body && typeof body === 'object' && '$type' in (body as object)) {
-      result.push(...collectNodeIds(body as ExpressionNode));
+    if (body && typeof body === 'object' && '$type' in body) {
+      result.push(...collectNodeIds(body));
     }
   }
 
@@ -58,8 +58,8 @@ function collectNodeIds(node: ExpressionNode): string[] {
   if (Array.isArray(cases)) {
     for (const c of cases as Record<string, unknown>[]) {
       const expr = c['expression'];
-      if (expr && typeof expr === 'object' && '$type' in (expr as object)) {
-        result.push(...collectNodeIds(expr as ExpressionNode));
+      if (expr && typeof expr === 'object' && '$type' in expr) {
+        result.push(...collectNodeIds(expr));
       }
     }
   }
@@ -69,8 +69,8 @@ function collectNodeIds(node: ExpressionNode): string[] {
   if (Array.isArray(values)) {
     for (const v of values as Record<string, unknown>[]) {
       const val = v['value'];
-      if (val && typeof val === 'object' && '$type' in (val as object)) {
-        result.push(...collectNodeIds(val as ExpressionNode));
+      if (val && typeof val === 'object' && '$type' in val) {
+        result.push(...collectNodeIds(val));
       }
     }
   }

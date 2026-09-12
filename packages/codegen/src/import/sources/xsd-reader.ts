@@ -2,94 +2,38 @@
 // Copyright (c) 2026 Pradeep Mouli
 
 /**
- * xsd-reader — W3C XML Schema (XSD) → `SourceModel` (spec.md Phase 3). This
- * module is the INBOUND half; the outbound `-t xsd` emitter
- * (`../../emit/xsd-emitter.ts`) shipped in a later commit on this same
- * effort — both directions now exist, forming the single-artifact
- * Rune → XSD → Rune round-trip oracle (see the `round-trip-xsd-*.test.ts`
- * files).
+ * Parses one XSD document into SourceModel. Rune AST construction and constraint
+ * translation belong to ast-builder.ts and constraint-translator.ts.
  *
- * Parser: `fast-xml-parser@^5.9.3` (spec.md Phase 3: NOT tree-sitter — XSD
- * is a document format like JSON Schema/OpenAPI, not a language with real
- * grammar/statements). No mature typed-XSD-vocabulary package exists, so
- * this module hand-rolls a small, typed walker over XSD's own well-known,
- * fixed vocabulary — the same approach `json-schema-reader.ts` takes for
- * JSON Schema.
+ * Parser invariants:
+ * - fast-xml-parser must return element, complexType, simpleType, enumeration,
+ *   and attribute nodes as arrays even for singleton occurrences. Compositors,
+ *   restrictions, complexContent, and extensions retain their object shape.
+ * - Resolve prefixes through the document's namespace declarations. xs:, xsd:,
+ *   and other aliases for the XSD namespace must behave identically.
  *
- * Two grounded parser-configuration decisions (spec.md Phase 3, verified via
- * a direct spike against `fast-xml-parser@5.9.3` against a representative
- * multi-construct sample XSD before writing this module):
- *
- *  1. `isArray` is mandatory, not optional. A tag occurring once parses to a
- *     plain object; the SAME tag occurring more than once parses to an
- *     array — the exact single-vs-many ambiguity bug class that hit the SQL
- *     reader twice. `xs:element`/`xs:complexType`/`xs:simpleType`/
- *     `xs:enumeration`/`xs:attribute` are forced to ALWAYS be arrays
- *     regardless of occurrence count. `xs:sequence`/`xs:choice`/`xs:all`/
- *     `xs:restriction`/`xs:complexContent`/`xs:extension` are NOT included —
- *     each of these occurs at most once per direct parent in valid XSD (a
- *     complexType has one `xs:sequence` XOR one `xs:choice` XOR one
- *     `xs:all`; a simpleType has one `xs:restriction`), verified empirically
- *     against a representative multi-construct sample.
- *
- *  2. Namespace prefixes are literal and arbitrary. The reader resolves
- *     tag/type-reference lookups via the DECLARED namespace URI (read from
- *     the root element's `xmlns:*` attributes into a prefix→URI map), never
- *     hardcoded `'xs:'`-prefixed string literals. A document using `xsd:`
- *     (or any other alias) for `http://www.w3.org/2001/XMLSchema` parses
- *     identically to one using `xs:` — see xsd-reader.test.ts's
- *     'xsd: prefix' regression test.
- *
- * Vocabulary (spec.md Phase 3's exact mapping):
- *  - Top-level named `xs:complexType` → `SourceType`. `xs:sequence`/
- *    `xs:choice`/`xs:all` children → attributes; a complexType's own
- *    `xs:attribute` children → also attributes (Rune has no XML-attribute-
- *    vs-element distinction).
- *  - `xs:simpleType` whose `xs:restriction` has ONLY `xs:enumeration`
- *    children → `SourceEnum`. A `simpleType` with other restriction facets
- *    (no enumeration) is NOT an enum — for MVP its facets are attached to
- *    the REFERENCING attribute (Rune has no first-class "restricted scalar
- *    type"), and the attribute is retyped to the Rune builtin matching the
- *    simpleType's own `base`.
- *  - Built-in XSD type → Rune builtin (`xs:string`→`string`,
- *    `xs:decimal`/`xs:double`/`xs:float`→`number`,
- *    `xs:int`/`xs:integer`/`xs:long`/`xs:short`→`int`, `xs:boolean`→`boolean`,
- *    `xs:date`→`date`, `xs:dateTime`→`dateTime`). A non-builtin `@_type`
- *    referencing another named complexType/enum-shaped simpleType → a typed
- *    attribute referencing that Rune type by its namespace-stripped local
- *    name.
- *  - `minOccurs`/`maxOccurs` → `SourceCardinality` (absent/`"1"` → `1`;
- *    `"0"` → `0`; `"unbounded"` or `> 1` → `sup` absent).
- *  - `xs:choice` → every member becomes a `(0..1)` attribute PLUS a
- *    type-level ConstraintIR: the `xs:choice` element's OWN `@_minOccurs`
- *    (default, when absent, `"1"` per XSD semantics) decides which —
- *    `minOccurs="0"` (a legitimately OPTIONAL group) → `{ kind: 'choice',
- *    paths }`; absent/`"1"` (the mandatory default) → `{ kind: 'oneOf',
- *    paths }` — mirrors `json-schema-reader.ts`'s own discriminated-`oneOf`
- *    handling for the mandatory case, plus the `choice` variant for the
- *    optional one.
- *  - `xs:extension` (nested in `xs:complexContent`) → `SourceType.extends`,
- *    resolved via the namespace map to the LOCAL base type name. The base
- *    type's own attributes are NOT re-emitted on the extending type.
- *  - `xs:restriction` facets → `ConstraintIR`: `xs:minInclusive`/
- *    `xs:maxInclusive` → `range` (inclusive); `xs:minExclusive`/
- *    `xs:maxExclusive` → `range` with `exclusive: true` — ONE `range` IR PER
- *    BOUND (never coalesced), matching every other reader's per-bound-
- *    exclusivity discipline; `xs:pattern` → `pattern` (always stub, per the
- *    established no-expression-level-regex rule);
- *    `xs:maxLength`/`xs:minLength`/`xs:length` → `length`.
- *  - Out of MVP scope — diagnostic + skip/stub, never silently dropped:
- *    `xs:union`, `xs:import`/`xs:include` (single-document import only —
- *    never fetches another file), substitution groups
- *    (`substitutionGroup` attribute), abstract types/elements
- *    (`abstract="true"` — Rune has no abstract-type concept; the type is
- *    still emitted structurally), `xs:group`/`xs:attributeGroup` references,
- *    mixed content.
- *
- * This module has ZERO Rune-AST awareness — its only job is
- * `XSD document text → SourceModel`. `ast-builder.ts` /
- * `constraint-translator.ts` do the Rune-specific work, exactly as for
- * every other reader.
+ * Vocabulary:
+ * - Named complexType becomes SourceType. sequence/choice/all elements and XML
+ *   attributes become Rune attributes; the XML attribute/element distinction
+ *   is not retained.
+ * - Enumeration-only simpleType restrictions become SourceEnum. Other scalar
+ *   facets attach to the referencing attribute, whose type uses the restriction
+ *   base's Rune builtin.
+ * - string → string; decimal/double/float → number; int/integer/long/short → int;
+ *   boolean → boolean; date → date; dateTime → dateTime. Named type references
+ *   use namespace-stripped local names.
+ * - Occurrence bounds map to SourceCardinality: absent/1 → 1, 0 → 0, and
+ *   unbounded or upper bounds above 1 leave sup absent.
+ * - Choice members become (0..1) attributes plus a type-level condition.
+ *   The group's own minOccurs determines optional choice (0) versus required
+ *   oneOf (absent/1).
+ * - complexContent/extension sets extends to the local base name without
+ *   copying the base's attributes into the child.
+ * - Range facets produce one ConstraintIR per bound, preserving exclusivity.
+ *   minLength/maxLength/length produce length constraints; pattern is a stub.
+ * - union, import/include, substitution groups, abstract types/elements,
+ *   group/attributeGroup references, and mixed content produce diagnostics.
+ *   External documents are never fetched; abstract types still emit structure.
  */
 
 import { XMLParser } from 'fast-xml-parser';
@@ -901,7 +845,7 @@ export function readXsd(
   const topLevelElementsByName = new Map(topLevelElementList.map((el) => [el.name, el]));
 
   const complexTypes = asArray<XmlNode>(schema[q('complexType')] as XmlNode | XmlNode[] | undefined).filter(
-    (ct) => typeof ct['@_name'] === 'string' && (ct['@_name'] as string).length > 0
+    (ct) => typeof ct['@_name'] === 'string' && ct['@_name'].length > 0
   );
   const types: SourceType[] = complexTypes.map((ct) =>
     buildType(

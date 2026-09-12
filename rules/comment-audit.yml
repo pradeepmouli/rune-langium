@@ -1,0 +1,20 @@
+id: comment-audit-typescript
+language: TypeScript
+severity: hint
+message: Comment inventory; review before changing.
+rule:
+  kind: comment
+---
+id: comment-audit-tsx
+language: Tsx
+severity: hint
+message: Comment inventory; review before changing.
+rule:
+  kind: comment
+---
+id: comment-audit-javascript
+language: JavaScript
+severity: hint
+message: Comment inventory; review before changing.
+rule:
+  kind: comment

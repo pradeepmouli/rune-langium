@@ -103,7 +103,8 @@ vi.mock('@rune-langium/codegen/export', () => ({
   generate: generateMock,
   generatePreviewSchemas: generatePreviewSchemasMock,
   emitStandaloneZodSchema: emitStandaloneZodSchemaMock,
-  RUNTIME_HELPER_JS_SOURCE: ''
+  RUNTIME_HELPER_JS_SOURCE: 'const runeToField = undefined; const runeToReference = undefined;',
+  normalizePreviewInputs: (_documents: unknown, _targetId: string, inputs: unknown) => inputs
 }));
 
 const getActiveConditionPredicatesMock = vi.fn(() => []);
@@ -736,7 +737,7 @@ describe('codegen-worker previewGenerateCache (executeFunction)', () => {
     generateMock.mockReturnValue([
       {
         relativePath: 'alpha.ts',
-        content: '',
+        content: 'export function CalcTrade(input) { return input; }',
         sourceMap: undefined,
         diagnostics: [],
         funcs: [{ name: 'CalcTrade', fileContents: 'function CalcTrade(input) { return input; }' }]
@@ -769,7 +770,7 @@ describe('codegen-worker previewGenerateCache (executeFunction)', () => {
     generateMock.mockReturnValue([
       {
         relativePath: 'alpha.ts',
-        content: '',
+        content: 'export function CalcTrade(input) { return input; }',
         sourceMap: undefined,
         diagnostics: [],
         funcs: [{ name: 'CalcTrade', fileContents: 'function CalcTrade(input) { return input; }' }]
@@ -797,7 +798,7 @@ describe('codegen-worker previewGenerateCache (executeFunction)', () => {
     generateMock.mockReturnValue([
       {
         relativePath: 'alpha.ts',
-        content: '',
+        content: 'export function CalcTrade(input) { return input; }',
         sourceMap: undefined,
         diagnostics: [],
         funcs: [{ name: 'CalcTrade', fileContents: 'function CalcTrade(input) { return input; }' }]
@@ -825,6 +826,141 @@ describe('codegen-worker previewGenerateCache (executeFunction)', () => {
     await flushWorker();
 
     expect(generateMock).toHaveBeenCalledTimes(2);
+  });
+
+  it('transpiles nested calls with generic metadata and set helpers', async () => {
+    generateMock.mockReturnValue([
+      {
+        relativePath: 'alpha.ts',
+        content: `
+          const runeWithMeta = <T, K extends string>(value: T, entries: Record<K, unknown>): T => value;
+          const runeDistinct = <T>(values: readonly T[]): T[] => Array.from(new Set(values));
+          const increment = (value: number): number => value + 1;
+          export function Summarize(input: { values: number[] }): number[] {
+            return runeWithMeta(runeDistinct(input.values.map(increment)), { source: 'preview' });
+          }
+        `,
+        sourceMap: undefined,
+        diagnostics: [],
+        funcs: [{ name: 'Summarize', fileContents: '' }]
+      }
+    ]);
+
+    const { scope, dispatch } = await loadWorkerModule();
+    dispatch({
+      type: 'preview:setFiles',
+      files: [{ uri: 'file:///trade.rosetta', content: 'namespace "alpha"' }],
+      requestId: 'generic:1'
+    });
+    await flushWorker();
+
+    dispatch({
+      type: 'preview:execute',
+      funcName: 'alpha.Summarize',
+      inputs: { values: [2, 2, 1] },
+      requestId: 'generic:2'
+    });
+    await flushWorker();
+
+    expect(scope.postMessage).toHaveBeenLastCalledWith({
+      type: 'preview:execute-result',
+      requestId: 'generic:2',
+      funcName: 'alpha.Summarize',
+      output: [3, 2]
+    });
+  });
+
+  it('resolves imports between generated namespace modules', async () => {
+    generateMock.mockReturnValue([
+      {
+        relativePath: 'alpha.ts',
+        content: `
+          import { innerValue } from './beta.js';
+          export function Outer(input: { value: number }): number {
+            return innerValue(input);
+          }
+        `,
+        sourceMap: undefined,
+        diagnostics: [],
+        funcs: [{ name: 'Outer', fileContents: '' }]
+      },
+      {
+        relativePath: 'beta.ts',
+        content: `
+          export function innerValue(input: { value: number }): number {
+            return input.value * 2;
+          }
+        `,
+        sourceMap: undefined,
+        diagnostics: [],
+        funcs: [{ name: 'innerValue', fileContents: '' }]
+      }
+    ]);
+
+    const { scope, dispatch } = await loadWorkerModule();
+    dispatch({
+      type: 'preview:setFiles',
+      files: [{ uri: 'file:///trade.rosetta', content: 'namespace "alpha"' }],
+      requestId: 'modules:1'
+    });
+    await flushWorker();
+
+    dispatch({
+      type: 'preview:execute',
+      funcName: 'alpha.Outer',
+      inputs: { value: 4 },
+      requestId: 'modules:2'
+    });
+    await flushWorker();
+
+    expect(scope.postMessage).toHaveBeenLastCalledWith({
+      type: 'preview:execute-result',
+      requestId: 'modules:2',
+      funcName: 'alpha.Outer',
+      output: 8
+    });
+  });
+
+  it('rejects imports outside the generated module graph', async () => {
+    generateMock.mockReturnValue([
+      {
+        relativePath: 'alpha.ts',
+        content: `
+          import { readFileSync } from 'node:fs';
+          export function Unsafe(input: { path: string }): string {
+            return readFileSync(input.path, 'utf8');
+          }
+        `,
+        sourceMap: undefined,
+        diagnostics: [],
+        funcs: [{ name: 'Unsafe', fileContents: '' }]
+      }
+    ]);
+
+    const { scope, dispatch } = await loadWorkerModule();
+    dispatch({
+      type: 'preview:setFiles',
+      files: [{ uri: 'file:///trade.rosetta', content: 'namespace "alpha"' }],
+      requestId: 'blocked:1'
+    });
+    await flushWorker();
+
+    dispatch({
+      type: 'preview:execute',
+      funcName: 'alpha.Unsafe',
+      inputs: { path: '/tmp/secret' },
+      requestId: 'blocked:2'
+    });
+    await flushWorker();
+
+    expect(scope.postMessage).toHaveBeenLastCalledWith(
+      expect.objectContaining({
+        type: 'preview:execute-error',
+        requestId: 'blocked:2',
+        funcName: 'alpha.Unsafe',
+        error: expect.stringContaining("unsupported dependency 'node:fs'")
+      })
+    );
   });
 });
 
@@ -1521,6 +1657,56 @@ describe('codegen-worker validateInstance (real standalone Zod validator)', () =
     expect(call.diagnostics).toHaveLength(1);
     expect(call.diagnostics[0].path).toBe('');
     expect(call.diagnostics[0].message).toMatch(/^Structural validation unavailable:/);
+  });
+
+  it('keeps structural paths when a condition shares the field name', async () => {
+    emitStandaloneZodSchemaMock.mockReturnValue({
+      code: `import { z } from 'zod';
+export const TradeSchema = z.object({ trade: z.object({ amount: z.number().min(1) }) })
+  .superRefine((_data, ctx) => { ctx.addIssue({ code: 'custom', message: 'trade: condition failed', path: ['trade'] }); });`,
+      diagnostics: []
+    });
+    findDataNodeMock.mockReturnValue({ name: 'Trade' });
+    getActiveConditionPredicatesMock.mockReturnValue([{ name: 'trade', predicate: 'false' }]);
+    const { scope, dispatch } = await loadWorkerModule();
+    await setFilesAndFlush(dispatch, flushWorker);
+    dispatch({
+      type: 'instance:validate',
+      typeFqn: 'beta.Trade',
+      data: { trade: { amount: 0 } },
+      requestId: 'collision'
+    });
+    await flushWorker();
+    expect(scope.postMessage).toHaveBeenLastCalledWith({
+      type: 'instance:validateResult',
+      requestId: 'collision',
+      diagnostics: [
+        { path: 'trade.amount', message: expect.any(String) },
+        { path: 'trade', message: 'trade: condition failed', conditionName: 'trade' }
+      ]
+    });
+  });
+
+  it('formats every array index in nested structural paths', async () => {
+    emitStandaloneZodSchemaMock.mockReturnValue({
+      code: `import { z } from 'zod';
+export const TradeSchema = z.object({ orders: z.array(z.object({ lines: z.array(z.object({ amount: z.number() })) })) });`,
+      diagnostics: []
+    });
+    const { scope, dispatch } = await loadWorkerModule();
+    await setFilesAndFlush(dispatch, flushWorker);
+    dispatch({
+      type: 'instance:validate',
+      typeFqn: 'beta.Trade',
+      data: { orders: [{ lines: [{ amount: 1 }, { amount: 'invalid' }] }] },
+      requestId: 'nested'
+    });
+    await flushWorker();
+    expect(scope.postMessage).toHaveBeenLastCalledWith({
+      type: 'instance:validateResult',
+      requestId: 'nested',
+      diagnostics: [{ path: 'orders[0].lines[1].amount', message: expect.any(String) }]
+    });
   });
 
   it('attributes a multi-condition superRefine issue to its condition name via path', async () => {

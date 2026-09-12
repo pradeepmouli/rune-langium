@@ -284,7 +284,7 @@ function coerceBytes(value: unknown): Uint8Array | null {
     return new Uint8Array(v.buffer, v.byteOffset ?? 0, v.byteLength);
   }
   if (Array.isArray(value) && value.every((b) => typeof b === 'number')) {
-    return new Uint8Array(value as number[]);
+    return new Uint8Array(value);
   }
   if (typeof value === 'string') return new TextEncoder().encode(value);
   return null;

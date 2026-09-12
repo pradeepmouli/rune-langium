@@ -98,7 +98,7 @@ export function Select({
   children?: ReactNode;
 }) {
   return (
-    <RadixSelect value={(value as string) ?? ''} onValueChange={onChange as (v: string) => void} disabled={disabled}>
+    <RadixSelect value={value ?? ''} onValueChange={onChange} disabled={disabled}>
       <SelectTrigger id={id}>
         <SelectValue placeholder="Select..." />
       </SelectTrigger>

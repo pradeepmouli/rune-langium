@@ -35,7 +35,7 @@ export interface ToDehydratedOptions {
 }
 
 export function expressionNodeToDehydrated(node: ExpressionNode, opts: ToDehydratedOptions): unknown {
-  return convert(node as unknown as Record<string, unknown>, opts);
+  return convert(node, opts);
 }
 
 function convert(value: unknown, opts: ToDehydratedOptions): unknown {

@@ -74,7 +74,7 @@ describe('Zod LanguageProfile (019 Phase 0.5.2)', () => {
     // import it from the sidecar.
     const fooOutput = outputs.find((o) => o.relativePath === 'foo.zod.ts');
     expect(fooOutput?.content).toContain(
-      `import { runeCheckOneOf, runeCount, runeAttrExists, runeToDate, runeToTime, runeToDateTime, runeToZonedDateTime, runeExtendChoice } from './runtime.zod.js';`
+      `import { runeCheckOneOf, runeCount, runeValueEquals, runeValueKey, runeAttrExists, runeToDate, runeToTime, runeToDateTime, runeToZonedDateTime, runeExtendChoice } from './runtime.zod.js';`
     );
     expect(fooOutput?.content).not.toContain('// --- rune-codegen runtime helpers (inlined) ---');
 
@@ -95,6 +95,19 @@ describe('Zod LanguageProfile (019 Phase 0.5.2)', () => {
     // typecheck and threw ReferenceError at module-init.)
     expect(runtimeOutput?.content).toContain(`export const runeExtendChoice`);
     expect(runtimeOutput?.content).toContain(`import { z } from 'zod';`);
+  });
+
+  it('resolves the shared runtime from a nested namespace', async () => {
+    const { RuneDsl } = createRuneDslServices();
+    const doc = RuneDsl.shared.workspace.LangiumDocumentFactory.fromString(
+      SOURCE_A.replace('namespace foo', 'namespace foo.bar'),
+      URI.parse('inmemory:///nested.rosetta')
+    );
+    await RuneDsl.shared.workspace.DocumentBuilder.build([doc]);
+    const outputs = await generate(doc, { target: 'zod', zod: { layout: 'barrel' } });
+    expect(outputs.find((output) => output.relativePath === 'foo/bar.zod.ts')?.content).toContain(
+      "from '../runtime.zod.js'"
+    );
   });
 
   it('the runtime.zod.ts sidecar actually executes: runeExtendChoice works when imported (no ReferenceError on z)', async () => {

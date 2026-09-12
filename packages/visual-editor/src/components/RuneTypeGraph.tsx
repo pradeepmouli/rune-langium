@@ -796,7 +796,7 @@ const RuneTypeGraphInner = forwardRef<RuneTypeGraphRef, RuneTypeGraphProps>(func
     if (groupLabel) {
       items.push({ key: 'group', label: groupLabel });
     }
-    items.push({ key: 'node', label: activeNode.data.name as string });
+    items.push({ key: 'node', label: activeNode.data.name });
     const neighborCount = edges.filter((edge) => edge.source === activeNode.id || edge.target === activeNode.id).length;
     if (neighborCount > 0) {
       items.push({
@@ -880,7 +880,7 @@ const RuneTypeGraphInner = forwardRef<RuneTypeGraphRef, RuneTypeGraphProps>(func
         if (!query.trim()) return results;
         const regex = new RegExp(query, 'i');
         for (const node of graphNodes) {
-          if (regex.test((node.data as AnyGraphNode).name as string)) {
+          if (regex.test(node.data.name)) {
             results.push(node.id);
           }
         }

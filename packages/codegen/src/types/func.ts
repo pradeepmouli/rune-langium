@@ -1,93 +1,22 @@
 // SPDX-License-Identifier: MIT
 // Copyright (c) 2026 Pradeep Mouli
 
-/**
- * T113 — Inventory: Prior-art dispatch map, operator-precedence table, and block taxonomy.
- *
- * ═══════════════════════════════════════════════════════════════════════
- * OPERATOR PRECEDENCE TABLE (from expression-node-to-dsl.ts, copied verbatim)
- * Lower number = lower precedence = binds less tightly.
- * ═══════════════════════════════════════════════════════════════════════
- *
- *   or:      1   — LogicalOperation
- *   and:     2   — LogicalOperation
- *   '=':     3   — EqualityOperation
- *   '<>':    3   — EqualityOperation
- *   contains:3   — RosettaContainsExpression
- *   disjoint:3   — RosettaDisjointExpression
- *   default: 3   — DefaultOperation
- *   '<':     4   — ComparisonOperation
- *   '<=':    4   — ComparisonOperation
- *   '>':     4   — ComparisonOperation
- *   '>=':    4   — ComparisonOperation
- *   '+':     5   — ArithmeticOperation
- *   '-':     5   — ArithmeticOperation
- *   '*':     6   — ArithmeticOperation
- *   '/':     6   — ArithmeticOperation
- *
- * ═══════════════════════════════════════════════════════════════════════
- * VISITOR-PATTERN $type DISPATCH MAP (from transpiler.ts Phase 5)
- * ═══════════════════════════════════════════════════════════════════════
- *
- *   RosettaBooleanLiteral    → transpileLiteral()  (true/false)
- *   RosettaIntLiteral        → transpileLiteral()  (BigInt → Number)
- *   RosettaNumberLiteral     → transpileLiteral()  (float)
- *   RosettaStringLiteral     → transpileLiteral()  ('escaped')
- *   RosettaSymbolReference   → `${selfName}.${name}` (attribute ref)
- *   RosettaImplicitVariable  → selfName (lambda param)
- *   RosettaFeatureCall       → transpileNavigation() → receiver?.feature
- *   RosettaDeepFeatureCall   → transpileNavigation() → receiver?.feature
- *   ArithmeticOperation      → transpileArithmetic() (+, -, *, /)
- *   ComparisonOperation      → transpileComparison() (<, <=, >, >=)
- *   EqualityOperation        → transpileComparison() (= → ===, <> → !==)
- *   LogicalOperation         → transpileBoolean() (and → &&, or → ||)
- *   RosettaContainsExpression → transpileSetOps() → (arr ?? []).includes(v)
- *   RosettaDisjointExpression → transpileSetOps() → !(arr).some(…)
- *   RosettaCountOperation    → transpileAggregation() → runeCount(arr)
- *   SumOperation             → transpileAggregation() → arr.reduce(…)
- *   MinOperation             → transpileAggregation() → Math.min(...arr)
- *   MaxOperation             → transpileAggregation() → Math.max(...arr)
- *   SortOperation            → transpileAggregation() → [...arr].sort()
- *   DistinctOperation        → transpileAggregation() → [...new Set(arr)]
- *   FirstOperation           → transpileAggregation() → arr[0]
- *   LastOperation            → transpileAggregation() → arr.at(-1)
- *   FlattenOperation         → transpileAggregation() → arr.flat()
- *   ReverseOperation         → transpileAggregation() → [...arr].reverse()
- *   FilterOperation          → transpileHigherOrder() → arr.filter((p) => body)
- *   MapOperation             → transpileHigherOrder() → arr.map((p) => body)
- *   RosettaExistsExpression  → runeAttrExists(…)
- *   RosettaAbsentExpression  → !runeAttrExists(…)
- *   RosettaConditionalExpression → transpileConditional() (ternary or if-block)
- *   OneOfOperation           → emitOneOf() → runeCheckOneOf([…])
- *   ChoiceOperation          → emitChoice() → runeCheckOneOf([…])
- *   RosettaOnlyExistsExpression → emitOnlyExists() *   RosettaConstructorExpression → transpileConstructor() → { k1: v1, k2: v2 }
- *   ListLiteral              → transpileListLiteral() → [e1, e2, ...] *
- * ═══════════════════════════════════════════════════════════════════════
- * BLOCK TAXONOMY (from expression-builder/blocks/)
- * ═══════════════════════════════════════════════════════════════════════
- *
- *   BinaryBlock        — arithmetic, comparison, equality, logical operators
- *   ComparisonBlock    — <, <=, >, >= (sub-class of BinaryBlock)
- *   ConditionalBlock   — if/then/else expression (RosettaConditionalExpression)
- *   ConstructorBlock   — type constructor invocation (not yet in transpiler)
- *   FeatureCallBlock   — navigation chain a -> b -> c (RosettaFeatureCall/Deep)
- *   LambdaBlock        — inline function body (FilterOperation/MapOperation fn)
- *   ListBlock          — list literal [a, b, c] (ListLiteral $type)
- *   LiteralBlock       — scalar literals (Bool/Int/Number/String)
- *   ReferenceBlock     — attribute or func reference (RosettaSymbolReference)
- *   SwitchBlock        — dispatch/choice switch (ChoiceOperation in conditions)
- *   UnaryBlock         — negation or unary minus (not yet in transpiler)
- *
- * Implementation notes for Phase 8b:
- * - Func inputs are referenced as `input.<name>` (not `this.<name>`) because
- *   funcs receive a single `input: { ... }` parameter (FR-028 signature shape).
- * - `selfName` in ExpressionTranspilerContext is set to `'input'` for funcs.
- * - For alias expressions, `selfName` remains `'input'` (aliases bind to the
- *   input object, not to other aliases — aliases are resolved separately via
- *   aliasBindings Map).
- * - For post-condition expressions, `selfName` is still `'input'` but the
- *   `result` local variable is also in scope.
- */
+import type { AstNode } from 'langium';
+import { fieldMetadataKind, type FieldMetadataKind } from '../expr/metadata-runtime.js';
+import { featureName } from '../expr/navigation.js';
+import {
+  getFunctionSignature as functionSignature,
+  isRosettaModel,
+  isRosettaFunction,
+  isAttribute,
+  isData,
+  isChoice,
+  isChoiceOption,
+  isRosettaTypeAlias,
+  type RosettaFunction,
+  type Attribute,
+  type TypeCall
+} from '@rune-langium/core';
 
 import type { ExpressionTranspilerContext } from '../expr/transpiler.js';
 import type { GeneratorDiagnostic } from '../types.js';
@@ -96,6 +25,8 @@ import type { GeneratorDiagnostic } from '../types.js';
 // T118 — RuneFunc type definitions
 // ---------------------------------------------------------------------------
 
+export type FuncTypeNameResolver = (declaration: AstNode & { name: string }, exportedName: string) => string;
+
 /**
  * A single input or output parameter of a Rune func declaration.
  * Extracted from the Langium Attribute AST node (RosettaFunction.inputs / output).
@@ -103,8 +34,11 @@ import type { GeneratorDiagnostic } from '../types.js';
 export interface RuneFuncParam {
   /** The parameter name as declared in the Rune model. */
   name: string;
-  /** Resolved Rune type name (e.g., 'int', 'string', a data type name). */
+  /** Resolved type name; a target emitter may qualify declaration bindings. */
   typeName: string;
+  /** Structural Shape type used by emitted TS funcs for plain Data values. */
+  shapeTypeName?: string;
+  metadataKind?: FieldMetadataKind;
   /**
    * Resolved cardinality.
    * lower: minimum cardinality (0 or 1).
@@ -124,15 +58,25 @@ export interface RuneFuncAlias {
   exprNode: unknown;
 }
 
-/**
- * A single `set <out>: <expr>` or `add <out>: <expr>` assignment in a func body.
- * Corresponds to Operation in the Langium AST.
- * - 'set' → scalar output assignment (`result = <expr>`)
- * - 'add' → array accumulation (`result.push(<expr>)`)
- */
+/** A declared assignment feature, retaining its collection and wrapper boundaries. */
+export interface RuneFuncAssignmentPathSegment {
+  name: string;
+  many: boolean;
+  choiceOption?: boolean;
+  metadataKind?: FieldMetadataKind;
+}
+
+/** A function's set/add operation, including the root and every explicit path segment. */
 export interface RuneFuncAssignment {
   kind: 'set' | 'add';
   exprNode: unknown;
+  target?: string;
+  path?: RuneFuncAssignmentPathSegment[];
+  rootMany?: boolean;
+  rootMetadataKind?: FieldMetadataKind;
+  metadataKind?: FieldMetadataKind;
+  targetMany?: boolean;
+  targetCardinality?: RuneFuncParam['cardinality'];
 }
 
 /**
@@ -149,7 +93,11 @@ export interface RuneFunc {
   /** The single output parameter. */
   output: RuneFuncParam;
   /** Name of the parent func if `extends` was used (superFunction). */
+  source?: RosettaFunction;
+  dispatchAttribute?: string;
+  dispatchValue?: string;
   superFunc?: string;
+  superFunction?: ExpressionTranspilerContext['superFunction'];
   /** Alias (shortcut) declarations in declaration order. */
   aliases: RuneFuncAlias[];
   /** Body assignments (set/add) in declaration order. */
@@ -211,8 +159,8 @@ export interface FuncBodyContext extends ExpressionTranspilerContext {
  */
 function collectCallees(expr: unknown, callees: Set<string>, visited: WeakSet<object> = new WeakSet()): void {
   if (!expr || typeof expr !== 'object') return;
-  if (visited.has(expr as object)) return;
-  visited.add(expr as object);
+  if (visited.has(expr)) return;
+  visited.add(expr);
 
   const node = expr as Record<string, unknown>;
 
@@ -226,6 +174,7 @@ function collectCallees(expr: unknown, callees: Set<string>, visited: WeakSet<ob
         if (name) callees.add(name);
       }
     }
+    for (const argument of (node['rawArgs'] as unknown[] | undefined) ?? []) collectCallees(argument, callees, visited);
     return;
   }
 
@@ -452,16 +401,51 @@ export function resolveFuncTypeTs(typeName: string): string {
 /**
  * Build a RuneFuncParam from a Langium Attribute node.
  */
-function extractParam(attr: {
-  name: string;
-  typeCall?: { type?: { $refText?: string; ref?: { name?: string } } };
-  card?: { inf?: number; sup?: number; unbounded?: boolean };
-}): RuneFuncParam {
-  const typeName = attr.typeCall?.type?.$refText ?? attr.typeCall?.type?.ref?.name ?? 'unknown';
+function funcTypeInfo(
+  typeCall: TypeCall | undefined,
+  plainDataTypeNames?: ReadonlySet<string>,
+  typeNameResolver?: FuncTypeNameResolver
+): { typeName: string; shapeTypeName?: string } {
+  const ref = typeCall?.type?.ref;
+  const typeName = ref?.name ?? typeCall?.type?.$refText ?? 'unknown';
+  const shapeTypeName =
+    isData(ref) || isChoice(ref) || plainDataTypeNames?.has(typeName)
+      ? `${typeName}Shape`
+      : isRosettaTypeAlias(ref)
+        ? typeName
+        : undefined;
+  return {
+    typeName: ref && typeNameResolver ? typeNameResolver(ref, typeName) : typeName,
+    shapeTypeName: ref && shapeTypeName && typeNameResolver ? typeNameResolver(ref, shapeTypeName) : shapeTypeName
+  };
+}
+
+function extractParam(
+  attr: Attribute,
+  plainDataTypeNames?: ReadonlySet<string>,
+  typeNameResolver?: FuncTypeNameResolver
+): RuneFuncParam {
+  const { typeName, shapeTypeName } = funcTypeInfo(attr.typeCall, plainDataTypeNames, typeNameResolver);
   const card = attr.card;
   const lower = card?.inf ?? 1;
   const upper: number | null = card?.unbounded ? null : (card?.sup ?? lower);
-  return { name: attr.name, typeName, cardinality: { lower, upper } };
+  return {
+    name: attr.name,
+    typeName,
+    shapeTypeName,
+    metadataKind: fieldMetadataKind(attr),
+    cardinality: { lower, upper }
+  };
+}
+
+/** Resolve an Attribute's plain-data TypeScript value type at a func boundary. */
+export function resolveFuncValueTypeTs(
+  attr: { typeCall?: TypeCall },
+  plainDataTypeNames?: ReadonlySet<string>,
+  typeNameResolver?: FuncTypeNameResolver
+): string {
+  const param = funcTypeInfo(attr.typeCall, plainDataTypeNames, typeNameResolver);
+  return param.shapeTypeName ? `RuneFuncData<${param.shapeTypeName}>` : resolveFuncTypeTs(param.typeName);
 }
 
 /**
@@ -475,102 +459,104 @@ function extractParam(attr: {
 export function extractFuncs(
   docs: { parseResult?: { value?: unknown } }[],
   namespace: string,
-  diagnostics: GeneratorDiagnostic[]
+  diagnostics: GeneratorDiagnostic[],
+  plainDataTypeNames?: ReadonlySet<string>,
+  typeNameResolver?: FuncTypeNameResolver
 ): RuneFunc[] {
   const funcs: RuneFunc[] = [];
-
+  const declarations = docs.flatMap((doc) => {
+    const model = doc.parseResult?.value;
+    return isRosettaModel(model) ? model.elements.filter(isRosettaFunction) : [];
+  });
   for (const doc of docs) {
     const model = doc.parseResult?.value;
-    if (!model || typeof model !== 'object') continue;
-    const modelNode = model as Record<string, unknown>;
-    const elements = modelNode['elements'];
-    if (!Array.isArray(elements)) continue;
-
-    for (const el of elements) {
-      if (!el || typeof el !== 'object') continue;
-      const node = el as Record<string, unknown>;
-      if (node['$type'] !== 'RosettaFunction') continue;
-
-      const name = node['name'] as string;
-      if (!name) continue;
-
-      // Extract inputs
-      const inputs: RuneFuncParam[] = [];
-      const inputNodes = node['inputs'] as unknown[] | undefined;
-      if (Array.isArray(inputNodes)) {
-        for (const inp of inputNodes) {
-          inputs.push(extractParam(inp as Parameters<typeof extractParam>[0]));
-        }
-      }
-
-      // Extract output
-      const outputNode = node['output'] as Parameters<typeof extractParam>[0] | undefined;
-      let output: RuneFuncParam;
-      if (outputNode) {
-        output = extractParam(outputNode);
-      } else {
-        // No explicit output — emit diagnostic and use a placeholder
+    if (!isRosettaModel(model)) continue;
+    for (const node of model.elements) {
+      if (!isRosettaFunction(node)) continue;
+      const signature = functionSignature(node, declarations);
+      const inputs = functionInputs(signature).map((attr) => extractParam(attr, plainDataTypeNames, typeNameResolver));
+      const outputNode = functionOutput(signature);
+      if (!outputNode) {
         diagnostics.push({
           severity: 'warning',
           code: 'func-no-output',
-          message: `Func '${name}' in namespace '${namespace}' has no output declaration`
+          message: `Func '${node.name}' in namespace '${namespace}' has no output declaration`
         });
-        output = { name: 'result', typeName: 'unknown', cardinality: { lower: 1, upper: 1 } };
       }
-
-      // Extract superFunc
-      const superFunctionRef = node['superFunction'] as { $refText?: string; ref?: { name?: string } } | undefined;
-      const superFunc = superFunctionRef?.$refText ?? superFunctionRef?.ref?.name ?? undefined;
-
-      // Extract shortcuts (aliases)
-      const aliases: RuneFuncAlias[] = [];
-      const shortcutNodes = node['shortcuts'] as unknown[] | undefined;
-      if (Array.isArray(shortcutNodes)) {
-        for (const sc of shortcutNodes) {
-          const scNode = sc as Record<string, unknown>;
-          aliases.push({
-            name: scNode['name'] as string,
-            exprNode: scNode['expression']
+      const output = outputNode
+        ? extractParam(outputNode, plainDataTypeNames, typeNameResolver)
+        : { name: 'result', typeName: 'unknown', cardinality: { lower: 1, upper: 1 } };
+      const parent = node.superFunction?.ref;
+      const assignments = node.operations.map((operation): RuneFuncAssignment => {
+        const path: RuneFuncAssignmentPathSegment[] = [];
+        const root = operation.assignRoot.ref ?? functionAttribute(signature, operation.assignRoot.$refText);
+        let target: AstNode | undefined = root;
+        for (let segment = operation.path; segment; segment = segment.next) {
+          target = segment.feature.ref;
+          path.push({
+            name: isChoiceOption(target)
+              ? featureName(target)
+              : (segment.feature.ref?.name ?? segment.feature.$refText),
+            ...(isChoiceOption(target) ? { choiceOption: true } : {}),
+            many: isAttribute(target) && (target.card.unbounded || (target.card.sup ?? 1) > 1),
+            metadataKind: isAttribute(target) ? fieldMetadataKind(target) : undefined
           });
         }
-      }
-
-      // Extract operations (set/add assignments)
-      const assignments: RuneFuncAssignment[] = [];
-      const operationNodes = node['operations'] as unknown[] | undefined;
-      if (Array.isArray(operationNodes)) {
-        for (const op of operationNodes) {
-          const opNode = op as Record<string, unknown>;
-          assignments.push({
-            kind: opNode['add'] === true ? 'add' : 'set',
-            exprNode: opNode['expression']
-          });
-        }
-      }
-
-      // Extract pre/post conditions
-      const preCondNodes = node['conditions'] as unknown[] | undefined;
-      const postCondNodes = node['postConditions'] as unknown[] | undefined;
-
-      const preConditions: unknown[] = Array.isArray(preCondNodes) ? preCondNodes : [];
-      const postConditions: unknown[] = Array.isArray(postCondNodes) ? postCondNodes : [];
-
-      const isAbstract = assignments.length === 0;
-
+        return {
+          kind: operation.add ? 'add' : 'set',
+          exprNode: operation.expression,
+          target: operation.assignRoot.ref?.name ?? operation.assignRoot.$refText,
+          rootMany: isAttribute(root) && (root.card.unbounded || (root.card.sup ?? 1) > 1),
+          rootMetadataKind: isAttribute(root) ? fieldMetadataKind(root) : undefined,
+          metadataKind: isAttribute(target) ? fieldMetadataKind(target) : undefined,
+          targetMany: isAttribute(target) ? target.card.unbounded || (target.card.sup ?? 1) > 1 : undefined,
+          ...(path.length > 0 && isAttribute(target) ? { targetCardinality: extractParam(target).cardinality } : {}),
+          path
+        };
+      });
       funcs.push({
-        name,
+        name: node.name,
         namespace,
+        source: node,
         inputs,
         output,
-        superFunc,
-        aliases,
+        dispatchAttribute: node.dispatchAttribute?.ref?.name ?? node.dispatchAttribute?.$refText,
+        dispatchValue: node.dispatchValue?.value.ref?.name ?? node.dispatchValue?.value.$refText,
+        superFunc: parent?.name ?? node.superFunction?.$refText,
+        superFunction: parent
+          ? { name: parent.name, inputs: functionInputs(parent), output: functionOutput(parent), source: parent }
+          : undefined,
+        aliases: node.shortcuts.map((alias) => ({ name: alias.name, exprNode: alias.expression })),
         assignments,
-        preConditions,
-        postConditions,
-        isAbstract
+        preConditions: node.conditions,
+        postConditions: node.postConditions,
+        isAbstract: assignments.length === 0
       });
     }
   }
-
   return funcs;
+}
+
+export function functionInputs(node: RosettaFunction, seen: Set<RosettaFunction> = new Set()): Attribute[] {
+  if (node.inputs.length > 0 || seen.has(node)) return node.inputs;
+  seen.add(node);
+  const parent = node.superFunction?.ref;
+  const signature = functionSignature(node);
+  return parent ? functionInputs(parent, seen) : signature !== node ? functionInputs(signature, seen) : [];
+}
+
+export function functionOutput(node: RosettaFunction, seen: Set<RosettaFunction> = new Set()): Attribute | undefined {
+  if (node.output || seen.has(node)) return node.output;
+  seen.add(node);
+  const parent = node.superFunction?.ref;
+  const signature = functionSignature(node);
+  return parent ? functionOutput(parent, seen) : signature !== node ? functionOutput(signature, seen) : undefined;
+}
+
+export { functionSignature };
+
+/** Resolve a signature attribute, including inherited inputs and output. */
+export function functionAttribute(func: RosettaFunction, name: string): Attribute | undefined {
+  const output = functionOutput(func);
+  return output?.name === name ? output : functionInputs(func).find((input) => input.name === name);
 }

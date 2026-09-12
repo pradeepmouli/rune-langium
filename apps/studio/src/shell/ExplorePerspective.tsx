@@ -318,7 +318,7 @@ function graphNodesToAdapterDocument(
         namespace,
         deferred: rfNode.meta?.deferred,
         inputs: (df.inputs ?? []) as AdapterNode['inputs'],
-        output: (df.output ?? null) as AdapterNode['output'],
+        output: df.output ?? null,
         // Phase A — type metadata (doc / annotations / conditions). Functions
         // carry BOTH `conditions` and `postConditions`; projectStructureMeta
         // forwards postConditions to conditionsToDisplay so they surface in the

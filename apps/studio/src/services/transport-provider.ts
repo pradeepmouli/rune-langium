@@ -3,26 +3,9 @@
 // Copyright (c) 2026 Pradeep Mouli
 
 /**
- * Transport provider with automatic failover (T011 + T044 + 019 Phase 2).
- *
- * Two-tier connection strategy:
- *   1. Direct WebSocket (external dev server — full Langium + OS access)
- *      with retry/backoff up to `maxReconnectAttempts`. Only attempted when
- *      `wsUri` is explicitly configured or the session endpoint is
- *      cross-origin (i.e. the studio cannot rely on the same-origin Pages
- *      Function).
- *   2. **Pages Function LSP** (same-origin) — POST a token mint to
- *      `${config.lspSessionUrl}` (default: `/api/lsp/session`), then open
- *      `WebSocket(\`${cfWsBase}/ws/${token}\`)`. On 401 from the mint we
- *      retry once with a fresh token; on 429 / 5xx we surface "language
- *      services unavailable" with the dev-mode-gated copy from FR-014.
- *
- * The provider exposes a reactive state so UI components can show
- * connection status without polling.
- *
- * Phase 2 removed the in-browser embedded worker transport entirely;
- * `apps/studio/src/workers/lsp-worker.ts` and
- * `apps/studio/src/services/worker-transport.ts` are gone.
+ * LSP transport with reactive connection state and WebSocket failover.
+ * Defaults to session-token minting followed by a token-gated WebSocket.
+ * An explicit `wsUri` tries direct WebSocket first, with token-gated fallback.
  */
 
 import type { Transport } from '@codemirror/lsp-client';
@@ -54,21 +37,14 @@ export interface TransportProviderOptions {
   maxReconnectAttempts?: number;
   /** Base backoff delay in ms (default: 500). */
   backoffBase?: number;
-  /**
-   * HTTP endpoint for `POST /api/lsp/session` (T044). Defaults to
-   * `config.lspSessionUrl`. Override for tests.
-   */
+  /** Session mint endpoint. Defaults to `config.lspSessionUrl`. */
   sessionUrl?: string;
   /**
    * WebSocket base for the Pages Function LSP; the token is appended at
    * `\`${cfWsBase}/ws/${token}\``. Defaults to `config.lspWsUrl`.
    */
   cfWsBase?: string;
-  /**
-   * Opaque workspace identifier sent to the mint endpoint. Tests pass a
-   * fixed ULID; production callers will pull this from the active
-   * workspace record.
-   */
+  /** Opaque workspace identifier sent to the mint endpoint. */
   workspaceId?: string;
 }
 
@@ -89,12 +65,12 @@ export interface TransportProvider {
 // Implementation
 // ────────────────────────────────────────────────────────────────────────────
 
-/** LSP host base URL, env-configurable via VITE_LSP_WS_URL (T012/FR-021). */
+/** LSP host base URL, configured by VITE_LSP_WS_URL. */
 const DEFAULT_WS_URI = config.lspWsUrl;
 const DEFAULT_TIMEOUT = 2000;
 const DEFAULT_MAX_RECONNECT = 3;
 const DEFAULT_BACKOFF_BASE = 500;
-/** Default workspaceId for the session mint until the active workspace is wired in. */
+/** Fallback identifier when the caller omits workspaceId. */
 const DEFAULT_WORKSPACE_ID = '01J7M8AAAAAAAAAAAAAAAAAAAA';
 
 export const createTransportProvider = withInstrumentation(
@@ -106,16 +82,8 @@ export const createTransportProvider = withInstrumentation(
     const sessionUrl = opts?.sessionUrl ?? config.lspSessionUrl;
     const cfWsBase = opts?.cfWsBase ?? config.lspWsUrl;
     const workspaceId = opts?.workspaceId ?? DEFAULT_WORKSPACE_ID;
-    // Only an explicit `wsUri` override selects the legacy direct/bare
-    // WebSocket path. Cross-origin session URLs (the documented local
-    // cross-port dev flow, and CF Pages preview builds routed at
-    // production — see apps/studio/src/config.ts's isPagesPreviewHost)
-    // are NOT a signal to try it: the bare WS route has no un-authenticated
-    // upgrade handler in apps/lsp-worker/src/index.ts (only `/ws/<token>`
-    // matches), so treating "cross-origin" as "prefer direct WS" wastes up
-    // to `backoffBase * (2^maxReconnectAttempts - 1)` ms retrying a route
-    // guaranteed to fail before falling through to the correct mint+token
-    // flow below.
+    // Cross-origin session endpoints still require token-gated WebSocket;
+    // the hosted LSP has no unauthenticated upgrade route.
     const preferDirectWebSocket = opts?.wsUri !== undefined;
 
     let state: TransportState = { mode: 'disconnected', status: 'disconnected' };
@@ -128,7 +96,6 @@ export const createTransportProvider = withInstrumentation(
       for (const l of [...listeners]) l(state);
     }
 
-    /** Pause for `ms` milliseconds. */
     function delay(ms: number): Promise<void> {
       return new Promise((resolve) => setTimeout(resolve, ms));
     }
@@ -156,11 +123,7 @@ export const createTransportProvider = withInstrumentation(
       throw lastError ?? new Error('WebSocket connection failed');
     }
 
-    /**
-     * Mint a session token via `POST ${sessionUrl}` and return the parsed
-     * 200 body. Throws an Error tagged with the HTTP status when the mint
-     * is rejected so the caller can branch on 401 / 429 / 5xx.
-     */
+    /** Mint a token; attach HTTP status to errors for retry handling. */
     const mintSessionToken = withInstrumentation(
       async function mintSessionToken(): Promise<string> {
         const res = await fetch(sessionUrl, {
@@ -183,20 +146,9 @@ export const createTransportProvider = withInstrumentation(
         return body.token;
       },
       {
-        // `namespace: 'lsp'` is what makes this call survive the production
-        // build's IS_PROD short-circuit in withInstrumentation (an
-        // un-namespaced wrap is skipped entirely in prod) — without it this
-        // phase would be invisible to the Activity sink / telemetry-shipper
-        // in exactly the environment this exists to diagnose. Neither the
-        // token nor workspaceId is captured (default capture: 0) — a mint
-        // response's `token` is a bearer credential. The HTTP status code
-        // IS captured via sanitizeError — it's what distinguishes a
-        // signing-key rotation (401), rate limiting (429), and a genuine
-        // 5xx outage, none of which carry any user/model content. `toast:
-        // false` keeps this out of the Toast UI — it fires on every
-        // reconnect, and the pre-existing LSP-unavailable toast (fired by
-        // createPagesFunctionUnavailableError's caller) already covers the
-        // user-facing failure signal; this is background diagnostic data.
+        // The namespace enables production instrumentation. Keep token and
+        // workspace data out of captures; record only the failure status.
+        // LspProvider owns the user-facing error toast.
         op: 'mintSessionToken',
         namespace: 'lsp' satisfies InstrumentationNamespace,
         toast: false,
@@ -210,32 +162,19 @@ export const createTransportProvider = withInstrumentation(
       }
     );
 
-    /**
-     * Open a token-gated WS to the Pages Function LSP. Returns a real
-     * Transport via `createWebSocketTransport`; surfaces the underlying WS
-     * error untouched so the caller's retry logic can branch.
-     */
     const openPagesFunctionWs = withInstrumentation(
       async function openPagesFunctionWs(token: string): Promise<CloseableTransport> {
         const wsUrl = `${cfWsBase.replace(/\/$/, '')}/ws/${encodeURIComponent(token)}`;
         return createWebSocketTransport(wsUrl, connectionTimeout);
       },
       {
-        // Same rationale as mintSessionToken above, including `toast:
-        // false`. `token` is never captured (default capture: 0) — it's
-        // the bearer credential this call consumes.
+        // Leave capture disabled: the input is a bearer token.
         op: 'openPagesFunctionWs',
         namespace: 'lsp' satisfies InstrumentationNamespace,
         toast: false
       }
     );
 
-    /**
-     * Pages Function LSP via session token. On 401 from the mint, refreshes
-     * the token once and retries; on 429 / 5xx surfaces the documented
-     * "language services unavailable" copy from FR-014 and falls through
-     * to the disconnected error state.
-     */
     const tryPagesFunction = withInstrumentation(
       async function tryPagesFunction(): Promise<Transport> {
         setState({ mode: 'pages-function', status: 'connecting' });
@@ -245,10 +184,7 @@ export const createTransportProvider = withInstrumentation(
         } catch (err) {
           const status = (err as { status?: number }).status;
           if (status === 401) {
-            // Per the contract, a 401 from the mint is a stale/missing
-            // signing-key on the server side OR a rotated key that
-            // invalidated the cached token; one retry buys us the happy-path
-            // on a fresh session.
+            // Retry once to tolerate signing-key rotation.
             try {
               token = await mintSessionToken();
             } catch (err2) {
@@ -264,9 +200,7 @@ export const createTransportProvider = withInstrumentation(
           currentTransport = transport;
           return transport;
         } catch (err) {
-          // The WS open MAY itself fail with 401 (server rotated the signing
-          // key between mint and connect) — handle that with one retry,
-          // matching the documented state-machine.
+          // The signing key can rotate between minting and connecting.
           try {
             token = await mintSessionToken();
             const transport = await openPagesFunctionWs(token);
@@ -279,36 +213,15 @@ export const createTransportProvider = withInstrumentation(
         }
       },
       {
-        // The end-to-end connection-establish phase (mint + WS upgrade,
-        // including any 401 retry) — the phase this repo's [DIAG] hover-
-        // timing instrumentation on rune-lsp-worker's session.ts does NOT
-        // cover, since that only starts timing once a WebSocket message
-        // arrives on an already-open connection. A slow or failing connect
-        // here is exactly what would make the client's hover/completion
-        // request time out before the DO ever sees the message. `toast:
-        // false` for the same reason as mintSessionToken/openPagesFunctionWs
-        // above — this fires on every reconnect and would otherwise stack a
-        // toast on top of the pre-existing LSP-unavailable toast on failure.
+        // Include minting and retries, which server-side request timing excludes.
         op: 'connectPagesFunctionLsp',
         namespace: 'lsp' satisfies InstrumentationNamespace,
         toast: false
       }
     );
 
-    /**
-     * Surface the "language services unavailable" terminal state and reject
-     * transport acquisition so the LSP client stays disconnected instead of
-     * timing out on a no-op channel.
-     */
     function createPagesFunctionUnavailableError(cause: unknown): Error {
-      // Report `sessionUrl` — the exact endpoint mintSessionToken actually
-      // called (opts.sessionUrl override, else config.lspSessionUrl) — not
-      // `window.location.origin`. The local cross-port dev flow and CF
-      // Pages preview routing (apps/studio/src/config.ts's
-      // isPagesPreviewHost) both mint against a different origin than the
-      // page itself, so window.location.origin pointed contributors at the
-      // wrong host; it also hardcoded the now-deleted unprefixed
-      // `/api/lsp/session` route on top of that.
+      // Local and preview builds can mint against a different origin.
       const actualUrl = sessionUrl;
       const errorMessage = config.devMode
         ? `Pages Function LSP unreachable (${describeCause(cause)}) — verify ${actualUrl} is reachable from ${typeof window !== 'undefined' ? window.location.origin : 'this origin'}`
@@ -359,13 +272,7 @@ export const createTransportProvider = withInstrumentation(
       },
 
       async reconnect(): Promise<Transport> {
-        // Close the old WebSocket before discarding it — under per-
-        // connection Durable Object keying, every reconnect mints a fresh
-        // DO, and the OLD one only purges its storage on a real close.
-        // The transport is never otherwise observed to close (no `onclose`
-        // handling in ws-transport.ts): a bare reassignment here abandons
-        // the old socket AND its server-side DO+documents for the life of
-        // the tab.
+        // Closing the socket lets the previous Durable Object release its documents.
         currentTransport?.close();
         currentTransport = undefined;
         return connect();
@@ -380,17 +287,12 @@ export const createTransportProvider = withInstrumentation(
       },
 
       dispose(): void {
-        // Same reasoning as reconnect() — close before discarding, or
-        // unmounting LspProvider leaks the same way.
         currentTransport?.close();
         currentTransport = undefined;
         listeners.length = 0;
         setState({ mode: 'disconnected', status: 'disconnected' });
       }
     };
-    // `opts` is app/LSP-infra config (endpoint URLs, timeouts, an opaque
-    // workspace id) — never model/user content — safe to capture. The
-    // returned TransportProvider is a function-bearing object, skipped.
   },
   {
     op: 'createTransportProvider',

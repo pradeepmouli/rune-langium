@@ -2,9 +2,8 @@
 // Copyright (c) 2026 Pradeep Mouli
 
 import type { LangiumDocument } from 'langium';
-import { isChoice, isData, isRosettaModel, type Choice, type Data, type RosettaModel } from '@rune-langium/core';
+import { isChoice, isData, isRosettaModel, type Choice, type Data, type TypeCall } from '@rune-langium/core';
 import { resolveTypeCallTarget, type TypeIndexLookup, type TypeResolutionVisitor } from './emit/type-ref-resolver.js';
-import type { TypeCall } from '@rune-langium/core';
 
 /**
  * `resolveTypeCallTarget` requires a `TypeIndexLookup` for its refText-based
@@ -113,7 +112,7 @@ export function buildTypeReferenceGraph(
     const model = doc.parseResult?.value;
     if (!model || !isRosettaModel(model)) continue;
 
-    const rosettaModel = model as RosettaModel;
+    const rosettaModel = model;
     for (const element of rosettaModel.elements) {
       if (isChoice(element)) {
         const choiceName = getNodeId(element);

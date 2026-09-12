@@ -172,7 +172,7 @@ function dispatch(node: AnyNode): string {
       return symbol.$refText;
     }
     case 'RosettaFeatureCall': {
-      const receiver = rTight(node['receiver'] as RosettaExpression);
+      const receiver = rTight(node['receiver']);
       const feature = node['feature'] as { $refText?: string } | undefined;
       if (!feature?.$refText) throw new UnsupportedInChild();
       return `getattr(${receiver}, ${JSON.stringify(feature.$refText)}, None)`;
@@ -185,7 +185,7 @@ function dispatch(node: AnyNode): string {
       // Argument-less exists (the grammar's "without left" form, used as
       // the RHS of a then-chain) has no receiver text to render — refuse
       // rather than let `node['argument']` be undefined and crash later.
-      const argumentNode = node['argument'] as RosettaExpression | undefined;
+      const argumentNode = node['argument'];
       if (!argumentNode) throw new UnsupportedInChild();
       const argument = rComparisonFamily(argumentNode, 3, 'left');
       return `${argument} is not None`;
@@ -193,7 +193,7 @@ function dispatch(node: AnyNode): string {
     case 'RosettaAbsentExpression': {
       // RosettaAbsentExpression has no modifier field (only 'is absent',
       // no single/multiple variant) — only the argument-less case applies.
-      const argumentNode = node['argument'] as RosettaExpression | undefined;
+      const argumentNode = node['argument'];
       if (!argumentNode) throw new UnsupportedInChild();
       const argument = rComparisonFamily(argumentNode, 3, 'left');
       return `${argument} is None`;
@@ -203,8 +203,8 @@ function dispatch(node: AnyNode): string {
       const op = ARITHMETIC_PY[opKey];
       if (op === undefined) throw new UnsupportedInChild();
       const tier = precedenceTier('ArithmeticOperation', opKey)!;
-      const left = r(node['left'] as RosettaExpression, tier, 'left');
-      const right = r(node['right'] as RosettaExpression, tier, 'right');
+      const left = r(node['left'], tier, 'left');
+      const right = r(node['right'], tier, 'right');
       return `${left} ${op} ${right}`;
     }
     case 'ComparisonOperation': {
@@ -214,7 +214,7 @@ function dispatch(node: AnyNode): string {
       if (op === undefined) throw new UnsupportedInChild();
       const tier = precedenceTier('ComparisonOperation', opKey)!;
       const left = rComparisonFamily(node['left'] as RosettaExpression, tier, 'left');
-      const right = rComparisonFamily(node['right'] as RosettaExpression, tier, 'right');
+      const right = rComparisonFamily(node['right'], tier, 'right');
       return `${left} ${op} ${right}`;
     }
     case 'EqualityOperation': {
@@ -224,7 +224,7 @@ function dispatch(node: AnyNode): string {
       if (op === undefined) throw new UnsupportedInChild();
       const tier = precedenceTier('EqualityOperation', opKey)!;
       const left = rComparisonFamily(node['left'] as RosettaExpression, tier, 'left');
-      const right = rComparisonFamily(node['right'] as RosettaExpression, tier, 'right');
+      const right = rComparisonFamily(node['right'], tier, 'right');
       return `${left} ${op} ${right}`;
     }
     case 'LogicalOperation': {
@@ -232,8 +232,8 @@ function dispatch(node: AnyNode): string {
       const op = LOGICAL_PY[opKey];
       if (op === undefined) throw new UnsupportedInChild();
       const tier = precedenceTier('LogicalOperation', opKey)!;
-      const left = r(node['left'] as RosettaExpression, tier, 'left');
-      const right = r(node['right'] as RosettaExpression, tier, 'right');
+      const left = r(node['left'], tier, 'left');
+      const right = r(node['right'], tier, 'right');
       return `${left} ${op} ${right}`;
     }
     default:

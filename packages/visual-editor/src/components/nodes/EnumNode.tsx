@@ -43,7 +43,7 @@ export const EnumNode = memo(function EnumNode({ data, selected, id }: NodeProps
   // cells, no chevrons, just the value list for shape display.
   // -------------------------------------------------------------------------
   if (isStructureEnum(data)) {
-    const values = data.values as ReadonlyArray<string>;
+    const values = data.values;
     // e2e-batch fix #12: per-node rows-column width from the layout.
     const rowsColWidth = (data as { rowsColWidth?: number }).rowsColWidth;
     return (

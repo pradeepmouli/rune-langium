@@ -92,7 +92,7 @@ function buildGraphNode<T extends { $type: string; name: string }>(
   // langium is not a direct visual-editor dependency — thread the
   // adapters' AstNode constraint structurally.
   const data = (isLiveAstElement(element)
-    ? parsedAdapter.dehydrate(element as unknown as Parameters<typeof parsedAdapter.dehydrate>[0])
+    ? parsedAdapter.dehydrate(element)
     : curatedAdapter.parse(element)) as unknown as TypeGraphNode['data'];
   const meta: GraphNodeMeta = {
     namespace,
@@ -158,10 +158,7 @@ function getAttributeEdges(
  * Each graph node's `data` IS the pure domain payload (AST fields only);
  * UI/editor metadata (namespace, errors, isReadOnly, …) lives on `node.meta`.
  */
-export function astToModel(
-  models: RosettaModel | RosettaModel[] | unknown | unknown[],
-  options?: AstToModelOptions
-): AstToModelResult {
+export function astToModel(models: unknown, options?: AstToModelOptions): AstToModelResult {
   const modelArray = Array.isArray(models) ? models : [models];
   const filters = options?.filters;
 
@@ -173,7 +170,7 @@ export function astToModel(
   for (const model of modelArray) {
     const m = model as RosettaModel;
     const namespace = getNamespace(m);
-    const elements: RosettaRootElement[] = (m.elements ?? []) as RosettaRootElement[];
+    const elements: RosettaRootElement[] = m.elements ?? [];
     const modelUri = (m as unknown as { $document?: { uri?: { toString(): string } } }).$document?.uri?.toString();
     const isReadOnly = modelUri?.startsWith('system://') ?? false;
 
@@ -205,7 +202,7 @@ export function astToModel(
   const nameToNodeId = new Map<string, string>();
   for (const node of nodes) {
     nameToNodeId.set(node.id, node.id);
-    nameToNodeId.set(node.data.name as string, node.id);
+    nameToNodeId.set(node.data.name, node.id);
   }
 
   // Second pass: create edges
@@ -294,9 +291,9 @@ export function astToModel(
         }
       }
     } else if ($type === 'RosettaRecordType') {
-      edges.push(...getAttributeEdges(node.id, (d.features ?? []) as unknown as MemberLikeRef[], nameToNodeId));
+      edges.push(...getAttributeEdges(node.id, d.features ?? [], nameToNodeId));
     } else if ($type === 'RosettaTypeAlias') {
-      const targetType = getTypeRefText(d.typeCall as { type?: { $refText?: string } } | undefined);
+      const targetType = getTypeRefText(d.typeCall);
       if (targetType) {
         const targetNodeId = nameToNodeId.get(targetType);
         if (targetNodeId && targetNodeId !== node.id) {
@@ -325,7 +322,7 @@ export function astToModel(
     } else if ($type === 'RosettaFunction') {
       members = (d.inputs ?? []) as unknown as MemberLikeRef[];
     } else if ($type === 'RosettaRecordType') {
-      members = (d.features ?? []) as unknown as MemberLikeRef[];
+      members = d.features ?? [];
     }
     if (members) {
       node.meta.hasExternalRefs = members.some((m) => {

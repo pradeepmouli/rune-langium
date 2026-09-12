@@ -498,7 +498,7 @@ async function loadAllDocuments(
         for (let i = 0; i < closureNs.length; i += FETCH_CONCURRENCY) {
           const window = closureNs.slice(i, i + FETCH_CONCURRENCY);
           const fetched = await Promise.all(
-            window.map((ns) => fetchCuratedNamespace(bundle.id, bundle.version, nsGraph[ns]!.artifact, curatedFetcher))
+            window.map((ns) => fetchCuratedNamespace(bundle.id, bundle.version, nsGraph[ns].artifact, curatedFetcher))
           );
           for (const nsDocs of fetched) {
             for (const cd of nsDocs) {
@@ -601,7 +601,7 @@ function downloadFilename(target: Target, outputs: readonly GeneratorOutput[]): 
   if (descriptor.contract === 'whole-model') {
     return outputs[0]?.relativePath ?? `model${descriptor.extension}`;
   }
-  return outputs[0]!.relativePath.split('/').pop() ?? `${target}-output${descriptor.extension}`;
+  return outputs[0].relativePath.split('/').pop() ?? `${target}-output${descriptor.extension}`;
 }
 
 function singleArtifactResponse(target: Target, output: GeneratorOutput, filename: string): Response {
@@ -938,7 +938,7 @@ export const onRequestPost: PagesFunction<Env> = withInstrumentation(
 
         const filename = downloadFilename(body.target, outputs);
         if (outputs.length === 1) {
-          return singleArtifactResponse(body.target, outputs[0]!, filename);
+          return singleArtifactResponse(body.target, outputs[0], filename);
         }
         return zipResponse(outputs, filename);
       } finally {

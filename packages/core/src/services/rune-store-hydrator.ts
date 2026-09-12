@@ -46,7 +46,7 @@ export class RuneStoreHydrator extends DefaultHydrator {
     for (const astNode of AstUtils.streamAst(node)) {
       astNodes.set(astNode, {});
     }
-    return { astNodes, cstNodes: new Map() } as DehydrateContext;
+    return { astNodes, cstNodes: new Map() };
   }
 
   protected override dehydrateAstNode(node: AstNode, context: DehydrateContext): object {

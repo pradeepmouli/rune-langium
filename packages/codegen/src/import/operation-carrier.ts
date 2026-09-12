@@ -2,22 +2,9 @@
 // Copyright (c) 2026 Pradeep Mouli
 
 /**
- * operation-carrier — the func ↔ OpenAPI-operation correspondence carrier
- * (spec.md Phase 2b Implementation Addendum).
- *
- * GRAMMAR VERIFICATION (parse-first, see test/import/operation-carrier.test.ts):
- * `RosettaFunction` accepts `(References | Annotations)*` only — no
- * `Synonyms` fragment (rune-dsl.langium:147-159, confirmed directly against
- * the grammar source). The correspondence carrier is therefore carrier
- * option (a) from the addendum: a declared custom `annotation` consumed via
- * `AnnotationRef`, NOT a naming/definition-text convention (option (b)) —
- * `AnnotationRef` CAN carry a string payload via its `qualifiers+=
- * AnnotationQualifier` list (`qualName=STRING '=' (qualValue=STRING |
- * qualPath=...)`, rune-dsl.langium:109-111), and
- * `rosetta-render-core.ts`'s `renderAnnotationRef` already renders
- * qualifiers as `"qualName"="qualValue"` — no renderer change needed.
- *
- * Concretely: one annotation declared ONCE per emitted document —
+ * Carries OpenAPI operation metadata through a custom Rune annotation.
+ * Functions accept annotations but not synonyms. AnnotationRef qualifiers carry
+ * the string payload, with one declaration per emitted document:
  *
  * ```rune
  * annotation openApi: <"Carries the OpenAPI operation for a func.">
@@ -28,25 +15,12 @@
  *     ...
  * ```
  *
- * `renderNode` has NO case for `$type: 'Annotation'` (the DECLARATION, as
- * opposed to `AnnotationRef`, the USAGE) — verified empirically, same
- * "unimplemented → null" contract every other unhandled `$type` has. This
- * mirrors the exact situation `ast-builder.ts`'s module doc records for
- * `RosettaSynonymSource` (`synonym source <Name>` — also undispatched):
- * the fix is the SAME established pattern — hand-assemble the declaration
- * as literal text (reusing `renderNode`'s OWN `Attribute` rendering for the
- * nested `op string (0..1)` line, via the caller's `renderChild`, so the
- * attribute line itself is never duplicated logic) and splice it into the
- * emitted document once, the same way `import/index.ts`'s `splice()`
- * already inserts the `synonym source` line after `version "..."`. Zero
- * changes to `rosetta-render-core.ts`.
- *
- * `AnnotationRef` itself DOES have a `renderNode` case (used directly, no
- * hand-assembly needed for the per-func usage site).
+ * renderNode handles AnnotationRef usage but not Annotation declarations.
+ * Assemble the declaration text once, using renderChild for the nested Attribute
+ * so attribute rendering remains shared, and splice it after the version line.
  */
 
-import type { Dehydrated } from '@rune-langium/core';
-import type { Annotation, AnnotationRef, Attribute } from '@rune-langium/core';
+import type { Dehydrated, Annotation, AnnotationRef, Attribute } from '@rune-langium/core';
 import { escapeString } from '../emit/rosetta/rosetta-render-core.js';
 
 /** The declared annotation's name — `[openApi ...]` at each func's usage site. */

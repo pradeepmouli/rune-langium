@@ -105,7 +105,7 @@ export function buildAttributeTypesMap(data: Data): Map<string, string> {
     }
     const parent: unknown = current.superType?.ref;
     if (parent && isChoice(parent)) {
-      contributeChoiceOptionsAsAttributes(parent as Choice, map, visited);
+      contributeChoiceOptionsAsAttributes(parent, map, visited);
       current = undefined;
       break;
     }
@@ -178,7 +178,7 @@ export function buildAttrAccessorNamesMap(data: Data): Map<string, string> {
     visited.add(current.name);
     const parent: unknown = current.superType?.ref;
     if (parent && isChoice(parent)) {
-      for (const option of (parent as Choice).attributes) {
+      for (const option of parent.attributes) {
         const optionTypeName = option.typeCall?.type?.ref?.name ?? option.typeCall?.type?.$refText;
         if (!optionTypeName) continue;
         if (!map.has(optionTypeName)) map.set(optionTypeName, choiceOptionFieldName(optionTypeName));
@@ -223,10 +223,13 @@ export function mergeProfileTypeMaps<T>(profile: {
 }
 
 /** Build sorted emit lines for a `runeReportRules` const object body. */
-export function buildReportRulesLines(rulesByName: ReadonlyMap<string, RosettaRule>): string[] {
+export function buildReportRulesLines(
+  rulesByName: ReadonlyMap<string, RosettaRule>,
+  exportedName = 'runeReportRules'
+): string[] {
   const ruleNames = Array.from(rulesByName.keys()).sort();
   if (ruleNames.length === 0) return [];
-  const lines = ['export const runeReportRules = {'];
+  const lines = [`export const ${exportedName} = {`];
   for (const name of ruleNames) {
     const rule = rulesByName.get(name)!;
     const kind = rule.eligibility ? 'eligibility' : 'reporting';

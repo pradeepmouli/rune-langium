@@ -188,7 +188,7 @@ describe('ts-emitter — Data extends Choice: CLASS surface (generic child class
     const doc = await parseSource(FIXTURE);
     const model = walkNamespace([doc], 'test.tsDataExtendsChoice');
     const output = emitNamespace(model, {});
-    expect(output.content).toContain('this.weight = data.weight as typeof this.weight;');
+    expect(output.content).toContain('this.weight = data.weight;');
   });
 
   it('does NOT emit a mixin factory (ObservableMixin-shaped export) — superseded design', async () => {

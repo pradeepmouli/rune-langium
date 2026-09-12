@@ -106,7 +106,7 @@ function asNode(
     }
     return {};
   }
-  return def as JsonSchemaNode;
+  return def;
 }
 
 const BUILTIN_TYPE_MAP: Readonly<Record<string, string>> = {

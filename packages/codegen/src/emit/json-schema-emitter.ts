@@ -50,11 +50,15 @@ import {
 import type { GeneratorOptions, GeneratorOutput, SourceMapEntry, GeneratorDiagnostic } from '../types.js';
 import { emitNamespaceWithContract } from './namespace-emitter.js';
 import type { NamespaceEmitterOptions } from './namespace-emitter.js';
-import { BaseNamespaceEmitter } from './base-namespace-emitter.js';
+import {
+  BaseNamespaceEmitter,
+  mergeProfileTypeMaps,
+  decodeCardinality,
+  choiceOptionFieldName
+} from './base-namespace-emitter.js';
 import type { NamespaceRegistry } from './namespace-registry.js';
 import { getTargetRelativePath, type NamespaceWalkResult } from './namespace-walker.js';
 import { jsonSchemaProfile } from './json-schema-profile.js';
-import { mergeProfileTypeMaps, decodeCardinality, choiceOptionFieldName } from './base-namespace-emitter.js';
 import { resolveTypeCallTarget, type TypeIndexEntry, type TypeIndexLookup } from './type-ref-resolver.js';
 import { debug } from '../instrument.js';
 
@@ -751,7 +755,7 @@ export class JsonSchemaNamespaceEmitter extends BaseNamespaceEmitter {
     }
 
     if (typeof value === 'object') {
-      const keys = Object.keys(value as Record<string, unknown>);
+      const keys = Object.keys(value);
       if (keys.length === 0) return '{}';
 
       const entries = keys.map(

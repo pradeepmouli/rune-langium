@@ -1,13 +1,21 @@
+# Claude Configuration Directory
+
+Follow the repository's [Claude instructions](../CLAUDE.md).
+
+Keep repository hooks and plugin preferences in `settings.json`. Keep local
+permissions and machine-specific MCP choices in ignored `settings.local.json`.
 
 
-<!-- BEGIN INFIGRAPH v2 -->
+
+<!-- BEGIN INFIGRAPH v3 -->
 ## Infigraph — Code Intelligence (auto-generated)
 
 This project is indexed by Infigraph. Use Infigraph MCP tools FIRST for all code tasks.
-Fall back to grep/Read only if Infigraph returns nothing or for non-code files.
+Read non-code files directly. If an Infigraph tool is unavailable or errors, tell the user
+(e.g. to reconnect the MCP server) rather than working around the enforcement hook.
 
 ### Tool Preferences
-1. **`search`** for ALL code search — hybrid BM25+vector+grep in one call
+1. **`search`** for ALL code search — ranked symbols plus every line containing the text; **`regex=true`** lists every occurrence (e.g. all call sites). Constants: `get_symbols_in_file`. Full routing: the `infigraph-tool-routing` skill
 2. **`get_doc_context`** before editing any function — returns source+callers+callees
 3. **`trace_callers`** / **`find_all_references`** before refactoring — never grep for callers
 4. **`trace_callees`** / **`transitive_impact`** for blast radius
@@ -15,7 +23,7 @@ Fall back to grep/Read only if Infigraph returns nothing or for non-code files.
 
 ### Subagent Rules
 Do NOT spawn these agent types for code tasks — they lack MCP access:
-- **Explore** → use `search`, `search_code`, `search_symbols` directly
+- **Explore** → use `search` (with `regex=true` to enumerate) and `get_symbols_in_file` directly
 - **Plan** → use `get_architecture`, `get_skeleton`, `get_stats` directly
 - **code-reviewer** → use `get_doc_context`, `get_code_snippet`, `review` directly
 

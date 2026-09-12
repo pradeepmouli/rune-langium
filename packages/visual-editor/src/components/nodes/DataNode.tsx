@@ -370,7 +370,7 @@ export const DataNode = memo(function DataNode({ data, selected, id }: NodeProps
     // Core geometry handled by .rune-node-data--structure, .rune-node-body--two-col,
     // .rune-node-rows, .rune-node-row, .rune-row-handle, .rune-node-children-slot
     // in styles.css — layout constants (ROW_HEIGHT=28, COL_WIDTH=260, etc.) are matched there.
-    const rows = data.rows as ReadonlyArray<StructureRow>;
+    const rows = data.rows;
     const {
       cellComponents,
       expansionMap,

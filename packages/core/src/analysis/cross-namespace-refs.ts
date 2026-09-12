@@ -98,7 +98,7 @@ export function collectNamespaceDependencies(documents: readonly LangiumDocument
 
   function trackRef(typeRef: unknown, sourceNs: string): void {
     if (!typeRef || typeof typeRef !== 'object') return;
-    const targetNs = getElementNamespace(typeRef as { $container?: unknown });
+    const targetNs = getElementNamespace(typeRef);
     if (!targetNs) return;
     addEdge(sourceNs, targetNs);
   }

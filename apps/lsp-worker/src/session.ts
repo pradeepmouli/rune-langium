@@ -271,9 +271,7 @@ export class RuneLspSession {
 
     await this.touchMeta();
 
-    return new Response(null, { status: 101, webSocket: client } as ResponseInit & {
-      webSocket: WebSocket;
-    });
+    return new Response(null, { status: 101, webSocket: client });
   }
 
   // ── Hibernation-API entry points ───────────────────────────────────────
@@ -495,9 +493,7 @@ export class RuneLspSession {
     // once per DO instance, so a second invocation can't happen.
     try {
       this.langium = createRuneLspServer();
-      this.transport = new DurableObjectWebSocketTransport(
-        this.wrapSocketForAckDetection(ws as unknown as CfSocketLike)
-      );
+      this.transport = new DurableObjectWebSocketTransport(this.wrapSocketForAckDetection(ws));
       // Does not await — listen() only resolves when the transport closes.
       void this.langium.listen(this.transport);
       this.registerStorageMirror();

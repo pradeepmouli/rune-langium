@@ -3,10 +3,21 @@
 // Source namespace: test.rules
 
 // --- rune-codegen runtime helpers (inlined) ---
-const runeCheckOneOf = (values: (unknown | undefined | null)[]): boolean =>
-  values.filter((v) => v !== undefined && v !== null).length === 1;
+const runeValueKey = (value: unknown): string => {
+  if (value == null) return 'null';
+  if (typeof value !== 'object') return typeof value + ':' + String(value);
+  if (Array.isArray(value)) return 'array:' + JSON.stringify(value.map(runeValueKey));
+  const tag = Object.prototype.toString.call(value);
+  if (/^\[object Temporal\.(PlainDate|PlainTime|PlainDateTime|ZonedDateTime|Instant|PlainYearMonth|PlainMonthDay|Duration)\]$/.test(tag)) return tag + ':' + String(value);
+  const fields = value as Record<string, unknown>;
+  return 'object:' + JSON.stringify(Object.keys(fields).sort().filter((key) => fields[key] != null).map((key) => [key, runeValueKey(fields[key])]));
+};
+const runeValueEquals = (left: unknown, right: unknown): boolean => runeValueKey(left) === runeValueKey(right);
 
-const runeCount = (arr: unknown[] | undefined | null): number => arr?.length ?? 0;
+const runeCheckOneOf = (values: unknown[]): boolean =>
+  values.filter((v) => v !== undefined && v !== null && !(Array.isArray(v) && v.length === 0)).length === 1;
+
+const runeCount = (value: unknown): number => Array.isArray(value) ? value.length : value == null ? 0 : 1;
 
 const runeAttrExists = (v: unknown): boolean =>
   v !== undefined && v !== null && !(Array.isArray(v) && v.length === 0);
@@ -38,9 +49,9 @@ export class Position implements PositionShape {
   currency: string;
 
   constructor(data: PositionShape) {
-    this.quantity = data.quantity as typeof this.quantity;
-    this.price = data.price as typeof this.price;
-    this.currency = data.currency as typeof this.currency;
+    this.quantity = data.quantity;
+    this.price = data.price;
+    this.currency = data.currency;
   }
 
   static from(json: unknown): Position {
@@ -60,11 +71,20 @@ export function isPosition(x: unknown): x is Position {
 }
 
 
-export function validateIsSignificant(position: PositionShape): boolean {
+export function validateIsSignificant(position: RuneFuncData<PositionShape>): boolean {
   return position.Position?.quantity * position.Position?.price > 10000;
 }
 
 export const runeReportRules = {
   'IsSignificant': { kind: 'eligibility' as const, inputType: 'Position' },
 } as const;
-// (functions emitted by Phase 8b appear below this line)
+
+type RuneFuncData<T> = T extends readonly (infer I)[]
+  ? RuneFuncData<I>[]
+  : T extends { readonly [Symbol.toStringTag]: `Temporal.${string}` }
+    ? string
+    : T extends (...args: never[]) => unknown
+      ? never
+      : T extends object
+        ? { [K in keyof T as T[K] extends (...args: never[]) => unknown ? never : K]: RuneFuncData<T[K]> }
+        : T;

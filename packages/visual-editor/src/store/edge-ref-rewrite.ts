@@ -60,7 +60,7 @@ export function rewriteEdgeRefInNode(
 ): DomainNodeData | null {
   const d = sourceData as unknown as Record<string, unknown>;
   const kind = edge.data?.kind;
-  const label = edge.data?.label as string | undefined;
+  const label = edge.data?.label;
 
   switch (kind) {
     case 'attribute-ref': {
@@ -112,7 +112,7 @@ export function rewriteEdgeRefInNode(
       const ref = d[field] as { $refText?: string } | undefined;
       const next = renameRefValue(ref?.$refText, oldName, newName, namespace);
       if (next === null) return null;
-      return { ...sourceData, [field]: { ...ref, $refText: next } } as DomainNodeData;
+      return { ...sourceData, [field]: { ...ref, $refText: next } };
     }
     case 'enum-extends': {
       const ref = d['parent'] as { $refText?: string } | undefined;
@@ -162,7 +162,7 @@ export function rewriteOwnRefs(d: DomainNodeData, oldName: string, newName: stri
             ...m.typeCall,
             type: { ...m.typeCall!.type, $refText: next }
           }
-        } as T;
+        };
       }
       return m;
     });

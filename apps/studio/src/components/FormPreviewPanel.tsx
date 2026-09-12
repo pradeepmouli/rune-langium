@@ -161,7 +161,7 @@ export const FormPreviewPanel = withInstrumentation(
 
     const defaultValues = useMemo(() => {
       if (!schema) return {};
-      return buildDefaultValues(schema.fields, resolveArmPaths(schema)) as Record<string, unknown>;
+      return buildDefaultValues(schema.fields, resolveArmPaths(schema));
     }, [schema]);
     const lookupFieldSource = useCallback(
       (fieldPath: string) =>

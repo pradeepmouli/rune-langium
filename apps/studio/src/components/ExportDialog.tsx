@@ -77,11 +77,10 @@ export const ExportDialog = withInstrumentation(
     const [turnstileToken, setTurnstileToken] = useState<string | null>(null);
     const service = useMemo(() => getCodegenService(), []);
     const isHosted = service.isHostedService();
-    const turnstileSiteKey = (
+    const turnstileSiteKey =
       typeof import.meta !== 'undefined'
         ? (import.meta as unknown as Record<string, Record<string, string>>).env?.['VITE_TURNSTILE_SITE_KEY']
-        : undefined
-    ) as string | undefined;
+        : undefined;
     const showTurnstile = isHosted && Boolean(turnstileSiteKey);
     // Track whether the session cookie is probably set (true after a
     // successful first generation) so we can hide the widget on re-opens.

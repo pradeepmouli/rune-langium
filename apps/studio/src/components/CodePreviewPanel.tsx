@@ -341,7 +341,7 @@ export const CodePreviewPanel = withInstrumentation(
           <>
             <div className="preview-panel__toolbar flex shrink-0 flex-wrap items-center gap-2 border-b border-border/70 bg-card/40 px-3 py-1.5">
               <span className="text-sm font-medium text-foreground" data-testid="codegen-active-target">
-                {TARGET_LABELS[activeTarget!]}
+                {TARGET_LABELS[activeTarget]}
               </span>
               {selectableFiles && selectableFiles.length > 1 ? (
                 <Select value={activeRelativePath} onValueChange={(value) => setActiveCodePreviewFile(value)}>

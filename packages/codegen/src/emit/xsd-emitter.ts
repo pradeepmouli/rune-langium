@@ -2,152 +2,35 @@
 // Copyright (c) 2026 Pradeep Mouli
 
 /**
- * XSD (W3C XML Schema) target emitter for the Rune code generator (spec.md
- * Phase 3, adopted 2026-07-06).
+ * Emits Rune namespaces as XSD using the vocabulary supported by xsd-reader.ts.
  *
- * Entry point: emitNamespace(model, options, registry) → GeneratorOutput
+ * Mapping:
+ * - Data becomes a named xs:complexType containing an xs:sequence of elements.
+ *   Cardinality maps to minOccurs/maxOccurs; default bounds of 1 are omitted,
+ *   and unbounded upper bounds use maxOccurs="unbounded". Type references use
+ *   local names in a single document with a fixed xs: prefix.
+ * - Enumerations become named xs:simpleType restrictions on xs:string.
+ *   Values use Rune identifiers, not the original literals stored in synonyms.
+ * - Data.superType becomes xs:complexContent/xs:extension. Only the child's own
+ *   attributes are emitted inside the extension.
+ * - Required/optional choice conditions group their attributes in xs:choice.
+ *   Optional groups use minOccurs="0"; required groups use the default of 1.
+ *   Members retain XSD's default occurrence bounds: copying their Rune (0..1)
+ *   cardinality would allow an empty member to satisfy a required group.
+ * - Choice declarations also become complex types with xs:choice, but importing
+ *   them yields attributes plus a condition, not a Rune Choice declaration.
  *
- * This is a FROM-SCRATCH namespace emitter — like `json-schema-emitter.ts`,
- * NOT like `openapi-emitter.ts` (which composes over the JSON Schema
- * emitter's own output). XSD has nothing natural to compose from JSON
- * Schema output, so this module walks `Data`/`Choice`/`RosettaEnumeration`
- * directly, the same way `json-schema-emitter.ts`'s `JsonSchemaNamespaceEmitter`
- * does, and builds plain XML string templates (no `fast-xml-parser`
- * `XMLBuilder` dependency needed — deterministic string assembly, mirroring
- * how `JsonSchemaNamespaceEmitter.serializeJson` hand-rolls its own
- * formatter rather than pulling in a generic serializer).
- *
- * Mapping (the INVERSE of `../import/sources/xsd-reader.ts`'s own vocabulary
- * — that reader is the ground truth for shape; every design choice below
- * was checked against its actual parsing logic, not assumed):
- *
- *  - `Data` → a top-level named `xs:complexType`. Attributes → `xs:element`
- *    children of an `xs:sequence`. `minOccurs`/`maxOccurs`: `(1..1)` →
- *    neither attribute (both default to `1`); `(0..1)` → `minOccurs="0"`;
- *    `(0..*)` → `minOccurs="0" maxOccurs="unbounded"`; `(1..*)` →
- *    `maxOccurs="unbounded"` (no `minOccurs`, since `1` is the default);
- *    `(n..m)`/`(n..*)` general case → both attributes emitted explicitly
- *    whenever they differ from the XSD default. A typed attribute
- *    referencing another Data/Enum → `type="TargetTypeName"` (no namespace
- *    prefix machinery — single document, single implicit target namespace,
- *    fixed `xs:` prefix, exactly the reader's own default-prefix-agnostic
- *    but here author-side-fixed convention).
- *
- *  - `RosettaEnumeration` → a top-level named `xs:simpleType` +
- *    `xs:restriction base="xs:string"` + one `xs:enumeration value="..."`
- *    per enum value. The reader's `buildEnumFromSimpleType` records each
- *    value's ORIGINAL source literal via `sourceKey`/the `[synonym ...
- *    value "..."]` annotation — but no emitter in this codebase (json-
- *    schema-emitter.ts's own `emitEnumDef` included) currently reads that
- *    synonym back out when EMITTING; every existing emitter uses the
- *    Rune-safe identifier (`RosettaEnumValue.name`) as the literal enum
- *    value. This emitter matches that established (if perhaps surprising)
- *    convention for consistency/DRY — see this file's own doc note below
- *    for the full finding.
- *
- *  - `extends` (Data.superType) → `xs:complexContent`/`xs:extension
- *    base="ParentTypeName"`, with the extending type's OWN new attributes
- *    nested inside the `xs:extension`'s own `xs:sequence` — the base
- *    type's attributes are NEVER re-emitted on the child (matches the
- *    reader's own `readComplexType`/`buildType`, which never re-attaches a
- *    base type's attributes to the extending type).
- *
- *  - A `required choice a, b, ...` condition (`ChoiceOperation` with
- *    `necessity: 'required'`, recognized via `constraint-recognizer.ts`'s
- *    `recognizeCondition` → `{kind: 'oneOf', paths}`) → the named attributes
- *    are pulled OUT of the plain `xs:sequence` and re-grouped as a single
- *    bare `xs:choice` (no `minOccurs` of its own, defaulting to exactly-one-
- *    occurrence) nested inside the sequence. An `optional choice`
- *    (`necessity: 'optional'` → `{kind: 'choice', paths}`) is ALSO
- *    recognized and rendered the same way, but as `<xs:choice
- *    minOccurs="0">` — the reader (`xsd-reader.ts`'s `buildType`) reads the
- *    `xs:choice` element's own `@_minOccurs` attribute (default, when
- *    absent, `"1"`): `minOccurs="0"` → `{kind: 'choice', paths}` (optional),
- *    absent/`"1"` → `{kind: 'oneOf', paths}` (required) — this emitter's
- *    handling is the EXACT inverse of that, for both cases. Neither variant
- *    puts `minOccurs`/`maxOccurs` on the choice MEMBERS themselves (every
- *    `<xs:element>` inside `<xs:choice>` gets none at all, letting XSD's own
- *    defaults, `minOccurs="1" maxOccurs="1"`, apply) — carrying over each
- *    member attribute's own Rune cardinality (normally `(0..1)` for a choice
- *    member) would let the WHOLE group be satisfied with zero members
- *    present, contradicting `required choice`/`choice` semantics; only the
- *    WRAPPING `<xs:choice>` element's own occurrence marker expresses
- *    "exactly one" vs. "at most one, possibly none".
- *
- *  - A genuine Rune `choice` TYPE DECLARATION (`Choice`, a distinct Rune
- *    construct from the `required choice` CONDITION above) has no XSD
- *    inverse the reader can consume back into a `Choice` — the reader never
- *    produces a Rune `Choice` declaration from any XSD construct (confirmed:
- *    `xsd-reader.ts` has zero references to a Choice-shaped output; its
- *    `SourceModel`/`SourceType` has no choice-declaration concept, only the
- *    attributes+oneOf-condition shape above). This emitter still emits a
- *    structurally reasonable `xs:complexType` + nested `xs:choice` for a
- *    `Choice` declaration (each option → an `xs:element`) so the output is
- *    not simply silently dropped, but this half is NOT exercised by the
- *    single-artifact oracle (there is no reader-side path back to a Rune
- *    `Choice`) — see this package's round-trip test file's own doc comment
- *    for the explicit call-out.
- *
- *  - Conditions via `recognizeCondition` (`../emit/constraint-recognizer.ts`)
- *    + this file's OWN `constraintIRToXsdFacets`:
- *      - `range` → `xs:minInclusive`/`xs:maxInclusive` (or
- *        `xs:minExclusive`/`xs:maxExclusive` per bound when the IR's
- *        `exclusive` flag is set — XSD natively supports a MIXED
- *        inclusive/exclusive pair in one `xs:restriction`, so both bounds
- *        are combined into ONE restriction, never refused) as a
- *        SEPARATELY-NAMED top-level `xs:simpleType`, referenced from the
- *        owning `xs:element` via `@_type` — NOT an anonymous restriction
- *        nested inline inside the element. **Reader-ground-truth finding,
- *        corrected from an earlier (wrong) assumption**: `xsd-reader.ts`'s
- *        `readElementLike`/`buildAttributeFromElementLike` ONLY ever
- *        resolves a scalar-restricted simpleType's facets via `@_type`
- *        pointing at a named top-level `xs:simpleType`
- *        (`collectSimpleTypes` reads ONLY `schema[q('simpleType')]` —
- *        direct children of `xs:schema` — never an `xs:element`'s own
- *        nested child); an `xs:element` with NO `@_type` attribute falls
- *        straight through to `{ typeName: 'string' }` with the facets
- *        silently never read at all (verified empirically: an inline
- *        anonymous nested `xs:simpleType`/`xs:restriction` round-tripped
- *        to a plain `string` attribute with zero conditions, in this
- *        emitter's own test suite, before this was corrected — see the
- *        round-trip conditions test file's own doc comment for the
- *        explicit call-out). Each facet-bearing attribute gets its own
- *        uniquely-named simpleType (`<AttributeName>Type`).
- *      - `length` → `xs:maxLength`/`xs:minLength`/`xs:length` the same
- *        named-top-level-simpleType way (`length` when both bounds are
- *        equal, matching the reader's own `xs:length` → single min===max
- *        `length` IR collapse — `facetsToConstraints` folds `xs:length` to
- *        one IR with `min === max`; emitting the collapsed single-facet
- *        form when both bounds are present and equal keeps the round trip
- *        exact rather than merely equivalent).
- *      - Conditions that don't map to a SINGLE attribute's facets (`oneOf`
- *        handled above as `xs:choice`; `choice`/`comparison`/`exists`/
- *        `absent`/`conditional`/unrecognized) are NOT rendered as XSD
- *        structure — "recognized but not literally round-tripped
- *        structurally", the same posture `openapi-emitter.ts`'s own
- *        `constraintIRToJsonSchemaKeywords` doc comment establishes for
- *        constructs its own keyword rendering can't express (this emitter
- *        does not add an opaque metadata sidecar the way the JSON Schema/
- *        OpenAPI emitters do via `x-rune-conditions` — XSD has no
- *        established non-standard-extension convention analogous to
- *        `x-`-prefixed keys; the condition is simply not represented in
- *        this document, per spec.md's "CONSERVATIVE ... reject to an
- *        unrepresentable/opaque fallback rather than guess" framing).
- *      - `xs:pattern` is never emitted outbound — confirmed via
- *        `xsd-reader.ts`'s own `facetsToConstraints`, which only ever
- *        stubs `xs:pattern` into an untranslatable `pattern` ConstraintIR
- *        (never a real Rune expression), matching every other reader's
- *        "no expression-level regex" rule; there is no Rune condition
- *        shape this emitter could recognize as pattern-shaped in the first
- *        place (`recognizeCondition` has no `pattern` recognizer), so this
- *        is naturally a non-issue rather than a special case to guard.
- *
- *  - NO func/operation emission: spec.md's Phase 3 vocabulary-mapping table
- *    and its "Outbound emitter" paragraph enumerate Data/Enumeration/
- *    Choice/extends/constraints only — XSD has no RPC verb model and the
- *    addendum never mentions funcs/operations for this target (unlike
- *    OpenAPI's Phase 2b decision 4). Confirmed by reading the ENTIRE
- *    Phase 3 section top to bottom before writing this file.
+ * Constraint facets:
+ * - Range bounds become min/maxInclusive or min/maxExclusive. Mixed bounds
+ *   share one restriction. Length bounds become minLength/maxLength, or length
+ *   when both bounds are equal.
+ * - Each constrained attribute references a unique, named top-level simpleType
+ *   via its type attribute. The reader does not recover facets from anonymous
+ *   simpleTypes nested inside elements; without a type reference it falls back
+ *   to string and loses those constraints.
+ * - Conditions beyond choice groups and scalar facets are not represented.
+ *   There is no opaque metadata sidecar. Pattern facets and funcs/operations
+ *   are not emitted.
  */
 
 import {

@@ -470,7 +470,7 @@ function StructureFlowInner({
       onNavigateToEnumType !== undefined ||
       (structureDiagnostics !== undefined && structureDiagnostics.length > 0);
     const freshNodes: Node[] = needsInjection
-      ? (result.nodes.map((n) => {
+      ? result.nodes.map((n) => {
           if (n.type === 'data')
             return {
               ...n,
@@ -497,7 +497,7 @@ function StructureFlowInner({
             };
           if (n.type === 'structureBase') return { ...n, data: { ...n.data, expansionMap, onToggleExpansion } };
           return n;
-        }) as Node[])
+        })
       : (result.nodes as Node[]);
 
     // Reuse previous node references where the new node's data is shallow-

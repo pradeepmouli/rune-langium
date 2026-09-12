@@ -16,11 +16,33 @@
  * - S-07: Invalid name characters per Rune DSL identifier rules
  */
 
-import type { TypeGraphNode, TypeGraphEdge, ValidationError, AnyGraphNode } from '../types.js';
+import type { TypeGraphNode, TypeGraphEdge, ValidationError } from '../types.js';
 
 // ---------------------------------------------------------------------------
 // Circular inheritance detection (S-02)
 // ---------------------------------------------------------------------------
+
+function buildParentMap(edges: TypeGraphEdge[]): Map<string, string> {
+  const parentMap = new Map<string, string>();
+  for (const edge of edges) {
+    if (edge.data?.kind === 'extends' || edge.data?.kind === 'enum-extends') {
+      parentMap.set(edge.source, edge.target);
+    }
+  }
+  return parentMap;
+}
+
+function reachesAncestor(childId: string, parentId: string, parentMap: ReadonlyMap<string, string>): boolean {
+  const visited = new Set<string>();
+  let current: string | undefined = parentId;
+  while (current) {
+    if (current === childId) return true;
+    if (visited.has(current)) break;
+    visited.add(current);
+    current = parentMap.get(current);
+  }
+  return false;
+}
 
 /**
  * Detect whether setting `childId extends parentId` would create a cycle.
@@ -30,26 +52,7 @@ import type { TypeGraphNode, TypeGraphEdge, ValidationError, AnyGraphNode } from
  */
 export function detectCircularInheritance(childId: string, parentId: string, edges: TypeGraphEdge[]): boolean {
   if (childId === parentId) return true;
-
-  // Build adjacency map: nodeId → parent nodeId (via extends edges)
-  const parentMap = new Map<string, string>();
-  for (const edge of edges) {
-    if (edge.data?.kind === 'extends' || edge.data?.kind === 'enum-extends') {
-      parentMap.set(edge.source, edge.target);
-    }
-  }
-
-  // Walk up from parentId
-  const visited = new Set<string>();
-  let current: string | undefined = parentId;
-  while (current) {
-    if (current === childId) return true;
-    if (visited.has(current)) break; // already visited — no cycle to childId
-    visited.add(current);
-    current = parentMap.get(current);
-  }
-
-  return false;
+  return reachesAncestor(childId, parentId, buildParentMap(edges));
 }
 
 // ---------------------------------------------------------------------------
@@ -67,7 +70,7 @@ export function detectDuplicateName(name: string, namespace: string, nodes: Type
     // Check for duplicate attribute within a node
     const node = nodes.find((n) => n.id === nodeId);
     if (!node) return false;
-    const d = node.data as AnyGraphNode;
+    const d = node.data;
     const members = ((d as any).attributes ??
       (d as any).enumValues ??
       (d as any).inputs ??
@@ -130,7 +133,7 @@ export function validateCardinality(input: string): string | null {
 export function detectDuplicateEnumValue(valueName: string, nodeId: string, nodes: TypeGraphNode[]): boolean {
   const node = nodes.find((n) => n.id === nodeId);
   if (!node) return false;
-  const d = node.data as AnyGraphNode;
+  const d = node.data;
   if (d.$type !== 'RosettaEnumeration') return false;
   const vals = ((d as any).enumValues ?? []) as { name?: string }[];
   return vals.some((v) => v.name === valueName);
@@ -263,35 +266,22 @@ export function validateGraph(nodes: TypeGraphNode[], edges: TypeGraphEdge[]): V
   }
 
   // Check for circular inheritance
-  const parentMap = new Map<string, string>();
-  for (const edge of edges) {
-    if (edge.data?.kind === 'extends' || edge.data?.kind === 'enum-extends') {
-      parentMap.set(edge.source, edge.target);
-    }
-  }
+  const parentMap = buildParentMap(edges);
 
   for (const [childId, parentId] of parentMap) {
-    const visited = new Set<string>();
-    let current: string | undefined = parentId;
-    while (current) {
-      if (current === childId) {
-        errors.push({
-          nodeId: childId,
-          severity: 'error',
-          message: 'Circular inheritance detected',
-          ruleId: 'S-02'
-        });
-        break;
-      }
-      if (visited.has(current)) break;
-      visited.add(current);
-      current = parentMap.get(current);
+    if (reachesAncestor(childId, parentId, parentMap)) {
+      errors.push({
+        nodeId: childId,
+        severity: 'error',
+        message: 'Circular inheritance detected',
+        ruleId: 'S-02'
+      });
     }
   }
 
   // Check for duplicate attribute names within each type
   for (const node of nodes) {
-    const d = node.data as AnyGraphNode;
+    const d = node.data;
     const members = ((d as any).attributes ?? (d as any).inputs ?? (d as any).features ?? []) as {
       name?: string;
     }[];
@@ -311,7 +301,7 @@ export function validateGraph(nodes: TypeGraphNode[], edges: TypeGraphEdge[]): V
 
   // S-05: Check for duplicate enum value names within each enum
   for (const node of nodes) {
-    const d = node.data as AnyGraphNode;
+    const d = node.data;
     if (d.$type !== 'RosettaEnumeration') continue;
     const vals = ((d as any).enumValues ?? []) as { name?: string }[];
     const valueNames = new Set<string>();

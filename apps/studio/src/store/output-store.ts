@@ -46,7 +46,7 @@ export const useOutputStore = create<OutputState>((set) => ({
       id: ++_idCounter,
       text,
       severity,
-      ts: performance.now() as number,
+      ts: performance.now(),
       ...meta
     };
     set((state) => {

@@ -33,7 +33,7 @@ export const ExcelOptionsFormAdapter = withInstrumentation(
     return (
       <GeneratedExcelOptionsForm
         // defaultValues seeds RHF on mount with the parent's current value.
-        defaultValues={value as Record<string, unknown>}
+        defaultValues={value}
         onValueChange={(data: unknown) => {
           onChange(data as Record<string, unknown>);
         }}

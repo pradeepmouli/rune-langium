@@ -5,18 +5,19 @@ import type { LangiumDocument } from 'langium';
 import {
   isAnnotation,
   isData,
+  isChoice,
   isRosettaEnumeration,
   isRosettaExternalFunction,
   isRosettaFunction,
   isRosettaModel,
   isRosettaReport,
   isRosettaRule,
-  isRosettaTypeAlias,
-  type RosettaModel
+  isRosettaTypeAlias
 } from '@rune-langium/core';
 
 export interface NamespaceManifest {
   namespace: string;
+  /** Structured Data and Choice declarations, including their Shape and guard exports. */
   exportedDataNames: Set<string>;
   exportedEnumNames: Set<string>;
   exportedFuncNames: Set<string>;
@@ -51,8 +52,8 @@ export function buildNamespaceRegistry(groupedDocs: Map<string, LangiumDocument[
       const model = doc.parseResult?.value;
       if (!model || !isRosettaModel(model)) continue;
 
-      for (const element of (model as RosettaModel).elements) {
-        if (isData(element)) {
+      for (const element of model.elements) {
+        if (isData(element) || isChoice(element)) {
           manifest.exportedDataNames.add(element.name);
         } else if (isRosettaEnumeration(element)) {
           manifest.exportedEnumNames.add(element.name);

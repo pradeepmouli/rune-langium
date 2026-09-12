@@ -2,55 +2,20 @@
 // Copyright (c) 2026 Pradeep Mouli
 
 /**
- * OpenAPI 3.1 target emitter for the Rune code generator (spec.md Phase 2b
- * Implementation Addendum).
+ * Emits OpenAPI 3.1 by calling the public JSON Schema emitter and wrapping its
+ * $defs as components.schemas. Schema generation remains shared.
  *
- * Entry point: emitNamespace(model, options, registry) → GeneratorOutput
- *
- * ─── DECISION 2 (byte-stability) ─────────────────────────────────────────
- * The existing JSON Schema emitter (`json-schema-emitter.ts`) is UNCHANGED
- * by this effort — its own tests/fixtures stay green untouched. This
- * emitter COMPOSES rather than extracts: it calls the JSON Schema
- * emitter's own PUBLIC `emitNamespace()` entry point unmodified, parses
- * the resulting JSON text back into `{ $defs, x-rune-conditions, ... }`,
- * and wraps `$defs` as `components.schemas` — the exact approach
- * `test/import/round-trip-openapi.test.ts`'s test-local
- * `wrapAsOpenApiComponents` helper already proved out for Phase 2's T5
- * oracle (this module productionizes that same pattern as real emitter
- * code, rather than inventing a new one). Byte-stability of the JSON
- * Schema emitter's own output is trivially guaranteed: zero lines of
- * json-schema-emitter.ts are touched by this file.
- *
- * On top of the wrapped schemas, this emitter ADDS (json-schema-emitter.ts
- * does none of this):
- *  1. Constraint keywords for every RECOGNIZED condition
- *     (`../emit/constraint-recognizer.ts`, T1) — merged into the owning
- *     property's schema object, additive alongside the existing
- *     `x-rune-conditions` opaque metadata (nothing removed).
- *  2. Funcs → RPC-style operations (decision 4): `POST /functions/{FuncName}`,
- *     `operationId` = func name, inputs → an inline requestBody object
- *     schema (respecting cardinality — reusing `extractFuncs`'s already-
- *     resolved `RuneFuncParam` shape from `../types/func.ts`, the exact
- *     same extraction `ts-emitter.ts`'s `emitFunctions()` already uses),
- *     output → the 200 response schema, `definition` → summary/description.
- *     `x-rune-operation` carries the SAME "METHOD /path" string T2's
- *     operation-carrier module attaches to a func via
- *     `[openApi op "value"="..."]` — the emitter and the reader (T4) must
- *     independently derive/consume the identical string for the round
- *     trip to close.
- *  3. YAML output: `options.openapi.format === 'yaml'` emits YAML via the
- *     `yaml` package (already a runtime dep of this package, from Phase
- *     2's inbound OpenAPI reader) instead of JSON — CORRECTED (review
- *     finding): this is the ONLY selector; the generator API has no
- *     output-path override to derive a format from an explicit
- *     `.yaml`/`.yml` extension request (a prior version of this doc
- *     claimed otherwise; extension-driven selection would be a real
- *     feature, recorded as a follow-up, not built here).
- *  4. CRUD generation (decision 5): an OPT-IN emitter option
- *     (`options.openapi.crud`) generating the standard
- *     `GET /xs`, `POST /xs`, `GET /xs/{id}`, `PUT /xs/{id}`,
- *     `DELETE /xs/{id}` operation set for selected (or all) `Data` types.
- *     NOT default.
+ * Adds:
+ * - Representable constraint keywords alongside existing x-rune-conditions
+ *   metadata.
+ * - Funcs as POST /functions/{FuncName} operations. Shared extractFuncs output
+ *   supplies input cardinality and the 200 response schema; definitions supply
+ *   summary/description. x-rune-operation uses the same "METHOD /path" carrier
+ *   as the OpenAPI reader and Rune annotation helpers.
+ * - YAML only when options.openapi.format is 'yaml'; output file extensions
+ *   do not select the format.
+ * - Opt-in CRUD operations via options.openapi.crud: GET/POST /xs and
+ *   GET/PUT/DELETE /xs/{id} for selected or all Data types.
  */
 
 import { stringify as stringifyYaml } from 'yaml';

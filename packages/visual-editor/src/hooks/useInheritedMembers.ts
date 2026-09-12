@@ -69,7 +69,7 @@ function getParentName(d: AnyGraphNode): string | undefined {
  */
 function getMembers(d: AnyGraphNode): unknown[] {
   const rec = d as unknown as DataShape & EnumShape & FuncShape & RecordShape;
-  return (rec.attributes ?? rec.enumValues ?? rec.inputs ?? rec.features ?? []) as unknown[];
+  return rec.attributes ?? rec.enumValues ?? rec.inputs ?? rec.features ?? [];
 }
 
 /**
@@ -106,17 +106,17 @@ export function useInheritedMembers(
       const parentNode =
         nodeRepository?.byId(currentParentName) ??
         allNodes.find((n) => {
-          const pd = n.data as AnyGraphNode;
-          return pd.name === currentParentName || makeNodeId(n.meta.namespace, pd.name as string) === currentParentName;
+          const pd = n.data;
+          return pd.name === currentParentName || makeNodeId(n.meta.namespace, pd.name) === currentParentName;
         });
 
       if (!parentNode) break;
 
-      const pd = parentNode.data as AnyGraphNode;
+      const pd = parentNode.data;
       const members = getMembers(pd);
       if (members.length > 0) {
         groups.push({
-          ancestorName: pd.name as string,
+          ancestorName: pd.name,
           namespace: parentNode.meta.namespace,
           kind: resolveNodeKind(parentNode),
           members
@@ -211,11 +211,11 @@ function getLocalMemberName(field: LocalMemberField): string {
 }
 
 function getInheritedAttributeMember(member: unknown): InheritedAttributeMemberShape | undefined {
-  return isRecord(member) ? (member as InheritedAttributeMemberShape) : undefined;
+  return isRecord(member) ? member : undefined;
 }
 
 function getInheritedEnumValueMember(member: unknown): InheritedEnumValueMemberShape | undefined {
-  return isRecord(member) ? (member as InheritedEnumValueMemberShape) : undefined;
+  return isRecord(member) ? member : undefined;
 }
 
 // ---------------------------------------------------------------------------

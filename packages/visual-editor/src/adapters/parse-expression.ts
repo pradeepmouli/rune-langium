@@ -15,7 +15,7 @@ import { astToExpressionNode } from './ast-to-expression-node.js';
 
 export function parseExpression(value: string): ExpressionNode {
   if (!value) {
-    return { $type: 'Placeholder', id: 'root-placeholder' } as unknown as ExpressionNode;
+    return { $type: 'Placeholder', id: 'root-placeholder' };
   }
 
   // JSON-serialized AST (from a previous round-trip) — convert directly.
@@ -30,7 +30,7 @@ export function parseExpression(value: string): ExpressionNode {
 
   const { value: ast, hasErrors } = parseExpressionCore(value);
   if (hasErrors) {
-    return { $type: 'Unsupported', id: 'parse-error', rawText: value } as unknown as ExpressionNode;
+    return { $type: 'Unsupported', id: 'parse-error', rawText: value };
   }
   return astToExpressionNode(ast, value);
 }

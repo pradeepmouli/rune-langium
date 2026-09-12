@@ -12,14 +12,7 @@
  *      Foundation for the shared hierarchical NamespaceTree picker.
  */
 
-import type {
-  TypeGraphNode,
-  TypeKind,
-  NamespaceTreeNode,
-  NamespaceTypeEntry,
-  AnyGraphNode,
-  TypeOption
-} from '../types.js';
+import type { TypeGraphNode, TypeKind, NamespaceTreeNode, NamespaceTypeEntry, TypeOption } from '../types.js';
 import { resolveNodeKind } from '../adapters/model-helpers.js';
 import type { NodeRepository } from '../store/node-repository.js';
 
@@ -245,7 +238,7 @@ export interface SegmentNode {
  * comparator), so such nodes are excluded here instead of fabricated.
  */
 function extractTypeEntry(node: TypeGraphNode): NamespaceTypeEntry | undefined {
-  const d = node.data as AnyGraphNode;
+  const d = node.data;
   const name = (d as { name?: unknown }).name;
   if (typeof name !== 'string' || name === '') return undefined;
   return {

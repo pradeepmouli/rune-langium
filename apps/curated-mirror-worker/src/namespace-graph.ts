@@ -74,7 +74,7 @@ function refUriToCuratedKey(ref: string): string | null {
  */
 function nameToNamespace(name: unknown): string | undefined {
   if (typeof name === 'string') return name;
-  if (name !== null && typeof name === 'object' && 'segments' in (name as object)) {
+  if (name !== null && typeof name === 'object' && 'segments' in name) {
     const segs = (name as { segments?: unknown }).segments;
     if (Array.isArray(segs)) return (segs as unknown[]).join('.');
   }

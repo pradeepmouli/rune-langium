@@ -10,6 +10,7 @@
  * `'single-file'`.
  */
 
+import { stripBundledImports } from './bundle-imports.js';
 import type { GeneratorOutput } from '../types.js';
 import type { LanguageProfile } from './language-profile.js';
 import { RUNTIME_HELPER_SOURCE, RUNTIME_SIDECAR_HELPER_LINES, RUNE_HELPER_NAMES } from '../helpers.js';
@@ -93,7 +94,12 @@ function makeSingleFileContent(perNs: ReadonlyArray<GeneratorOutput>): string {
     ``
   ];
   for (const out of perNs) {
-    const body = stripPerNamespaceHeader(out.content);
+    const body = stripBundledImports(
+      stripPerNamespaceHeader(out.content),
+      out.relativePath,
+      perNs.map((output) => output.relativePath),
+      '.zod.ts'
+    );
     if (body.length > 0) {
       sections.push(`// --- namespace: ${out.relativePath} ---`);
       sections.push(body);
