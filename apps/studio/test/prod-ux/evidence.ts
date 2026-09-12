@@ -5,6 +5,7 @@ import { mkdir, readFile, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 import type { Page, ConsoleMessage, Request, Response } from '@playwright/test';
 import type { OpLogEntry } from '../../src/services/op-log.js';
+import { waitForEntranceAnimations } from './readiness.js';
 import { buildTimingsRollup, type TimingRecord } from './timings.js';
 
 export interface Checkpoint {
@@ -76,6 +77,7 @@ export class EvidenceCollector {
   private readonly softFindings: SoftFinding[] = [];
   private typeClosureRecords: TypeClosureRecord[] = [];
   private seq = 0;
+  private timingSeq = 0;
   /** In-flight response-body reads from the `response` handler below — awaited by `finish()` so a body that's still being read when the journey ends isn't silently dropped. */
   private readonly pendingBodyReads: Promise<void>[] = [];
   /**
@@ -167,12 +169,37 @@ export class EvidenceCollector {
     await mkdir(dir, { recursive: true });
     const fileName = `${String(this.seq).padStart(2, '0')}-${name}.png`;
     const screenshotPath = path.join(dir, fileName);
+    await waitForEntranceAnimations(this.page);
     await this.page.screenshot({ path: screenshotPath, fullPage: true });
     this.checkpoints.push({
       name,
       screenshot: path.relative(REPORT_DIR, screenshotPath),
       tMs: Date.now() - this.startedAt
     });
+  }
+
+  recordTiming(op: string, subject: string, durationMs: number): void {
+    this.recordOpLog([
+      {
+        op,
+        subject,
+        durationMs,
+        panel: 'perf',
+        sourceId: --this.timingSeq,
+        level: 'info',
+        message: 'Journey wall-clock measurement',
+        ts: Date.now() - this.startedAt
+      }
+    ]);
+  }
+
+  async measure<T>(op: string, subject: string, action: () => Promise<T>): Promise<T> {
+    const startedAt = Date.now();
+    try {
+      return await action();
+    } finally {
+      this.recordTiming(op, subject, Date.now() - startedAt);
+    }
   }
 
   softFinding(ledgerId: string, detail: string): void {

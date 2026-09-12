@@ -8,7 +8,7 @@ test.describe('J03 — curated CDM load & unload', () => {
 
   test('J03 loads and unloads CDM, recording cdmLoad timing', async ({ page, evidence }) => {
     const cdmLoadStartedAt = Date.now();
-    await loadCdm(page);
+    await loadCdm(page, evidence);
     // loadCdm() only waits for the model chip + Unload button to mount, which
     // happens as soon as the curated archive's metadata-only load resolves —
     // BEFORE App.tsx's model-change effect re-parses/re-links and populates

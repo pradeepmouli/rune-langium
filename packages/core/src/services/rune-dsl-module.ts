@@ -10,11 +10,13 @@ import type {
   DefaultSharedCoreModuleContext
 } from 'langium';
 import { inject, createDefaultCoreModule, createDefaultSharedCoreModule, EmptyFileSystem } from 'langium';
+import { RuneJsonSerializer } from '../serializer/rune-json-serializer.js';
 import { RuneDslGeneratedModule, RuneDslGeneratedSharedModule } from '../generated/module.js';
 import { RuneDslScopeProvider } from './rune-dsl-scope-provider.js';
 import { RuneDslScopeComputation } from './rune-dsl-scope-computation.js';
 import { RuneDslValidator } from './rune-dsl-validator.js';
 import { createRuneDslParser } from './rune-dsl-parser.js';
+import { RuneWorkspaceManager } from './rune-workspace-manager.js';
 import { RuneDslIndexManager } from './rune-dsl-index-manager.js';
 import { RuneDslLinker, type DeferredModelProvider } from './rune-dsl-linker.js';
 export type { DeferredModelProvider } from './rune-dsl-linker.js';
@@ -28,7 +30,8 @@ export type { DeferredModelProvider } from './rune-dsl-linker.js';
  */
 export const RuneDslSharedModule: Module<LangiumSharedCoreServices, PartialLangiumSharedCoreServices> = {
   workspace: {
-    IndexManager: (services) => new RuneDslIndexManager(services)
+    IndexManager: (services) => new RuneDslIndexManager(services),
+    WorkspaceManager: (services) => new RuneWorkspaceManager(services)
   }
 };
 
@@ -43,7 +46,7 @@ export const RuneDslSharedModule: Module<LangiumSharedCoreServices, PartialLangi
  *
  * @category Core
  */
-export type RuneDslServices = LangiumCoreServices;
+export type RuneDslServices = LangiumCoreServices & { serializer: { JsonSerializer: RuneJsonSerializer } };
 
 /**
  * Dependency-injection module for the Rune DSL language.
@@ -70,7 +73,8 @@ export type RuneDslServices = LangiumCoreServices;
  *
  * @category Core
  */
-export const RuneDslModule: Module<LangiumCoreServices, PartialLangiumCoreServices> = {
+export const RuneDslModule = {
+  serializer: { JsonSerializer: (services) => new RuneJsonSerializer(services) },
   parser: {
     LangiumParser: (services) => createRuneDslParser(services)
   },
@@ -78,7 +82,7 @@ export const RuneDslModule: Module<LangiumCoreServices, PartialLangiumCoreServic
     ScopeComputation: (services) => new RuneDslScopeComputation(services),
     ScopeProvider: (services) => new RuneDslScopeProvider(services)
   }
-};
+} satisfies Module<RuneDslServices, PartialLangiumCoreServices>;
 
 /**
  * Create the full set of services required for the Rune DSL language.
@@ -139,7 +143,7 @@ export function createRuneDslServices(
   deferredProvider?: DeferredModelProvider
 ): {
   shared: LangiumSharedCoreServices;
-  RuneDsl: LangiumCoreServices;
+  RuneDsl: RuneDslServices;
 } {
   const shared = inject(createDefaultSharedCoreModule(context), RuneDslGeneratedSharedModule, RuneDslSharedModule);
   const RuneDsl = inject(createDefaultCoreModule({ shared }), RuneDslGeneratedModule, RuneDslModule, {

@@ -33,7 +33,7 @@ test.describe('J17 — Accessibility sweep', () => {
   test('J17 axe sweep across all perspectives and the Import/Export dialogs', async ({ page, evidence }) => {
     const results: AxeSweepResult[] = [];
 
-    await loadCdm(page);
+    await loadCdm(page, evidence);
 
     await page.getByTestId('rail-explore').click();
     await expect(page.getByTestId('explore-workbench')).toBeVisible({ timeout: 20000 });

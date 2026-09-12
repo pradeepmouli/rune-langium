@@ -2,7 +2,7 @@
 // Copyright (c) 2026 Pradeep Mouli
 import { unwrapMetadata } from './metadata-runtime.js';
 import { expressionMetadataKind } from './metadata-type.js';
-import { inlineContext, freshLocal } from './inline-function.js';
+import { inlineContext, freshLocal, arrowBody } from './inline-function.js';
 
 import {
   isFilterOperation,
@@ -45,7 +45,7 @@ export function renderCollectionOperation(
       : fn
         ? render(fn.body, inlineContext(fn, ctx, [param], metadata))
         : param;
-    return `(${argument} ?? []).${isFilterOperation(expr) ? 'filter' : 'map'}((${param}) => ${body})`;
+    return `(${argument} ?? []).${isFilterOperation(expr) ? 'filter' : 'map'}((${param}) => ${arrowBody(body)})`;
   }
   if (isSortOperation(expr)) {
     const a = freshLocal(ctx, '__sortA');

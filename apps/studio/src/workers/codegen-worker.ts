@@ -843,55 +843,55 @@ function createGeneratedModuleLoader(outputs: readonly GeneratorOutput[]): {
 async function executeFunction(funcName: string, inputs: Record<string, unknown>, requestId: string): Promise<void> {
   const scope = self as unknown as DedicatedWorkerGlobalScope;
 
-  const { version: documentsVersion, value: documents } = await buildDocuments();
-  // Tagged with documentsVersion (fixed — `documents` is an immutable local
-  // array once obtained, so no further staleness can be introduced during
-  // this call), not the live previewFilesVersion — see runPreview's
-  // identical comment for why re-sampling the live counter here would be
-  // wrong.
-  const results =
-    documents.length > 0
-      ? (
-          await getOrComputeAsync(
-            previewGenerateCache,
-            'generate:typescript',
-            () => documentsVersion,
-            () => generate(documents, { target: 'typescript' })
-          )
-        ).value
-      : [];
-
-  // Matches both the bare function name and the namespace-qualified form
-  // (`${ns}.${func.name}`, derived the same way runCodegen's own cache
-  // population always did). The real UI caller (FormPreviewPanel.tsx) always
-  // passes the qualified `schema.targetId`, not the bare `schema.title` —
-  // two namespaces can share a bare func name, and only the qualified form
-  // disambiguates which one to run; the bare-name branch here exists only
-  // for callers (tests, `instance:execute`-style future callers) that don't
-  // have a namespace-qualified name to give.
-  let selectedModulePath: string | undefined;
-  let selectedTargetId = funcName;
-  for (const result of results) {
-    const ns = result.relativePath.replace(/\//g, '.').replace(/\.ts$/, '');
-    const func = result.funcs.find((f) => f.name === funcName || `${ns}.${f.name}` === funcName);
-    if (func) {
-      selectedModulePath = result.relativePath;
-      selectedTargetId = `${ns}.${func.name}`;
-      break;
-    }
-  }
-
-  if (selectedModulePath === undefined) {
-    scope.postMessage({
-      type: 'preview:execute-error',
-      requestId,
-      funcName,
-      error: `Function '${funcName}' not found in generated code. Ensure the model has a valid func declaration and no parse errors.`
-    });
-    return;
-  }
-
   try {
+    const { version: documentsVersion, value: documents } = await buildDocuments();
+    // Tagged with documentsVersion (fixed — `documents` is an immutable local
+    // array once obtained, so no further staleness can be introduced during
+    // this call), not the live previewFilesVersion — see runPreview's
+    // identical comment for why re-sampling the live counter here would be
+    // wrong.
+    const results =
+      documents.length > 0
+        ? (
+            await getOrComputeAsync(
+              previewGenerateCache,
+              'generate:typescript',
+              () => documentsVersion,
+              () => generate(documents, { target: 'typescript' })
+            )
+          ).value
+        : [];
+
+    // Matches both the bare function name and the namespace-qualified form
+    // (`${ns}.${func.name}`, derived the same way runCodegen's own cache
+    // population always did). The real UI caller (FormPreviewPanel.tsx) always
+    // passes the qualified `schema.targetId`, not the bare `schema.title` —
+    // two namespaces can share a bare func name, and only the qualified form
+    // disambiguates which one to run; the bare-name branch here exists only
+    // for callers (tests, `instance:execute`-style future callers) that don't
+    // have a namespace-qualified name to give.
+    let selectedModulePath: string | undefined;
+    let selectedTargetId = funcName;
+    for (const result of results) {
+      const ns = result.relativePath.replace(/\//g, '.').replace(/\.ts$/, '');
+      const func = result.funcs.find((f) => f.name === funcName || `${ns}.${f.name}` === funcName);
+      if (func) {
+        selectedModulePath = result.relativePath;
+        selectedTargetId = `${ns}.${func.name}`;
+        break;
+      }
+    }
+
+    if (selectedModulePath === undefined) {
+      scope.postMessage({
+        type: 'preview:execute-error',
+        requestId,
+        funcName,
+        error: `Function '${funcName}' not found in generated code. Ensure the model has a valid func declaration and no parse errors.`
+      });
+      return;
+    }
+
     // Load the complete generated module so function calls, metadata helpers,
     // and imports from sibling generated modules share one module graph.
     // Execution still goes through runInWorkerSandbox — see its threat-model

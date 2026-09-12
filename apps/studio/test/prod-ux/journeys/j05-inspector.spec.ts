@@ -12,7 +12,7 @@ test.describe('J05 — Inspector pane', () => {
     page,
     evidence
   }) => {
-    await loadCdm(page);
+    await loadCdm(page, evidence);
     const centerStack = page.getByTestId('center-stack');
 
     await page.getByTestId('rail-explore').click();
@@ -27,4 +27,38 @@ test.describe('J05 — Inspector pane', () => {
     await expectPopulatedAttributes(centerStack);
     await evidence.checkpoint('inspector-populated');
   });
+  test(
+    'J05 narrow viewport keeps three selected center panes readable',
+    { annotation: { type: 'journey-subid', description: 'narrow-layout' } },
+    async ({ page, evidence }) => {
+      await page.setViewportSize({ width: 1280, height: 720 });
+      await loadCdm(page, evidence);
+      await page.getByTestId('rail-explore').click();
+      await page.getByTestId('namespace-search').fill('BusinessCenters');
+      await page.getByTestId(`ns-type-nav-${ANCHOR_DATA}`).click();
+      for (const name of ['Graph', 'Source', 'Inspector']) {
+        const button = page.getByRole('button', { name, exact: true });
+        if ((await button.getAttribute('aria-pressed')) !== 'true') await button.click();
+      }
+      const structure = page.getByRole('button', { name: 'Structure', exact: true });
+      if ((await structure.getAttribute('aria-pressed')) === 'true') await structure.click();
+      const stack = page.getByTestId('center-stack');
+      await expect(stack).toHaveAttribute('data-count', '3');
+      await expect(stack).toHaveCSS('display', 'grid');
+      const panes = await stack.locator('[data-pane]').evaluateAll((elements) =>
+        elements.map((element) => ({
+          width: element.getBoundingClientRect().width,
+          parentWidth: element.parentElement!.getBoundingClientRect().width
+        }))
+      );
+      for (const pane of panes) {
+        expect(pane.width).toBeGreaterThan(300);
+        expect(pane.width).toBeLessThanOrEqual(pane.parentWidth);
+      }
+      const inspector = stack.locator('[data-pane="inspector"]');
+      await inspector.scrollIntoViewIfNeeded();
+      await expectPopulatedAttributes(inspector);
+      await evidence.checkpoint('narrow-three-pane-inspector');
+    }
+  );
 });

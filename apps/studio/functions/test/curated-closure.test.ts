@@ -3,7 +3,11 @@
 
 import { describe, it, expect } from 'vitest';
 import { readSerializedModelMeta } from '../lib/serialized-model-meta.js';
-import { closeNamespacesFromManifest, expandWildcard, buildDependencyGraph } from '../lib/curated-closure.js';
+import {
+  closeNamespacesFromManifest,
+  expandWildcard,
+  buildDependencyGraph
+} from '../../src/services/curated-closure.js';
 
 function doc(namespace: string, imports: string[], uri?: string): { uri: string; serializedModel: string } {
   return {

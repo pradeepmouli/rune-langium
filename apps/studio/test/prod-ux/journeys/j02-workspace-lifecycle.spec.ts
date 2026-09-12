@@ -15,18 +15,22 @@ test.describe('J02 — workspace lifecycle & persistence', () => {
     await expect(page.getByTestId('model-loader')).toBeVisible({ timeout: 20000 });
 
     const fileInput = page.locator('input[type="file"][accept=".rosetta"]');
+    const openedAt = Date.now();
     await fileInput.setInputFiles([
       { name: WORKSPACE_FILE_NAME, mimeType: 'text/plain', buffer: Buffer.from(WORKSPACE_FILE_CONTENT) }
     ]);
     await expect(page.getByTestId('explore-workbench')).toBeVisible({ timeout: 20000 });
+    evidence.recordTiming('workspaceOpen', WORKSPACE_FILE_NAME, Date.now() - openedAt);
     await evidence.checkpoint('workspace-created');
 
+    const reloadedAt = Date.now();
     await page.reload();
     await page.waitForLoadState('domcontentloaded');
-    await evidence.checkpoint('after-reload');
 
     // A reloaded page with a prior workspace lands back in the workbench,
     // not the model-loader launcher — this IS the persistence assertion.
     await expect(page.getByTestId('explore-workbench')).toBeVisible({ timeout: 20000 });
+    evidence.recordTiming('reloadRestore', WORKSPACE_FILE_NAME, Date.now() - reloadedAt);
+    await evidence.checkpoint('after-reload');
   });
 });

@@ -63,11 +63,11 @@ test.describe('J10 — Expression language lens', () => {
     await evidence.checkpoint('lens-mode-enabled');
 
     await conditionRow.getByRole('button', { name: 'TypeScript', exact: true }).click();
-    await expect(conditionRow.getByRole('textbox', { name: 'TypeScript expression' })).toBeVisible();
+    await expect(conditionRow.getByRole('textbox', { name: 'TypeScript expression' })).toContainText(/amount\s*>\s*0/);
     await evidence.checkpoint('toggled-typescript');
 
     await conditionRow.getByRole('button', { name: 'Python', exact: true }).click();
-    await expect(conditionRow.getByRole('textbox', { name: 'Python expression' })).toBeVisible();
+    await expect(conditionRow.getByRole('textbox', { name: 'Python expression' })).toContainText(/amount\s*>\s*0/);
     await evidence.checkpoint('toggled-python');
 
     await conditionRow.getByRole('button', { name: 'Rune', exact: true }).click();

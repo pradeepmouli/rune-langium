@@ -80,7 +80,7 @@ test.describe('J13 — Export perspective', () => {
           '/api/codegen-backed DownloadConfigDialog generate flow exercised elsewhere in this journey.'
       );
 
-      await loadCdm(page);
+      await loadCdm(page, evidence);
       await page.getByTestId('rail-export').click();
       await expect(page.getByTestId('export-perspective')).toBeVisible({ timeout: 20000 });
       await expect(page.getByTestId('export-targets-section')).toBeVisible({ timeout: 10000 });
@@ -110,7 +110,7 @@ test.describe('J13 — Export perspective', () => {
     'J13 Export generate — soft-asserted under KI-codegen-503',
     { annotation: { type: 'journey-subid', description: 'generate' } },
     async ({ page, evidence }) => {
-      await loadCdm(page);
+      await loadCdm(page, evidence);
       await page.getByTestId('rail-export').click();
       await expect(page.getByTestId('export-perspective')).toBeVisible({ timeout: 20000 });
 

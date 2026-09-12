@@ -25,7 +25,8 @@ import { getTargetRelativePath, type NamespaceWalkResult } from './namespace-wal
 import { resolveTypeCallTarget, type TypeIndexEntry, type TypeIndexLookup } from './type-ref-resolver.js';
 import { zodProfile } from './zod-profile.js';
 import { typescriptProfile } from './typescript-profile.js';
-import { getElementNamespace,
+import {
+  getElementNamespace,
   isChoice,
   isData,
   isRosettaEnumeration,
@@ -39,7 +40,8 @@ import { getElementNamespace,
   type RosettaReport,
   type Annotation,
   type RosettaExternalFunction,
-  type TypeCall } from '@rune-langium/core';
+  type TypeCall
+} from '@rune-langium/core';
 import { debug } from '../instrument.js';
 import type { GeneratorOptions, GeneratorOutput, SourceMapEntry, GeneratorDiagnostic } from '../types.js';
 import { RUNTIME_HELPER_SOURCE, buildRuntimeHelperImportLine } from '../helpers.js';

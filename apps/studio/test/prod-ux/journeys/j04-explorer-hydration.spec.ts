@@ -14,7 +14,7 @@ test.describe('J04 — explorer navigation & on-demand hydration', () => {
   test.skip(!process.env.PLAYWRIGHT_PROD_SMOKE, 'set PLAYWRIGHT_PROD_SMOKE=1 to run against a deployed Studio');
 
   test('J04a explorer navigation updates panes with reference-only design', async ({ page, evidence }) => {
-    await loadCdm(page);
+    await loadCdm(page, evidence);
     const centerStack = page.getByTestId('center-stack');
 
     await page.getByTestId('rail-explore').click();
@@ -50,7 +50,7 @@ test.describe('J04 — explorer navigation & on-demand hydration', () => {
     evidence
   }) => {
     // First navigation must hydrate attributes without visiting another namespace first.
-    await loadCdm(page);
+    await loadCdm(page, evidence);
     const centerStack = page.getByTestId('center-stack');
 
     await page.getByTestId('rail-explore').click();
@@ -85,7 +85,7 @@ test.describe('J04 — explorer navigation & on-demand hydration', () => {
       await route.continue();
     });
 
-    await loadCdm(page);
+    await loadCdm(page, evidence);
 
     await page.getByTestId('rail-explore').click();
     await expect(page.getByTestId('explore-workbench')).toBeVisible({ timeout: 20_000 });

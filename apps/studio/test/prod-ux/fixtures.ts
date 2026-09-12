@@ -250,7 +250,7 @@ const WORKSPACE_FILE_NAME = 'starter.rosetta';
 const WORKSPACE_FILE_CONTENT = 'namespace example\n';
 
 /** Ported verbatim from test/prod-smoke/production-checkout.spec.ts's loadCdm helper. */
-export async function loadCdm(page: Page): Promise<void> {
+export async function loadCdm(page: Page, evidence?: EvidenceCollector): Promise<void> {
   await page.goto('./');
   await page.waitForLoadState('domcontentloaded');
   await expect(page).toHaveTitle(/Rune Studio/);
@@ -264,10 +264,12 @@ export async function loadCdm(page: Page): Promise<void> {
   await page.getByTestId('rail-workspaces').click();
   await expect(page.getByTestId('model-loader')).toBeVisible({ timeout: 20000 });
 
+  const startedAt = Date.now();
   await page.getByTestId('model-loader').getByRole('button', { name: CDM_BUTTON }).click();
 
   await expect(page.getByText('Loaded Models', { exact: false })).toBeVisible({ timeout: 90000 });
   await expect(page.getByRole('button', { name: `Unload ${CDM_BUTTON}` })).toBeVisible({ timeout: 90000 });
+  evidence?.recordTiming('modelLoad', 'cdm loaded in UI', Date.now() - startedAt);
 }
 
 export interface ScratchAttributeSpec {

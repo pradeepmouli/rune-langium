@@ -11,7 +11,7 @@ test.describe('J9 — Form preview & function execution', () => {
     'J9 form preview + validation for curated and scratch data types',
     { annotation: { type: 'journey-subid', description: 'form-preview' } },
     async ({ page, evidence }) => {
-      await loadCdm(page);
+      await loadCdm(page, evidence);
       await page.getByTestId('rail-explore').click();
       await expect(page.getByTestId('explore-workbench')).toBeVisible({ timeout: 20000 });
 
@@ -23,6 +23,7 @@ test.describe('J9 — Form preview & function execution', () => {
       await expect(formPanel.getByRole('heading', { name: 'BusinessCenters' })).toBeVisible({ timeout: 30_000 });
       await expect(formPanel.getByText('Generating preview', { exact: false })).toHaveCount(0);
       const curatedFormRenderMs = Date.now() - curatedFormStartedAt;
+      evidence.recordTiming('formRender', ANCHOR_DATA, curatedFormRenderMs);
       await evidence.checkpoint('curated-form-preview');
 
       // Generated Zod accepts empty strings; a fractional int is structurally invalid.
@@ -36,6 +37,7 @@ test.describe('J9 — Form preview & function execution', () => {
       const quantityField = formPanel.getByLabel('Quantity', { exact: true });
       await expect(quantityField).toBeVisible({ timeout: 20_000 });
       const scratchFormRenderMs = Date.now() - scratchFormStartedAt;
+      evidence.recordTiming('formRender', 'ScratchWidget', scratchFormRenderMs);
 
       await quantityField.fill('1.5');
       await quantityField.blur();
@@ -64,7 +66,7 @@ test.describe('J9 — Form preview & function execution', () => {
     'J9 executes a curated corpus function and a scratch-authored function',
     { annotation: { type: 'journey-subid', description: 'function-execution' } },
     async ({ page, evidence }) => {
-      await loadCdm(page);
+      await loadCdm(page, evidence);
       await page.getByTestId('rail-explore').click();
       await expect(page.getByTestId('explore-workbench')).toBeVisible({ timeout: 20000 });
 
@@ -84,6 +86,7 @@ test.describe('J9 — Form preview & function execution', () => {
       // contains an 'x'; confirmed live this session).
       await page.getByLabel('S1', { exact: true }).fill('hello');
       await page.getByLabel('S2', { exact: true }).fill('hello');
+      const executionStartedAt = Date.now();
       await page.getByRole('button', { name: 'Run' }).click();
       // The function-execution output and the (unrelated) "Sample data"
       // preview share the SAME class, `preview-panel__sample-output`
@@ -94,6 +97,7 @@ test.describe('J9 — Form preview & function execution', () => {
       const curatedOutput = page.locator('.execution-result .preview-panel__sample-output');
       await expect(curatedOutput).toBeVisible({ timeout: 20000 });
       await expect(curatedOutput).toHaveText('true');
+      evidence.recordTiming('functionExecute', ANCHOR_FUNCTION, Date.now() - executionStartedAt);
       await evidence.checkpoint('curated-function-executed');
 
       // Author a scratch function via Source-pane typing (same no-graphical-
@@ -117,10 +121,12 @@ test.describe('J9 — Form preview & function execution', () => {
       // `exact: true` — see the S1/S2 comment above; a bare 'X' also matches
       // unrelated chrome.
       await page.getByLabel('X', { exact: true }).fill('5');
+      const scratchExecutionStartedAt = Date.now();
       await page.getByRole('button', { name: 'Run' }).click();
       const scratchOutput = page.locator('.execution-result .preview-panel__sample-output');
       await expect(scratchOutput).toBeVisible({ timeout: 20000 });
       await expect(scratchOutput).toHaveText('10');
+      evidence.recordTiming('functionExecute', 'scratch.j9func.Double', Date.now() - scratchExecutionStartedAt);
       await evidence.checkpoint('scratch-function-executed');
 
       // Deploy-sequencing note: this will fail against a live production run

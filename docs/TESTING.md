@@ -90,10 +90,25 @@ alongside assertions before attributing a timeout to product behavior.
 
 Inspector hydration checks share `test/prod-ux/readiness.ts` and require a
 populated **Attributes (N)** group. Accessibility sweeps use the same module
-to wait for finite entrance animations before scanning; perpetual spinners
+to wait for finite entrance animations before scanning and taking checkpoints; perpetual spinners
 remain active and serious/critical contrast violations still fail. Form
 validation checks use generated Zod semantics: a fractional `int` is invalid,
 while an empty `string` is valid unless the model adds a length constraint.
+
+Closure walks require `deferred: false` from the type-graph bridge before inspecting
+members. `EvidenceCollector.measure` and `recordTiming` record journey wall-clock
+measurements in the existing timing rollup. Measure through visible completion;
+model registration alone does not measure hydration. Cancellation journeys that
+cannot reach a cancel operation report BLOCKED rather than PASS.
+
+Curated download verification should cover both a valid namespace ZIP and the
+whole selection's diagnostics. `cdm.base.datetime` provides a compact download
+check. Keep generation errors visible: an HTTP 400 with model diagnostics is
+different from an edge 503 or a worker timeout. Publication changes also require
+an authenticated `curated-artifacts.yml` run; local mocked uploads only verify
+script behavior. The publisher reads the build's Langium version from
+`artifact-meta.json`, retains full Wrangler errors, and fails if manifest fetching
+fails.
 
 ### Operational note
 

@@ -19,7 +19,15 @@ REPO_ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 BUCKET="rune-curated-mirror"
 MIRROR_BASE="https://www.daikonic.dev/curated"
 ARTIFACT_DIR="$REPO_ROOT/dist/curated-artifacts"
-WRANGLER="pnpm --filter @rune-langium/curated-mirror-worker exec wrangler"
+WRANGLER=(pnpm --filter @rune-langium/curated-mirror-worker exec wrangler)
+TMP_DIR=$(mktemp -d)
+trap 'rm -rf "$TMP_DIR"' EXIT
+
+upload_object() {
+  local key="$1" file="$2" content_type="$3"
+  # Keep the complete error: tailing Wrangler output hid the cause of failed publications.
+  "${WRANGLER[@]}" r2 object put "$BUCKET/$key" --file "$file" --content-type "$content_type" --remote
+}
 
 for model_dir in "$ARTIFACT_DIR"/*/; do
   model_id=$(basename "$model_dir")
@@ -34,6 +42,7 @@ for model_dir in "$ARTIFACT_DIR"/*/; do
   echo "=== $model_id ==="
 
   # Read metadata
+  langium_version=$(jq -er '.langiumVersion // error("Missing compiler version; rebuild artifacts")' "$meta_file")
   version=$(jq -r '.version' "$meta_file")
   sha256=$(jq -r '.sha256' "$meta_file")
   size_bytes=$(jq -r '.sizeBytes' "$meta_file")
@@ -41,10 +50,8 @@ for model_dir in "$ARTIFACT_DIR"/*/; do
 
   # Upload versioned + latest artifact
   echo "  Uploading artifact ($size_bytes bytes, $doc_count documents)..."
-  $WRANGLER r2 object put "$BUCKET/curated/$model_id/artifacts/$version.serialized.json.gz" \
-    --file "$artifact_file" --content-type "application/gzip" --remote 2>&1 | tail -1
-  $WRANGLER r2 object put "$BUCKET/curated/$model_id/latest.serialized.json.gz" \
-    --file "$artifact_file" --content-type "application/gzip" --remote 2>&1 | tail -1
+  upload_object "curated/$model_id/artifacts/$version.serialized.json.gz" "$artifact_file" application/gzip
+  upload_object "curated/$model_id/latest.serialized.json.gz" "$artifact_file" application/gzip
 
   # Upload per-namespace artifacts (if the ns/ dir was built)
   ns_dir="$model_dir/ns"
@@ -53,8 +60,7 @@ for model_dir in "$ARTIFACT_DIR"/*/; do
     for ns_file in "$ns_dir"/*.json.gz; do
       [[ -e "$ns_file" ]] || continue  # guard: skip if glob matched nothing
       ns_name=$(basename "$ns_file")
-      $WRANGLER r2 object put "$BUCKET/curated/$model_id/artifacts/$version/ns/$ns_name" \
-        --file "$ns_file" --content-type "application/gzip" --remote 2>&1 | tail -1
+      upload_object "curated/$model_id/artifacts/$version/ns/$ns_name" "$ns_file" application/gzip
       ns_count=$((ns_count + 1))
     done
     echo "  Uploaded $ns_count per-namespace artifact(s)"
@@ -63,60 +69,30 @@ for model_dir in "$ARTIFACT_DIR"/*/; do
   # Fetch current manifest, patch in the artifact reference + namespaces, re-upload
   echo "  Patching manifest.json..."
   manifest_url="$MIRROR_BASE/$model_id/manifest.json"
-  current_manifest=$(curl -sf "$manifest_url" || echo '{}')
+  current_manifest=$(curl -fsS "$manifest_url")
 
-  if [[ "$current_manifest" == '{}' ]]; then
-    echo "  ⚠ Could not fetch manifest for $model_id — skipping manifest patch"
-    continue
-  fi
+  manifest_file="$TMP_DIR/$model_id.json"
+  echo "$current_manifest" | jq \
+    --arg sha "$sha256" \
+    --arg url "$MIRROR_BASE/$model_id/artifacts/$version.serialized.json.gz" \
+    --arg langiumVersion "$langium_version" \
+    --argjson size "$size_bytes" \
+    --argjson docs "$doc_count" \
+    --slurpfile meta "$meta_file" \
+    '.artifacts.serializedWorkspace = {
+      schemaVersion: 1,
+      kind: "langium-json-serializer",
+      url: $url,
+      sha256: $sha,
+      sizeBytes: $size,
+      documentCount: $docs,
+      langiumVersion: $langiumVersion
+    } |
+    if (($meta[0].namespaces // {}) | length) > 0 then
+      .schemaVersion = 2 | .namespaces = $meta[0].namespaces
+    else . end' > "$manifest_file"
 
-  ns_count=$(jq -r '(.namespaces // {}) | length' "$meta_file")
-
-  if [[ "$ns_count" -gt 0 ]]; then
-    # Read the namespaces graph from the meta FILE via --slurpfile rather than
-    # passing it as a `--argjson` command-line arg: the CDM graph (90 namespaces,
-    # hundreds of exports each) exceeds Linux's MAX_ARG_STRLEN (128 KB per single
-    # arg) → "jq: Argument list too long" / exit 126 in CI. (macOS has no such
-    # per-arg cap, which is why this only failed on the Linux GH runner.)
-    patched_manifest=$(echo "$current_manifest" | jq \
-      --arg sha "$sha256" \
-      --arg url "$MIRROR_BASE/$model_id/latest.serialized.json.gz" \
-      --argjson size "$size_bytes" \
-      --argjson docs "$doc_count" \
-      --slurpfile meta "$meta_file" \
-      '.schemaVersion = 2 |
-      .artifacts.serializedWorkspace = {
-        schemaVersion: 1,
-        kind: "langium-json-serializer",
-        url: $url,
-        sha256: $sha,
-        sizeBytes: $size,
-        documentCount: $docs,
-        langiumVersion: "4.2.2"
-      } |
-      .namespaces = $meta[0].namespaces')
-  else
-    patched_manifest=$(echo "$current_manifest" | jq \
-      --arg sha "$sha256" \
-      --arg url "$MIRROR_BASE/$model_id/latest.serialized.json.gz" \
-      --argjson size "$size_bytes" \
-      --argjson docs "$doc_count" \
-      '.artifacts.serializedWorkspace = {
-        schemaVersion: 1,
-        kind: "langium-json-serializer",
-        url: $url,
-        sha256: $sha,
-        sizeBytes: $size,
-        documentCount: $docs,
-        langiumVersion: "4.2.2"
-      }')
-  fi
-
-  echo "$patched_manifest" > /tmp/patched-manifest-$model_id.json
-  $WRANGLER r2 object put "$BUCKET/curated/$model_id/manifest.json" \
-    --file "/tmp/patched-manifest-$model_id.json" \
-    --content-type "application/json; charset=utf-8" --remote 2>&1 | tail -1
-  rm -f "/tmp/patched-manifest-$model_id.json"
+  upload_object "curated/$model_id/manifest.json" "$manifest_file" 'application/json; charset=utf-8'
 
   echo "  ✓ Done"
 done

@@ -79,7 +79,14 @@ vi.mock('@rune-langium/core', () => {
           }
         },
         serializer: {
-          JsonSerializer: { deserialize: deserializeMock }
+          JsonSerializer: {
+            deserialize: deserializeMock,
+            deserializeModels: (contents: string[], register: (models: unknown[]) => void) => {
+              const models = contents.map((json) => deserializeMock(json));
+              register(models);
+              return models;
+            }
+          }
         }
       }
     }),
@@ -651,6 +658,24 @@ describe('codegen-worker preview messages', () => {
 describe('codegen-worker execute messages', () => {
   afterEach(() => {
     vi.unstubAllGlobals();
+  });
+
+  it.each(['build', 'generate'])('returns a terminal execution error when %s fails', async (stage) => {
+    const { scope, dispatch } = await loadWorkerModule();
+    dispatch({ type: 'preview:setFiles', files: [{ uri: 'file:///failed.rosetta', content: 'namespace failed' }] });
+    const failing = stage === 'build' ? buildMock : generateMock;
+    failing.mockImplementationOnce(() => {
+      throw new Error(`${stage} failed`);
+    });
+    dispatch({ type: 'preview:execute', funcName: 'failed.Run', inputs: {}, requestId: 'failed:1' });
+    await vi.waitFor(() =>
+      expect(scope.postMessage).toHaveBeenCalledWith({
+        type: 'preview:execute-error',
+        funcName: 'failed.Run',
+        requestId: 'failed:1',
+        error: `${stage} failed`
+      })
+    );
   });
 
   it('posts preview:execute-error when function is not in cache', async () => {

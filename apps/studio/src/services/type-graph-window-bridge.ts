@@ -18,6 +18,8 @@ export interface TypeGraphNodeSnapshot {
    * changes instead of duplicating that knowledge into production code.
    */
   data: unknown;
+  /** True while the node is a list-only curated placeholder. */
+  deferred: boolean;
 }
 
 export interface RuneStudioTypeGraphBridge {
@@ -36,7 +38,7 @@ export const installTypeGraphWindowBridge = withInstrumentation(
       snapshot: () => {
         const nodesById = useEditorStore.getState().nodesById;
         const repo = selectNodeRepository(nodesById);
-        return repo.all().map((node) => ({ id: node.id, data: node.data }));
+        return repo.all().map((node) => ({ id: node.id, data: node.data, deferred: node.meta.deferred === true }));
       }
     };
     // The bridge's own snapshot() closure (exposed on window, not itself

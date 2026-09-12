@@ -87,8 +87,11 @@ test.describe('J16 — Resilience & chrome', () => {
       const reachedInFlight = await cancelButton
         .or(connectingText)
         .first()
-        .isVisible({ timeout: 5000 })
-        .catch(() => false);
+        .waitFor({ state: 'visible', timeout: 5000 })
+        .then(
+          () => true,
+          () => false
+        );
 
       if (!reachedInFlight) {
         evidence.softFinding(
@@ -100,7 +103,7 @@ test.describe('J16 — Resilience & chrome', () => {
             'ported from (test/e2e/curated-load-cancel.spec.ts, T019b) cannot be exercised via the current UI.'
         );
         await evidence.checkpoint('no-cancel-window-soft-finding');
-        return;
+        test.skip(true, 'Curated loading exposes no cancel operation; cancellation was not exercised.');
       }
       await evidence.checkpoint('load-in-flight');
 
@@ -157,7 +160,7 @@ test.describe('J16 — Resilience & chrome', () => {
     'J16 reload mid-Explore restores active perspective and dockview layout',
     { annotation: { type: 'journey-subid', description: 'reload-explore' } },
     async ({ page, evidence }) => {
-      await loadCdm(page);
+      await loadCdm(page, evidence);
       await page.getByTestId('rail-explore').click();
       await expect(page.getByTestId('explore-workbench')).toBeVisible({ timeout: 20000 });
       await evidence.checkpoint('before-reload');
@@ -252,7 +255,16 @@ test.describe('J16 — Resilience & chrome', () => {
         });
       });
 
-      await loadCdm(page);
+      await page.goto('./');
+      await expect(page.getByTestId('model-loader')).toBeVisible();
+      await page.locator('input[type="file"][accept=".rosetta"]').setInputFiles([
+        {
+          name: 'toast.rosetta',
+          mimeType: 'text/plain',
+          buffer: Buffer.from('namespace toast\ntype Sample:\n value string (1..1)\n')
+        }
+      ]);
+      await expect(page.getByTestId('explore-workbench')).toBeVisible();
       await page.getByTestId('rail-export').click();
       await expect(page.getByTestId('export-perspective')).toBeVisible({ timeout: 20000 });
       // Specific, source-confirmed testid (read from CodegenTargetsTable.tsx)
@@ -288,6 +300,16 @@ test.describe('J16 — Resilience & chrome', () => {
       await evidence.checkpoint('toast-appeared');
       await expect(toast).not.toBeVisible({ timeout: 5000 });
       await evidence.checkpoint('toast-auto-dismissed');
+      await page.getByTestId('rail-explore').click();
+      if ((await page.getByTestId('toggle-utilities').getAttribute('aria-pressed')) === 'false') {
+        await page.getByTestId('toggle-utilities').click();
+      }
+      await page.getByRole('tab', { name: 'Activity', exact: true }).click();
+      await expect(page.getByTestId('panel-activity')).toBeVisible();
+      await evidence.checkpoint('activity-history');
+      await page.getByRole('tab', { name: 'Output', exact: true }).click();
+      await expect(page.getByTestId('panel-output')).toContainText('J16 toast-determinism mock');
+      await evidence.checkpoint('download-error-retained-in-output');
     }
   );
 });

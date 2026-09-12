@@ -3,7 +3,7 @@
 
 import type { AstNode, AstNodeDescription, ReferenceInfo, Scope, LangiumCoreServices } from 'langium';
 import { AstUtils, EMPTY_SCOPE, DefaultScopeProvider, MapScope } from 'langium';
-import { getFunctionSignature, resolveOperationType } from '../utils/expression-utils.js';
+import { getFunctionSignature, getOperationArgument, resolveOperationType } from '../utils/expression-utils.js';
 import { qualifiedExportPath } from '../naming/qualified-export-path.js';
 import {
   isData,
@@ -34,6 +34,7 @@ import {
   isChoiceOption,
   isAnnotation,
   isInlineFunction,
+  isRosettaExpression,
   isMapOperation,
   isFilterOperation,
   isThenOperation,
@@ -271,7 +272,19 @@ export class RuneDslScopeProvider extends DefaultScopeProvider {
    * Resolve the type produced by an expression.
    * Returns a Data, RosettaRecordType, or Choice node if the expression's type can be determined.
    */
+  private readonly resolvingExpressionTypes = new Set<RosettaExpression>();
+
   private resolveExpressionType(expr: RosettaExpression): Data | RosettaRecordType | Choice | undefined {
+    if (this.resolvingExpressionTypes.has(expr)) return undefined;
+    this.resolvingExpressionTypes.add(expr);
+    try {
+      return this.inferExpressionType(expr);
+    } finally {
+      this.resolvingExpressionTypes.delete(expr);
+    }
+  }
+
+  private inferExpressionType(expr: RosettaExpression): Data | RosettaRecordType | Choice | undefined {
     // Symbol reference → look up the symbol to determine its type
     if (isRosettaSymbolReference(expr)) {
       const sym = expr.symbol?.ref;
@@ -323,13 +336,7 @@ export class RuneDslScopeProvider extends DefaultScopeProvider {
         const inlineFunc = sym.$container;
         if (isInlineFunction(inlineFunc)) {
           const op = inlineFunc.$container;
-          const argument = isMapOperation(op)
-            ? op.argument
-            : isFilterOperation(op)
-              ? op.argument
-              : isThenOperation(op)
-                ? op.argument
-                : undefined;
+          const argument = isRosettaExpression(op) ? getOperationArgument(op) : undefined;
           if (argument) {
             return this.resolveCollectionElementType(argument);
           }
@@ -372,21 +379,7 @@ export class RuneDslScopeProvider extends DefaultScopeProvider {
         if (!inlineFunc) break;
         const op = inlineFunc.$container;
         if (!op) break;
-        const argument = isMapOperation(op)
-          ? op.argument
-          : isFilterOperation(op)
-            ? op.argument
-            : isThenOperation(op)
-              ? op.argument
-              : isSortOperation(op)
-                ? op.argument
-                : isMaxOperation(op)
-                  ? op.argument
-                  : isMinOperation(op)
-                    ? op.argument
-                    : isReduceOperation(op)
-                      ? op.argument
-                      : undefined;
+        const argument = isRosettaExpression(op) ? getOperationArgument(op) : undefined;
         if (argument) {
           return this.resolveCollectionElementType(argument);
         }
@@ -1010,21 +1003,7 @@ export class RuneDslScopeProvider extends DefaultScopeProvider {
       const op = inlineFunc.$container;
       if (!op) break;
 
-      const argument = isMapOperation(op)
-        ? op.argument
-        : isFilterOperation(op)
-          ? op.argument
-          : isThenOperation(op)
-            ? op.argument
-            : isSortOperation(op)
-              ? op.argument
-              : isMaxOperation(op)
-                ? op.argument
-                : isMinOperation(op)
-                  ? op.argument
-                  : isReduceOperation(op)
-                    ? op.argument
-                    : undefined;
+      const argument = isRosettaExpression(op) ? getOperationArgument(op) : undefined;
 
       if (argument) {
         const itemType = this.resolveCollectionElementType(argument);

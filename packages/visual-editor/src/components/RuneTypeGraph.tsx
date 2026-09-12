@@ -474,7 +474,7 @@ const RuneTypeGraphInner = forwardRef<RuneTypeGraphRef, RuneTypeGraphProps>(func
   const scheduleFitView = useCallback(
     (options?: Parameters<typeof fitView>[0]) => {
       if (typeof window === 'undefined') return;
-      let timeoutId: ReturnType<typeof setTimeout> | undefined;
+      let timeoutId: number | undefined;
       const frameId = window.requestAnimationFrame(() => {
         timeoutId = window.setTimeout(() => {
           void fitView(options);

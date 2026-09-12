@@ -21,7 +21,7 @@ test.describe('J11 — Client-side codegen (Code tab)', () => {
     evidence
   }) => {
     // --- Curated anchor -----------------------------------------------------
-    await loadCdm(page);
+    await loadCdm(page, evidence);
     await page.getByTestId('rail-explore').click();
     await expect(page.getByTestId('explore-workbench')).toBeVisible({ timeout: 20000 });
 
@@ -97,10 +97,12 @@ test.describe('J11 — Client-side codegen (Code tab)', () => {
       // open viewer — no need to collapse the previous one first
       // (CodePreviewPanel.tsx's handleViewTarget only toggles closed when
       // the SAME target is clicked again).
+      const startedAt = Date.now();
       await page.getByTestId(`codegen-targets-table__view-${target}`).click();
       await expect(page.getByTestId('codegen-status')).toContainText(/Generated/i, { timeout: 20000 });
       const output = await page.getByTestId('code-preview-editor').textContent();
       expect(output?.trim().length ?? 0, `expected non-empty scratch ${target} output`).toBeGreaterThan(0);
+      evidence.recordTiming('codegen', target, Date.now() - startedAt);
     }
     await evidence.checkpoint('scratch-all-targets-rendered');
   });

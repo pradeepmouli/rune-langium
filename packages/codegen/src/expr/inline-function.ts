@@ -26,3 +26,8 @@ export function inlineContext(
   });
   return { ...ctx, selfName: names[0]!, localBindings: bindings, localMetadata, implicitMetadata };
 }
+
+/** An object-valued arrow expression must not be parsed as a statement block. */
+export function arrowBody(expression: string): string {
+  return expression.trimStart().startsWith('{') ? `(${expression})` : expression;
+}

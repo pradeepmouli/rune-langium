@@ -27,6 +27,9 @@ export type { ParseResult } from './api/parse.js';
 export { parseExpression } from './api/parse-expression.js';
 export type { ExpressionParseResult } from './api/parse-expression.js';
 
+// Shared language resources
+export { BASE_TYPE_FILES, BASICTYPES_ROSETTA, ANNOTATIONS_ROSETTA } from './stdlib/base-types.js';
+
 // Services
 export { createRuneDslServices, RuneDslModule, RuneDslSharedModule } from './services/rune-dsl-module.js';
 export type { RuneDslServices } from './services/rune-dsl-module.js';

@@ -11,6 +11,7 @@
  */
 
 import { afterEach, describe, expect, it, vi } from 'vitest';
+import * as downloadClient from '../../src/services/codegen-download-client.js';
 import { downloadTargetViaRouter, CodegenDownloadError } from '../../src/services/workspace.js';
 
 const FILES = [{ path: 'x.rune', content: 'namespace x\ntype T:\n  a string (1..1)\n' }];
@@ -200,12 +201,11 @@ describe('downloadTargetViaRouter', () => {
   });
 
   it('sends curatedBundles (path C) and omits curatedDocs when curatedDocs is empty', async () => {
-    const fetchMock = mockFetch(
-      () =>
-        new Response('x', {
-          status: 200,
-          headers: { 'Content-Disposition': 'attachment; filename="out.zip"' }
-        })
+    const requestMock = vi.spyOn(downloadClient, 'requestCodegenDownload').mockResolvedValue(
+      new Response('x', {
+        status: 200,
+        headers: { 'Content-Disposition': 'attachment; filename="out.zip"' }
+      })
     );
     const fakeAnchor = makeFakeAnchor();
     vi.spyOn(document, 'createElement').mockReturnValue(fakeAnchor);
@@ -222,7 +222,7 @@ describe('downloadTargetViaRouter', () => {
       [],
       [] // curatedDocs empty → path C
     );
-    const body = JSON.parse((fetchMock.mock.calls[0]![1] as RequestInit).body as string);
+    const body = requestMock.mock.calls[0]![0];
     // path C: curatedBundles present, curatedDocs absent
     expect(body.curatedBundles).toHaveLength(1);
     expect(body.curatedBundles[0]).toEqual({ id: 'cdm', version: 'latest' });
@@ -236,12 +236,11 @@ describe('downloadTargetViaRouter', () => {
     // needs). curatedBundles is now sent alongside it whenever available so
     // the server can independently fetch + close the correct set from the
     // manifest rather than trusting curatedDocs unconditionally.
-    const fetchMock = mockFetch(
-      () =>
-        new Response('x', {
-          status: 200,
-          headers: { 'Content-Disposition': 'attachment; filename="out.zip"' }
-        })
+    const requestMock = vi.spyOn(downloadClient, 'requestCodegenDownload').mockResolvedValue(
+      new Response('x', {
+        status: 200,
+        headers: { 'Content-Disposition': 'attachment; filename="out.zip"' }
+      })
     );
     // Stub DOM side-effects from triggerBlobDownload
     const fakeAnchor = makeFakeAnchor();
@@ -259,7 +258,7 @@ describe('downloadTargetViaRouter', () => {
       ['cdm.base.math'],
       [{ uri: 'cdm/base/math.rosetta', serializedModel: '{"$type":"RosettaModel","name":"cdm.base.math"}' }]
     );
-    const body = JSON.parse((fetchMock.mock.calls[0]![1] as RequestInit).body as string);
+    const body = requestMock.mock.calls[0]![0];
     expect(body.curatedDocs).toHaveLength(1);
     expect(body.curatedDocs[0].uri).toBe('cdm/base/math.rosetta');
     expect(body.curatedBundles).toHaveLength(1);

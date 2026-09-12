@@ -154,7 +154,7 @@ describe('POST /api/parse — curatedBundles', () => {
   it('merges curated bundle documents into hydrationState on success', async () => {
     // User file imports cdm.base.math → closure = {cdm.base.math}. Only that
     // namespace's artifact is fetched (manifest fast-path). No whole-bundle fetch.
-    const curatedFetchModule = await import('../lib/curated-fetch.js');
+    const curatedFetchModule = await import('../../src/services/curated-fetch.js');
     vi.spyOn(curatedFetchModule, 'fetchCuratedManifest').mockResolvedValue({
       schemaVersion: 2,
       modelId: 'cdm',
@@ -217,7 +217,7 @@ describe('POST /api/parse — curatedBundles', () => {
   it('passes through $namespace baked into curated artifact elements', async () => {
     // $namespace is stamped at build time (scripts/build-serialized-artifacts.mjs),
     // not at runtime — the worker passes it through unchanged from the artifact.
-    const curatedFetchModule = await import('../lib/curated-fetch.js');
+    const curatedFetchModule = await import('../../src/services/curated-fetch.js');
     vi.spyOn(curatedFetchModule, 'fetchCuratedManifest').mockResolvedValue({
       schemaVersion: 2,
       modelId: 'cdm',
@@ -278,7 +278,7 @@ describe('POST /api/parse — curatedBundles', () => {
     //
     // Contract: ONE deferredExports entry per FILE (matches the in-browser
     // parser-worker.handleParseWorkspace contract).
-    const curatedFetchModule = await import('../lib/curated-fetch.js');
+    const curatedFetchModule = await import('../../src/services/curated-fetch.js');
     vi.spyOn(curatedFetchModule, 'fetchCuratedManifest').mockResolvedValue({
       schemaVersion: 2,
       modelId: 'cdm',
@@ -414,7 +414,7 @@ describe('POST /api/parse — dependencyGraph (spec 2026-05-14 §5.2)', () => {
     // User file with no imports → seeds set is empty → curated closure is
     // empty → fetchCuratedNamespace is never called. The manifest fast-path
     // still returns 200 and the user namespace appears in dependencyGraph.
-    const curatedFetchModule = await import('../lib/curated-fetch.js');
+    const curatedFetchModule = await import('../../src/services/curated-fetch.js');
     vi.spyOn(curatedFetchModule, 'fetchCuratedManifest').mockResolvedValue({
       schemaVersion: 2,
       modelId: 'cdm',

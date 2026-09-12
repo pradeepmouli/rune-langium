@@ -2,6 +2,15 @@
 // Copyright (c) 2026 Pradeep Mouli
 
 import { expect, type Locator, type Page } from '@playwright/test';
+import type {} from '../../src/services/type-graph-window-bridge.js';
+
+export async function waitForHydratedNode(page: Page, fqn: string): Promise<void> {
+  await page.waitForFunction(
+    (id) => window.__runeStudioTypeGraph?.snapshot().some((node) => node.id === id && !node.deferred),
+    fqn,
+    { timeout: 30_000 }
+  );
+}
 
 /** Require populated attributes, not just the Inspector's persistent Members tab. */
 export async function expectPopulatedAttributes(inspector: Locator): Promise<void> {

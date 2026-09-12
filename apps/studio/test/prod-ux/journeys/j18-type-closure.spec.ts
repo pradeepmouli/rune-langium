@@ -14,13 +14,15 @@ test.describe('J18 — Data-type closure mapping (scripted completeness check)',
   test.skip(!process.env.PLAYWRIGHT_PROD_SMOKE, 'set PLAYWRIGHT_PROD_SMOKE=1 to run against a deployed Studio');
 
   test('J18 walks the curated and scratch type closures with zero unmapped', async ({ page, evidence }) => {
-    await loadCdm(page);
+    await loadCdm(page, evidence);
     await page.getByTestId('rail-explore').click();
     await expect(page.getByTestId('explore-workbench')).toBeVisible({ timeout: 20000 });
 
     const curatedStartedAt = Date.now();
     const curatedResult = await walkTypeClosure(page, ANCHOR_DATA, 'namespace-search');
     const curatedWalkMs = Date.now() - curatedStartedAt;
+    expect(curatedResult.mapped).toContain('cdm.base.datetime.CommodityBusinessCalendarEnum');
+    expect(curatedResult.mapped.length).toBeGreaterThan(1);
     await evidence.checkpoint('curated-closure-walked');
 
     // The scratch closure exercises all three referenced-type kinds the
@@ -87,6 +89,7 @@ test.describe('J18 — Data-type closure mapping (scripted completeness check)',
       }
     ];
     evidence.setTypeClosure(records);
+    for (const record of records) evidence.recordTiming('typeClosureWalk', record.rootFqn, record.typeClosureWalkMs);
 
     // Form preview: no unresolved-type stub for any field on the scratch
     // root. Confirmed directly by reading packages/codegen/src/
@@ -117,32 +120,7 @@ test.describe('J18 — Data-type closure mapping (scripted completeness check)',
     const formPreviewPanel = page.getByTestId('panel-formPreview');
     await expect(formPreviewPanel).toBeVisible({ timeout: 20000 });
 
-    // KNOWN ISSUE CARVE-OUT: issue #394 — a Choice-typed attribute never
-    // resolves in the client-side form preview (preview-schema.ts's
-    // buildBaseField has no branch for RosettaChoiceType/choiceByName,
-    // unlike RosettaBasicType/RosettaRecordType/RosettaEnumeration/Data,
-    // which ARE handled). ScratchClosureRoot's `variant` attribute is typed
-    // ScratchClosureChoice, so it renders the "could not be resolved for
-    // form preview" stub even though the type-graph walk above reports the
-    // closure fully mapped — the two resolution paths disagree, a real,
-    // filed, deferred product bug (first found by this exact journey during
-    // Phase 2's own close-out), not a harness gap. Only the specific known
-    // Choice-typed stub is carved out below — any OTHER unresolved-reference
-    // text (i.e. not naming ScratchClosureChoice) still hard-fails this
-    // assertion, so a future, different resolution regression is still
-    // caught.
-    const unresolvedStubs = formPreviewPanel.getByText(/could not be resolved for form preview/i);
-    const unresolvedCount = await unresolvedStubs.count();
-    if (unresolvedCount > 0) {
-      await expect(unresolvedStubs.filter({ hasText: 'ScratchClosureChoice' })).toHaveCount(unresolvedCount);
-      evidence.softFinding(
-        'KI-choice-attribute-form-preview-unresolved',
-        `${unresolvedCount} Choice-typed attribute(s) render an unresolved-reference stub in form preview ` +
-          'despite being fully mapped by the type-graph walk above — tracked in ' +
-          "https://github.com/pradeepmouli/rune-langium/issues/394 (preview-schema.ts's buildBaseField has no " +
-          'branch for Choice/choiceByName).'
-      );
-    }
+    await expect(formPreviewPanel.getByText(/could not be resolved for form preview/i)).toHaveCount(0);
 
     // DOM-level cross-check (per the plan's design): TypeLink.tsx renders an
     // unresolvable type reference as a disabled `data-slot="type-link"`

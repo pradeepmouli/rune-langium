@@ -97,98 +97,115 @@ export function featureIsRequired(feature: Feature): boolean {
 }
 
 /** Whether evaluating an expression can produce a collection. */
-export function expressionIsMany(expr: RosettaExpression | undefined): boolean {
-  if (!expr) return false;
-  if (isRosettaOnlyElement(expr)) return false;
-  if (
-    isFilterOperation(expr) ||
-    isMapOperation(expr) ||
-    isSortOperation(expr) ||
-    isReverseOperation(expr) ||
-    isDistinctOperation(expr) ||
-    isFlattenOperation(expr) ||
-    isListLiteral(expr)
-  )
-    return true;
-  if (isRosettaDeepFeatureCall(expr)) {
-    return expressionIsMany(expr.receiver) || deepNavigationPaths(expr).some((path) => path.some(featureIsMany));
+export function expressionIsMany(
+  expr: RosettaExpression | undefined,
+  visiting = new Set<RosettaExpression>()
+): boolean {
+  if (!expr || visiting.has(expr)) return false;
+  visiting.add(expr);
+  const from = (value: RosettaExpression | undefined) => expressionIsMany(value, visiting);
+  try {
+    if (isRosettaOnlyElement(expr)) return false;
+    if (
+      isFilterOperation(expr) ||
+      isMapOperation(expr) ||
+      isSortOperation(expr) ||
+      isReverseOperation(expr) ||
+      isDistinctOperation(expr) ||
+      isFlattenOperation(expr) ||
+      isListLiteral(expr)
+    )
+      return true;
+    if (isRosettaDeepFeatureCall(expr)) {
+      return from(expr.receiver) || deepNavigationPaths(expr).some((path) => path.some(featureIsMany));
+    }
+    if (isRosettaFeatureCall(expr)) {
+      return featureIsMany(expr.feature?.ref as Feature | undefined) || from(expr.receiver);
+    }
+    if (isRosettaSymbolReference(expr)) {
+      const ref = expr.symbol?.ref;
+      if (isRosettaFunction(ref)) return featureIsMany(functionOutput(ref));
+      if (isShortcutDeclaration(ref)) return from(ref.expression);
+      return featureIsMany(ref as Feature | undefined);
+    }
+    if (isThenOperation(expr)) {
+      return expr.function ? from(expr.function.body) : from(expr.argument);
+    }
+    if (isRosettaConditionalExpression(expr)) return from(expr.ifthen) || from(expr.elsethen);
+    if (isDefaultOperation(expr)) return from(expr.left) || from(expr.right);
+    if (isSwitchOperation(expr))
+      return expr.cases.some(
+        (branch) =>
+          !(isListLiteral(branch.expression) && branch.expression.elements.length === 0) && from(branch.expression)
+      );
+    return false;
+  } finally {
+    visiting.delete(expr);
   }
-  if (isRosettaFeatureCall(expr)) {
-    return featureIsMany(expr.feature?.ref as Feature | undefined) || expressionIsMany(expr.receiver);
-  }
-  if (isRosettaSymbolReference(expr)) {
-    const ref = expr.symbol?.ref;
-    if (isRosettaFunction(ref)) return featureIsMany(functionOutput(ref));
-    if (isShortcutDeclaration(ref)) return expressionIsMany(ref.expression);
-    return featureIsMany(ref as Feature | undefined);
-  }
-  if (isThenOperation(expr)) {
-    return expr.function ? expressionIsMany(expr.function.body) : expressionIsMany(expr.argument);
-  }
-  if (isRosettaConditionalExpression(expr)) return expressionIsMany(expr.ifthen) || expressionIsMany(expr.elsethen);
-  if (isDefaultOperation(expr)) return expressionIsMany(expr.left) || expressionIsMany(expr.right);
-  if (isSwitchOperation(expr))
-    return expr.cases.some(
-      (branch) =>
-        !(isListLiteral(branch.expression) && branch.expression.elements.length === 0) &&
-        expressionIsMany(branch.expression)
-    );
-  return false;
 }
 
-export function expressionType(expr: RosettaExpression | undefined): RosettaType | undefined {
-  if (!expr) return undefined;
-  if (isRosettaConstructorExpression(expr)) return expressionType(expr.typeRef);
-  if (isRosettaSymbolReference(expr)) {
-    const ref = expr.symbol?.ref;
-    if (isData(ref) || isChoice(ref) || isRosettaRecordType(ref)) return ref;
-    if (isAttribute(ref) || isChoiceOption(ref) || isRosettaRecordFeature(ref)) return resolveType(ref.typeCall);
-    if (isRosettaFunction(ref)) return resolveType(functionOutput(ref)?.typeCall);
-    if (isShortcutDeclaration(ref)) return expressionType(ref.expression);
-  }
-  if (expr.$type === 'RosettaImplicitVariable') {
-    // `item` is commonly wrapped by one or more feature calls before it is
-    // consumed. Walk the linked containment chain to recover the switch case
-    // type instead of relying on the immediate container shape.
-    const visited = new Set<object>();
-    let owner: unknown = expr.$container;
-    while (owner && typeof owner === 'object' && !visited.has(owner)) {
-      visited.add(owner);
-      if ((owner as { $type?: string }).$type === 'SwitchCaseOrDefault') {
-        const target = (owner as { guard?: { referenceGuard?: { ref?: unknown } } }).guard?.referenceGuard?.ref;
-        if (isData(target) || isChoice(target)) return target;
-        // A bare Choice option can be shadowed by an enum value with the same
-        // spelling (for example `Index`). Recover the declared option type
-        // from the switch argument rather than treating that link as final.
-        const operation = (owner as { $container?: unknown }).$container;
-        if (isSwitchOperation(operation)) {
-          const input = expressionType(operation.argument);
-          const targetName =
-            (target && typeof target === 'object' && 'name' in target && typeof target.name === 'string'
-              ? target.name
-              : undefined) ??
-            operation.cases.find((currentCase) => currentCase.guard?.referenceGuard?.ref === target)?.guard
-              ?.referenceGuard?.$refText;
-          if (isChoice(input) && targetName) {
-            const optionType = choiceOptionType(input, targetName);
-            if (isData(optionType) || isChoice(optionType)) return optionType;
+export function expressionType(
+  expr: RosettaExpression | undefined,
+  visiting = new Set<RosettaExpression>()
+): RosettaType | undefined {
+  if (!expr || visiting.has(expr)) return undefined;
+  visiting.add(expr);
+  const from = (value: RosettaExpression | undefined) => expressionType(value, visiting);
+  try {
+    if (isRosettaConstructorExpression(expr)) return from(expr.typeRef);
+    if (isRosettaSymbolReference(expr)) {
+      const ref = expr.symbol?.ref;
+      if (isData(ref) || isChoice(ref) || isRosettaRecordType(ref)) return ref;
+      if (isAttribute(ref) || isChoiceOption(ref) || isRosettaRecordFeature(ref)) return resolveType(ref.typeCall);
+      if (isRosettaFunction(ref)) return resolveType(functionOutput(ref)?.typeCall);
+      if (isShortcutDeclaration(ref)) return from(ref.expression);
+    }
+    if (expr.$type === 'RosettaImplicitVariable') {
+      // `item` is commonly wrapped by one or more feature calls before it is
+      // consumed. Walk the linked containment chain to recover the switch case
+      // type instead of relying on the immediate container shape.
+      const visited = new Set<object>();
+      let owner: unknown = expr.$container;
+      while (owner && typeof owner === 'object' && !visited.has(owner)) {
+        visited.add(owner);
+        if ((owner as { $type?: string }).$type === 'SwitchCaseOrDefault') {
+          const target = (owner as { guard?: { referenceGuard?: { ref?: unknown } } }).guard?.referenceGuard?.ref;
+          if (isData(target) || isChoice(target)) return target;
+          // A bare Choice option can be shadowed by an enum value with the same
+          // spelling (for example `Index`). Recover the declared option type
+          // from the switch argument rather than treating that link as final.
+          const operation = (owner as { $container?: unknown }).$container;
+          if (isSwitchOperation(operation)) {
+            const input = from(operation.argument);
+            const targetName =
+              (target && typeof target === 'object' && 'name' in target && typeof target.name === 'string'
+                ? target.name
+                : undefined) ??
+              operation.cases.find((currentCase) => currentCase.guard?.referenceGuard?.ref === target)?.guard
+                ?.referenceGuard?.$refText;
+            if (isChoice(input) && targetName) {
+              const optionType = choiceOptionType(input, targetName);
+              if (isData(optionType) || isChoice(optionType)) return optionType;
+            }
           }
         }
-      }
-      if (isInlineFunction(owner)) {
-        const parent = owner.$container;
-        if (parent && typeof parent === 'object' && 'argument' in parent) {
-          return expressionType(getOperationArgument(parent));
+        if (isInlineFunction(owner)) {
+          const parent = owner.$container;
+          if (parent && typeof parent === 'object' && 'argument' in parent) {
+            return from(getOperationArgument(parent));
+          }
         }
+        owner = (owner as { $container?: unknown }).$container;
       }
-      owner = (owner as { $container?: unknown }).$container;
     }
+    if (isRosettaFeatureCall(expr) || isRosettaDeepFeatureCall(expr)) {
+      const ref = expr.feature?.ref;
+      if (isAttribute(ref) || isChoiceOption(ref) || isRosettaRecordFeature(ref)) return resolveType(ref.typeCall);
+    }
+    return resolveOperationType(expr, from);
+  } finally {
+    visiting.delete(expr);
   }
-  if (isRosettaFeatureCall(expr) || isRosettaDeepFeatureCall(expr)) {
-    const ref = expr.feature?.ref;
-    if (isAttribute(ref) || isChoiceOption(ref) || isRosettaRecordFeature(ref)) return resolveType(ref.typeCall);
-  }
-  return resolveOperationType(expr, expressionType);
 }
 
 export function typeFeatures(type: RosettaType | undefined, seen: Set<RosettaType> = new Set()): Feature[] {

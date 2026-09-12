@@ -1,6 +1,8 @@
 // SPDX-License-Identifier: FSL-1.1-ALv2
 // Copyright (c) 2026 Pradeep Mouli
 
+import { existsSync, readFileSync } from 'node:fs';
+import { BASE_TYPE_FILES } from '@rune-langium/core';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
 type WorkerScope = {
@@ -39,6 +41,67 @@ async function waitForMessage(scope: WorkerScope, type: string): Promise<void> {
 describe('codegen-worker parsed/emitted function execution', () => {
   afterEach(() => {
     vi.unstubAllGlobals();
+  });
+
+  it.skipIf(!existsSync('../../.resources/cdm/base-math-func.rosetta'))(
+    'executes StringEquals from the real CDM math namespace',
+    async () => {
+      const { scope, dispatch } = await loadRealWorker();
+      dispatch({
+        type: 'preview:setFiles',
+        files: [
+          ...BASE_TYPE_FILES.map((f) => ({ uri: f.path, content: f.content })),
+          ...['func', 'type', 'enum'].map((kind) => ({
+            uri: `file:///base-math-${kind}.rosetta`,
+            content: readFileSync(`../../.resources/cdm/base-math-${kind}.rosetta`, 'utf8')
+          }))
+        ]
+      });
+      dispatch({
+        type: 'preview:execute',
+        funcName: 'cdm.base.math.StringEquals',
+        inputs: { s1: 'hello', s2: 'hello' },
+        requestId: 'cdm:equals'
+      });
+      await vi.waitFor(() =>
+        expect(scope.postMessage).toHaveBeenCalledWith(expect.objectContaining({ requestId: 'cdm:equals' }))
+      );
+      expect(
+        scope.postMessage.mock.calls.map(([message]) => message).find((message) => message.requestId === 'cdm:equals')
+      ).toEqual({
+        type: 'preview:execute-result',
+        requestId: 'cdm:equals',
+        funcName: 'cdm.base.math.StringEquals',
+        output: true
+      });
+    }
+  );
+
+  it('returns constructed objects from collection callbacks', async () => {
+    const { scope, dispatch } = await loadRealWorker();
+    dispatch({
+      type: 'preview:setFiles',
+      files: [
+        {
+          uri: 'file:///objects.rosetta',
+          content: `namespace objects
+type Box:
+ value int (1..1)
+func Wrap:
+ inputs: values int (0..*)
+ output: result Box (0..*)
+ set result: values extract x [Box { value: x }]`
+        }
+      ]
+    });
+    dispatch({ type: 'preview:execute', funcName: 'objects.Wrap', inputs: { values: [1, 2] }, requestId: 'objects' });
+    await waitForMessage(scope, 'preview:execute-result');
+    expect(scope.postMessage).toHaveBeenCalledWith({
+      type: 'preview:execute-result',
+      funcName: 'objects.Wrap',
+      requestId: 'objects',
+      output: [{ value: 1 }, { value: 2 }]
+    });
   });
 
   it('executes models whose type names match private evaluator bindings', async () => {

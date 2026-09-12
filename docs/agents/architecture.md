@@ -31,10 +31,14 @@ and CLI/codegen/LSP → core.
 - Parser and codegen browser workers handle local model operations; they do not provide an LSP fallback.
 - `LspProvider` synchronizes only the active editable file, excluding bundle markers and `refOnly` files. Cross-file hover/definition into documents outside that set is not guaranteed. Preserve this boundary unless deliberately changing the server document lifecycle.
 - Curated/reference-only models have distinct hydration and editing capabilities. Check deferred hydration, diagnostics, inheritance, and bare/qualified references when changing them; do not equate visibility with editability.
+- Center panes stack vertically when their container becomes too narrow for the selected pane count; the wide layout retains draggable horizontal splits.
 - Close transports during reconnect/disposal so server-side sessions and documents can be released.
 
 ## Shared Semantics
 
+- Core `BASE_TYPE_FILES` owns the standard Rune types and annotations. Studio re-exports it; the shared `RuneWorkspaceManager` loads it during LSP initialization, including reconnects. Core and LSP factories install `RuneDslSharedModule`.
+- `hydrateModelDocuments` registers every parsed root before `RuneJsonSerializer` invokes Langium's reference revival. Keep one object graph: repeated deserialize rounds retain stale generations and cannot resolve arbitrary cycles. Batch tests must verify target identity across long chains and cycles.
+- Curated downloads use a disposable browser worker; user-file-only downloads use `/api/codegen`. Both call `src/services/codegen-download-handler.ts` for validation, namespace closure, generation, and packaging. Preserve fatal diagnostics and terminate the browser worker on completion, error, or timeout.
 - Derive UI previews and validation from authoritative codegen output.
 - `walkNamespace` gathers declarations and computes the type-reference graph, cycles, and emission order once per namespace. Emitters consume the readonly `NamespaceWalkResult` and own their diagnostics/source maps.
 - `getTargetRelativePath` centralizes output paths. Keep TypeScript-only function extraction in `ts-emitter.ts` unless intentionally changing other targets.

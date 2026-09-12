@@ -15,7 +15,7 @@ import { expressionMetadataKind } from './metadata-type.js';
 import { functionOutput, resolveFuncValueTypeTs, type FuncTypeNameResolver } from '../types/func.js';
 import { renderSwitchExpression } from './switch-expression.js';
 import { renderOnlyExists } from './only-exists.js';
-import { freshLocal, inlineContext } from './inline-function.js';
+import { arrowBody, freshLocal, inlineContext } from './inline-function.js';
 import { renderCardinalityOperation } from './cardinality-operations.js';
 import { renderNavigation, expressionType, expressionIsMany, typeFeatures, featureName } from './navigation.js';
 
@@ -1123,7 +1123,7 @@ export function transpileReduce(expr: RosettaExpression, ctx: ExpressionTranspil
     inputKind === 'reference' && !resultKind
       ? `(${arr} ?? []).filter((value): value is typeof value & { value: NonNullable<typeof value.value> } => value.value != null)`
       : `(${arr} ?? [])`;
-  const reduced = `((${values}) => ${values}.length === 0 ? undefined : ${values}.slice(1).reduce((${accName}, ${itemName}) => ${body}, ${initial}))(${input})`;
+  const reduced = `((${values}) => ${values}.length === 0 ? undefined : ${values}.slice(1).reduce((${accName}, ${itemName}) => ${arrowBody(body)}, ${initial}))(${input})`;
   return resultKind && !ctx.preserveMetadata ? unwrapMetadata(reduced, false) : reduced;
 }
 

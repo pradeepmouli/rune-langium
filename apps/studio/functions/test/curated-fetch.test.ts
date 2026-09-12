@@ -8,7 +8,7 @@ import {
   fetchCuratedNamespace,
   CuratedBundleUnavailableError,
   type CuratedFetcher
-} from '../lib/curated-fetch.js';
+} from '../../src/services/curated-fetch.js';
 
 const MIRROR = 'https://www.daikonic.dev/curated';
 

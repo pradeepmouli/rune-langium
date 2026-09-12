@@ -14,7 +14,7 @@
 // Outputs to dist/curated-artifacts/<modelId>/ for R2 upload via wrangler.
 
 import { createHash } from 'node:crypto';
-import { writeFile, mkdir } from 'node:fs/promises';
+import { writeFile, mkdir, readFile } from 'node:fs/promises';
 import { gunzipSync, gzipSync } from 'node:zlib';
 import { computeNamespaceGraph, nsArtifactSlug } from './lib/namespace-graph.mjs';
 
@@ -28,7 +28,9 @@ const SOURCES = [
   { id: 'rune-dsl', owner: 'finos', repo: 'rune-dsl', ref: 'main' }
 ];
 
-const LANGIUM_VERSION = '4.2.2';
+const LANGIUM_VERSION = JSON.parse(
+  await readFile(new URL('node_modules/langium/package.json', corePkgDir), 'utf8')
+).version;
 const OUT_DIR = 'dist/curated-artifacts';
 // Public base for absolute artifact URLs in the manifest (matches archiveUrl +
 // artifacts.serializedWorkspace.url). Per-namespace `artifact` values MUST be
@@ -278,6 +280,7 @@ async function main() {
         JSON.stringify(
           {
             modelId: source.id,
+            langiumVersion: LANGIUM_VERSION,
             version,
             sha256: result.sha256,
             sizeBytes: result.sizeBytes,

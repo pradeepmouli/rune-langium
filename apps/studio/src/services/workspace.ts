@@ -8,6 +8,7 @@
  */
 
 import { parse, parseWorkspace, createRuneDslServices, type RosettaModel } from '@rune-langium/core';
+import { requestCodegenDownload } from './codegen-download-client.js';
 import { EmptyFileSystem } from 'langium';
 import type { CuratedSerializedDocument } from '@rune-langium/curated-schema';
 import { CURATED_MODEL_IDS } from '@rune-langium/curated-schema';
@@ -1185,11 +1186,7 @@ export const downloadTargetViaRouter = withInstrumentation(
     if (namespaces.length > 0) {
       body.namespaces = namespaces;
     }
-    const response = await fetch('/api/codegen', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(body)
-    });
+    const response = await requestCodegenDownload(body);
 
     if (!response.ok) {
       let envelope: { ok?: boolean; error?: string; diagnostics?: unknown } = {};
