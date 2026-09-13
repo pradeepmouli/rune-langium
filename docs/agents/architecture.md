@@ -31,6 +31,7 @@ and CLI/codegen/LSP → core.
 - Parser and codegen browser workers handle local model operations; they do not provide an LSP fallback.
 - `LspProvider` synchronizes only the active editable file, excluding bundle markers and `refOnly` files. Cross-file hover/definition into documents outside that set is not guaranteed. Preserve this boundary unless deliberately changing the server document lifecycle.
 - Curated/reference-only models have distinct hydration and editing capabilities. Check deferred hydration, diagnostics, inheritance, and bare/qualified references when changing them; do not equate visibility with editability.
+- Curated namespace artifacts carry original file `content` alongside the serialized AST. Both artifact builders preserve upstream comments and formatting. The parse response and model cache retain that content for read-only source browsing; list-only namespaces remain deferred. Legacy artifacts without content still hydrate, but displaying their original source requires rebuilding and publishing the artifacts.
 - Center panes stack vertically when their container becomes too narrow for the selected pane count; the wide layout retains draggable horizontal splits.
 - Close transports during reconnect/disposal so server-side sessions and documents can be released.
 

@@ -654,7 +654,7 @@ export const parseWorkspaceViaRouter = withInstrumentation(
       const pathInBundle = filePath.startsWith(`${bundleId}/`) ? filePath.slice(bundleId.length + 1) : filePath;
       const entry: CachedFile = {
         path: pathInBundle,
-        content: '',
+        content: doc.content,
         namespace: namespaceByFilePath.get(filePath) ?? '',
         serializedModelJson: doc.serializedModel,
         exports: doc.exports,

@@ -18,7 +18,7 @@
  */
 
 import { describe, it, expect } from 'vitest';
-import { gzip } from 'pako';
+import { gzip, inflate } from 'pako';
 import { buildSerializedWorkspaceArtifact } from '../src/serialized-artifact.js';
 
 /**
@@ -78,6 +78,17 @@ function makeUstarTar(files: Array<{ path: string; content: string }>): Uint8Arr
 }
 
 describe('buildSerializedWorkspaceArtifact — AppleDouble filter', () => {
+  it('preserves the original source including comments and line endings', async () => {
+    const content = '// Source comment\r\nnamespace source.test\r\n\r\ntype Example:\r\n  value string (1..1)\r\n';
+    const result = await buildSerializedWorkspaceArtifact(
+      'cdm',
+      '2026-09-13',
+      makeUstarTar([{ path: 'wrap/rosetta-source/src/main/rosetta/example.rosetta', content }])
+    );
+    const artifact = JSON.parse(new TextDecoder().decode(inflate(result.bytes)));
+    expect(artifact.documents[0].content).toBe(content);
+  });
+
   it('skips macOS `._<name>.rosetta` companion entries', async () => {
     // Three real files; three AppleDouble companions (each ~163B of
     // binary AppleDouble metadata, here mocked as opaque bytes that

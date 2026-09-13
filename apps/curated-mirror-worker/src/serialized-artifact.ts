@@ -95,6 +95,7 @@ export async function buildSerializedWorkspaceArtifact(
     }
     return {
       path: rosettaFiles[index]!.path,
+      content: rosettaFiles[index]!.content,
       modelJson: serializeRuneModel(serializer, document.parseResult.value),
       exports
     };

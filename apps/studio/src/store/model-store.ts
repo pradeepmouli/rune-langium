@@ -319,7 +319,7 @@ export const useModelStore = create<ModelStore>((set, get) => ({
     // every keystroke would re-publish identical files and re-trigger
     // downstream effects (model-watching useEffect → re-merge → another
     // /api/parse round-trip → loop). The check compares path + the
-    // identity of `serializedModelJson` so a reparse with the same paths
+    // source text and `serializedModelJson` so a reparse with the same paths
     // but updated AST content (e.g. bundle version bump) re-publishes
     // and downstream consumers see fresh exports (Copilot review of
     // PR #163: shallow path-only check let stale exports survive).
@@ -327,7 +327,12 @@ export const useModelStore = create<ModelStore>((set, get) => ({
       existing.files.length === files.length &&
       existing.files.every((f, i) => {
         const next = files[i];
-        return next !== undefined && f.path === next.path && f.serializedModelJson === next.serializedModelJson;
+        return (
+          next !== undefined &&
+          f.path === next.path &&
+          f.content === next.content &&
+          f.serializedModelJson === next.serializedModelJson
+        );
       })
     ) {
       return;

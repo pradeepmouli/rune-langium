@@ -36,6 +36,7 @@ import {
   CuratedSerializedWorkspaceArtifactSchema,
   CuratedSerializedDocumentSchema,
   CuratedCohortSchema,
+  type CuratedSerializedDocument,
   type CuratedManifest,
   parseManifest
 } from '@rune-langium/curated-schema';
@@ -224,25 +225,11 @@ async function fetchSerializedArtifact(
   return toDocuments(id, parsed.data);
 }
 
-function toDocuments(
-  bundleId: string,
-  artifact: {
-    documents: Array<{
-      path: string;
-      modelJson: string;
-      exports?: Array<{ type: string; name: string; path: string }>;
-    }>;
-  }
-): CuratedDocument[] {
-  // The /api/parse response shape uses { uri, content, serializedModel,
-  // exports } per document. The artifact carries `path`, `modelJson`,
-  // and `exports?`. `content` (raw source text) is not part of the
-  // serialized artifact — the browser worker's hydrate handler doesn't
-  // need it (it deserializes from modelJson). Emit empty content to
-  // keep the shape consistent without inventing data we don't have.
+function toDocuments(bundleId: string, artifact: { documents: CuratedSerializedDocument[] }): CuratedDocument[] {
+  // Older artifacts may lack source text; preserve their hydration support.
   return artifact.documents.map((doc) => ({
     uri: `${bundleId}/${doc.path}`,
-    content: '',
+    content: doc.content ?? '',
     serializedModel: doc.modelJson,
     exports: doc.exports ?? []
   }));

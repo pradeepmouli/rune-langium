@@ -185,6 +185,7 @@ async function buildArtifact(source, archiveBytes, RuneDsl, documentMap) {
       const rawModelJson = serializeRuneModel(serializer, model);
       return {
         path: rosettaFiles[i].path,
+        content: rosettaFiles[i].content,
         modelJson: ns ? stampNamespacesIntoModelJson(rawModelJson, ns, runeBigIntReplacer) : rawModelJson,
         exports
       };

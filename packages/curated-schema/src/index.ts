@@ -78,6 +78,8 @@ export type CuratedNamespaceEntry = z.infer<typeof CuratedNamespaceEntrySchema>;
 export const CuratedSerializedDocumentSchema = z.object({
   path: z.string().min(1),
   modelJson: z.string().min(1),
+  /** Original file text, fetched with its namespace for read-only source browsing. */
+  content: z.string().optional(),
   exports: z.array(CuratedSerializedDocumentExportSchema).optional()
 });
 export type CuratedSerializedDocument = z.infer<typeof CuratedSerializedDocumentSchema>;
