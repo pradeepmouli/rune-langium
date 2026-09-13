@@ -153,23 +153,7 @@ export class RuneDslScopeProvider extends DefaultScopeProvider {
       const argument = getOperationArgument(container);
       const input = argument ? this.resolveExpressionType(argument) : undefined;
       if (isChoice(input)) {
-        const options = getChoiceOptionPaths(input).flatMap((path) => {
-          const type = path[path.length - 1]!.typeCall.type.ref;
-          if (!type) return [];
-          const model = AstUtils.getContainerOfType(
-            type,
-            (node): node is RosettaModel => node.$type === 'RosettaModel'
-          );
-          return [
-            this.createDescription(type, type.name),
-            this.createDescription(type, qualifiedExportPath(model?.name ?? '', type.name))
-          ];
-        });
-        const model = AstUtils.getContainerOfType(
-          container,
-          (node): node is RosettaModel => node.$type === 'RosettaModel'
-        );
-        return new AliasResolvingScope(new MapScope(options), this.buildImportAliasMap(model?.imports ?? []));
+        return this.getChoiceTypeScope(input, context);
       }
     }
 
@@ -209,23 +193,17 @@ export class RuneDslScopeProvider extends DefaultScopeProvider {
       return this.getWithMetaKeyScope(container);
     }
 
-    // Case 7: SwitchCaseGuard.referenceGuard — resolve to enum values or data subtypes.
-    // SwitchCaseTarget = Data | Choice | RosettaEnumValue, which can span namespaces
-    // (e.g. fpml.CapFloor) so we use the global scope with alias resolution.
+    // Basic, record, enum and alias types are switch targets only through declared Choice options.
     if (container.$type === 'SwitchCaseGuard' && property === 'referenceGuard') {
       const operation = AstUtils.getContainerOfType(container, isSwitchOperation);
       const argument = operation ? getOperationArgument(operation) : undefined;
       const inputType = argument ? this.resolveExpressionType(argument) : undefined;
       if (isData(inputType) || isChoice(inputType)) {
-        const globalScope = this.getGlobalScope('RosettaType', context);
+        const globalScope = this.getGlobalScope('DataOrChoice', context);
         if (!isChoice(inputType)) return globalScope;
-        const options = getChoiceOptionPaths(inputType).flatMap((path) => {
-          const type = path[path.length - 1]?.typeCall.type.ref;
-          return type ? [this.createDescription(type, type.name)] : [];
-        });
-        return new MapScope(options, globalScope);
+        return this.getChoiceTypeScope(inputType, context, globalScope);
       }
-      return super.getScope(context);
+      return this.getGlobalScope('RosettaEnumValue', context);
     }
 
     // Case 8: EnumValueReference.value — resolve to enum values of the specified enum
@@ -290,6 +268,23 @@ export class RuneDslScopeProvider extends DefaultScopeProvider {
   }
 
   // ── Type-aware scoping ──────────────────────────────────────────────
+
+  private getChoiceTypeScope(input: Choice, context: ReferenceInfo, base: Scope = EMPTY_SCOPE): Scope {
+    const options = getChoiceOptionPaths(input).flatMap((path) => {
+      const type = path[path.length - 1]!.typeCall.type.ref;
+      if (!type) return [];
+      const model = AstUtils.getContainerOfType(type, (node): node is RosettaModel => node.$type === 'RosettaModel');
+      return [
+        this.createDescription(type, type.name),
+        this.createDescription(type, qualifiedExportPath(model?.name ?? '', type.name))
+      ];
+    });
+    const model = AstUtils.getContainerOfType(
+      context.container,
+      (node): node is RosettaModel => node.$type === 'RosettaModel'
+    );
+    return new AliasResolvingScope(new MapScope(options, base), this.buildImportAliasMap(model?.imports ?? []));
+  }
 
   /**
    * Resolve the type produced by an expression.

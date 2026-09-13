@@ -49,6 +49,46 @@ async function compile(source: string | string[], typeAssertions = '', checkLink
 }
 
 describe('generated TypeScript function execution', () => {
+  it('selects basic, calendar, enum and alias Choice arms while retaining enum-value switches', async () => {
+    const funcs = await compile(
+      [
+        BASICTYPES_ROSETTA,
+        `namespace test.switches
+enum Kind:
+ A
+ B
+typeAlias Text: string
+type Payload:
+ amount int (1..1)
+typeAlias PayloadAlias: Payload
+choice Value:
+ number
+ date
+ Kind
+ Text
+ PayloadAlias
+func Select:
+ inputs: value Value (1..1)
+ output: result int (1..1)
+ set result: value switch number then 1, com.rosetta.model.date then 2, Kind then 3, test.switches.Text then 4, PayloadAlias then 5, default 0
+func EnumValue:
+ inputs: value Kind (1..1)
+ output: result int (1..1)
+ set result: value switch A then 1, B then 2, default 0
+`
+      ],
+      '',
+      true
+    );
+    expect(funcs.Select!({ value: { number: 42 } })).toBe(1);
+    expect(funcs.Select!({ value: { date: '2026-09-12' } })).toBe(2);
+    expect(funcs.Select!({ value: { kind: 'A' } })).toBe(3);
+    expect(funcs.Select!({ value: { text: 'text' } })).toBe(4);
+    expect(funcs.Select!({ value: { payloadAlias: { amount: 7 } } })).toBe(5);
+    expect(funcs.EnumValue!({ value: 'A' })).toBe(1);
+    expect(funcs.EnumValue!({ value: 'B' })).toBe(2);
+  });
+
   it('links calendar constructors and preserves conversion types through navigation and comparisons', async () => {
     const funcs = await compile(
       [
