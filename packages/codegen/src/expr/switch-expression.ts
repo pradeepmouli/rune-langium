@@ -23,7 +23,8 @@ import {
   featureName,
   renderFeaturePath,
   typeMatches,
-  typeFeatures
+  typeFeatures,
+  type ExpressionType
 } from './navigation.js';
 
 export interface SwitchExpressionRenderOptions {
@@ -42,7 +43,7 @@ export interface SwitchExpressionRenderOptions {
   selfName?: string;
 }
 
-function typeName(type: RosettaType | undefined): string {
+function typeName(type: ExpressionType | undefined): string {
   return type?.name ?? '?';
 }
 
@@ -125,7 +126,7 @@ export function renderAsExpression(
   const input = getOperationArgument(expression);
   const inputType = expressionType(input);
   const target = expression.type.ref;
-  const selected = inputType && target ? typeSelection('__as', inputType, target, true) : undefined;
+  const selected = isRosettaType(inputType) && target ? typeSelection('__as', inputType, target, true) : undefined;
   if (!selected) {
     options.report?.(`Cannot narrow '${typeName(inputType)}' to '${target?.name ?? expression.type.$refText}'`);
     return undefined;
@@ -149,7 +150,7 @@ function primitiveSwitch(
   operation: SwitchOperation,
   argument: string,
   options: SwitchExpressionRenderOptions,
-  inputType: RosettaType | undefined
+  inputType: ExpressionType | undefined
 ): string {
   let fallback = 'undefined';
   const cases: string[] = [];

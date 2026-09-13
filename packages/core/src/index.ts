@@ -29,6 +29,7 @@ export type { ExpressionParseResult } from './api/parse-expression.js';
 
 // Shared language resources
 export { BASE_TYPE_FILES, BASICTYPES_ROSETTA, ANNOTATIONS_ROSETTA } from './stdlib/base-types.js';
+export { addLegacyAnnotations } from './stdlib/legacy-annotations.js';
 
 // Services
 export { createRuneDslServices, RuneDslModule, RuneDslSharedModule } from './services/rune-dsl-module.js';
@@ -77,6 +78,7 @@ export {
   getFunctionSignature,
   getOperationArgument,
   resolveOperationType,
+  type IntrinsicTypeName,
   resolveTypeAliases,
   getFunctionInputs,
   getFunctionOutput

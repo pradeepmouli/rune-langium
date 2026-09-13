@@ -99,10 +99,25 @@ export function getOperationArgument(expr: RosettaExpression): RosettaExpression
 export function resolveOperationType<T>(
   expr: RosettaExpression,
   resolve: (expression: RosettaExpression) => T | undefined,
-  resolveType?: (type: RosettaType) => T | undefined
+  resolveType?: (type: RosettaType) => T | undefined,
+  resolveIntrinsic?: (name: IntrinsicTypeName) => T | undefined
 ): T | undefined {
   const from = (expression: RosettaExpression | undefined) => (expression ? resolve(expression) : undefined);
   switch (expr.$type) {
+    case 'ToDateOperation':
+      return resolveIntrinsic?.('date');
+    case 'ToTimeOperation':
+      return resolveIntrinsic?.('time');
+    case 'ToDateTimeOperation':
+      return resolveIntrinsic?.('dateTime');
+    case 'ToZonedDateTimeOperation':
+      return resolveIntrinsic?.('zonedDateTime');
+    case 'ToStringOperation':
+      return resolveIntrinsic?.('string');
+    case 'ToIntOperation':
+      return resolveIntrinsic?.('int');
+    case 'ToNumberOperation':
+      return resolveIntrinsic?.('number');
     case 'AsOperation': {
       const type = resolveTypeAliases(expr.type.ref);
       return type ? resolveType?.(type) : undefined;
@@ -144,3 +159,6 @@ export function resolveOperationType<T>(
       return undefined;
   }
 }
+
+/** Operator-defined types have an identity even without a declaration reference. */
+export type IntrinsicTypeName = 'date' | 'time' | 'dateTime' | 'zonedDateTime' | 'string' | 'int' | 'number';

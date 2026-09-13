@@ -1,7 +1,12 @@
 // SPDX-License-Identifier: FSL-1.1-ALv2
 // Copyright (c) 2026 Pradeep Mouli
 
-import { createRuneDslServices, serializeRuneModel, assertValidDocuments } from '@rune-langium/core';
+import {
+  createRuneDslServices,
+  serializeRuneModel,
+  assertValidDocuments,
+  addLegacyAnnotations
+} from '@rune-langium/core';
 import { isCuratedSourceFile } from '@rune-langium/curated-schema';
 import type { CuratedModelId, CuratedSerializedWorkspaceArtifact } from '@rune-langium/curated-schema';
 import { URI } from 'langium';
@@ -45,9 +50,12 @@ export async function buildSerializedWorkspaceArtifact(
   const builder = RuneDsl.shared.workspace.DocumentBuilder;
   const serializer = RuneDsl.serializer.JsonSerializer;
 
-  const documents = rosettaFiles.map((file) =>
-    factory.fromString(file.content, URI.parse(`[${modelId}]/${file.path}`))
-  );
+  const documents = rosettaFiles.map((file) => {
+    const document = factory.fromString(file.content, URI.parse(`[${modelId}]/${file.path}`));
+    return modelId === 'rune-dsl' && file.path.endsWith('/annotations.rosetta')
+      ? addLegacyAnnotations(document, factory)
+      : document;
+  });
   await builder.build(documents, { validation: false });
   assertValidDocuments(documents);
 

@@ -1,6 +1,8 @@
 // SPDX-License-Identifier: MIT
 // Copyright (c) 2026 Pradeep Mouli
 
+import { LEGACY_ANNOTATIONS } from './legacy-annotations.js';
+
 /**
  * Built-in Rune DSL base type definitions.
  *
@@ -96,19 +98,7 @@ annotation qualification: <"Annotation that describes a func that is used for ev
 
 annotation deprecated: <"Marks a type, function or enum as deprecated and will be removed/replaced.">
 
-annotation ingest: <"Marks a function that performs ingestion operations with the in bound serialisation format">
-\tJSON boolean (0..1)
-\tRUNE_JSON boolean (0..1)
-\tXML boolean (0..1)
-\tCSV boolean (0..1)
-
-annotation enrich: <"Marks a function that performs enrichment operations">
-
-annotation projection: <"Marks a function that performs projection operations with the out bound serialisation format">
-\tJSON boolean (0..1)
-\tRUNE_JSON boolean (0..1)
-\tXML boolean (0..1)
-\tCSV boolean (0..1)
+${Object.values(LEGACY_ANNOTATIONS).join('\n\n')}
 
 annotation codeImplementation: <"Marks the function as statically implemented by model internal code, with no body defined in Rune.">
 

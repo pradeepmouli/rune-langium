@@ -19,6 +19,7 @@ import { createHash } from 'node:crypto';
 import { writeFile, mkdir, readFile } from 'node:fs/promises';
 import { gunzipSync, gzipSync } from 'node:zlib';
 import { computeNamespaceGraph, nsArtifactSlug } from './lib/namespace-graph.mjs';
+import { resolveCuratedSources } from './lib/curated-sources.mjs';
 import { isCuratedSourceFile } from '../packages/curated-schema/dist/index.js';
 
 const corePkgDir = new URL('../packages/core/', import.meta.url);
@@ -28,13 +29,7 @@ const { URI } = await import(langiumIndex);
 const { values: options } = parseArgs({
   options: { sources: { type: 'string' }, 'out-dir': { type: 'string' }, 'cache-dir': { type: 'string' } }
 });
-const SOURCES = options.sources
-  ? JSON.parse(await readFile(options.sources, 'utf8'))
-  : [
-      { id: 'cdm', owner: 'REGnosys', repo: 'rosetta-cdm', ref: 'master' },
-      { id: 'fpml', owner: 'rosetta-models', repo: 'rune-fpml', ref: 'master' },
-      { id: 'rune-dsl', owner: 'finos', repo: 'rune-dsl', ref: 'main' }
-    ];
+const SOURCES = options.sources ? JSON.parse(await readFile(options.sources, 'utf8')) : await resolveCuratedSources();
 
 const LANGIUM_VERSION = JSON.parse(
   await readFile(new URL('node_modules/langium/package.json', corePkgDir), 'utf8')
@@ -210,22 +205,27 @@ async function buildArtifact(source, archiveBytes, RuneDsl, documentMap) {
 
 async function main() {
   await mkdir(OUT_DIR, { recursive: true });
-  const { createRuneDslServices, assertValidDocuments } = await import('../packages/core/dist/index.js');
+  await writeFile(`${OUT_DIR}/resolved-sources.json`, JSON.stringify(SOURCES, null, 2) + '\n');
+  const { createRuneDslServices, assertValidDocuments, addLegacyAnnotations } =
+    await import('../packages/core/dist/index.js');
   const archives = new Map(
     await Promise.all(SOURCES.map(async (source) => [source.id, await downloadArchive(source)]))
   );
   const { RuneDsl } = createRuneDslServices();
+  const factory = RuneDsl.shared.workspace.LangiumDocumentFactory;
   const documentMap = new Map(
     SOURCES.flatMap((source) =>
       extractRosettaFiles(archives.get(source.id))
         .filter((file) => isCuratedSourceFile(source.id, file.path))
-        .map((file) => [
-          `${source.id}/${file.path}`,
-          RuneDsl.shared.workspace.LangiumDocumentFactory.fromString(
-            file.content,
-            URI.parse(`[${source.id}]/${file.path}`)
-          )
-        ])
+        .map((file) => {
+          const document = factory.fromString(file.content, URI.parse(`[${source.id}]/${file.path}`));
+          return [
+            `${source.id}/${file.path}`,
+            source.id === 'rune-dsl' && file.path.endsWith('/annotations.rosetta')
+              ? addLegacyAnnotations(document, factory)
+              : document
+          ];
+        })
     )
   );
   const documents = [...documentMap.values()];

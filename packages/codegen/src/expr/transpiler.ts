@@ -86,7 +86,14 @@ import { renderAsExpression, renderSwitchExpression } from './switch-expression.
 import { renderOnlyExists } from './only-exists.js';
 import { arrowBody, freshLocal, inlineContext, bindImplicitFeatures } from './inline-function.js';
 import { renderCardinalityOperation } from './cardinality-operations.js';
-import { renderNavigation, expressionType, expressionIsMany, typeFeatures, featureName } from './navigation.js';
+import {
+  renderNavigation,
+  renderCalendarField,
+  expressionType,
+  expressionIsMany,
+  typeFeatures,
+  featureName
+} from './navigation.js';
 
 /** Rune expressions shared by generated functions and validators. */
 
@@ -804,18 +811,12 @@ export function transpileLiteral(expr: RosettaExpression, _ctx: ExpressionTransp
 export function transpileNavigation(expr: RosettaExpression, ctx: ExpressionTranspilerContext): string {
   if (isRosettaFeatureCall(expr) || isRosettaDeepFeatureCall(expr)) {
     const feature = expr.feature?.ref;
-    if (
-      isRosettaRecordFeature(feature) &&
-      isRosettaRecordType(feature.$container) &&
-      ['date', 'dateTime', 'zonedDateTime'].includes(feature.$container.name)
-    ) {
-      const receiver = transpileExpression(expr.receiver, { ...ctx, preserveMetadata: false });
-      const read = (value: string) =>
-        `runeDateField(${value}, ${JSON.stringify(feature.$container.name)}, ${JSON.stringify(feature.name)})`;
-      return expressionIsMany(expr.receiver)
-        ? `runeList(${receiver}).flatMap((value) => runeList(${read('value')}))`
-        : read(receiver);
-    }
+    const calendarField = renderCalendarField(
+      feature,
+      () => transpileExpression(expr.receiver, { ...ctx, preserveMetadata: false }),
+      expressionIsMany(expr.receiver)
+    );
+    if (calendarField !== undefined) return calendarField;
     if (ctx.emitMode.startsWith('ts-') && isRosettaEnumValue(feature)) {
       return `(${JSON.stringify(feature.name)} as const)`;
     }
@@ -1453,11 +1454,13 @@ export function transpileExpression(
     const name = isChoiceOption(expr.symbol.ref)
       ? featureName(expr.symbol.ref)
       : (expr.symbol?.$refText ?? expr.symbol?.ref?.name ?? '?');
+    const target = expr.symbol?.ref;
+    const calendarField = renderCalendarField(target, () => ctx.selfName, expressionIsMany(expr));
+    if (calendarField !== undefined) return calendarField;
     // Aliases and parameters shadow model symbols.
     if (ctx.localBindings?.has(name)) {
       return attrAccessExpr(name, ctx);
     }
-    const target = expr.symbol?.ref;
     if (target?.$type === 'RosettaFunction') {
       let failure = `Function '${target.name}' requires arguments`;
       const call = renderResolvedFunctionCall(

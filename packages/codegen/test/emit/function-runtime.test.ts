@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: MIT
 // Copyright (c) 2026 Pradeep Mouli
 import { describe, expect, it } from 'vitest';
-import { createRuneDslServices } from '@rune-langium/core';
+import { createRuneDslServices, assertValidDocuments, BASICTYPES_ROSETTA } from '@rune-langium/core';
 import { URI } from 'langium';
 import ts from 'typescript-classic';
 import { resolve } from 'node:path';
@@ -10,7 +10,7 @@ import { Temporal } from '@js-temporal/polyfill';
 import { generate } from '../../src/export.js';
 import { mixedChoiceSource, mixedChoiceCases } from '../helpers/mixed-choice.js';
 
-async function compile(source: string | string[], typeAssertions = '') {
+async function compile(source: string | string[], typeAssertions = '', checkLinks = false) {
   const { RuneDsl } = createRuneDslServices();
   const docs = (Array.isArray(source) ? source : [source]).map((content, index) =>
     RuneDsl.shared.workspace.LangiumDocumentFactory.fromString(
@@ -20,6 +20,7 @@ async function compile(source: string | string[], typeAssertions = '') {
   );
   await RuneDsl.shared.workspace.DocumentBuilder.build(docs);
   for (const doc of docs) expect(doc.parseResult.parserErrors).toEqual([]);
+  if (checkLinks) assertValidDocuments(docs);
   const outputs = await generate(docs, { target: 'typescript', typescript: { layout: 'single-file' } });
   expect(outputs.flatMap((output) => output.diagnostics.filter((d) => d.severity === 'error'))).toEqual([]);
   const code = outputs[0]!.content;
@@ -48,6 +49,56 @@ async function compile(source: string | string[], typeAssertions = '') {
 }
 
 describe('generated TypeScript function execution', () => {
+  it('links calendar constructors and preserves conversion types through navigation and comparisons', async () => {
+    const funcs = await compile(
+      [
+        BASICTYPES_ROSETTA,
+        `namespace test.conversion
+func Day:
+ inputs: value string (1..1)
+ output: result date (0..1)
+ set result: (value to-zoned-date-time) -> date
+func Year:
+ inputs: value string (1..1)
+ output: result int (0..1)
+ alias converted: value to-zoned-date-time
+ set result: converted -> date -> year
+func DateYear:
+ inputs: value string (1..1)
+ output: result int (0..1)
+ set result: (value to-date then item) -> year
+func Clock:
+ inputs: value string (1..1)
+ output: result time (0..1)
+ set result: (value to-date-time) -> time
+func ImplicitYear:
+ inputs: value string (1..1) year int (0..1)
+ output: result int (0..1)
+ set result: value to-date then year
+func Before:
+ inputs: left string (1..1) right string (1..1)
+ output: result boolean (1..1)
+ alias start: left to-zoned-date-time
+ set result: start < (right to-zoned-date-time)
+func Make:
+ inputs: day date (1..1)
+ output: zonedDateTime zonedDateTime (0..1)
+ set zonedDateTime: zonedDateTime {date: day, time: "12:30:00" to-time, timezone: "Z"}
+`
+      ],
+      '',
+      true
+    );
+    expect(funcs.Day!({ value: '2026-09-11T12:30:00Z' })).toBe('2026-09-11');
+    expect(funcs.Day!({ value: '2026-01-01T00:30:00+05:30' })).toBe('2026-01-01');
+    expect(funcs.Year!({ value: '2026-01-01T00:30:00+05:30' })).toBe(2026);
+    expect(funcs.DateYear!({ value: '2026-09-11' })).toBe(2026);
+    expect(funcs.ImplicitYear!({ value: '2026-09-11', year: 1900 })).toBe(2026);
+    expect(funcs.Clock!({ value: '2026-09-11T12:30:00' })).toBe('12:30:00');
+    expect(funcs.Before!({ left: '2026-01-01T00:30:00+05:30', right: '2025-12-31T20:00:00Z' })).toBe(true);
+    expect(funcs.Make!({ day: '2026-09-11' })).toBe('2026-09-11T12:30:00+00:00[UTC]');
+  });
+
   it('keeps constructor fields ahead of metadata keywords and converts scalar fields to lists', async () => {
     const funcs = await compile(`namespace test.address
 annotation metadata:

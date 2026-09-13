@@ -324,7 +324,7 @@ export class RuneDslScopeProvider extends DefaultScopeProvider {
       }
 
       // Attribute → its typeCall determines the type
-      if (isAttribute(sym) || isChoiceOption(sym)) {
+      if (isAttribute(sym) || isChoiceOption(sym) || isRosettaRecordFeature(sym)) {
         return this.resolveTypeCallToData(sym.typeCall);
       }
 
@@ -349,7 +349,7 @@ export class RuneDslScopeProvider extends DefaultScopeProvider {
         }
         return sym;
       }
-      if (isChoice(sym)) {
+      if (isChoice(sym) || isRosettaRecordType(sym)) {
         return sym;
       }
 
@@ -438,7 +438,18 @@ export class RuneDslScopeProvider extends DefaultScopeProvider {
     return resolveOperationType(
       expr,
       (expression) => this.resolveExpressionType(expression),
-      (type) => (isData(type) || isChoice(type) || isRosettaRecordType(type) ? type : undefined)
+      (type) => (isData(type) || isChoice(type) || isRosettaRecordType(type) ? type : undefined),
+      (name) => {
+        const description = this.getGlobalScope('RosettaRecordType', {
+          container: expr,
+          property: 'type',
+          reference: { $refText: name, ref: undefined }
+        }).getElement(name);
+        if (!description) return undefined;
+        const root = this.documents.getDocument(description.documentUri)?.parseResult.value;
+        const node = description.node ?? (root ? this.locator.getAstNode(root, description.path) : undefined);
+        return isRosettaRecordType(node) ? node : undefined;
+      }
     );
   }
 
@@ -1044,6 +1055,8 @@ export class RuneDslScopeProvider extends DefaultScopeProvider {
             extra.push(...this.choiceOptionDescriptions(option));
         } else if (isChoice(itemType)) {
           for (const option of itemType.attributes) extra.push(...this.choiceOptionDescriptions(option));
+        } else if (isRosettaRecordType(itemType)) {
+          for (const feature of itemType.features) extra.push(this.createDescription(feature, feature.name));
         }
         break;
       }

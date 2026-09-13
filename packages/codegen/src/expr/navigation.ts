@@ -39,6 +39,7 @@ import {
   type Attribute,
   type ChoiceOption,
   type RosettaRecordFeature,
+  type IntrinsicTypeName,
   type Choice
 } from '@rune-langium/core';
 import { AstUtils } from 'langium';
@@ -46,6 +47,8 @@ import { choiceOptionFieldName } from '../emit/base-namespace-emitter.js';
 import { functionOutput } from '../types/func.js';
 
 type Feature = Attribute | ChoiceOption | RosettaRecordFeature;
+
+export type ExpressionType = RosettaType | { $type: 'IntrinsicType'; name: IntrinsicTypeName };
 
 export function resolveType(call: TypeCall | undefined, seen: Set<RosettaType> = new Set()): RosettaType | undefined {
   return resolveTypeAliases(call?.type?.ref, seen);
@@ -127,8 +130,11 @@ export function expressionIsMany(
       const owner = AstUtils.getContainerOfType(expr, isInlineFunction);
       if (owner && isThenOperation(owner.$container)) {
         const argument = getOperationArgument(owner.$container);
-        if (isClosureParameter(ref) || (isAttribute(ref) && typeFeatures(expressionType(argument)).includes(ref)))
-          return from(argument) || featureIsMany(isAttribute(ref) ? ref : undefined);
+        if (
+          isClosureParameter(ref) ||
+          ((isAttribute(ref) || isRosettaRecordFeature(ref)) && typeFeatures(expressionType(argument)).includes(ref))
+        )
+          return from(argument) || featureIsMany(isAttribute(ref) || isRosettaRecordFeature(ref) ? ref : undefined);
       }
       if (isRosettaFunction(ref)) return featureIsMany(functionOutput(ref));
       if (isShortcutDeclaration(ref)) return from(ref.expression);
@@ -157,7 +163,7 @@ export function expressionIsMany(
 export function expressionType(
   expr: RosettaExpression | undefined,
   visiting = new Set<RosettaExpression>()
-): RosettaType | undefined {
+): ExpressionType | undefined {
   if (!expr || visiting.has(expr)) return undefined;
   visiting.add(expr);
   const from = (value: RosettaExpression | undefined) => expressionType(value, visiting);
@@ -212,14 +218,19 @@ export function expressionType(
       const ref = expr.feature?.ref;
       if (isAttribute(ref) || isChoiceOption(ref) || isRosettaRecordFeature(ref)) return resolveType(ref.typeCall);
     }
-    return resolveOperationType(expr, from, (type) => type);
+    return resolveOperationType<ExpressionType>(
+      expr,
+      from,
+      (type) => type,
+      (name) => ({ $type: 'IntrinsicType', name })
+    );
   } finally {
     visiting.delete(expr);
   }
 }
 
-export function typeFeatures(type: RosettaType | undefined, seen: Set<RosettaType> = new Set()): Feature[] {
-  if (!type || seen.has(type)) return [];
+export function typeFeatures(type: ExpressionType | undefined, seen: Set<RosettaType> = new Set()): Feature[] {
+  if (!type || type.$type === 'IntrinsicType' || seen.has(type)) return [];
   seen.add(type);
   if (isRosettaRecordType(type)) return type.features;
   if (isChoice(type)) return type.attributes;
@@ -235,13 +246,27 @@ export function featureName(feature: Feature): string {
   return choiceOptionFieldName(typeName.split('.').pop()!);
 }
 
+/** Calendar records use ISO strings at runtime, including implicit field reads. */
+export function renderCalendarField(feature: unknown, receiver: () => string, many = false): string | undefined {
+  if (
+    !isRosettaRecordFeature(feature) ||
+    !isRosettaRecordType(feature.$container) ||
+    !['date', 'dateTime', 'zonedDateTime'].includes(feature.$container.name)
+  )
+    return undefined;
+  const read = (value: string) =>
+    `runeDateField(${value}, ${JSON.stringify(feature.$container.name)}, ${JSON.stringify(feature.name)})`;
+  const value = receiver();
+  return many ? `runeList(${value}).flatMap((value) => runeList(${read('value')}))` : read(value);
+}
+
 export function deepFeaturePaths(
-  type: RosettaType | undefined,
+  type: ExpressionType | undefined,
   name: string,
   seen: Set<RosettaType> = new Set(),
   target?: Feature
 ): Feature[][] {
-  if (!type || seen.has(type)) return [];
+  if (!type || type.$type === 'IntrinsicType' || seen.has(type)) return [];
   const features = typeFeatures(type);
   const direct = features.filter(
     (feature) => featureName(feature) === name && (!target || featureMatches(feature, target))

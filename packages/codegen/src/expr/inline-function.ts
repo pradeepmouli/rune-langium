@@ -1,13 +1,15 @@
 // SPDX-License-Identifier: MIT
 // Copyright (c) 2026 Pradeep Mouli
-import { getOperationArgument, isRosettaExpression, type InlineFunction, type RosettaType } from '@rune-langium/core';
+import { getOperationArgument, isRosettaExpression, type InlineFunction } from '@rune-langium/core';
 import {
   expressionType,
   expressionIsMany,
   typeFeatures,
   featureName,
   featureIsMany,
-  renderFeaturePath
+  renderFeaturePath,
+  renderCalendarField,
+  type ExpressionType
 } from './navigation.js';
 import { fieldMetadataKind, unwrapMetadata } from './metadata-runtime.js';
 import type { ExpressionTranspilerContext } from './transpiler.js';
@@ -22,7 +24,7 @@ export function freshLocal(ctx: ExpressionTranspilerContext, preferred: string):
 
 export function bindImplicitFeatures(
   ctx: ExpressionTranspilerContext,
-  type: RosettaType | undefined,
+  type: ExpressionType | undefined,
   many = false
 ): ExpressionTranspilerContext {
   const bindings = new Map(ctx.localBindings);
@@ -30,7 +32,11 @@ export function bindImplicitFeatures(
   const receiver = ctx.implicitMetadata ? unwrapMetadata(ctx.selfName, ctx.implicitMetadata.many) : ctx.selfName;
   for (const field of typeFeatures(type)) {
     const name = featureName(field);
-    bindings.set(name, renderFeaturePath(receiver, [name], many || featureIsMany(field)));
+    bindings.set(
+      name,
+      renderCalendarField(field, () => receiver, many) ??
+        renderFeaturePath(receiver, [name], many || featureIsMany(field))
+    );
     const kind = 'annotations' in field ? fieldMetadataKind(field) : undefined;
     localMetadata.set(name, kind ? { kind, many: many || featureIsMany(field) } : undefined);
   }

@@ -113,4 +113,21 @@ After changing the config, exit and relaunch Copilot CLI, then run `/lsp` to
 check status. This config does not add an LSP tool to an already-running Codex
 session. The native server can also be queried over standard LSP stdio.
 
-Curated publication changes: run `node --test scripts/upload-serialized-artifacts.test.mjs`. The tests use a temporary artifact tree and mocked uploads to verify dependency ordering and failure behavior without writing to R2.
+Curated publication changes: run `node --test scripts/lib/curated-sources.test.mjs scripts/upload-serialized-artifacts.test.mjs`. These verify source selection, dependency ordering, and failure behavior without writing to R2.
+
+The nightly artifact builder follows CDM `master`, resolves that exact commit's
+`rune-fpml.version` and `rosetta.dsl.version` to released dependency commits, and
+records the cohort in `resolved-sources.json`. CDM's direct Rune dependency can
+upgrade FpML's older transitive requirement within the same major version;
+newer or cross-major requirements fail selection. Every selected document must
+still pass the linking gate. `--sources` accepts an explicit cohort for reproducible
+checks; `scripts/fixtures/codegen-corpus.json` records the verified cohort.
+
+CDM still uses legacy function annotations removed by
+[Rune's schema migration](https://github.com/finos/rune-dsl/commit/5ed7142f1a6b2e82885e9ab1e9cb5b8479d67c8b).
+Both artifact builders apply core's `addLegacyAnnotations` to the runtime annotation
+document before linking. It adds only missing `ingest`, `enrich`, and `projection`
+declarations, reusing the same definitions as the bundled standard library.
+Upstream declarations and newer schema annotations are preserved; unknown names
+remain errors. Serialized annotation documents include this explicit dialect
+compatibility bridge; upstream archive bytes and their hashes remain unchanged.
