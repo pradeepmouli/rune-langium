@@ -113,7 +113,7 @@ After changing the config, exit and relaunch Copilot CLI, then run `/lsp` to
 check status. This config does not add an LSP tool to an already-running Codex
 session. The native server can also be queried over standard LSP stdio.
 
-Curated publication changes: run `node --test scripts/lib/curated-sources.test.mjs scripts/upload-serialized-artifacts.test.mjs`. These verify source selection, dependency ordering, and failure behavior without writing to R2.
+Curated publication changes: run `node --test scripts/lib/curated-sources.test.mjs scripts/upload-serialized-artifacts.test.mjs`. These verify source selection, dependency ordering, immutable cohort manifests, and failures at every latest-pointer step without writing to R2. Run Studio Pages Function tests for shared parse/download closure and cohort selection, and mirror-worker tests for cron metadata preservation when changing publication.
 
 The nightly artifact builder follows CDM `master`, resolves that exact commit's
 `rune-fpml.version` and `rosetta.dsl.version` to released dependency commits, and

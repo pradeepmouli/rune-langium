@@ -1,9 +1,10 @@
 // SPDX-License-Identifier: FSL-1.1-ALv2
 // Copyright (c) 2026 Pradeep Mouli
 import { afterEach, expect, it, vi } from 'vitest';
-import { createRuneDslServices } from '@rune-langium/core';
+import { createRuneDslServices, hydrateModelDocuments, isTypeCall } from '@rune-langium/core';
 import type { CuratedManifest } from '@rune-langium/curated-schema';
-import { URI } from 'langium';
+import { URI, AstUtils } from 'langium';
+import { onRequestPost as parseWorkspace } from '../api/parse.js';
 import JSZip from 'jszip';
 import * as curated from '../../src/services/curated-fetch.js';
 import { onRequestPost, __resetDocumentCacheForTests } from '../api/codegen.js';
@@ -41,58 +42,89 @@ function request(): Request {
       files: [],
       target: 'typescript',
       curatedBundles: [{ id: 'cdm', version: 'latest' }],
-      namespaces: ['cdm']
+      namespaces: ['cdm'],
+      hydrateNamespaces: ['cdm']
     })
   });
 }
 
-it('loads cyclic bundle dependencies once and emits a linked cross-bundle namespace closure', async () => {
-  const { RuneDsl } = createRuneDslServices();
-  const sources = new Map([
-    [
-      'cdm',
-      'namespace cdm\nimport fpml.*\nfunc Use:\n inputs: value Amount (1..1)\n output: result int (1..1)\n set result: value -> quantity'
-    ],
-    ['fpml', 'namespace fpml\ntype Amount:\n quantity int (1..1)']
-  ]);
-  const docs = [...sources].map(([id, source]) =>
-    RuneDsl.shared.workspace.LangiumDocumentFactory.fromString(source, URI.parse(`file:///[${id}]/model.rosetta`))
-  );
-  await RuneDsl.shared.workspace.DocumentBuilder.build(docs, { validation: false });
-  const serialized = new Map(
-    docs.map((doc, index) => {
-      const id = [...sources.keys()][index]!;
-      return [
-        id,
-        {
-          uri: `${id}/model.rosetta`,
-          content: '',
-          exports: [],
-          serializedModel: RuneDsl.serializer.JsonSerializer.serialize(doc.parseResult.value, { refText: true })
-        }
-      ];
-    })
-  );
-  const manifests = vi
-    .spyOn(curated, 'fetchCuratedManifest')
-    .mockImplementation(async (id) => manifest(id as 'cdm' | 'fpml'));
-  const namespaces = vi.spyOn(curated, 'fetchCuratedNamespace').mockImplementation(async (id) => [serialized.get(id)!]);
-  const response = await onRequestPost({ request: request() } as never);
-  expect(response.status).toBe(200);
-  expect(manifests.mock.calls.map((call) => call[0])).toEqual(['cdm', 'fpml']);
-  expect(namespaces.mock.calls.map((call) => call[2])).toEqual(['cdm.json.gz', 'fpml.json.gz']);
-  const zip = await JSZip.loadAsync(await response.arrayBuffer());
-  expect(Object.keys(zip.files)).toEqual(expect.arrayContaining(['cdm.ts', 'fpml.ts']));
-  expect(Object.keys(zip.files).some((path) => path.includes('unused'))).toBe(false);
-  expect(await zip.file('cdm.ts')!.async('string')).toContain('quantity');
-});
+it.each(['codegen', 'parse'])(
+  '%s loads cyclic bundle dependencies once and preserves cross-bundle targets',
+  async (mode) => {
+    const { RuneDsl } = createRuneDslServices();
+    const sources = new Map([
+      [
+        'cdm',
+        'namespace cdm\nimport fpml.*\nfunc Use:\n inputs: value Amount (1..1)\n output: result int (1..1)\n set result: value -> quantity'
+      ],
+      ['fpml', 'namespace fpml\ntype Amount:\n quantity int (1..1)']
+    ]);
+    const docs = [...sources].map(([id, source]) =>
+      RuneDsl.shared.workspace.LangiumDocumentFactory.fromString(source, URI.parse(`file:///[${id}]/model.rosetta`))
+    );
+    await RuneDsl.shared.workspace.DocumentBuilder.build(docs, { validation: false });
+    const serialized = new Map(
+      docs.map((doc, index) => {
+        const id = [...sources.keys()][index]!;
+        return [
+          id,
+          {
+            uri: `${id}/model.rosetta`,
+            content: '',
+            exports: [],
+            serializedModel: RuneDsl.serializer.JsonSerializer.serialize(doc.parseResult.value, { refText: true })
+          }
+        ];
+      })
+    );
+    const manifests = vi
+      .spyOn(curated, 'fetchCuratedManifest')
+      .mockImplementation(async (id) => manifest(id as 'cdm' | 'fpml'));
+    const namespaces = vi
+      .spyOn(curated, 'fetchCuratedNamespace')
+      .mockImplementation(async (id) => [serialized.get(id)!]);
+    const handler = mode === 'parse' ? parseWorkspace : onRequestPost;
+    const response = await handler({ request: request() } as never);
+    expect(response.status).toBe(200);
+    expect(manifests.mock.calls.map((call) => call[0])).toEqual(['cdm', 'fpml']);
+    expect(namespaces.mock.calls.map((call) => call[2])).toEqual(['cdm.json.gz', 'fpml.json.gz']);
+    if (mode === 'parse') {
+      const payload = (await response.json()) as {
+        dependencyGraph: Record<string, string[]>;
+        hydrationState: { documents: Array<curated.CuratedDocument & { bundleId: string }> };
+      };
+      expect(payload.dependencyGraph.cdm).toEqual(['cdm', 'fpml']);
+      expect(payload.hydrationState.documents.map((doc: { bundleId: string }) => doc.bundleId)).toEqual([
+        'cdm',
+        'fpml'
+      ]);
+      const services = createRuneDslServices();
+      const hydrated = hydrateModelDocuments(
+        services,
+        payload.hydrationState.documents.map((doc: { bundleId: string; serializedModel: string }) => ({
+          uri: URI.parse(`file:///[${doc.bundleId}]/model.rosetta`),
+          json: doc.serializedModel
+        }))
+      );
+      const target = hydrated[1]!.model.elements[0];
+      const typeCalls = AstUtils.streamAllContents(hydrated[0]!.model).filter(isTypeCall).toArray();
+      expect(typeCalls.some((call) => call.type.ref === target)).toBe(true);
+      return;
+    }
+    const zip = await JSZip.loadAsync(await response.arrayBuffer());
+    expect(Object.keys(zip.files)).toEqual(expect.arrayContaining(['cdm.ts', 'fpml.ts']));
+    expect(Object.keys(zip.files).some((path) => path.includes('unused'))).toBe(false);
+    expect(await zip.file('cdm.ts')!.async('string')).toContain('quantity');
+  }
+);
 
-it('returns a dependency fetch failure as a structured 502', async () => {
+it.each(['codegen', 'parse'])('%s returns a dependency fetch failure as a structured 502', async (mode) => {
   vi.spyOn(curated, 'fetchCuratedManifest').mockImplementation(async (id) => {
     if (id === 'fpml') throw new curated.CuratedBundleUnavailableError(id, 'latest', 404);
     return manifest('cdm');
   });
-  const response = await onRequestPost({ request: request() } as never);
+  const handler = mode === 'parse' ? parseWorkspace : onRequestPost;
+  const response = await handler({ request: request() } as never);
   expect(response.status).toBe(502);
   expect(await response.json()).toMatchObject({ error: 'curated_bundle_unavailable', bundleId: 'fpml' });
 });

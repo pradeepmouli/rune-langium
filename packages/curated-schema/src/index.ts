@@ -92,6 +92,8 @@ export const CuratedSerializedWorkspaceArtifactSchema = z.object({
 });
 export type CuratedSerializedWorkspaceArtifact = z.infer<typeof CuratedSerializedWorkspaceArtifactSchema>;
 
+export const CuratedCohortSchema = z.string().regex(/^cohort-[a-f0-9]{64}$/);
+
 /**
  * Curated-mirror manifest. Written by the publisher Worker, fetched and
  * validated by Studio. `schemaVersion` is a literal so out-of-range values
@@ -128,6 +130,8 @@ export const CuratedManifestSchema = z.object({
     .optional(),
   /** Per-namespace dependency graph + export list + artifact key. deps are DIRECT cross-namespace edges; consumers walk the transitive closure. */
   namespaces: z.record(z.string(), CuratedNamespaceEntrySchema).optional(),
+  /** Immutable manifest cohort shared by jointly linked serialized bundles. */
+  cohort: CuratedCohortSchema.optional(),
   dependencies: z.partialRecord(CuratedModelIdSchema, z.string()).optional()
 });
 export type CuratedManifest = z.infer<typeof CuratedManifestSchema>;

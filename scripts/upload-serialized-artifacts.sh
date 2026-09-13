@@ -76,7 +76,7 @@ for model_dir in "${model_dirs[@]}"; do
     --argjson size "$size_bytes" \
     --argjson docs "$doc_count" \
     --slurpfile meta "$meta_file" \
-    '.artifacts.serializedWorkspace = {
+    'del(.cohort) | .artifacts.serializedWorkspace = {
       schemaVersion: 1,
       kind: "langium-json-serializer",
       url: $url,
@@ -92,6 +92,16 @@ for model_dir in "${model_dirs[@]}"; do
 
 done
 
+# Hash the complete prepared manifest set, so unchanged local bundles also get
+# new immutable manifests when their dependency cohort changes.
+cohort="cohort-$(cat "$TMP_DIR/"*.json | shasum -a 256 | cut -d ' ' -f 1)"
+for model_dir in "${model_dirs[@]}"; do
+  model_id=$(basename "$model_dir")
+  jq --arg cohort "$cohort" '.cohort = $cohort | .dependencies |= map_values($cohort)' \
+    "$TMP_DIR/$model_id.json" > "$TMP_DIR/$model_id.pinned"
+  mv "$TMP_DIR/$model_id.pinned" "$TMP_DIR/$model_id.json"
+done
+
 # Upload all versioned blobs across the dependency set before advancing any pointer.
 for model_dir in "${model_dirs[@]}"; do
   model_id=$(basename "$model_dir")
@@ -100,6 +110,12 @@ for model_dir in "${model_dirs[@]}"; do
   for ns_file in "$model_dir/ns/"*.json.gz; do
     upload_object "curated/$model_id/artifacts/$version/ns/$(basename "$ns_file")" "$ns_file" application/gzip
   done
+done
+
+# Every dependency manifest must exist before a latest manifest can expose it.
+for model_dir in "${model_dirs[@]}"; do
+  model_id=$(basename "$model_dir")
+  upload_object "curated/$model_id/artifacts/$cohort/manifest.json" "$TMP_DIR/$model_id.json" 'application/json; charset=utf-8'
 done
 
 # Each pointer write is atomic in R2; the group of manifests is not a transaction.

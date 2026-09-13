@@ -35,6 +35,7 @@ import { z } from 'zod';
 import {
   CuratedSerializedWorkspaceArtifactSchema,
   CuratedSerializedDocumentSchema,
+  CuratedCohortSchema,
   type CuratedManifest,
   parseManifest
 } from '@rune-langium/curated-schema';
@@ -267,7 +268,8 @@ export const fetchCuratedManifest = withInstrumentation(
     // Default to globalThis.fetch — same rationale as fetchCuratedBundle (CF
     // same-zone loop prevention; production callers pass env.CURATED_MIRROR.fetch).
     const fetchFn: CuratedFetcher = fetcher ?? ((url, init) => globalThis.fetch(url, init));
-    const url = `${CURATED_MIRROR_BASE}/${id}/manifest.json`;
+    const pinned = CuratedCohortSchema.safeParse(version).success;
+    const url = `${CURATED_MIRROR_BASE}/${id}/${pinned ? `artifacts/${version}/` : ''}manifest.json`;
 
     let res: Response;
     try {
@@ -311,6 +313,9 @@ export const fetchCuratedManifest = withInstrumentation(
         reason: result.reason
       });
       throw new CuratedBundleUnavailableError(id, version, undefined, new Error(result.reason));
+    }
+    if (pinned && result.manifest.cohort !== version) {
+      throw new CuratedBundleUnavailableError(id, version, undefined, new Error('Manifest cohort mismatch'));
     }
     return result.manifest;
     // Fetched unauthenticated from the public curated mirror — the whole

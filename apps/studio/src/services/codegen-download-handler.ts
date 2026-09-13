@@ -5,7 +5,6 @@
 /** Shared download pipeline for Pages requests and dedicated browser workers. */
 
 import JSZip from 'jszip';
-import type { CuratedManifest } from '@rune-langium/curated-schema';
 import {
   IMPLEMENTED_TARGETS,
   TARGET_DESCRIPTORS,
@@ -13,8 +12,7 @@ import {
   type GeneratorOutput,
   type Target
 } from '@rune-langium/codegen/export';
-import { fetchCuratedManifest, fetchCuratedNamespace, CuratedBundleUnavailableError } from './curated-fetch.js';
-import { closeNamespacesFromManifest } from './curated-closure.js';
+import { loadCuratedWorkspace, curatedWorkspaceErrorResponse } from './curated-workspace.js';
 import { withInstrumentation, Capture } from './instrumentation/core.js';
 
 interface CodegenRequestBody {
@@ -444,74 +442,17 @@ async function loadAllDocuments(
   let namespaces: string[] | undefined;
   if (curatedBundles.length > 0) {
     try {
-      const bundles = new Map(curatedBundles.map((bundle) => [bundle.id, bundle]));
-      const manifests = new Map<string, CuratedManifest>();
-      for (const bundle of bundles.values()) {
-        const manifest = await fetchCuratedManifest(bundle.id, bundle.version, curatedFetcher);
-        if (!manifest?.namespaces || Object.keys(manifest.namespaces).length === 0) {
-          return {
-            docs: [],
-            curatedError: new Response(
-              JSON.stringify({
-                ok: false,
-                error: 'curated_manifest_missing',
-                bundleId: bundle.id,
-                version: bundle.version
-              }),
-              { status: 502, headers: { 'Content-Type': 'application/json' } }
-            )
-          };
-        }
-        manifests.set(bundle.id, manifest);
-        for (const [id, version] of Object.entries(manifest.dependencies ?? {})) {
-          if (!bundles.has(id)) bundles.set(id, { id, version });
-        }
-      }
-      const graph = Object.assign({}, ...[...manifests.values()].map((manifest) => manifest.namespaces)) as NonNullable<
-        CuratedManifest['namespaces']
-      >;
-      const roots =
-        seeds.size > 0
-          ? seeds
-          : new Set(curatedBundles.flatMap((bundle) => Object.keys(manifests.get(bundle.id)!.namespaces!)));
-      const closure = closeNamespacesFromManifest(roots, graph);
-      namespaces = [...new Set([...requestedNamespaces, ...closure])];
-      const fetchedEntries: Array<{ uri: import('langium').URI; json: string }> = [];
-      for (const [id, manifest] of manifests) {
-        const selected = [...closure].filter((ns) => manifest.namespaces?.[ns]);
-        for (let i = 0; i < selected.length; i += 8) {
-          const fetched = await Promise.all(
-            selected
-              .slice(i, i + 8)
-              .map((ns) =>
-                fetchCuratedNamespace(id, bundles.get(id)!.version, manifest.namespaces![ns]!.artifact, curatedFetcher)
-              )
-          );
-          for (const entries of fetched)
-            for (const entry of entries) {
-              fetchedEntries.push({ uri: curatedKeyToUri(entry.uri, URI), json: entry.serializedModel });
-            }
-        }
-      }
+      const loaded = await loadCuratedWorkspace(curatedBundles, seeds, curatedFetcher, true);
+      namespaces = [...new Set([...requestedNamespaces, ...loaded.closure])];
+      const entries = loaded.bundles.flatMap((bundle) =>
+        bundle.documents.map((entry) => ({ uri: curatedKeyToUri(entry.uri, URI), json: entry.serializedModel }))
+      );
       docs.push(
-        ...hydrateModelDocuments({ RuneDsl, shared: RuneDsl.shared }, fetchedEntries).map((result) => result.document)
+        ...hydrateModelDocuments({ RuneDsl, shared: RuneDsl.shared }, entries).map((result) => result.document)
       );
     } catch (err) {
-      if (err instanceof CuratedBundleUnavailableError) {
-        return {
-          docs: [],
-          curatedError: new Response(
-            JSON.stringify({
-              ok: false,
-              error: 'curated_bundle_unavailable',
-              bundleId: err.bundleId,
-              version: err.version,
-              upstreamStatus: err.status
-            }),
-            { status: 502, headers: { 'Content-Type': 'application/json' } }
-          )
-        };
-      }
+      const curatedError = curatedWorkspaceErrorResponse(err);
+      if (curatedError) return { docs: [], curatedError };
       throw err;
     }
   } else if (curatedDocs.length > 0) {

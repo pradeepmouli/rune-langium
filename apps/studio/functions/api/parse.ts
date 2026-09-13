@@ -30,8 +30,8 @@ import {
   collectNamespaceDependencies
 } from '@rune-langium/core';
 import { URI, type LangiumDocument, type LangiumSharedCoreServices, type LangiumCoreServices } from 'langium';
-import { fetchCuratedManifest, fetchCuratedNamespace, CuratedBundleUnavailableError } from '../lib/curated-fetch.js';
-import { closeNamespacesFromManifest, buildDependencyGraph, expandWildcard } from '../lib/curated-closure.js';
+import { loadCuratedWorkspace, curatedWorkspaceErrorResponse } from '../../src/services/curated-workspace.js';
+import { buildDependencyGraph, expandWildcard } from '../lib/curated-closure.js';
 import { readSerializedModelMeta } from '../lib/serialized-model-meta.js';
 import { withInstrumentation, Capture } from '../../src/services/instrumentation/core.js';
 
@@ -185,10 +185,7 @@ export const onRequestPost: PagesFunction<Env> = withInstrumentation(
       // import. Hoisted here (before the bundle loop) so the manifest fast-path
       // can use them when computing which per-namespace artifacts to fetch.
       const seeds = collectUserSeedNamespaces(workspaceContext?.userDocs ?? []);
-      // On-demand hydration: the browser may request namespaces beyond the user's
-      // import closure (curated browsing). Union them into the seeds; each bundle's
-      // closure walk picks up the ones present in its own manifest and pulls their
-      // transitive deps (closeNamespacesFromManifest ignores unknown seeds).
+      // Curated browsing can request namespaces beyond the user's import closure.
       const requestedHydration = Array.isArray(body.hydrateNamespaces) ? body.hydrateNamespaces : [];
       for (const ns of requestedHydration) {
         if (typeof ns === 'string') seeds.add(ns);
@@ -210,74 +207,34 @@ export const onRequestPost: PagesFunction<Env> = withInstrumentation(
       // precomputed manifest graph (NO deserialize/link). Feeds buildDependencyGraph.
       const curatedDirectDeps = new Map<string, Set<string>>();
       if (Array.isArray(body.curatedBundles) && body.curatedBundles.length > 0) {
-        for (const bundle of body.curatedBundles) {
-          try {
-            const manifest = await fetchCuratedManifest(bundle.id, bundle.version, curatedFetcher);
-            if (!manifest?.namespaces || Object.keys(manifest.namespaces).length === 0) {
-              return new Response(
-                JSON.stringify({
-                  ok: false,
-                  error: 'curated_manifest_missing',
-                  bundleId: bundle.id,
-                  version: bundle.version
-                }),
-                { status: 502, headers: { 'Content-Type': 'application/json' } }
-              );
+        try {
+          const loaded = await loadCuratedWorkspace(body.curatedBundles, seeds, curatedFetcher);
+          for (const ns of loaded.closure) {
+            manifestClosureNamespaces.add(ns);
+            const targets = new Set<string>();
+            for (const raw of loaded.graph[ns]!.deps) {
+              for (const target of expandWildcard(raw, loaded.closure)) targets.add(target);
             }
-            // Manifest fast-path: fetch ONLY the user's closure, never the whole bundle.
-            const nsGraph = manifest.namespaces;
-            const closure = closeNamespacesFromManifest(seeds, nsGraph);
-            for (const ns of closure) manifestClosureNamespaces.add(ns);
-            // Record precomputed curated→curated edges for the dep graph (no link).
-            for (const ns of closure) {
-              const entry = nsGraph[ns];
-              if (!entry) continue;
-              const targets = new Set<string>();
-              for (const raw of entry.deps) {
-                for (const t of expandWildcard(raw, closure)) targets.add(t);
-              }
-              curatedDirectDeps.set(ns, targets);
+            curatedDirectDeps.set(ns, targets);
+          }
+          for (const bundle of loaded.bundles) {
+            for (const doc of bundle.documents) {
+              documentsForHydration.push({ ...doc, bundleId: bundle.id });
+              mergeCuratedDocIntoDeferredExports(doc, deferredExportsList);
             }
-            const closureNs = [...closure].filter((ns) => nsGraph[ns]);
-            const FETCH_CONCURRENCY = 8;
-            for (let i = 0; i < closureNs.length; i += FETCH_CONCURRENCY) {
-              const window = closureNs.slice(i, i + FETCH_CONCURRENCY);
-              const fetchedPerNs = await Promise.all(
-                window.map((ns) =>
-                  fetchCuratedNamespace(bundle.id, bundle.version, nsGraph[ns].artifact, curatedFetcher)
-                )
-              );
-              for (const nsDocs of fetchedPerNs) {
-                for (const doc of nsDocs) {
-                  documentsForHydration.push({ ...doc, bundleId: bundle.id });
-                  mergeCuratedDocIntoDeferredExports(doc, deferredExportsList);
-                }
-              }
-            }
-            // List every OTHER curated namespace so the explorer shows the full corpus.
-            for (const [ns, entry] of Object.entries(nsGraph)) {
-              if (closure.has(ns)) continue;
+            for (const [ns, entry] of Object.entries(bundle.manifest.namespaces!)) {
+              if (loaded.closure.has(ns)) continue;
               deferredExportsList.push({
                 filePath: `${bundle.id}/${ns}`,
                 namespace: ns,
                 entries: entry.exports.map((e) => ({ type: e.type, name: e.name }))
               });
             }
-          } catch (err) {
-            if (err instanceof CuratedBundleUnavailableError) {
-              return new Response(
-                JSON.stringify({
-                  ok: false,
-                  error: 'curated_bundle_unavailable',
-                  bundleId: err.bundleId,
-                  version: err.version,
-                  upstreamStatus: err.status
-                }),
-                { status: 502, headers: { 'Content-Type': 'application/json' } }
-              );
-            }
-            throw err;
           }
+        } catch (err) {
+          const response = curatedWorkspaceErrorResponse(err);
+          if (response) return response;
+          throw err;
         }
       }
 

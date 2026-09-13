@@ -38,6 +38,17 @@ const VALID_MANIFEST = {
 // ---------------------------------------------------------------------------
 
 describe('fetchCuratedManifest', () => {
+  it('fetches an immutable cohort manifest and rejects a different cohort', async () => {
+    const cohort = `cohort-${'b'.repeat(64)}`;
+    const stub: CuratedFetcher = vi
+      .fn()
+      .mockResolvedValueOnce(new Response(JSON.stringify({ ...VALID_MANIFEST, cohort })))
+      .mockResolvedValueOnce(new Response(JSON.stringify(VALID_MANIFEST)));
+    expect((await fetchCuratedManifest('cdm', cohort, stub)).cohort).toBe(cohort);
+    expect(stub).toHaveBeenCalledWith(`${MIRROR}/cdm/artifacts/${cohort}/manifest.json`, undefined);
+    await expect(fetchCuratedManifest('cdm', cohort, stub)).rejects.toThrow(CuratedBundleUnavailableError);
+  });
+
   it('happy path: fetches and returns valid manifest', async () => {
     const stub: CuratedFetcher = vi
       .fn()
