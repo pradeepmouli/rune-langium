@@ -2135,6 +2135,44 @@ func Compute:
     expect(funcs.Compute!({ amount: { value: 3 } })).toBe(13);
   });
 
+  it('preserves library array parameters in explicit and implicit calls', async () => {
+    const funcs = await compile(
+      [
+        BASICTYPES_ROSETTA,
+        `namespace test.libraryArrays
+library function Total(values number[]) number
+library function WeightedTotal(scale number, values number[]) number
+func Explicit:
+ inputs: values number (0..*)
+ output: result number (1..1)
+ set result: WeightedTotal(2, values)
+func Implicit:
+ inputs: values number (0..*)
+ output: result number (1..1)
+ set result: values then Total
+func Scalar:
+ inputs: value number (0..1)
+ output: result number (1..1)
+ set result: Total(value)
+`
+      ],
+      `Total.implementation = (values: number[]): number => values.reduce((sum, value) => sum + value, 0);
+WeightedTotal.implementation = (scale: number, values: number[]): number => scale * Total(values);`,
+      true
+    );
+    const total = (values: number[]) => values.reduce((sum, value) => sum + value, 0);
+    Object.assign(funcs.Total!, { implementation: total });
+    Object.assign(funcs.WeightedTotal!, {
+      implementation: (scale: number, values: number[]) => scale * total(values)
+    });
+    for (const values of [[], [3], [3, 7]]) {
+      expect(funcs.Explicit!({ values })).toBe(2 * total(values));
+      expect(funcs.Implicit!({ values })).toBe(total(values));
+    }
+    expect(funcs.Scalar!({ value: 5 })).toBe(5);
+    expect(funcs.Scalar!({})).toBe(0);
+  });
+
   it('counts scalars and validates one-of across declared object fields', async () => {
     const funcs = await compile(`namespace test.runtime
 type Alternatives:

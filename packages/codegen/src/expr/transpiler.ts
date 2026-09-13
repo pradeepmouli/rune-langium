@@ -1493,7 +1493,10 @@ export function transpileExpression(
           argument ? transpileExpression(argument, { ...ctx, preserveMetadata: false }) : ctx.selfName,
           {
             name: target.$type === 'RosettaExternalFunction' ? (target.parameters[index]?.name ?? 'input') : 'input',
-            cardinality: { lower: 1, upper: 1 }
+            cardinality:
+              target.$type === 'RosettaExternalFunction' && target.parameters[index]?.isArray
+                ? { lower: 0, upper: null }
+                : { lower: 1, upper: 1 }
           },
           ctx,
           argument
