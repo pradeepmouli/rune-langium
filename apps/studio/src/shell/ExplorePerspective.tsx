@@ -799,7 +799,7 @@ export const ExplorePerspective = withInstrumentation(
       // react-doctor/effect-needs-cleanup: intentional — pure state update, no subscription.
     }, [selectedNodeId]);
 
-    // Navigate the source editor when a graph node is selected.
+    // Link the selected graph node document on demand.
     const prevSelectedRef = useRef<string | null>(null);
     useEffect(() => {
       if (selectedNodeId === prevSelectedRef.current) return;

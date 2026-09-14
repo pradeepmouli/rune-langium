@@ -61,13 +61,9 @@ export interface WorkspaceFile {
    */
   bundleVersion?: string;
   /**
-   * Reference-only file from a curated bundle: present in the file list so
-   * counts + namespace listings reflect the bundle contents, but the source
-   * text is not available client-side (the curated artifact is pre-parsed
-   * and doesn't carry raw source). Distinct from `readOnly` (which only
-   * forbids edits): a refOnly file has no source to display. UI handlers:
-   * - SourceView click is a no-op (don't switch active source view).
-   * - Inspector renders a "Reference Only" pill + disables editing.
+   * Curated reference file: excluded from workspace authoring and local LSP
+   * synchronization. Hydration supplies its original source for read-only
+   * display; catalog-only entries have empty content until then.
    */
   refOnly?: boolean;
 }
