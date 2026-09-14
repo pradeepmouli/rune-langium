@@ -13,12 +13,14 @@
  * the inlined helpers; the size-limit branch is exercised separately.
  */
 
-import { writeFile } from 'node:fs/promises';
-import { join } from 'node:path';
+import { writeFile, mkdir, rm } from 'node:fs/promises';
+import { createRequire } from 'node:module';
+import ts from 'typescript-classic';
+import { join, dirname } from 'node:path';
 import { mkdtempWithNodeModules } from './emitted-module-dir.js';
 import { pathToFileURL } from 'node:url';
 import { describe, it, expect } from 'vitest';
-import { createRuneDslServices } from '@rune-langium/core';
+import { createRuneDslServices, assertValidDocuments } from '@rune-langium/core';
 import { URI } from 'langium';
 import { z } from 'zod';
 import { generate } from '../../src/export.js';
@@ -191,3 +193,72 @@ describe('Zod LanguageProfile (019 Phase 0.5.2)', () => {
     expect(outputs[0]?.diagnostics[0]?.message).toContain('51 > 50');
   });
 });
+
+it.each(['per-namespace', 'barrel', 'single-file'] as const)(
+  'compiles and executes calendar conditions in the %s Zod layout',
+  async (layout) => {
+    const { RuneDsl } = createRuneDslServices();
+    await RuneDsl.shared.workspace.WorkspaceManager.initializeWorkspace([]);
+    const doc = RuneDsl.shared.workspace.LangiumDocumentFactory.fromString(
+      `namespace calendar.compare
+
+type DateWindow:
+  start date (1..1)
+  end date (1..1)
+  condition Ordered: start < end
+
+type TimeWindow:
+  start time (1..1)
+  end time (1..1)
+  condition Ordered: start < end
+
+type ZonedWindow:
+  start zonedDateTime (1..1)
+  end zonedDateTime (1..1)
+  condition Ordered: start < end
+`,
+      URI.parse('inmemory:///calendar.rosetta')
+    );
+    await RuneDsl.shared.workspace.DocumentBuilder.build([doc]);
+    assertValidDocuments([doc]);
+    const outputs = await generate(doc, { target: 'zod', zod: { layout } });
+    expect(outputs.flatMap((output) => output.diagnostics.filter((d) => d.severity === 'error'))).toEqual([]);
+    const directory = await mkdtempWithNodeModules('rune-zod-calendar-');
+    try {
+      await writeFile(join(directory, 'package.json'), '{"type":"commonjs"}');
+      const files = await Promise.all(
+        outputs.map(async (output) => {
+          const file = join(directory, output.relativePath);
+          await mkdir(dirname(file), { recursive: true });
+          await writeFile(file, output.content);
+          return file;
+        })
+      );
+      const program = ts.createProgram(files, {
+        strict: true,
+        target: ts.ScriptTarget.ES2022,
+        module: ts.ModuleKind.NodeNext,
+        moduleResolution: ts.ModuleResolutionKind.NodeNext,
+        skipLibCheck: true,
+        types: []
+      });
+      expect(
+        ts.getPreEmitDiagnostics(program).map((d) => ts.flattenDiagnosticMessageText(d.messageText, '\n'))
+      ).toEqual([]);
+      program.emit();
+      const entry = layout === 'single-file' ? 'model' : layout === 'barrel' ? 'index' : 'calendar/compare';
+      const schemas = createRequire(join(directory, 'entry.js'))(`./${entry}.zod.js`);
+      for (const [name, start, end] of [
+        ['DateWindowSchema', '2025-12-31', '2026-01-01'],
+        ['TimeWindowSchema', '09:30:00', '10:30:00'],
+        ['ZonedWindowSchema', '2026-01-01T00:30:00+05:30', '2025-12-31T20:00:00Z']
+      ] as const) {
+        expect(schemas[name].safeParse({ start, end }).success).toBe(true);
+        expect(schemas[name].safeParse({ start: end, end: start }).success).toBe(false);
+        expect(schemas[name].safeParse({ start, end: start }).success).toBe(false);
+      }
+    } finally {
+      await rm(directory, { recursive: true, force: true });
+    }
+  }
+);

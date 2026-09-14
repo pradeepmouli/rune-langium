@@ -1253,6 +1253,7 @@ export class ZodNamespaceEmitter extends BaseNamespaceEmitter {
       `import { z } from 'zod';`,
       ...(this.suppressBoilerplate
         ? [
+            "import { Temporal } from '@js-temporal/polyfill';",
             buildRuntimeHelperImportLine(
               `${resolveImportPath(this.model.namespace, 'runtime', this.registry)}.zod.js`,
               ['runeExtendChoice']

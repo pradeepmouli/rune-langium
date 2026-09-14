@@ -241,10 +241,12 @@ describe('emitStandaloneZodSchema', () => {
     ]);
     const result = emitStandaloneZodSchema(docs, 'test.main.Foo');
     expect(result.diagnostics).toEqual([]);
-    // The only surviving import is the genuine external 'zod' package
-    // dependency — every cross-namespace generated-file import is stripped,
-    // since Bar is already declared locally in this same script.
-    expect(result.code.match(/^import .*/gm)).toEqual(["import { z } from 'zod';"]);
+    // External dependencies remain; generated cross-namespace imports are
+    // removed because their schemas are declared in this script.
+    expect(result.code.match(/^import .*/gm)).toEqual([
+      "import { z } from 'zod';",
+      "import { Temporal } from '@js-temporal/polyfill';"
+    ]);
     expect(result.code).toContain('BarSchema');
   });
 
@@ -367,7 +369,10 @@ describe('emitStandaloneZodSchema', () => {
       `
     ]);
     const result = emitStandaloneZodSchema(docs, 'test.Leaf');
-    expect(result.code.match(/^import .*/gm)).toEqual(["import { z } from 'zod';"]);
+    expect(result.code.match(/^import .*/gm)).toEqual([
+      "import { z } from 'zod';",
+      "import { Temporal } from '@js-temporal/polyfill';"
+    ]);
     expect(result.code).toContain('LeafSchema');
   });
 
