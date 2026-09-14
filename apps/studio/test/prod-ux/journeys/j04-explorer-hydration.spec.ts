@@ -2,7 +2,7 @@
 // Copyright (c) 2026 Pradeep Mouli
 
 import { checkout as test, expect, loadCdm } from '../fixtures.js';
-import { expectPopulatedAttributes } from '../readiness.js';
+import { expectPopulatedAttributes, expectSourceReadOnly } from '../readiness.js';
 
 import {
   ANCHOR_ENUM as ENUM_NODE_ID,
@@ -45,7 +45,7 @@ test.describe('J04 — explorer navigation & on-demand hydration', () => {
     await expect(page.getByLabel('Source file path')).toContainText('base-datetime-type.rosetta');
     const source = page.getByTestId('source-editor').locator('.cm-content');
     await expect(source).toContainText('type BusinessCenters');
-    await expect(source).toHaveAttribute('contenteditable', 'false');
+    await expectSourceReadOnly(source);
   });
 
   test('J04b Inspector populates members on first navigation to a never-hydrated curated namespace', async ({
@@ -74,7 +74,7 @@ test.describe('J04 — explorer navigation & on-demand hydration', () => {
     await expect(page.getByLabel('Source file path')).toContainText('base-staticdata-party-type.rosetta');
     const source = page.getByTestId('source-editor').locator('.cm-content');
     await expect(source).toContainText('type Counterparty');
-    await expect(source).toHaveAttribute('contenteditable', 'false');
+    await expectSourceReadOnly(source);
 
     await evidence.checkpoint('hydration-complete');
   });

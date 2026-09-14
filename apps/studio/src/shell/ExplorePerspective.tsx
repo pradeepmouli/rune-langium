@@ -36,6 +36,7 @@ import {
   CardinalityCell,
   TypePickerCell,
   BUILTIN_TYPES,
+  AST_TYPE_TO_NODE_TYPE,
   resolveNodeKind,
   annotationsToDisplay,
   conditionsToDisplay,
@@ -1017,6 +1018,7 @@ export const ExplorePerspective = withInstrumentation(
       // Include deferred corpus entries so linkDocument can resolve their file paths.
       for (const entry of deferredExports) {
         for (const exp of entry.exports) {
+          if (!(exp.type in AST_TYPE_TO_NODE_TYPE)) continue;
           const nodeId = qualifiedExportPath(entry.namespace, exp.name);
           if (!map.has(nodeId)) map.set(nodeId, entry.filePath);
         }

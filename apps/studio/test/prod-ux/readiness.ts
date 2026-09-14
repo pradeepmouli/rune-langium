@@ -37,3 +37,10 @@ export async function waitForEntranceAnimations(page: Page): Promise<void> {
     )
     .toBe(0);
 }
+
+/** CodeMirror keeps its DOM editable for focus/selection even when document edits are disabled. */
+export async function expectSourceReadOnly(source: Locator): Promise<void> {
+  await expect(source).toHaveAttribute('aria-readonly', 'true');
+  await source.pressSequentially('__readonly_probe__');
+  await expect(source).not.toContainText('__readonly_probe__');
+}

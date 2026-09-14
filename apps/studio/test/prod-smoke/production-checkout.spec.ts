@@ -4,6 +4,7 @@
 import { Buffer } from 'node:buffer';
 import { execFileSync } from 'node:child_process';
 import { expect, test } from '@playwright/test';
+import { expectSourceReadOnly } from '../prod-ux/readiness.js';
 
 const CF_PAGES_PROJECT = 'daikonic-dev';
 const CF_PRODUCTION_BRANCH = 'master';
@@ -105,7 +106,7 @@ test.describe('production checkout smoke', () => {
     await expect(page.getByLabel('Source file path')).toContainText('base-datetime-type.rosetta');
     const source = page.getByTestId('source-editor').locator('.cm-content');
     await expect(source).toContainText('type BusinessCenters');
-    await expect(source).toHaveAttribute('contenteditable', 'false');
+    await expectSourceReadOnly(source);
   });
 
   test('Inspector populates members on first navigation to a never-hydrated curated namespace', async ({ page }) => {
@@ -146,7 +147,7 @@ test.describe('production checkout smoke', () => {
     await expect(page.getByLabel('Source file path')).toContainText('base-staticdata-party-type.rosetta');
     const source = page.getByTestId('source-editor').locator('.cm-content');
     await expect(source).toContainText('type Counterparty');
-    await expect(source).toHaveAttribute('contenteditable', 'false');
+    await expectSourceReadOnly(source);
   });
 
   test('graph node shows a hydrating spinner while a never-hydrated namespace loads', async ({ page }) => {
