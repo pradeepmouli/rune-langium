@@ -10,7 +10,8 @@
  */
 
 import { describe, it, expect, beforeEach } from 'vitest';
-import { useExploreFileNavStore } from '../../src/shell/explore-file-nav-store.js';
+import type { WorkspaceFile } from '../../src/services/workspace.js';
+import { resolveEditorFilePath, useExploreFileNavStore } from '../../src/shell/explore-file-nav-store.js';
 
 describe('explore file nav store', () => {
   beforeEach(() => {
@@ -51,5 +52,33 @@ describe('explore file nav store', () => {
     useExploreFileNavStore.getState().openFileInSource('c.rosetta');
     const bodyRead = useExploreFileNavStore.getState().activeEditorFile;
     expect(bodyRead).toBe('c.rosetta');
+  });
+});
+
+describe('parser to source-editor file navigation', () => {
+  const curated: WorkspaceFile = {
+    name: 'types.rosetta',
+    path: '[cdm]/models/types.rosetta',
+    content: 'namespace cdm.example\n',
+    dirty: false,
+    readOnly: true,
+    refOnly: true,
+    bundleId: 'cdm'
+  };
+
+  it('opens the exact hydrated curated file with its editor identity', () => {
+    const sameBasename = { ...curated, path: '[fpml]/models/types.rosetta', bundleId: 'fpml' };
+    expect(resolveEditorFilePath('cdm/models/types.rosetta', [sameBasename, curated])).toBe(curated.path);
+  });
+
+  it('waits for source to arrive for the same selected parser identity', () => {
+    expect(resolveEditorFilePath('cdm/models/types.rosetta', [{ ...curated, content: '' }])).toBeUndefined();
+    expect(resolveEditorFilePath('cdm/models/types.rosetta', [curated])).toBe(curated.path);
+  });
+
+  it('preserves user file identities including empty files and bundle-like paths', () => {
+    const user = { name: 'types.rosetta', path: 'cdm/models/types.rosetta', content: '', dirty: false };
+    expect(resolveEditorFilePath(user.path, [curated, user])).toBe(user.path);
+    expect(resolveEditorFilePath('missing/types.rosetta', [curated, user])).toBeUndefined();
   });
 });

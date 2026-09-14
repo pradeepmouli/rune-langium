@@ -106,7 +106,7 @@ import type { DeferredExportEntry } from '../workers/parser-worker.js';
 import { pathToUri } from '../utils/uri.js';
 import { useOutputStore, fmtLine } from '../store/output-store.js';
 import { combineFileDiagnostics, countDiagnostics } from './explore-diagnostics.js';
-import { useExploreFileNavStore } from './explore-file-nav-store.js';
+import { resolveEditorFilePath, useExploreFileNavStore } from './explore-file-nav-store.js';
 import { useExportDialogStore } from './export-dialog-store.js';
 import { useImportDialogStore } from './import-dialog-store.js';
 import { HydrationOrchestrator } from '../services/hydration-orchestrator.js';
@@ -807,23 +807,6 @@ export const ExplorePerspective = withInstrumentation(
       if (!selectedNodeId || !selectedNodeData) return;
 
       const filePath = resolveNodeFile(selectedNodeData, selectedNodeMeta);
-      if (filePath) openFileInSource(filePath);
-
-      const nodeData = selectedNodeData as unknown as Record<string, unknown>;
-      const cstNode = nodeData['$cstNode'] as
-        | { range?: { start?: { line?: number } }; _rangeCache?: { start?: { line?: number } } }
-        | undefined;
-      const textRegion = nodeData['$textRegion'] as { range?: { start?: { line?: number } } } | undefined;
-      const range = cstNode?._rangeCache ?? cstNode?.range ?? textRegion?.range;
-      if (range?.start?.line !== undefined && filePath) {
-        pendingRevealRef.current = { line: range.start.line + 1, filePath };
-      } else if (filePath) {
-        const typeName = (nodeData as { name?: string }).name;
-        const file = files.find((f) => f.path === filePath);
-        const line = typeName && file ? findDeclarationLine(file.content, typeName) : 0;
-        pendingRevealRef.current = { line: line > 0 ? line : 1, filePath };
-      }
-
       // Trigger on-demand linking for the selected node's document (ADR 007 Phase 2).
       // Skip system:// URIs (base types are always parsed, never deferred).
       // Debounced so rapid keyboard navigation doesn't queue many worker requests.
@@ -1071,6 +1054,35 @@ export const ExplorePerspective = withInstrumentation(
     // the old useCallback with an empty dep array) so every call site below
     // works unchanged.
     const openFileInSource = storeOpenFileInSource;
+
+    const selectedSourceFilePath = resolveEditorFilePath(
+      selectedNodeData ? resolveNodeFile(selectedNodeData, selectedNodeMeta) : undefined,
+      files
+    );
+    useEffect(() => {
+      if (!selectedNodeId || !selectedNodeData || !selectedSourceFilePath) return;
+      const filePath = selectedSourceFilePath;
+      openFileInSource(filePath);
+
+      const nodeData = selectedNodeData as unknown as Record<string, unknown>;
+      const cstNode = nodeData['$cstNode'] as
+        | { range?: { start?: { line?: number } }; _rangeCache?: { start?: { line?: number } } }
+        | undefined;
+      const textRegion = nodeData['$textRegion'] as { range?: { start?: { line?: number } } } | undefined;
+      const range = cstNode?._rangeCache ?? cstNode?.range ?? textRegion?.range;
+      if (range?.start?.line !== undefined) {
+        pendingRevealRef.current = { line: range.start.line + 1, filePath };
+      } else {
+        const typeName = (nodeData as { name?: string }).name;
+        const file = files.find((f) => f.path === filePath);
+        const line = typeName && file ? findDeclarationLine(file.content, typeName) : 0;
+        pendingRevealRef.current = { line: line > 0 ? line : 1, filePath };
+      }
+
+      // File availability changes when a selected curated namespace hydrates.
+      // Keep explicit tab navigation intact on unrelated model/data updates.
+      // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [selectedNodeId, selectedSourceFilePath, workspaceId]);
 
     // "+" new-file affordance moved to ExploreCenterSlot (shared-perspective-
     // chrome plan, Task 3) — it re-derives the same logic from useWorkspace().

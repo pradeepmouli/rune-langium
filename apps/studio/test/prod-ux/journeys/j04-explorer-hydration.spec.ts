@@ -13,7 +13,7 @@ import {
 test.describe('J04 — explorer navigation & on-demand hydration', () => {
   test.skip(!process.env.PLAYWRIGHT_PROD_SMOKE, 'set PLAYWRIGHT_PROD_SMOKE=1 to run against a deployed Studio');
 
-  test('J04a explorer navigation updates panes with reference-only design', async ({ page, evidence }) => {
+  test('J04a explorer navigation updates panes with original curated source', async ({ page, evidence }) => {
     await loadCdm(page, evidence);
     const centerStack = page.getByTestId('center-stack');
 
@@ -42,7 +42,10 @@ test.describe('J04 — explorer navigation & on-demand hydration', () => {
     await expect(centerStack.getByText('cdm.base.datetime', { exact: true })).toBeVisible();
     await expect(centerStack.getByText('Reference Only', { exact: true })).toBeVisible();
     await page.getByRole('button', { name: 'Source' }).click();
-    await expect(centerStack.getByText('namespace example', { exact: false })).toBeVisible();
+    await expect(page.getByLabel('Source file path')).toContainText('base-datetime-type.rosetta');
+    const source = page.getByTestId('source-editor').locator('.cm-content');
+    await expect(source).toContainText('type BusinessCenters');
+    await expect(source).toHaveAttribute('contenteditable', 'false');
   });
 
   test('J04b Inspector populates members on first navigation to a never-hydrated curated namespace', async ({
@@ -66,6 +69,13 @@ test.describe('J04 — explorer navigation & on-demand hydration', () => {
     await expect(centerStack.getByRole('heading', { name: 'Counterparty' })).toBeVisible({ timeout: 10_000 });
     await expect(centerStack.getByText('Reference Only', { exact: true })).toBeVisible();
     await expectPopulatedAttributes(centerStack);
+
+    await page.getByRole('button', { name: 'Source' }).click();
+    await expect(page.getByLabel('Source file path')).toContainText('base-staticdata-party-type.rosetta');
+    const source = page.getByTestId('source-editor').locator('.cm-content');
+    await expect(source).toContainText('type Counterparty');
+    await expect(source).toHaveAttribute('contenteditable', 'false');
+
     await evidence.checkpoint('hydration-complete');
   });
 

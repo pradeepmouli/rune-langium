@@ -55,7 +55,7 @@ The current smoke flow:
 2. Loads the CDM curated bundle
 3. Navigates one enum and one data type from the namespace explorer
 4. Verifies Structure and Inspector update
-5. Verifies Source stays on the workspace file for reference-only curated types
+5. Verifies Source opens the original read-only curated file when selecting a reference type
 
 ### Full checkout harness (`test:prod-ux`)
 
