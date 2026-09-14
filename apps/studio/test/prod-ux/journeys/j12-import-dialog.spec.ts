@@ -26,48 +26,10 @@ async function openWorkspaceAndImport(page: import('@playwright/test').Page): Pr
 const FORMAT_LABELS = ['JSON Schema', 'OpenAPI', 'SQL DDL', 'XSD'] as const;
 type FormatLabel = (typeof FORMAT_LABELS)[number];
 
-/**
- * Switches the Import dialog's Format field to `label`, assuming the
- * dialog is currently showing its post-reopen default (JSON Schema — see
- * ImportDialog.tsx's `useEffect` on `[open]`).
- *
- * FINDING (this session, confirmed live against a rebuilt local prod
- * bundle, recorded as evidence.softFinding('KI-import-format-select-click',
- * ...) in the test body below): the Format field is a base-ui `Select`
- * (`role="combobox"` trigger + `role="listbox"`/`role="option"` popup, NOT
- * a native `<select>` — `selectOption()` does not apply here). Clicking an
- * option directly with a real pointer click DOES NOT WORK inside this
- * dialog — `document.elementFromPoint()` at an option's on-screen center
- * resolves to the dialog's own body `<div>` underneath, not the option
- * (confirmed live via evaluate; not a Playwright actionability quirk — a
- * real mouse click would hit the same wrong element). Root cause: the
- * Select's Positioner renders with `position: fixed; z-index: auto`
- * nested INSIDE the dialog's own portal container instead of escaping to
- * a higher stacking context, so the dialog body (painted later in that
- * shared stacking context) intercepts the click. Keyboard-driven
- * selection (open the trigger, then ArrowDown × N + Enter) works
- * reliably and is what this helper uses. Filed as
- * https://github.com/pradeepmouli/rune-langium/issues/396.
- */
 async function selectImportFormat(page: import('@playwright/test').Page, label: FormatLabel): Promise<void> {
-  const targetIndex = FORMAT_LABELS.indexOf(label);
   await page.getByLabel('Format:').click();
-  // The popup listbox mounts asynchronously after the trigger's click
-  // handler fires — pressing ArrowDown before it has attached its keydown
-  // listener (or before the highlighted-option state has settled between
-  // successive presses) is a silent no-op. Confirmed live and via the real
-  // Playwright test runner: this raced intermittently even after waiting
-  // for the listbox to be visible, so each key press gets its own short
-  // settle delay too (a manual/MCP-driven session, with natural inter-call
-  // latency, never hit this race at all).
-  await expect(page.getByRole('listbox')).toBeVisible({ timeout: 5000 });
-  await page.waitForTimeout(150);
-  for (let i = 0; i < targetIndex; i++) {
-    await page.keyboard.press('ArrowDown');
-    await page.waitForTimeout(150);
-  }
-  await page.keyboard.press('Enter');
-  await expect(page.getByLabel('Format:')).toHaveText(label, { timeout: 10000 });
+  await page.getByRole('option', { name: label, exact: true }).click();
+  await expect(page.getByLabel('Format:')).toHaveText(label);
 }
 
 const JSON_SCHEMA_SOURCE = JSON.stringify({
@@ -143,16 +105,6 @@ test.describe('J12 — Import dialog (inbound codegen)', () => {
   test('J12 imports JSON Schema, OpenAPI, SQL, and XSD sources, one after another', async ({ page, evidence }) => {
     await openWorkspaceAndImport(page);
 
-    evidence.softFinding(
-      'KI-import-format-select-click',
-      "ImportDialog.tsx's Format <Select> (base-ui) cannot be operated with a real pointer click on its options " +
-        "inside this dialog — the popup's Positioner renders position:fixed/z-index:auto nested inside the " +
-        "dialog's own portal container, so the dialog body intercepts the click at the option's on-screen " +
-        'location (confirmed live via document.elementFromPoint, not a Playwright actionability artifact). ' +
-        'Keyboard-driven selection (open trigger, ArrowDown, Enter) works and is used throughout this journey. ' +
-        'Tracked in https://github.com/pradeepmouli/rune-langium/issues/396.'
-    );
-
     // --- JSON Schema — format defaults to it, no selector interaction needed.
 
     // "Adjust one import option" sub-assertion (Step 4): toggle
@@ -161,8 +113,10 @@ test.describe('J12 — Import dialog (inbound codegen)', () => {
     // JSON_SCHEMA_SOURCE below — see that constant's doc comment.
     await page.getByTestId('import-dialog__source').fill(JSON_SCHEMA_TOGGLE_SOURCE);
     await page.getByTestId('import-dialog__namespace').fill('smoke.jsonschema.toggle');
-    await page.getByRole('button', { name: 'Preview' }).click();
-    await expect(page.getByTestId('import-dialog__summary')).toContainText('4 type(s)', { timeout: 15000 });
+    await evidence.measure('importPreview', 'schema import', async () => {
+      await page.getByRole('button', { name: 'Preview' }).click();
+      await expect(page.getByTestId('import-dialog__summary')).toContainText('4 type(s)', { timeout: 15000 });
+    });
 
     // FINDING (this session, confirmed live): the z2f-generated checkbox
     // for includeUnreferencedDefs renders UNCHECKED whenever the dialog's
@@ -181,8 +135,10 @@ test.describe('J12 — Import dialog (inbound codegen)', () => {
     await includeUnreferencedDefsCheckbox.click();
     await expect(includeUnreferencedDefsCheckbox).toHaveAttribute('aria-checked', 'false');
 
-    await page.getByRole('button', { name: 'Preview' }).click();
-    await expect(page.getByTestId('import-dialog__summary')).toContainText('2 type(s)', { timeout: 15000 });
+    await evidence.measure('importPreview', 'schema import', async () => {
+      await page.getByRole('button', { name: 'Preview' }).click();
+      await expect(page.getByTestId('import-dialog__summary')).toContainText('2 type(s)', { timeout: 15000 });
+    });
     await expect(page.getByTestId('import-dialog__preview')).toContainText('type Root', { timeout: 5000 });
     await evidence.checkpoint('import-option-toggled');
 
@@ -193,12 +149,16 @@ test.describe('J12 — Import dialog (inbound codegen)', () => {
     // json-schema-reader.test.ts's own "keeps a standalone def" case).
     await page.getByTestId('import-dialog__source').fill(JSON_SCHEMA_SOURCE);
     await page.getByTestId('import-dialog__namespace').fill('smoke.jsonschema');
-    await page.getByRole('button', { name: 'Preview' }).click();
-    await expect(page.getByTestId('import-dialog__summary')).toContainText('1 type(s)', { timeout: 15000 });
+    await evidence.measure('importPreview', 'schema import', async () => {
+      await page.getByRole('button', { name: 'Preview' }).click();
+      await expect(page.getByTestId('import-dialog__summary')).toContainText('1 type(s)', { timeout: 15000 });
+    });
     await expect(page.getByTestId('import-dialog__preview')).toContainText('type Widget', { timeout: 5000 });
     await expect(page.getByTestId('import-dialog__confirm')).toBeEnabled();
-    await page.getByTestId('import-dialog__confirm').click();
-    await expect(page.getByTestId('import-dialog')).not.toBeVisible({ timeout: 10000 });
+    await evidence.measure('importMerge', 'schema import', async () => {
+      await page.getByTestId('import-dialog__confirm').click();
+      await expect(page.getByTestId('import-dialog')).not.toBeVisible({ timeout: 10000 });
+    });
     await evidence.checkpoint('json-schema-imported');
 
     // Confirm the imported type is real and navigable — same pattern every
@@ -217,11 +177,17 @@ test.describe('J12 — Import dialog (inbound codegen)', () => {
     await selectImportFormat(page, 'OpenAPI');
     await page.getByTestId('import-dialog__source').fill(OPENAPI_SOURCE);
     await page.getByTestId('import-dialog__namespace').fill('smoke.openapi');
-    await page.getByRole('button', { name: 'Preview' }).click();
-    await expect(page.getByTestId('import-dialog__summary')).toContainText('1 type(s)', { timeout: 15000 });
+    await evidence.measure('importPreview', 'schema import', async () => {
+      await page.getByRole('button', { name: 'Preview' }).click();
+      await expect(page.getByTestId('import-dialog__summary')).toContainText('1 type(s)', { timeout: 15000 });
+    });
     await expect(page.getByTestId('import-dialog__preview')).toContainText('type Party', { timeout: 5000 });
-    await page.getByTestId('import-dialog__confirm').click();
-    await expect(page.getByTestId('import-dialog')).not.toBeVisible({ timeout: 10000 });
+    await evidence.measure('importMerge', 'schema import', async () => {
+      await page.getByTestId('import-dialog__confirm').click();
+      await expect(page.getByTestId('import-dialog')).not.toBeVisible({ timeout: 10000 });
+    });
+    await namespaceSearch.fill('Party');
+    await expect(page.getByTestId('ns-type-nav-smoke.openapi.Party')).toBeVisible();
     await evidence.checkpoint('openapi-imported');
 
     // SQL — exercises the tree-sitter WASM grammar-fetch path (PR #390's
@@ -234,14 +200,22 @@ test.describe('J12 — Import dialog (inbound codegen)', () => {
     // Deliberately leave namespace blank first to confirm SQL's required-
     // namespace validation fires, then fill it — exercises the dialog's own
     // error-then-recover path, not just the happy path.
-    await page.getByRole('button', { name: 'Preview' }).click();
-    await expect(page.getByTestId('import-dialog__error')).toBeVisible({ timeout: 5000 });
+    await evidence.measure('importPreview', 'schema import', async () => {
+      await page.getByRole('button', { name: 'Preview' }).click();
+      await expect(page.getByTestId('import-dialog__error')).toBeVisible({ timeout: 5000 });
+    });
     await page.getByTestId('import-dialog__namespace').fill('smoke.sql');
-    await page.getByRole('button', { name: 'Preview' }).click();
-    await expect(page.getByTestId('import-dialog__summary')).toContainText('1 type(s)', { timeout: 20000 });
+    await evidence.measure('importPreview', 'schema import', async () => {
+      await page.getByRole('button', { name: 'Preview' }).click();
+      await expect(page.getByTestId('import-dialog__summary')).toContainText('1 type(s)', { timeout: 20000 });
+    });
     await expect(page.getByTestId('import-dialog__preview')).toContainText('type Party', { timeout: 5000 });
-    await page.getByTestId('import-dialog__confirm').click();
-    await expect(page.getByTestId('import-dialog')).not.toBeVisible({ timeout: 10000 });
+    await evidence.measure('importMerge', 'schema import', async () => {
+      await page.getByTestId('import-dialog__confirm').click();
+      await expect(page.getByTestId('import-dialog')).not.toBeVisible({ timeout: 10000 });
+    });
+    await namespaceSearch.fill('Party');
+    await expect(page.getByTestId('ns-type-nav-smoke.sql.Party')).toBeVisible();
     await evidence.checkpoint('sql-imported');
 
     // XSD.
@@ -250,11 +224,17 @@ test.describe('J12 — Import dialog (inbound codegen)', () => {
     await selectImportFormat(page, 'XSD');
     await page.getByTestId('import-dialog__source').fill(XSD_SOURCE);
     await page.getByTestId('import-dialog__namespace').fill('smoke.xsd');
-    await page.getByRole('button', { name: 'Preview' }).click();
-    await expect(page.getByTestId('import-dialog__summary')).toContainText('1 type(s)', { timeout: 15000 });
+    await evidence.measure('importPreview', 'schema import', async () => {
+      await page.getByRole('button', { name: 'Preview' }).click();
+      await expect(page.getByTestId('import-dialog__summary')).toContainText('1 type(s)', { timeout: 15000 });
+    });
     await expect(page.getByTestId('import-dialog__preview')).toContainText('type Party', { timeout: 5000 });
-    await page.getByTestId('import-dialog__confirm').click();
-    await expect(page.getByTestId('import-dialog')).not.toBeVisible({ timeout: 10000 });
+    await evidence.measure('importMerge', 'schema import', async () => {
+      await page.getByTestId('import-dialog__confirm').click();
+      await expect(page.getByTestId('import-dialog')).not.toBeVisible({ timeout: 10000 });
+    });
+    await namespaceSearch.fill('Party');
+    await expect(page.getByTestId('ns-type-nav-smoke.xsd.Party')).toBeVisible();
     await evidence.checkpoint('xsd-imported');
   });
 });

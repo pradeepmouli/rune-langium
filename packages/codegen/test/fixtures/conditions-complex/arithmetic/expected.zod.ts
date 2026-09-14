@@ -5,6 +5,87 @@
 import { z } from 'zod';
 
 // --- rune-codegen runtime helpers (inlined) ---
+import { Temporal } from '@js-temporal/polyfill';
+const runeParseZonedDateTime = (value: unknown): Temporal.ZonedDateTime => {
+  const text = String(value);
+  const offset = text.match(/(Z|[+-]\d{2}:\d{2})$/)?.[1];
+  return Temporal.ZonedDateTime.from(offset ? text + '[' + (offset === 'Z' ? 'UTC' : offset) + ']' : text);
+};
+const runeDateField = <K extends 'year' | 'month' | 'day' | 'date' | 'time' | 'timezone'>(value: unknown, kind: 'date' | 'dateTime' | 'zonedDateTime', field: K): (K extends 'year' | 'month' | 'day' ? number : string) | undefined => {
+  if (value == null) return undefined;
+  const parsed = kind === 'date' ? Temporal.PlainDate.from(String(value)) : kind === 'dateTime' ? Temporal.PlainDateTime.from(String(value)) : runeParseZonedDateTime(value);
+  const result = field === 'date' && 'toPlainDate' in parsed ? parsed.toPlainDate().toString()
+    : field === 'time' && 'toPlainTime' in parsed ? parsed.toPlainTime().toString()
+    : field === 'timezone' && 'timeZoneId' in parsed ? parsed.timeZoneId
+    : field === 'year' ? parsed.year : field === 'month' ? parsed.month : field === 'day' ? parsed.day : undefined;
+  return result as (K extends 'year' | 'month' | 'day' ? number : string) | undefined;
+};
+const runeDateConstruct = (kind: 'date' | 'dateTime' | 'zonedDateTime', fields: { year?: number; month?: number; day?: number; date?: string; time?: string; timezone?: string }): string | undefined => {
+  if (kind === 'date') {
+    if (fields.year == null || fields.month == null || fields.day == null) return undefined;
+    return Temporal.PlainDate.from({ year: fields.year, month: fields.month, day: fields.day }, { overflow: 'reject' }).toString();
+  }
+  if (fields.date == null || fields.time == null) return undefined;
+  const dateTime = Temporal.PlainDate.from(fields.date).toPlainDateTime(Temporal.PlainTime.from(fields.time));
+  if (kind === 'dateTime') return dateTime.toString();
+  if (fields.timezone == null) return undefined;
+  return dateTime.toZonedDateTime(fields.timezone === 'Z' ? 'UTC' : fields.timezone).toString();
+};
+type RuneFuncData<T> = T extends readonly (infer I)[]
+  ? RuneFuncData<I>[]
+  : T extends { readonly [Symbol.toStringTag]: `Temporal.${string}` }
+    ? string
+    : T extends (...args: never[]) => unknown
+      ? never
+      : T extends object
+        ? { [K in keyof T as T[K] extends (...args: never[]) => unknown ? never : K]: RuneFuncData<T[K]> }
+        : T;
+const runeToFuncData = <T>(input: T): RuneFuncData<T> => {
+  const seen = new WeakMap<object, unknown>();
+  const convert = (value: unknown): unknown => {
+    if (value == null || typeof value !== 'object') return value;
+    if (/^\[object Temporal\./.test(Object.prototype.toString.call(value))) return String(value);
+    if (seen.has(value)) return seen.get(value);
+    if (Array.isArray(value)) {
+      const result: unknown[] = [];
+      seen.set(value, result);
+      for (const item of value) result.push(convert(item));
+      return result;
+    }
+    const result: Record<string, unknown> = {};
+    seen.set(value, result);
+    for (const [key, item] of Object.entries(value)) if (typeof item !== 'function') Object.defineProperty(result, key, { value: convert(item), enumerable: true, writable: true, configurable: true });
+    return result;
+  };
+  return convert(input) as RuneFuncData<T>;
+};
+type RuneOperand<T> = T extends readonly (infer I)[] ? NonNullable<I> : NonNullable<T>;
+const runeBinary = <L, R, V>(left: L, right: R, operate: (a: RuneOperand<L>, b: RuneOperand<R>) => V): L extends readonly unknown[] | null | undefined ? V | undefined : R extends readonly unknown[] | null | undefined ? V | undefined : V => {
+  const l = runeList(left).filter((value) => value != null);
+  const r = runeList(right).filter((value) => value != null);
+  return (l.length === 1 && r.length === 1 ? operate(l[0] as RuneOperand<L>, r[0] as RuneOperand<R>) : undefined) as L extends readonly unknown[] | null | undefined ? V | undefined : R extends readonly unknown[] | null | undefined ? V | undefined : V;
+};
+const runeCompare = <A, B>(left: A, right: B, compare: (a: RuneOperand<A>, b: RuneOperand<B>) => boolean, quantifier: 'all' | 'any' = 'all'): boolean => {
+  const l = runeList(left).filter((value) => value != null);
+  const r = runeList(right).filter((value) => value != null);
+  if (l.length === 0 || r.length === 0) return false;
+  return quantifier === 'all' ? l.every((a) => r.every((b) => compare(a as RuneOperand<A>, b as RuneOperand<B>))) : l.some((a) => r.some((b) => compare(a as RuneOperand<A>, b as RuneOperand<B>)));
+};
+const runeOrder = <T>(left: T, right: T, compare: (a: NonNullable<T>, b: NonNullable<T>) => number, nullsLast = true): number => {
+  if (left == null) return right == null ? 0 : nullsLast ? 1 : -1;
+  if (right == null) return nullsLast ? -1 : 1;
+  return compare(left, right);
+};
+const runeList = <T>(value: T): (T extends readonly (infer I)[] ? I : NonNullable<T>)[] => {
+  if (value == null) return [];
+  return (Array.isArray(value) ? value : [value]) as (T extends readonly (infer I)[] ? I : NonNullable<T>)[];
+};
+const runeSingle = <T>(value: T): T extends readonly (infer I)[] ? I | undefined : T extends null | undefined ? undefined : T => {
+  const values = runeList(value);
+  if (values.length > 1) throw new Error('Expected at most one value');
+  return values[0] as T extends readonly (infer I)[] ? I | undefined : T extends null | undefined ? undefined : T;
+};
+
 const runeValueKey = (value: unknown): string => {
   if (value == null) return 'null';
   if (typeof value !== 'object') return typeof value + ':' + String(value);
@@ -21,7 +102,7 @@ const runeCheckOneOf = (values: unknown[]): boolean =>
 
 const runeCount = (value: unknown): number => Array.isArray(value) ? value.length : value == null ? 0 : 1;
 
-const runeAttrExists = (v: unknown): boolean =>
+const runeAttrExists = <T>(v: T): v is NonNullable<T> & (T extends readonly (infer I)[] ? readonly [I, ...I[]] : unknown) =>
   v !== undefined && v !== null && !(Array.isArray(v) && v.length === 0);
 
 const runeToDate = (v: unknown): string | undefined =>
@@ -48,14 +129,14 @@ export const NumericCheckSchema = z
     threshold: z.number().int().optional()
   })
   .superRefine((data, ctx) => {
-    if (!(data.value > 0)) {
+    if (!runeCompare(data.value, 0, (a, b) => a > b, "all")) {
       ctx.addIssue({
         code: 'custom',
         message: 'ValuePositive: condition failed in NumericCheck',
         path: ['ValuePositive']
       });
     }
-    if (!(data.value < data.threshold)) {
+    if (!runeCompare(data.value, data.threshold, (a, b) => a < b, "all")) {
       ctx.addIssue({
         code: 'custom',
         message: 'ValueBelowThreshold: condition failed in NumericCheck',

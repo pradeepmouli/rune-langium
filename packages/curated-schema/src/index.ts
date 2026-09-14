@@ -14,6 +14,7 @@
  */
 
 import { z } from 'zod';
+export { isCuratedSourceFile } from './source-files.js';
 
 /** Locked enumeration of curated model identifiers. */
 export const CuratedModelIdSchema = z.enum(['cdm', 'fpml', 'rune-dsl']);
@@ -77,6 +78,8 @@ export type CuratedNamespaceEntry = z.infer<typeof CuratedNamespaceEntrySchema>;
 export const CuratedSerializedDocumentSchema = z.object({
   path: z.string().min(1),
   modelJson: z.string().min(1),
+  /** Original file text, fetched with its namespace for read-only source browsing. */
+  content: z.string().optional(),
   exports: z.array(CuratedSerializedDocumentExportSchema).optional()
 });
 export type CuratedSerializedDocument = z.infer<typeof CuratedSerializedDocumentSchema>;
@@ -90,6 +93,8 @@ export const CuratedSerializedWorkspaceArtifactSchema = z.object({
   documents: z.array(CuratedSerializedDocumentSchema)
 });
 export type CuratedSerializedWorkspaceArtifact = z.infer<typeof CuratedSerializedWorkspaceArtifactSchema>;
+
+export const CuratedCohortSchema = z.string().regex(/^cohort-[a-f0-9]{64}$/);
 
 /**
  * Curated-mirror manifest. Written by the publisher Worker, fetched and
@@ -126,7 +131,10 @@ export const CuratedManifestSchema = z.object({
     })
     .optional(),
   /** Per-namespace dependency graph + export list + artifact key. deps are DIRECT cross-namespace edges; consumers walk the transitive closure. */
-  namespaces: z.record(z.string(), CuratedNamespaceEntrySchema).optional()
+  namespaces: z.record(z.string(), CuratedNamespaceEntrySchema).optional(),
+  /** Immutable manifest cohort shared by jointly linked serialized bundles. */
+  cohort: CuratedCohortSchema.optional(),
+  dependencies: z.partialRecord(CuratedModelIdSchema, z.string()).optional()
 });
 export type CuratedManifest = z.infer<typeof CuratedManifestSchema>;
 
@@ -144,3 +152,5 @@ export function parseSerializedWorkspaceArtifact(
   if (r.success) return { ok: true, artifact: r.data };
   return { ok: false, reason: r.error.message };
 }
+
+export { computeNamespaceGraph, type SerializedDoc, type NamespaceGraphEntry } from './namespace-graph.js';

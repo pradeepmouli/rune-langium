@@ -17,8 +17,12 @@
  * `._<name>.rosetta` AppleDouble companions.
  */
 
+import { mkdtempSync, mkdirSync, writeFileSync, rmSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join, dirname } from 'node:path';
+import { loadLocalFixtures } from '../scripts/local-fixtures.js';
 import { describe, it, expect } from 'vitest';
-import { gzip } from 'pako';
+import { gzip, inflate } from 'pako';
 import { buildSerializedWorkspaceArtifact } from '../src/serialized-artifact.js';
 
 /**
@@ -78,6 +82,17 @@ function makeUstarTar(files: Array<{ path: string; content: string }>): Uint8Arr
 }
 
 describe('buildSerializedWorkspaceArtifact — AppleDouble filter', () => {
+  it('preserves the original source including comments and line endings', async () => {
+    const content = '// Source comment\r\nnamespace source.test\r\n\r\ntype Example:\r\n  value string (1..1)\r\n';
+    const result = await buildSerializedWorkspaceArtifact(
+      'cdm',
+      '2026-09-13',
+      makeUstarTar([{ path: 'wrap/rosetta-source/src/main/rosetta/example.rosetta', content }])
+    );
+    const artifact = JSON.parse(new TextDecoder().decode(inflate(result.bytes)));
+    expect(artifact.documents[0].content).toBe(content);
+  });
+
   it('skips macOS `._<name>.rosetta` companion entries', async () => {
     // Three real files; three AppleDouble companions (each ~163B of
     // binary AppleDouble metadata, here mocked as opaque bytes that
@@ -87,12 +102,12 @@ describe('buildSerializedWorkspaceArtifact — AppleDouble filter', () => {
     const fakeAppleDoubleBytes = 'X'.repeat(163);
 
     const tarBytes = makeUstarTar([
-      { path: 'wrap/._a.rosetta', content: fakeAppleDoubleBytes },
-      { path: 'wrap/a.rosetta', content: realSource.replace('Foo', 'A') },
-      { path: 'wrap/._b.rosetta', content: fakeAppleDoubleBytes },
-      { path: 'wrap/b.rosetta', content: realSource.replace('Foo', 'B') },
-      { path: 'wrap/._c.rosetta', content: fakeAppleDoubleBytes },
-      { path: 'wrap/c.rosetta', content: realSource.replace('Foo', 'C') }
+      { path: 'wrap/rosetta-source/src/main/rosetta/._a.rosetta', content: fakeAppleDoubleBytes },
+      { path: 'wrap/rosetta-source/src/main/rosetta/a.rosetta', content: realSource.replace('Foo', 'A') },
+      { path: 'wrap/rosetta-source/src/main/rosetta/._b.rosetta', content: fakeAppleDoubleBytes },
+      { path: 'wrap/rosetta-source/src/main/rosetta/b.rosetta', content: realSource.replace('Foo', 'B') },
+      { path: 'wrap/rosetta-source/src/main/rosetta/._c.rosetta', content: fakeAppleDoubleBytes },
+      { path: 'wrap/rosetta-source/src/main/rosetta/c.rosetta', content: realSource.replace('Foo', 'C') }
     ]);
 
     const result = await buildSerializedWorkspaceArtifact('cdm', '2026-05-19', tarBytes);
@@ -100,17 +115,58 @@ describe('buildSerializedWorkspaceArtifact — AppleDouble filter', () => {
     expect(result.documentCount, 'expected 3 real docs, not 6 (companions filtered)').toBe(3);
   });
 
-  it('still emits a document for a real file that happens to start with `._` is impossible (filter is on basename)', () => {
-    // Sanity: the filter MUST be basename-only, not path-substring,
-    // so directory names containing `._` (legitimate but unusual)
-    // don't accidentally exclude real files. We assert the behaviour
-    // indirectly: the filter only triggers when the basename starts
-    // with `._`.
-    //
-    // A real Rosetta file basename can't start with `._` because
-    // Rosetta module names can't either, so we don't have a positive
-    // test for "real `._name.rosetta` survives" — there's no such
-    // legitimate case. This test documents the design choice.
-    expect(true).toBe(true);
+  it('rejects unresolved references even when an earlier artifact supplied the missing declaration', async () => {
+    const root = 'wrap/rosetta-source/src/main/rosetta/';
+    const consumer = {
+      path: root + 'consumer.rosetta',
+      content: 'namespace isolated\ntype Consumer:\n target Target (1..1)'
+    };
+    const target = { path: root + 'target.rosetta', content: 'namespace isolated\ntype Target:' };
+    expect(
+      (await buildSerializedWorkspaceArtifact('cdm', 'complete', makeUstarTar([consumer, target]))).documentCount
+    ).toBe(2);
+    await expect(buildSerializedWorkspaceArtifact('cdm', 'incomplete', makeUstarTar([consumer]))).rejects.toThrow(
+      "Could not resolve reference to RosettaType named 'Target'"
+    );
   });
+
+  it('excludes upstream tests and rejects production files with parse errors', async () => {
+    const root = 'wrap/rosetta-source/src/main/rosetta/';
+    const good = { path: root + 'good.rosetta', content: 'namespace example\ntype Good:\n value string (1..1)' };
+    const ignored = { path: 'wrap/tests/src/test/resources/bad.rosetta', content: 'not Rune' };
+    expect((await buildSerializedWorkspaceArtifact('cdm', 'test', makeUstarTar([good, ignored]))).documentCount).toBe(
+      1
+    );
+    await expect(
+      buildSerializedWorkspaceArtifact('cdm', 'test', makeUstarTar([{ ...ignored, path: root + 'bad.rosetta' }]))
+    ).rejects.toThrow('Cannot serialize invalid documents');
+  });
+});
+
+it('builds the local CDM seed from a repository-root clone and excludes test sources', async () => {
+  const resources = mkdtempSync(join(tmpdir(), 'rune-seed-test-'));
+  const content = 'namespace seed.cdm\n\ntype Example:\n  value string (1..1)\n';
+  try {
+    for (const [path, text] of Object.entries({
+      'cdm/rosetta-source/src/main/rosetta/example.rosetta': content,
+      'cdm/rosetta-source/src/test/rosetta/broken.rosetta': 'invalid test fixture',
+      'rune-fpml/rosetta-source/src/main/rosetta/example.rosetta': content,
+      'rune-dsl/rune-runtime/src/main/resources/model/basictypes.rosetta': content
+    })) {
+      const fullPath = join(resources, path);
+      mkdirSync(dirname(fullPath), { recursive: true });
+      writeFileSync(fullPath, text);
+    }
+    const fixtures = loadLocalFixtures(resources);
+    const archive = makeUstarTar(Object.entries(fixtures.cdm).map(([path, content]) => ({ path, content })));
+    const result = await buildSerializedWorkspaceArtifact('cdm', 'local', archive);
+    const artifact = JSON.parse(new TextDecoder().decode(inflate(result.bytes)));
+    expect(artifact.documents).toHaveLength(1);
+    expect(artifact.documents[0]).toMatchObject({
+      path: 'common-domain-model-local/rosetta-source/src/main/rosetta/example.rosetta',
+      content
+    });
+  } finally {
+    rmSync(resources, { recursive: true, force: true });
+  }
 });

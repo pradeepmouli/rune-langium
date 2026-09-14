@@ -117,7 +117,7 @@ export const CenterStackPanel = withInstrumentation(
     };
 
     return (
-      <div className="flex flex-col h-full min-h-0">
+      <div className="studio-center-stack-container flex flex-col h-full min-h-0">
         {/* Paneswitch pill — sits below the dockview tab strip */}
         <div
           className="studio-center-stack__bar"

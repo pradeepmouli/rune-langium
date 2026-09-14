@@ -1,6 +1,8 @@
 // SPDX-License-Identifier: MIT
 // Copyright (c) 2026 Pradeep Mouli
 
+import { RUNTIME_HELPER_SOURCE } from '../../src/helpers.js';
+import { createRequire } from 'node:module';
 import { describe, expect, it } from 'vitest';
 import { createRuneDslServices, isRosettaModel } from '@rune-langium/core';
 import { URI } from 'langium';
@@ -107,7 +109,8 @@ function renderParsedBody(func: DispatchFunc): string[] {
 }
 
 function execute(code: string): Record<string, (input: Record<string, unknown>) => unknown> {
-  const fileName = '/generated-dispatch.ts';
+  code = RUNTIME_HELPER_SOURCE + '\n' + code;
+  const fileName = new URL('./generated-dispatch.ts', import.meta.url).pathname;
   const options: ts.CompilerOptions = {
     strict: true,
     noEmit: true,
@@ -127,7 +130,7 @@ function execute(code: string): Record<string, (input: Record<string, unknown>) 
     compilerOptions: { target: ts.ScriptTarget.ES2022, module: ts.ModuleKind.CommonJS }
   }).outputText;
   const exports: Record<string, (input: Record<string, unknown>) => unknown> = {};
-  new Function('exports', js)(exports);
+  new Function('exports', 'require', js)(exports, createRequire(import.meta.url));
   return exports;
 }
 

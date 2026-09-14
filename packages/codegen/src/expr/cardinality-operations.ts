@@ -10,12 +10,7 @@
  * logic separate from the expression dispatcher so the dispatcher can share
  * it between conditions and nested expressions.
  */
-import {
-  isComparisonOperation,
-  isEqualityOperation,
-  isRosettaExistsExpression,
-  type RosettaExpression
-} from '@rune-langium/core';
+import { isEqualityOperation, isRosettaExistsExpression, type RosettaExpression } from '@rune-langium/core';
 import { expressionIsMany } from './navigation.js';
 import type { ExpressionTranspilerContext } from './transpiler.js';
 
@@ -34,7 +29,7 @@ export function renderCardinalityOperation(
     return `((__exists) => Array.isArray(__exists) ? __exists.length ${mode} : ${expr.modifier === 'single' ? '__exists != null' : 'false'})(${value})`;
   }
 
-  const binary = isComparisonOperation(expr) || isEqualityOperation(expr) ? expr : undefined;
+  const binary = isEqualityOperation(expr) ? expr : undefined;
   if (!binary) return undefined;
   const needsCollectionSemantics = (node: RosettaExpression | undefined): boolean => {
     if (!node) return false;
@@ -54,20 +49,12 @@ export function renderCardinalityOperation(
   const op = binary.operator;
   const compare = (left: string, right: string) => `${op === '<>' ? '!' : ''}runeValueEquals(${left}, ${right})`;
   const quantifier = binary.cardMod ?? (binary.operator === '<>' ? 'any' : 'all');
-  // Mapper runtime evaluates operands once and for
-  // ordered comparisons reduces the RHS to its extremum before comparing all
-  // or any LHS items. Equality compares paired items (or broadcasts scalar).
-  const rv = isEqualityOperation(binary)
-    ? '__r'
-    : `r.reduce((a,b) => ${binary.operator === '>' || binary.operator === '>=' ? (quantifier === 'all' ? '(a > b ? a : b)' : '(a < b ? a : b)') : quantifier === 'all' ? '(a < b ? a : b)' : '(a > b ? a : b)'})`;
-  const result = isEqualityOperation(binary)
-    ? quantifier === 'all'
+  // Compare paired items or broadcast a scalar, evaluating each operand once.
+  const result =
+    quantifier === 'all'
       ? `(!Array.isArray(__l) ? r.every((b) => ${compare('__l', 'b')}) : !Array.isArray(__r) ? l.every((a) => ${compare('a', '__r')}) : ${op === '<>' ? 'l.every((a,i) => i >= r.length || ' + compare('a', 'r[i]') + ')' : 'l.length === r.length && l.every((a,i) => ' + compare('a', 'r[i]') + ')'})`
-      : `(!Array.isArray(__l) ? r.some((b) => ${compare('__l', 'b')}) : !Array.isArray(__r) ? l.some((a) => ${compare('a', '__r')}) : ${op === '<>' ? 'l.length !== r.length || ' : ''}l.some((a,i) => i < r.length && ${compare('a', 'r[i]')}))`
-    : quantifier === 'all'
-      ? `l.every((a) => a ${op} rv)`
-      : `l.some((a) => a ${op} rv)`;
+      : `(!Array.isArray(__l) ? r.some((b) => ${compare('__l', 'b')}) : !Array.isArray(__r) ? l.some((a) => ${compare('a', '__r')}) : ${op === '<>' ? 'l.length !== r.length || ' : ''}l.some((a,i) => i < r.length && ${compare('a', 'r[i]')}))`;
   const emptyEqual = 'Array.isArray(__l) === Array.isArray(__r) && l.length === r.length';
-  const emptyResult = isEqualityOperation(binary) ? (op === '<>' ? `!(${emptyEqual})` : emptyEqual) : 'false';
-  return `((__l, __r) => { const l = Array.isArray(__l) ? __l : __l == null ? [] : [__l]; const r = Array.isArray(__r) ? __r : __r == null ? [] : [__r]; if (l.length === 0 || r.length === 0) return ${emptyResult}; const rv = ${rv}; return ${result}; })(${left}, ${right})`;
+  const emptyResult = op === '<>' ? `!(${emptyEqual})` : emptyEqual;
+  return `((__l, __r) => { const l = Array.isArray(__l) ? __l : __l == null ? [] : [__l]; const r = Array.isArray(__r) ? __r : __r == null ? [] : [__r]; if (l.length === 0 || r.length === 0) return ${emptyResult}; return ${result}; })(${left}, ${right})`;
 }

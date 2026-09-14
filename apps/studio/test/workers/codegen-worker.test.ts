@@ -79,7 +79,14 @@ vi.mock('@rune-langium/core', () => {
           }
         },
         serializer: {
-          JsonSerializer: { deserialize: deserializeMock }
+          JsonSerializer: {
+            deserialize: deserializeMock,
+            deserializeModels: (contents: string[], register: (models: unknown[]) => void) => {
+              const models = contents.map((json) => deserializeMock(json));
+              register(models);
+              return models;
+            }
+          }
         }
       }
     }),
@@ -653,6 +660,24 @@ describe('codegen-worker execute messages', () => {
     vi.unstubAllGlobals();
   });
 
+  it.each(['build', 'generate'])('returns a terminal execution error when %s fails', async (stage) => {
+    const { scope, dispatch } = await loadWorkerModule();
+    dispatch({ type: 'preview:setFiles', files: [{ uri: 'file:///failed.rosetta', content: 'namespace failed' }] });
+    const failing = stage === 'build' ? buildMock : generateMock;
+    failing.mockImplementationOnce(() => {
+      throw new Error(`${stage} failed`);
+    });
+    dispatch({ type: 'preview:execute', funcName: 'failed.Run', inputs: {}, requestId: 'failed:1' });
+    await vi.waitFor(() =>
+      expect(scope.postMessage).toHaveBeenCalledWith({
+        type: 'preview:execute-error',
+        funcName: 'failed.Run',
+        requestId: 'failed:1',
+        error: `${stage} failed`
+      })
+    );
+  });
+
   it('posts preview:execute-error when function is not in cache', async () => {
     const { scope, dispatch } = await loadWorkerModule();
 
@@ -867,6 +892,33 @@ describe('codegen-worker previewGenerateCache (executeFunction)', () => {
       requestId: 'generic:2',
       funcName: 'alpha.Summarize',
       output: [3, 2]
+    });
+  });
+
+  it('executes the emitted export name and supplies Temporal to generated modules', async () => {
+    generateMock.mockReturnValue([
+      {
+        relativePath: 'alpha.ts',
+        content: `import { Temporal } from '@js-temporal/polyfill';
+        export function DateFunction(input) { return Temporal.PlainDate.from(input.value).year; }`,
+        diagnostics: [],
+        funcs: [{ name: 'Date', exportName: 'DateFunction', fileContents: '' }]
+      }
+    ]);
+    const { scope, dispatch } = await loadWorkerModule();
+    dispatch({
+      type: 'preview:setFiles',
+      files: [{ uri: 'file:///dates.rosetta', content: 'namespace "alpha"' }],
+      requestId: 'date:1'
+    });
+    await flushWorker();
+    dispatch({ type: 'preview:execute', funcName: 'alpha.Date', inputs: { value: '2024-02-29' }, requestId: 'date:2' });
+    await flushWorker();
+    expect(scope.postMessage).toHaveBeenLastCalledWith({
+      type: 'preview:execute-result',
+      requestId: 'date:2',
+      funcName: 'alpha.Date',
+      output: 2024
     });
   });
 

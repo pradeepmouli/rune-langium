@@ -27,6 +27,10 @@ export type { ParseResult } from './api/parse.js';
 export { parseExpression } from './api/parse-expression.js';
 export type { ExpressionParseResult } from './api/parse-expression.js';
 
+// Shared language resources
+export { BASE_TYPE_FILES, BASICTYPES_ROSETTA, ANNOTATIONS_ROSETTA } from './stdlib/base-types.js';
+export { addLegacyAnnotations } from './stdlib/legacy-annotations.js';
+
 // Services
 export { createRuneDslServices, RuneDslModule, RuneDslSharedModule } from './services/rune-dsl-module.js';
 export type { RuneDslServices } from './services/rune-dsl-module.js';
@@ -61,13 +65,21 @@ export type { HydrateServices, HydrateOptions } from './serializer/hydrate-model
 
 // Utility functions
 export { isOptional, isSingular, isPlural, isRequired, toConstraintString } from './utils/cardinality-utils.js';
-export { getOptions, getEffectiveConditions } from './utils/choice-utils.js';
+export {
+  getOptions,
+  getEffectiveConditions,
+  getChoiceOptionPaths,
+  choiceOptionFieldName
+} from './utils/choice-utils.js';
+export { assertValidDocuments } from './serializer/assert-valid-documents.js';
 export {
   hasGeneratedInput,
   setGeneratedInputIfAbsent,
   getFunctionSignature,
   getOperationArgument,
   resolveOperationType,
+  type IntrinsicTypeName,
+  resolveTypeAliases,
   getFunctionInputs,
   getFunctionOutput
 } from './utils/expression-utils.js';
@@ -85,3 +97,5 @@ export { namespaceFromSource, namespaceFromModelName } from './naming/namespace.
 
 // Collection utilities
 export { indexById, fromIndex } from './collections/index-by-id.js';
+
+export { getEnumValues } from './utils/enum-utils.js';

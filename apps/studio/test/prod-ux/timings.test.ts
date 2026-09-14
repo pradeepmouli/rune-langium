@@ -20,6 +20,38 @@ function makeRecord(overrides: Partial<JourneyRecord> & Pick<JourneyRecord, 'id'
 }
 
 describe('buildTimingsRollup', () => {
+  it('prefers journey completion over an internal registration span', () => {
+    const record = makeRecord({
+      id: 'J03',
+      title: 'CDM',
+      opLog: [
+        {
+          op: 'modelLoad',
+          subject: 'cdm',
+          level: 'success',
+          message: 'registered',
+          durationMs: 1,
+          ts: 0,
+          panel: 'output',
+          sourceId: 1
+        },
+        {
+          op: 'modelLoad',
+          subject: 'cdm ready',
+          level: 'info',
+          message: 'Journey wall-clock measurement',
+          durationMs: 1200,
+          ts: 1200,
+          panel: 'perf',
+          sourceId: -1
+        }
+      ]
+    });
+    expect(buildTimingsRollup([record])).toEqual([
+      { op: 'modelLoad', subject: 'cdm ready', ms: 1200, budgetMs: 45000 }
+    ]);
+  });
+
   it('extracts one timing entry per budgeted op with a recorded duration', () => {
     const journeys: JourneyRecord[] = [
       makeRecord({

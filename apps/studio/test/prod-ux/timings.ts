@@ -41,7 +41,13 @@ export interface TimingRecord {
 export function buildTimingsRollup(journeys: readonly JourneyRecord[]): TimingRecord[] {
   const timings: TimingRecord[] = [];
   for (const journey of journeys) {
+    // Negative IDs belong to the collector's end-to-end measurements. Prefer
+    // those over internal spans such as the synchronous model registration.
+    const measuredOps = new Set(
+      journey.opLog.filter((entry) => entry.panel === 'perf' && entry.sourceId < 0).map((entry) => entry.op)
+    );
     for (const entry of journey.opLog) {
+      if (measuredOps.has(entry.op) && !(entry.panel === 'perf' && entry.sourceId < 0)) continue;
       const budgetMs = TIMING_BUDGETS[entry.op];
       if (budgetMs === undefined || entry.durationMs === undefined) continue;
       timings.push({ op: entry.op, subject: entry.subject ?? null, ms: entry.durationMs, budgetMs });

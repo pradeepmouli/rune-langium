@@ -24,8 +24,7 @@
  *  3. TypeScript (generic child class + emitted-runtime behavior).
  */
 
-import { readFile } from 'node:fs/promises';
-import { writeFile, mkdir } from 'node:fs/promises';
+import { readFile, writeFile, mkdir } from 'node:fs/promises';
 import { join, dirname, resolve } from 'node:path';
 import { mkdtempWithNodeModules } from './emitted-module-dir.js';
 import { pathToFileURL } from 'node:url';
@@ -181,7 +180,7 @@ describe('Data-extends-Choice — multi-level chain (synthetic fixture, parse-va
     const doc = await parseFixture();
     const model = walkNamespace([doc], 'test.dataExtendsChoiceMultilevel');
     const output = emitTs(model, {});
-    const diagnostics = typeCheckFile('/virtual/multilevel.ts', output.content);
+    const diagnostics = typeCheckFile(new URL('./multilevel.ts', import.meta.url).pathname, output.content);
     expect(diagnostics).toEqual([]);
   });
 });

@@ -2223,6 +2223,10 @@ html {
   height: 28px;
 }
 
+.studio-app .studio-center-stack-container {
+  container-type: inline-size;
+}
+
 .studio-app .studio-center-stack {
   display: flex;
   flex: 1;
@@ -2241,6 +2245,31 @@ html {
    * split-handle drag is live (`.is-dragging`) so the split tracks the
    * pointer 1:1. */
   transition: flex-grow var(--motion-default);
+}
+
+/* Keep every selected pane usable when the center column cannot fit three editors. */
+@container (max-width: 900px) {
+  .studio-app .studio-center-stack:is([data-count='3'], [data-count='4']) {
+    display: grid;
+    grid-auto-rows: minmax(280px, 1fr);
+    overflow: auto;
+  }
+
+  .studio-app .studio-center-stack:is([data-count='3'], [data-count='4']) > .studio-center-stack__split {
+    display: none;
+  }
+}
+
+@container (max-width: 600px) {
+  .studio-app .studio-center-stack[data-count='2'] {
+    display: grid;
+    grid-auto-rows: minmax(280px, 1fr);
+    overflow: auto;
+  }
+
+  .studio-app .studio-center-stack[data-count='2'] > .studio-center-stack__split {
+    display: none;
+  }
 }
 
 /* Aa font-size button — applies CSS `zoom` to the center-stack panes so

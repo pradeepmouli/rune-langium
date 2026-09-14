@@ -8,6 +8,7 @@
  */
 
 import { parse, parseWorkspace, createRuneDslServices, type RosettaModel } from '@rune-langium/core';
+import { requestCodegenDownload } from './codegen-download-client.js';
 import { EmptyFileSystem } from 'langium';
 import type { CuratedSerializedDocument } from '@rune-langium/curated-schema';
 import { CURATED_MODEL_IDS } from '@rune-langium/curated-schema';
@@ -60,13 +61,9 @@ export interface WorkspaceFile {
    */
   bundleVersion?: string;
   /**
-   * Reference-only file from a curated bundle: present in the file list so
-   * counts + namespace listings reflect the bundle contents, but the source
-   * text is not available client-side (the curated artifact is pre-parsed
-   * and doesn't carry raw source). Distinct from `readOnly` (which only
-   * forbids edits): a refOnly file has no source to display. UI handlers:
-   * - SourceView click is a no-op (don't switch active source view).
-   * - Inspector renders a "Reference Only" pill + disables editing.
+   * Curated reference file: excluded from workspace authoring and local LSP
+   * synchronization. Hydration supplies its original source for read-only
+   * display; catalog-only entries have empty content until then.
    */
   refOnly?: boolean;
 }
@@ -653,7 +650,7 @@ export const parseWorkspaceViaRouter = withInstrumentation(
       const pathInBundle = filePath.startsWith(`${bundleId}/`) ? filePath.slice(bundleId.length + 1) : filePath;
       const entry: CachedFile = {
         path: pathInBundle,
-        content: '',
+        content: doc.content,
         namespace: namespaceByFilePath.get(filePath) ?? '',
         serializedModelJson: doc.serializedModel,
         exports: doc.exports,
@@ -1185,11 +1182,7 @@ export const downloadTargetViaRouter = withInstrumentation(
     if (namespaces.length > 0) {
       body.namespaces = namespaces;
     }
-    const response = await fetch('/api/codegen', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(body)
-    });
+    const response = await requestCodegenDownload(body);
 
     if (!response.ok) {
       let envelope: { ok?: boolean; error?: string; diagnostics?: unknown } = {};

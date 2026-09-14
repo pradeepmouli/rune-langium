@@ -1,7 +1,34 @@
 // SPDX-License-Identifier: MIT
 // Copyright (c) 2026 Pradeep Mouli
 
-import { expressionIsMany, typeFeatures } from '../expr/navigation.js';
+import {
+  getEnumValues,
+  isAsOperation,
+  isSwitchCaseGuard,
+  isChoice,
+  isAttribute,
+  isChoiceOption,
+  isRosettaFunction,
+  isRosettaExternalFunction,
+  isRosettaRule,
+  isRosettaSymbolReference,
+  isData,
+  type Choice,
+  type Condition,
+  type Data,
+  type Attribute,
+  type RosettaEnumeration,
+  type RosettaExpression,
+  type RosettaCardinality,
+  type RosettaTypeAlias,
+  type RosettaRule,
+  type RosettaReport,
+  type Annotation,
+  type RosettaExternalFunction,
+  type TypeCall,
+  getElementNamespace
+} from '@rune-langium/core';
+import { expressionIsMany, featureIsMany, typeFeatures } from '../expr/navigation.js';
 import { expressionMetadataKind } from '../expr/metadata-type.js';
 import { groupFuncDispatches, renderFuncDispatchGroup } from './func-dispatch.js';
 import { AstUtils, isMultiReference, type AstNode } from 'langium';
@@ -9,10 +36,10 @@ import { renderFuncAssignment } from './func-assignment.js';
 import { renderCardinalityChecks, normalizeCardinalityValue } from '../expr/cardinality.js';
 import {
   fieldMetadataKind,
+  metadataType,
   hasFieldMetadata,
   hasTypeMetadata,
-  metadataRuntimeSource,
-  runeFuncDataSource
+  metadataRuntimeSource
 } from '../expr/metadata-runtime.js';
 
 /**
@@ -34,30 +61,6 @@ import {
  *   - export function declarations for Rune functions
  */
 
-import {
-  isChoice,
-  isAttribute,
-  isRosettaFunction,
-  isRosettaExternalFunction,
-  isRosettaRule,
-  isRosettaSymbolReference,
-  isData,
-  isRosettaBasicType,
-  type Choice,
-  type Condition,
-  type Data,
-  type Attribute,
-  type RosettaEnumeration,
-  type RosettaExpression,
-  type RosettaCardinality,
-  type RosettaTypeAlias,
-  type RosettaRule,
-  type RosettaReport,
-  type Annotation,
-  type RosettaExternalFunction,
-  type TypeCall,
-  getElementNamespace
-} from '@rune-langium/core';
 import type {
   GeneratorOptions,
   GeneratorOutput,
@@ -273,9 +276,11 @@ export class TsNamespaceEmitter extends BaseNamespaceEmitter {
     this.singleFile = options.typescript?.layout === 'single-file';
   }
 
+  private readonly emittedData = new Set<Data>();
+
   private callableName = (declaration: CallableDeclaration, forceAlias = false): string => {
     const namespace = getElementNamespace(declaration) ?? this.model.namespace;
-    const name = callableExportName(declaration);
+    const name = this.callableNames.exported(namespace, callableExportName(declaration));
     const emitted = this.singleFile
       ? this.callableNames.bundled(namespace, name)
       : namespace === this.model.namespace
@@ -333,6 +338,10 @@ export class TsNamespaceEmitter extends BaseNamespaceEmitter {
 
   @debug()
   emitData(data: Data): void {
+    if (this.emittedData.has(data)) return;
+    this.emittedData.add(data);
+    const parent = data.superType?.ref;
+    if (isData(parent) && this.ctx.dataByName.get(parent.name) === parent) this.emitData(parent);
     this.sections.push(this.emitInterface(data));
     this.sections.push('');
     this.sections.push(this.emitClass(data));
@@ -389,19 +398,6 @@ export class TsNamespaceEmitter extends BaseNamespaceEmitter {
       new Set(this.ctx.dataByName.keys()),
       this.typeName
     );
-    if (
-      runeFuncs.some((func) => [...func.inputs, func.output].some((param) => param.shapeTypeName)) ||
-      [...this.ctx.libraryFuncsByName.values()].some((func) =>
-        [...func.parameters, func].some((parameter) =>
-          resolveFuncValueTypeTs(parameter, undefined, this.typeName).startsWith('RuneFuncData<')
-        )
-      ) ||
-      [...this.ctx.rulesByName.values()].some((rule) =>
-        resolveFuncValueTypeTs({ typeCall: rule.input }, undefined, this.typeName).startsWith('RuneFuncData<')
-      )
-    ) {
-      this.sections.push('', runeFuncDataSource());
-    }
     const callGraph = buildFuncCallGraph(runeFuncs);
     const cyclicNames = findCyclicFuncs(callGraph);
     const groups = groupFuncDispatches(runeFuncs);
@@ -420,7 +416,7 @@ export class TsNamespaceEmitter extends BaseNamespaceEmitter {
       };
       const group = groupsByName.get(func.name)!.map((variant) => ({
         ...variant,
-        name: this.singleFile ? this.callableNames.bundled(variant.namespace, variant.name) : variant.name
+        name: variant.source ? this.callableName(variant.source) : variant.name
       }));
       const funcText =
         group.length === 1
@@ -442,6 +438,7 @@ export class TsNamespaceEmitter extends BaseNamespaceEmitter {
 
       this.generatedFuncs.push({
         name: func.name,
+        exportName: group[0]!.name,
         relativePath: this.relativePath,
         fileContents: funcText,
         sourceMap: []
@@ -495,7 +492,10 @@ export class TsNamespaceEmitter extends BaseNamespaceEmitter {
       symbols.add(exported === local ? exported : `${exported} as ${local}`);
     };
     const trackCallable = (declaration: CallableDeclaration) => {
-      const name = callableExportName(declaration);
+      const name = this.callableNames.exported(
+        getElementNamespace(declaration) ?? this.model.namespace,
+        callableExportName(declaration)
+      );
       trackRef(declaration, name, this.callableName(declaration));
     };
 
@@ -615,6 +615,10 @@ export class TsNamespaceEmitter extends BaseNamespaceEmitter {
       }
     }
 
+    for (const annotation of this.ctx.annotationsByName.values()) {
+      for (const attribute of annotation.attributes) trackAttributePositionImport(attribute.typeCall);
+    }
+
     // Check rule input types
     for (const rule of this.ctx.rulesByName.values()) {
       const inputRef = rule.input?.type?.ref;
@@ -634,6 +638,12 @@ export class TsNamespaceEmitter extends BaseNamespaceEmitter {
 
     for (const doc of this.model.docs) {
       for (const node of AstUtils.streamAllContents(doc.parseResult.value)) {
+        const narrowed = isAsOperation(node)
+          ? node.type.ref
+          : isSwitchCaseGuard(node)
+            ? node.referenceGuard?.ref
+            : undefined;
+        if (isData(narrowed) || isChoice(narrowed)) trackRef(narrowed, `${narrowed.name}Shape`);
         if (isRosettaSymbolReference(node)) {
           const ref = node.symbol?.ref;
           if (isRosettaFunction(ref) || isRosettaExternalFunction(ref) || isRosettaRule(ref)) trackCallable(ref);
@@ -694,8 +704,7 @@ export class TsNamespaceEmitter extends BaseNamespaceEmitter {
       },
       this.ctx.namespace
     );
-    const metadata = fieldMetadataKind(attr);
-    return metadata ? `${metadata === 'reference' ? 'RuneReferenceWithMeta' : 'RuneFieldWithMeta'}<${type}>` : type;
+    return metadataType(type, fieldMetadataKind(attr));
   }
 
   /**
@@ -1223,7 +1232,10 @@ export class TsNamespaceEmitter extends BaseNamespaceEmitter {
         const optionTypeName = optionTypeRef?.ref?.name ?? optionTypeRef?.$refText ?? '?';
         const fieldName = choiceOptionFieldName(optionTypeName);
         // VALUE TYPE: chases through any RosettaTypeAlias chain.
-        const valueType = this.resolveChoiceOptionTypeExpr(option.typeCall, fieldName);
+        const valueType = metadataType(
+          this.resolveChoiceOptionTypeExpr(option.typeCall, fieldName),
+          fieldMetadataKind(option)
+        );
         return `{ ${fieldName}: ${valueType} }`;
       })
       .join(' | ');
@@ -1261,7 +1273,10 @@ export class TsNamespaceEmitter extends BaseNamespaceEmitter {
         const fieldName = choiceOptionFieldName(optionTypeName);
         // VALUE TYPE: chases through any RosettaTypeAlias chain; Data targets
         // resolve to `<Name>Shape`.
-        const valueType = this.resolveChoiceOptionShapeTypeExpr(option.typeCall, fieldName);
+        const valueType = metadataType(
+          this.resolveChoiceOptionShapeTypeExpr(option.typeCall, fieldName),
+          fieldMetadataKind(option)
+        );
         return `{ ${fieldName}: ${valueType} }`;
       })
       .join(' | ');
@@ -1316,11 +1331,11 @@ export class TsNamespaceEmitter extends BaseNamespaceEmitter {
       attrAccessorNames,
       callableName: this.callableName,
       typeNameResolver: this.typeName,
-      metadataAttributes: new Set(
+      localMetadata: new Map(
         typeFeatures(data)
           .filter(isAttribute)
           .filter(hasFieldMetadata)
-          .map((attr) => attr.name)
+          .map((attr) => [attr.name, { kind: fieldMetadataKind(attr)!, many: featureIsMany(attr) }])
       )
     };
   }
@@ -1451,7 +1466,7 @@ export class TsNamespaceEmitter extends BaseNamespaceEmitter {
    */
   private usesMetadata(): boolean {
     const declarationUsesMetadata = (node: AstNode | undefined): boolean =>
-      (isAttribute(node) && hasFieldMetadata(node)) ||
+      ((isAttribute(node) || isChoiceOption(node)) && hasFieldMetadata(node)) ||
       (isData(node) && hasTypeMetadata(node)) ||
       (isRosettaFunction(node) &&
         (functionInputs(node).some(hasFieldMetadata) || hasFieldMetadata(functionOutput(node))));
@@ -1482,6 +1497,7 @@ export class TsNamespaceEmitter extends BaseNamespaceEmitter {
       ``,
       ...(this.suppressBoilerplate
         ? [
+            "import { Temporal } from '@js-temporal/polyfill';",
             buildRuntimeHelperImportLine(`${resolveImportPath(this.model.namespace, 'runtime', this.registry)}.js`, [
               ...libraryHelpers,
               ...(this.usesMetadata()
@@ -1513,7 +1529,7 @@ export class TsNamespaceEmitter extends BaseNamespaceEmitter {
    */
   private emitEnumDeclaration(enumNode: RosettaEnumeration): string {
     const name = this.typeName(enumNode);
-    const memberNames = enumNode.enumValues.map((v) => v.name);
+    const memberNames = getEnumValues(enumNode).map((v) => v.name);
 
     if (memberNames.length === 0) {
       return [
@@ -1530,9 +1546,9 @@ export class TsNamespaceEmitter extends BaseNamespaceEmitter {
       `export const ${this.typeName(enumNode, `${enumNode.name}Values`)}: ${name}[] = [${valuesArr}];`
     ];
 
-    const hasDisplayNames = enumNode.enumValues.some((v) => v.display != null);
+    const hasDisplayNames = getEnumValues(enumNode).some((v) => v.display != null);
     if (hasDisplayNames) {
-      const displayEntries = enumNode.enumValues.map((v) => {
+      const displayEntries = getEnumValues(enumNode).map((v) => {
         const displayName = v.display != null ? v.display : v.name;
         const escaped = displayName.replace(/\\/g, '\\\\').replace(/'/g, "\\'");
         return `  ${v.name}: '${escaped}'`;
@@ -1658,13 +1674,14 @@ export class TsNamespaceEmitter extends BaseNamespaceEmitter {
 
     if (upper === null) {
       if (lower === 0) return `${fieldName}?: ${baseType}[]`;
-      return `${fieldName}: ${baseType}[]`;
+      return `${fieldName}${lower === 0 ? '?' : ''}: ${baseType}[]`;
     }
 
     if (upper === 1 && lower === 1) return `${fieldName}: ${baseType}`;
-    if ((upper === 0 || upper === 1) && lower === 0) return `${fieldName}?: ${baseType}`;
+    if (upper === 0) return `${fieldName}?: never`;
+    if (upper === 1 && lower === 0) return `${fieldName}?: ${baseType}`;
 
-    return `${fieldName}: ${baseType}[]`;
+    return `${fieldName}${lower === 0 ? '?' : ''}: ${baseType}[]`;
   }
 
   /**

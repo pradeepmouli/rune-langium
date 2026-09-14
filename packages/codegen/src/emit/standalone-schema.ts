@@ -349,10 +349,10 @@ const CROSS_NAMESPACE_IMPORT_LINE = /^import \{[^}]*\} from '[^']*\.zod\.js';(\r
  * emission) is inlined right after the `import { z } from 'zod';` line,
  * since that helper is Zod-specific and therefore NOT part of the shared,
  * Zod-agnostic `RUNTIME_HELPER_JS_SOURCE` bundle the caller is expected to
- * prepend for everything else. The genuine `import { z } from 'zod';`
- * header line is NOT stripped — turning this into directly `new
- * Function`-evaluable JavaScript (erasing types/`export`/the cyclic-type
- * `interface` block, and binding `z`) is left to the caller, exactly as
+ * prepend for everything else. External imports of `z` and `Temporal` are
+ * preserved. Turning this into directly `new Function`-evaluable JavaScript
+ * (erasing types/exports/interfaces/imports and binding `z` and `Temporal`)
+ * is left to the caller, exactly as
  * `RUNTIME_HELPER_JS_SOURCE` is already caller-prepended rather than
  * bundled into this return value.
  *

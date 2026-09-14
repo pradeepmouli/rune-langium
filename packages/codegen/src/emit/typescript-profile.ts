@@ -11,7 +11,7 @@
  */
 
 import { stripBundledImports } from './bundle-imports.js';
-import { metadataRuntimeSource, runeFuncDataSource } from '../expr/metadata-runtime.js';
+import { metadataRuntimeSource } from '../expr/metadata-runtime.js';
 import type { GeneratorOutput } from '../types.js';
 import type { LanguageProfile } from './language-profile.js';
 import { RUNTIME_HELPER_SOURCE, RUNTIME_SIDECAR_HELPER_LINES, RUNE_HELPER_NAMES } from '../helpers.js';
@@ -95,12 +95,11 @@ function makeSingleFileContent(perNs: ReadonlyArray<GeneratorOutput>): string {
     RUNTIME_HELPER_SOURCE,
     ...(perNs.some((output) => output.content.includes('isLeapYear')) ? [TS_LIBRARY_RUNTIME_SOURCE] : []),
     ...(perNs.some((output) => output.content.includes('runeWithMeta')) ? [metadataRuntimeSource(true)] : []),
-    ...(perNs.some((output) => output.content.includes('type RuneFuncData<')) ? [runeFuncDataSource()] : []),
     ``
   ];
   for (const out of perNs) {
     const body = stripBundledImports(
-      stripPerNamespaceFuncDataType(stripPerNamespaceHeader(out.content)),
+      stripPerNamespaceHeader(out.content),
       out.relativePath,
       perNs.map((output) => output.relativePath),
       '.ts'
@@ -111,14 +110,6 @@ function makeSingleFileContent(perNs: ReadonlyArray<GeneratorOutput>): string {
     }
   }
   return sections.join('\n');
-}
-
-function stripPerNamespaceFuncDataType(content: string): string {
-  const marker = 'type RuneFuncData<T> = T extends readonly (infer I)[]';
-  const start = content.indexOf(marker);
-  if (start < 0) return content;
-  const end = content.indexOf('\n\n', start);
-  return end < 0 ? content.slice(0, start).trimEnd() : `${content.slice(0, start)}${content.slice(end + 2)}`.trim();
 }
 
 /**

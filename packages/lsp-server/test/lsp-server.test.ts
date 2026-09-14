@@ -121,8 +121,7 @@ describe('Rune DSL LSP Server', () => {
     const result = await diagnosticsPromise;
     expect(result).toBeDefined();
     expect(result.uri).toBe(SAMPLE_URI);
-    // Valid content should produce no errors (or only warnings)
-    expect(Array.isArray(result.diagnostics)).toBe(true);
+    expect(result.diagnostics).toEqual([]);
   }, 15_000);
 
   it('should report errors for invalid content', async () => {
@@ -147,6 +146,27 @@ describe('Rune DSL LSP Server', () => {
     // Parser errors should be severity 1 (Error)
     expect(result.diagnostics.some((d: any) => d.severity === 1)).toBe(true);
   }, 15_000);
+
+  it('clears a real syntax error after restoring valid built-in types', async () => {
+    const uri = 'file:///test/restore.rosetta';
+    const open = client.waitForNotification('textDocument/publishDiagnostics', {
+      timeout: 10_000,
+      filter: (p) => p.uri === uri
+    });
+    await client.sendNotification('textDocument/didOpen', {
+      textDocument: { uri, languageId: 'rune-dsl', version: 1, text: 'invalid rune !!!' }
+    });
+    expect((await open).diagnostics.some((d) => d.severity === 1)).toBe(true);
+    const changed = client.waitForNotification('textDocument/publishDiagnostics', {
+      timeout: 10_000,
+      filter: (p) => p.uri === uri
+    });
+    await client.sendNotification('textDocument/didChange', {
+      textDocument: { uri, version: 2 },
+      contentChanges: [{ text: SAMPLE_CONTENT }]
+    });
+    expect((await changed).diagnostics).toEqual([]);
+  });
 
   // ── Document Symbols ──────────────────────────────────────────────────
 

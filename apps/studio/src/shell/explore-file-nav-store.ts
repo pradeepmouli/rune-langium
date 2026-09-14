@@ -17,6 +17,8 @@
  */
 
 import { create } from 'zustand';
+import { withInstrumentation } from '../services/instrumentation/core.js';
+import type { WorkspaceFile } from '../services/workspace.js';
 import type { SyncStatus } from '@rune-langium/git-sync-engine';
 
 interface ExploreFileNavState {
@@ -55,3 +57,19 @@ export const useExploreFileNavStore = create<ExploreFileNavStore>((set) => ({
     set({ syncStatus: status });
   }
 }));
+
+/** Resolve parser identities against editor files, waiting for curated source hydration. */
+export const resolveEditorFilePath = withInstrumentation(
+  function resolveEditorFilePath(parserPath: string | undefined, files: readonly WorkspaceFile[]): string | undefined {
+    if (!parserPath) return undefined;
+    const file =
+      files.find((entry) => entry.path === parserPath) ??
+      files.find((entry) => {
+        if (!entry.refOnly || !entry.bundleId) return false;
+        const prefix = `[${entry.bundleId}]/`;
+        return entry.path.startsWith(prefix) && `${entry.bundleId}/${entry.path.slice(prefix.length)}` === parserPath;
+      });
+    return file && (!file.refOnly || file.content.length > 0) ? file.path : undefined;
+  },
+  { op: 'resolveEditorFilePath' }
+);

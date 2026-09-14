@@ -59,7 +59,7 @@ func PickEnum:
 function renderExpression(expression: RosettaExpression, options: { selfName?: string } = {}): string {
   if (isRosettaImplicitVariable(expression)) return options.selfName ?? 'input';
   if (isRosettaSymbolReference(expression)) {
-    const name = expression.symbol?.ref?.name ?? expression.symbol?.$refText ?? '?';
+    const name = expression.symbol?.$refText ?? '?';
     return options.selfName && name === 'item' ? options.selfName : `input[${JSON.stringify(name)}]`;
   }
   if (isRosettaFeatureCall(expression) || isRosettaDeepFeatureCall(expression)) {

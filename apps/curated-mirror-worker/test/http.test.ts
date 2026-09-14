@@ -7,6 +7,8 @@
  * against the in-memory R2 mock from T026.
  */
 
+import { readFileSync } from 'node:fs';
+import { URL as NodeURL } from 'node:url';
 import { describe, it, expect, beforeEach } from 'vitest';
 import { handleCuratedRead } from '../src/http.js';
 import { createMockR2Bucket, type MockR2Bucket } from './setup/r2-mock.js';
@@ -157,6 +159,54 @@ describe('CORS headers on every response', () => {
   it('attaches Access-Control-Allow-Origin to 404 unknown_model_id', async () => {
     const res = await get('/curated/notreal/manifest.json');
     expect(res.headers.get('Access-Control-Allow-Origin')).toBe('https://www.daikonic.dev');
+  });
+});
+
+describe('configured Studio read origins', () => {
+  beforeEach(() => {
+    const config = readFileSync(new NodeURL('../wrangler.toml', import.meta.url), 'utf8');
+    env.ALLOWED_ORIGIN = JSON.parse(config.match(/^ALLOWED_ORIGIN = (.+)$/m)![1]!);
+  });
+
+  it.each([
+    'https://www.daikonic.dev',
+    'https://daikonic-dev.pages.dev',
+    'https://a123bc.daikonic-dev.pages.dev',
+    'https://feature-review.daikonic-dev.pages.dev',
+    'http://localhost:4321',
+    'http://localhost:8788',
+    ...Array.from({ length: 8 }, (_, i) => `http://localhost:${5173 + i}`)
+  ])('allows %s for preflight, manifests, artifacts, and conditional responses', async (origin) => {
+    await bucket.put('curated/cdm/manifest.json', '{}');
+    await bucket.put('curated/cdm/artifacts/v1.serialized.json.gz', new Uint8Array([1]));
+    for (const [method, path, headers] of [
+      ['OPTIONS', '/curated/cdm/manifest.json', {}],
+      ['GET', '/curated/cdm/manifest.json', {}],
+      ['GET', '/curated/cdm/artifacts/v1.serialized.json.gz', {}],
+      ['GET', '/curated/cdm/manifest.json', { 'If-None-Match': '*' }],
+      ['GET', '/curated/cdm/artifacts/missing.serialized.json.gz', {}]
+    ] as const) {
+      const response = await handleCuratedRead(
+        new Request(`https://www.daikonic.dev${path}`, {
+          method,
+          headers: { Origin: origin, ...headers }
+        }),
+        env
+      );
+      expect(response.headers.get('Access-Control-Allow-Origin')).toBe(origin);
+      expect(response.headers.get('Vary')).toBe('Origin');
+    }
+  });
+
+  it.each([
+    'https://unrelated.pages.dev',
+    'https://attackerdaikonic-dev.pages.dev',
+    'https://a.daikonic-dev.pages.dev.evil.example',
+    'http://a.daikonic-dev.pages.dev',
+    'http://localhost:5181'
+  ])('does not grant %s read access', async (origin) => {
+    const response = await get('/curated/cdm/manifest.json', { Origin: origin });
+    expect(response.headers.get('Access-Control-Allow-Origin')).toBe('https://www.daikonic.dev');
   });
 });
 

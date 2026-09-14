@@ -167,6 +167,32 @@ describe('FormPreviewPanel', () => {
     });
   });
 
+  it('shows pending validation until the worker answers for the latest edit', () => {
+    const postMessage = vi.fn();
+    usePreviewStore.getState().setWorkerRef({ postMessage } as unknown as Worker);
+    render(<FormPreviewPanel schema={numericSchema} status={{ state: 'ready', targetId: numericSchema.targetId }} />);
+    const field = screen.getByLabelText('Quantity');
+    fireEvent.change(field, { target: { value: '1.5' } });
+    fireEvent.blur(field);
+    const invalidRequestId = postMessage.mock.lastCall![0].requestId;
+    act(() =>
+      usePreviewStore
+        .getState()
+        .receiveValidateResult(invalidRequestId, [{ path: 'quantity', message: 'Expected integer' }])
+    );
+    expect(screen.getByText('Invalid sample (1 issue)')).toBeInTheDocument();
+
+    fireEvent.change(field, { target: { value: '2' } });
+    const validRequestId = postMessage.mock.lastCall![0].requestId;
+    expect(screen.getByText('Validating sample')).toBeInTheDocument();
+    expect(screen.queryByText('Valid sample')).not.toBeInTheDocument();
+    act(() => usePreviewStore.getState().receiveValidateResult(invalidRequestId, []));
+    expect(screen.queryByText('Valid sample')).not.toBeInTheDocument();
+    act(() => usePreviewStore.getState().receiveValidateResult(validRequestId, []));
+    expect(screen.getByText('Valid sample')).toBeInTheDocument();
+    expect(screen.queryByText('Expected integer')).not.toBeInTheDocument();
+  });
+
   it('shows a no-selection state when no schema is available', () => {
     render(<FormPreviewPanel schema={undefined} status={{ state: 'waiting' }} />);
 

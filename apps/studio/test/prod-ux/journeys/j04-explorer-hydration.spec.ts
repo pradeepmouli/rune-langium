@@ -2,6 +2,7 @@
 // Copyright (c) 2026 Pradeep Mouli
 
 import { checkout as test, expect, loadCdm } from '../fixtures.js';
+import { expectPopulatedAttributes, expectSourceReadOnly } from '../readiness.js';
 
 import {
   ANCHOR_ENUM as ENUM_NODE_ID,
@@ -12,8 +13,8 @@ import {
 test.describe('J04 — explorer navigation & on-demand hydration', () => {
   test.skip(!process.env.PLAYWRIGHT_PROD_SMOKE, 'set PLAYWRIGHT_PROD_SMOKE=1 to run against a deployed Studio');
 
-  test('J04a explorer navigation updates panes with reference-only design', async ({ page, evidence }) => {
-    await loadCdm(page);
+  test('J04a explorer navigation updates panes with original curated source', async ({ page, evidence }) => {
+    await loadCdm(page, evidence);
     const centerStack = page.getByTestId('center-stack');
 
     await page.getByTestId('rail-explore').click();
@@ -41,26 +42,18 @@ test.describe('J04 — explorer navigation & on-demand hydration', () => {
     await expect(centerStack.getByText('cdm.base.datetime', { exact: true })).toBeVisible();
     await expect(centerStack.getByText('Reference Only', { exact: true })).toBeVisible();
     await page.getByRole('button', { name: 'Source' }).click();
-    await expect(centerStack.getByText('namespace example', { exact: false })).toBeVisible();
+    await expect(page.getByLabel('Source file path')).toContainText('base-datetime-type.rosetta');
+    const source = page.getByTestId('source-editor').locator('.cm-content');
+    await expect(source).toContainText('type BusinessCenters');
+    await expectSourceReadOnly(source);
   });
 
   test('J04b Inspector populates members on first navigation to a never-hydrated curated namespace', async ({
     page,
     evidence
   }) => {
-    // Regression for fix/source-parse-recovery (resolveNodeFileRef, commit f6a64029).
-    //
-    // Before the fix: the hydration relink effect captured a stale resolveNodeFile
-    // closure. On the first navigation to an unvisited namespace, linkDocument
-    // received the synthetic ${bundleId}/${namespace} path instead of the real
-    // deferred-model path, returned newModels:[], and Inspector stayed as a bare
-    // header stub with no members.
-    //
-    // This test navigates directly to cdm.base.staticdata.party.Counterparty
-    // without first visiting any other namespace, then asserts that the Inspector
-    // shows a populated "Members (N)" list. An empty inspector would mean the bug
-    // regressed.
-    await loadCdm(page);
+    // First navigation must hydrate attributes without visiting another namespace first.
+    await loadCdm(page, evidence);
     const centerStack = page.getByTestId('center-stack');
 
     await page.getByTestId('rail-explore').click();
@@ -75,10 +68,14 @@ test.describe('J04 — explorer navigation & on-demand hydration', () => {
     await page.getByRole('button', { name: 'Inspector' }).click();
     await expect(centerStack.getByRole('heading', { name: 'Counterparty' })).toBeVisible({ timeout: 10_000 });
     await expect(centerStack.getByText('Reference Only', { exact: true })).toBeVisible();
-    // /Members \([1-9]/ ensures at least one member — OtherForm's guard
-    // `{members.length > 0 && ...}` means "Members (0)" is never rendered, but
-    // being explicit here documents the intent clearly.
-    await expect(centerStack.getByText(/Members \([1-9]/)).toBeVisible({ timeout: 30_000 });
+    await expectPopulatedAttributes(centerStack);
+
+    await page.getByRole('button', { name: 'Source' }).click();
+    await expect(page.getByLabel('Source file path')).toContainText('base-staticdata-party-type.rosetta');
+    const source = page.getByTestId('source-editor').locator('.cm-content');
+    await expect(source).toContainText('type Counterparty');
+    await expectSourceReadOnly(source);
+
     await evidence.checkpoint('hydration-complete');
   });
 
@@ -98,7 +95,7 @@ test.describe('J04 — explorer navigation & on-demand hydration', () => {
       await route.continue();
     });
 
-    await loadCdm(page);
+    await loadCdm(page, evidence);
 
     await page.getByTestId('rail-explore').click();
     await expect(page.getByTestId('explore-workbench')).toBeVisible({ timeout: 20_000 });
@@ -113,7 +110,7 @@ test.describe('J04 — explorer navigation & on-demand hydration', () => {
     // The spinner clears once hydration completes and members populate.
     const centerStack = page.getByTestId('center-stack');
     await page.getByRole('button', { name: 'Inspector' }).click();
-    await expect(centerStack.getByText(/Members \([1-9]/)).toBeVisible({ timeout: 30_000 });
+    await expectPopulatedAttributes(centerStack);
     await expect(page.getByTestId('rune-node-hydrating-spinner')).toHaveCount(0);
     await evidence.checkpoint('hydration-complete');
   });

@@ -123,24 +123,23 @@ export async function publishCuratedMirrors(options: PublishOptions): Promise<Pu
       // forward keeps the fast-path serving the prior corpus' per-namespace
       // artifacts (still in R2) until CI refreshes them for the new version.
       let preservedNamespaces: CuratedManifest['namespaces'];
+      let preservedCohort: CuratedManifest['cohort'];
+      let preservedDependencies: CuratedManifest['dependencies'];
       let preservedSerializedWorkspace: NonNullable<CuratedManifest['artifacts']>['serializedWorkspace'];
       try {
         const existing = await bucket.get(manifestKey);
         if (existing) {
           const prev = JSON.parse(await existing.text()) as CuratedManifest;
-          // Carry the namespaces map forward ONLY if the per-namespace artifacts
-          // it points at still exist. Their keys are `artifacts/<version>/ns/…`;
-          // if CI has been stale long enough that <version> just fell into
-          // toPrune (its ns blobs were deleted above), advertising those keys
-          // would make /api/parse's fast-path 404 on namespace fetches. Dropping
-          // them lets the manifest fall to v1 so /api/parse uses the whole-bundle
-          // fallback instead (Codex P2).
+          // Cohort artifacts use content-hashed keys outside daily archive
+          // pruning. Legacy date-keyed namespaces survive only within retention.
           const candidateNs = prev.namespaces;
           if (candidateNs) {
             const sampleArtifact = Object.values(candidateNs)[0]?.artifact;
             const nsVersion = sampleArtifact?.match(/artifacts\/([^/]+)\/ns\//)?.[1];
-            if (nsVersion && retainedVersions.has(nsVersion)) {
+            if (prev.cohort || (nsVersion && retainedVersions.has(nsVersion))) {
               preservedNamespaces = candidateNs;
+              preservedCohort = prev.cohort;
+              preservedDependencies = prev.dependencies;
             } else {
               logger.warn(
                 { model_id: source.id, ns_version: nsVersion },
@@ -166,18 +165,22 @@ export async function publishCuratedMirrors(options: PublishOptions): Promise<Pu
       // can OOM on large models (CDM). Writing the manifest first
       // ensures latest.tar.gz and manifest.json stay in sync even
       // if the worker is killed during artifact generation.
-      let manifest = buildManifest({
-        modelId: source.id,
-        version,
-        sha256: sha,
-        sizeBytes: buf.byteLength,
-        generatedAt: now.toISOString(),
-        upstreamCommit: '',
-        upstreamRef: source.ref,
-        historyVersions,
-        namespaces: preservedNamespaces,
-        serializedWorkspace: preservedSerializedWorkspace
-      });
+      const manifest = {
+        ...buildManifest({
+          modelId: source.id,
+          version,
+          sha256: sha,
+          sizeBytes: buf.byteLength,
+          generatedAt: now.toISOString(),
+          upstreamCommit: '',
+          upstreamRef: source.ref,
+          historyVersions,
+          namespaces: preservedNamespaces,
+          serializedWorkspace: preservedSerializedWorkspace
+        }),
+        cohort: preservedCohort,
+        dependencies: preservedDependencies
+      };
       await bucket.put(manifestKey, JSON.stringify(manifest, null, 2), {
         httpMetadata: { contentType: 'application/json; charset=utf-8' }
       });

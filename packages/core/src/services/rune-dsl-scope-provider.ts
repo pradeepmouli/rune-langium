@@ -2,10 +2,14 @@
 // Copyright (c) 2026 Pradeep Mouli
 
 import type { AstNode, AstNodeDescription, ReferenceInfo, Scope, LangiumCoreServices } from 'langium';
-import { AstUtils, EMPTY_SCOPE, DefaultScopeProvider, MapScope } from 'langium';
-import { getFunctionSignature, resolveOperationType } from '../utils/expression-utils.js';
+import { AstUtils, EMPTY_SCOPE, DefaultScopeProvider, MapScope, stream } from 'langium';
+import { getFunctionSignature, getOperationArgument, resolveOperationType } from '../utils/expression-utils.js';
+import { getEnumValues } from '../utils/enum-utils.js';
 import { qualifiedExportPath } from '../naming/qualified-export-path.js';
+import { getChoiceOptionPaths, choiceOptionFieldName } from '../utils/choice-utils.js';
 import {
+  isAsOperation,
+  isEqualityOperation,
   isData,
   isRosettaFunction,
   isRosettaEnumeration,
@@ -34,22 +38,9 @@ import {
   isChoiceOption,
   isAnnotation,
   isInlineFunction,
-  isMapOperation,
-  isFilterOperation,
-  isThenOperation,
-  isFlattenOperation,
-  isRosettaOnlyElement,
-  isDistinctOperation,
-  isReverseOperation,
-  isFirstOperation,
-  isLastOperation,
-  isSortOperation,
-  isMaxOperation,
-  isMinOperation,
-  isReduceOperation,
+  isRosettaExpression,
   isSwitchCaseOrDefault,
   isClosureParameter,
-  isRosettaConditionalExpression,
   isRosettaImplicitVariable,
   isRosettaAttributeReference,
   isRosettaDataReference,
@@ -78,8 +69,6 @@ import type {
   RosettaRecordFeature,
   Choice,
   ChoiceOption,
-  RosettaEnumeration,
-  RosettaEnumValue,
   AnnotationPathExpression,
   AnnotationRef,
   RosettaType
@@ -95,45 +84,44 @@ import type {
 class AliasResolvingScope implements Scope {
   constructor(
     private readonly base: Scope,
-    private readonly aliasMap: Map<string, string[]>
+    private readonly aliasMap: Map<string, string[]>,
+    private readonly namespaces: string[] = [],
+    private readonly imports: Map<string, string> = new Map()
   ) {}
 
   getElement(name: string): AstNodeDescription | undefined {
-    const direct = this.base.getElement(name);
-    if (direct) return direct;
-    return this.resolveViaAlias(name, (expanded) => this.base.getElement(expanded));
+    for (const candidate of this.candidateNames(name)) {
+      const result = this.base.getElement(candidate);
+      if (result) return result;
+    }
+    return undefined;
   }
 
   getElements(name: string): import('langium').Stream<AstNodeDescription> {
-    const direct = this.base.getElements(name);
-    // Check if the alias expansion yields anything
-    const expanded = this.resolveViaAlias(name, (exp) => this.base.getElement(exp));
-    if (expanded) {
-      // stream() is available from langium
-      return direct;
-    }
-    return direct;
+    return stream(this.candidateNames(name))
+      .flatMap((candidate) => this.base.getElements(candidate))
+      .distinct((description) => JSON.stringify([description.documentUri.toString(), description.path]));
   }
 
   getAllElements(): import('langium').Stream<AstNodeDescription> {
     return this.base.getAllElements();
   }
 
-  private resolveViaAlias(
-    name: string,
-    lookup: (expanded: string) => AstNodeDescription | undefined
-  ): AstNodeDescription | undefined {
-    const dot = name.indexOf('.');
-    if (dot === -1) return undefined;
-    const prefix = name.slice(0, dot);
-    const rest = name.slice(dot + 1);
-    const namespaces = this.aliasMap.get(prefix);
-    if (!namespaces) return undefined;
-    for (const ns of namespaces) {
-      const result = lookup(`${ns}.${rest}`);
-      if (result) return result;
+  private candidateNames(name: string): Set<string> {
+    const candidates = new Set<string>();
+    if (!name.includes('.')) {
+      const explicit = this.imports.get(name);
+      if (explicit) candidates.add(explicit);
+      for (const namespace of this.namespaces) candidates.add(`${namespace}.${name}`);
     }
-    return undefined;
+    candidates.add(name);
+    const dot = name.indexOf('.');
+    if (dot !== -1) {
+      const prefix = name.slice(0, dot);
+      const rest = name.slice(dot + 1);
+      for (const namespace of this.aliasMap.get(prefix) ?? []) candidates.add(`${namespace}.${rest}`);
+    }
+    return candidates;
   }
 }
 
@@ -160,6 +148,14 @@ export class RuneDslScopeProvider extends DefaultScopeProvider {
   override getScope(context: ReferenceInfo): Scope {
     const container = context.container;
     const property = context.property;
+
+    if (isAsOperation(container) && property === 'type') {
+      const argument = getOperationArgument(container);
+      const input = argument ? this.resolveExpressionType(argument) : undefined;
+      if (isChoice(input)) {
+        return this.getChoiceTypeScope(input, context);
+      }
+    }
 
     // Case 1: RosettaFeatureCall.feature — resolve to attributes of receiver type
     if (isRosettaFeatureCall(container) && property === 'feature') {
@@ -197,11 +193,17 @@ export class RuneDslScopeProvider extends DefaultScopeProvider {
       return this.getWithMetaKeyScope(container);
     }
 
-    // Case 7: SwitchCaseGuard.referenceGuard — resolve to enum values or data subtypes.
-    // SwitchCaseTarget = Data | Choice | RosettaEnumValue, which can span namespaces
-    // (e.g. fpml.CapFloor) so we use the global scope with alias resolution.
+    // Basic, record, enum and alias types are switch targets only through declared Choice options.
     if (container.$type === 'SwitchCaseGuard' && property === 'referenceGuard') {
-      return super.getScope(context);
+      const operation = AstUtils.getContainerOfType(container, isSwitchOperation);
+      const argument = operation ? getOperationArgument(operation) : undefined;
+      const inputType = argument ? this.resolveExpressionType(argument) : undefined;
+      if (isData(inputType) || isChoice(inputType)) {
+        const globalScope = this.getGlobalScope('DataOrChoice', context);
+        if (!isChoice(inputType)) return globalScope;
+        return this.getChoiceTypeScope(inputType, context, globalScope);
+      }
+      return this.getGlobalScope('RosettaEnumValue', context);
     }
 
     // Case 8: EnumValueReference.value — resolve to enum values of the specified enum
@@ -267,11 +269,40 @@ export class RuneDslScopeProvider extends DefaultScopeProvider {
 
   // ── Type-aware scoping ──────────────────────────────────────────────
 
+  private getChoiceTypeScope(input: Choice, context: ReferenceInfo, base: Scope = EMPTY_SCOPE): Scope {
+    const options = getChoiceOptionPaths(input).flatMap((path) => {
+      const type = path[path.length - 1]!.typeCall.type.ref;
+      if (!type) return [];
+      const model = AstUtils.getContainerOfType(type, (node): node is RosettaModel => node.$type === 'RosettaModel');
+      return [
+        this.createDescription(type, type.name),
+        this.createDescription(type, qualifiedExportPath(model?.name ?? '', type.name))
+      ];
+    });
+    const model = AstUtils.getContainerOfType(
+      context.container,
+      (node): node is RosettaModel => node.$type === 'RosettaModel'
+    );
+    return new AliasResolvingScope(new MapScope(options, base), this.buildImportAliasMap(model?.imports ?? []));
+  }
+
   /**
    * Resolve the type produced by an expression.
    * Returns a Data, RosettaRecordType, or Choice node if the expression's type can be determined.
    */
+  private readonly resolvingExpressionTypes = new Set<RosettaExpression>();
+
   private resolveExpressionType(expr: RosettaExpression): Data | RosettaRecordType | Choice | undefined {
+    if (this.resolvingExpressionTypes.has(expr)) return undefined;
+    this.resolvingExpressionTypes.add(expr);
+    try {
+      return this.inferExpressionType(expr);
+    } finally {
+      this.resolvingExpressionTypes.delete(expr);
+    }
+  }
+
+  private inferExpressionType(expr: RosettaExpression): Data | RosettaRecordType | Choice | undefined {
     // Symbol reference → look up the symbol to determine its type
     if (isRosettaSymbolReference(expr)) {
       const sym = expr.symbol?.ref;
@@ -288,7 +319,7 @@ export class RuneDslScopeProvider extends DefaultScopeProvider {
       }
 
       // Attribute → its typeCall determines the type
-      if (isAttribute(sym)) {
+      if (isAttribute(sym) || isChoiceOption(sym) || isRosettaRecordFeature(sym)) {
         return this.resolveTypeCallToData(sym.typeCall);
       }
 
@@ -313,7 +344,7 @@ export class RuneDslScopeProvider extends DefaultScopeProvider {
         }
         return sym;
       }
-      if (isChoice(sym)) {
+      if (isChoice(sym) || isRosettaRecordType(sym)) {
         return sym;
       }
 
@@ -323,13 +354,7 @@ export class RuneDslScopeProvider extends DefaultScopeProvider {
         const inlineFunc = sym.$container;
         if (isInlineFunction(inlineFunc)) {
           const op = inlineFunc.$container;
-          const argument = isMapOperation(op)
-            ? op.argument
-            : isFilterOperation(op)
-              ? op.argument
-              : isThenOperation(op)
-                ? op.argument
-                : undefined;
+          const argument = isRosettaExpression(op) ? getOperationArgument(op) : undefined;
           if (argument) {
             return this.resolveCollectionElementType(argument);
           }
@@ -372,21 +397,7 @@ export class RuneDslScopeProvider extends DefaultScopeProvider {
         if (!inlineFunc) break;
         const op = inlineFunc.$container;
         if (!op) break;
-        const argument = isMapOperation(op)
-          ? op.argument
-          : isFilterOperation(op)
-            ? op.argument
-            : isThenOperation(op)
-              ? op.argument
-              : isSortOperation(op)
-                ? op.argument
-                : isMaxOperation(op)
-                  ? op.argument
-                  : isMinOperation(op)
-                    ? op.argument
-                    : isReduceOperation(op)
-                      ? op.argument
-                      : undefined;
+        const argument = isRosettaExpression(op) ? getOperationArgument(op) : undefined;
         if (argument) {
           return this.resolveCollectionElementType(argument);
         }
@@ -419,7 +430,22 @@ export class RuneDslScopeProvider extends DefaultScopeProvider {
       return undefined;
     }
 
-    return resolveOperationType(expr, (expression) => this.resolveExpressionType(expression));
+    return resolveOperationType(
+      expr,
+      (expression) => this.resolveExpressionType(expression),
+      (type) => (isData(type) || isChoice(type) || isRosettaRecordType(type) ? type : undefined),
+      (name) => {
+        const description = this.getGlobalScope('RosettaRecordType', {
+          container: expr,
+          property: 'type',
+          reference: { $refText: name, ref: undefined }
+        }).getElement(name);
+        if (!description) return undefined;
+        const root = this.documents.getDocument(description.documentUri)?.parseResult.value;
+        const node = description.node ?? (root ? this.locator.getAstNode(root, description.path) : undefined);
+        return isRosettaRecordType(node) ? node : undefined;
+      }
+    );
   }
 
   /**
@@ -515,15 +541,9 @@ export class RuneDslScopeProvider extends DefaultScopeProvider {
     if (visited.has(data)) return []; // cycle guard
     visited.add(data);
 
-    const attrs = [...data.attributes];
-
-    // Walk the inheritance chain; fall back to index lookup when .ref is not linked yet
     const superRef = data.superType?.ref ?? this.resolveDataByName(data.superType?.$refText ?? '');
-    if (superRef && isData(superRef)) {
-      attrs.push(...this.collectDataAttributes(superRef, visited));
-    }
-
-    return attrs;
+    const inherited = isData(superRef) ? this.collectDataAttributes(superRef, visited) : [];
+    return [...new Map([...inherited, ...data.attributes].map((attribute) => [attribute.name, attribute])).values()];
   }
 
   /**
@@ -686,11 +706,7 @@ export class RuneDslScopeProvider extends DefaultScopeProvider {
     }
     const descriptions: AstNodeDescription[] = [
       ...attrs.map((a) => this.createDescription(a, a.name)),
-      ...inheritedOptions.map((o) => {
-        const refText = o.typeCall?.type?.$refText ?? '';
-        const simpleName = refText.includes('.') ? refText.split('.').pop()! : refText;
-        return this.createDescription(o, simpleName);
-      })
+      ...inheritedOptions.flatMap((option) => this.choiceOptionDescriptions(option))
     ];
     return new MapScope(descriptions);
   }
@@ -700,15 +716,13 @@ export class RuneDslScopeProvider extends DefaultScopeProvider {
    * e.g. `choice Payout: InterestRatePayout` → exposes "InterestRatePayout" → ChoiceOption node.
    */
   private getChoiceOptionScope(choice: Choice): Scope {
-    const descriptions: AstNodeDescription[] = [];
-    for (const option of choice.attributes) {
-      const refText = option.typeCall?.type?.$refText;
-      if (!refText) continue;
-      // Use only the simple (unqualified) name for the scope key
-      const simpleName = refText.includes('.') ? refText.split('.').pop()! : refText;
-      descriptions.push(this.createDescription(option, simpleName));
-    }
-    return descriptions.length > 0 ? new MapScope(descriptions) : EMPTY_SCOPE;
+    return new MapScope(choice.attributes.flatMap((option) => this.choiceOptionDescriptions(option)));
+  }
+
+  private choiceOptionDescriptions(option: ChoiceOption): AstNodeDescription[] {
+    const name = option.typeCall.type.$refText.split('.').pop();
+    if (!name) return [];
+    return [...new Set([name, choiceOptionFieldName(name)])].map((key) => this.createDescription(option, key));
   }
 
   // ── Case implementations ────────────────────────────────────────────
@@ -724,7 +738,7 @@ export class RuneDslScopeProvider extends DefaultScopeProvider {
     if (isRosettaSymbolReference(node.receiver)) {
       const sym = node.receiver.symbol?.ref;
       if (sym && isRosettaEnumeration(sym)) {
-        const allValues = this.collectEnumValues(sym);
+        const allValues = getEnumValues(sym);
         const descriptions = allValues.map((v) => this.createDescription(v, v.name));
         return new MapScope(descriptions);
       }
@@ -777,14 +791,9 @@ export class RuneDslScopeProvider extends DefaultScopeProvider {
     if (allFeatures.length === 0) {
       return this.getAllAttributesScope(node);
     }
-    const descriptions = allFeatures.map((f) => {
-      if (isChoiceOption(f)) {
-        const refText = f.typeCall?.type?.$refText ?? '';
-        const simpleName = refText.includes('.') ? refText.split('.').pop()! : refText;
-        return this.createDescription(f, simpleName);
-      }
-      return this.createDescription(f, f.name);
-    });
+    const descriptions = allFeatures.flatMap((feature) =>
+      isChoiceOption(feature) ? this.choiceOptionDescriptions(feature) : [this.createDescription(feature, feature.name)]
+    );
     return new MapScope(descriptions);
   }
 
@@ -977,7 +986,28 @@ export class RuneDslScopeProvider extends DefaultScopeProvider {
    *     reference should resolve to an attribute of each list element.
    */
   private getSymbolReferenceScope(node: AstNode, context: ReferenceInfo): Scope {
+    if (
+      isRosettaSymbolReference(node) &&
+      isRosettaConstructorExpression(node.$container) &&
+      node.$container.typeRef === node
+    ) {
+      return this.getGlobalScope('RosettaType', context);
+    }
+    if (isRosettaSymbolReference(node) && node.explicitArguments) {
+      return this.getGlobalScope('RosettaCallableWithArgs', context);
+    }
     const baseScope = super.getScope(context);
+    const parent = node.$container;
+    if (isEqualityOperation(parent) && parent.right === node && parent.left) {
+      const attribute = this.getLastAttributeOfExpression(parent.left);
+      const expected = attribute?.typeCall?.type?.ref;
+      if (isRosettaEnumeration(expected)) {
+        return new MapScope(
+          getEnumValues(expected).map((value) => this.createDescription(value, value.name)),
+          baseScope
+        );
+      }
+    }
     const extra: AstNodeDescription[] = [];
 
     // (a) Inherited attributes from the enclosing Data type's supertype chain
@@ -1010,29 +1040,18 @@ export class RuneDslScopeProvider extends DefaultScopeProvider {
       const op = inlineFunc.$container;
       if (!op) break;
 
-      const argument = isMapOperation(op)
-        ? op.argument
-        : isFilterOperation(op)
-          ? op.argument
-          : isThenOperation(op)
-            ? op.argument
-            : isSortOperation(op)
-              ? op.argument
-              : isMaxOperation(op)
-                ? op.argument
-                : isMinOperation(op)
-                  ? op.argument
-                  : isReduceOperation(op)
-                    ? op.argument
-                    : undefined;
+      const argument = isRosettaExpression(op) ? getOperationArgument(op) : undefined;
 
       if (argument) {
         const itemType = this.resolveCollectionElementType(argument);
-        if (itemType) {
-          const attrs = this.collectDataAttributes(itemType);
-          for (const a of attrs) {
-            extra.push(this.createDescription(a, a.name));
-          }
+        if (isData(itemType)) {
+          for (const a of this.collectDataAttributes(itemType)) extra.push(this.createDescription(a, a.name));
+          for (const option of this.collectInheritedChoiceOptions(itemType))
+            extra.push(...this.choiceOptionDescriptions(option));
+        } else if (isChoice(itemType)) {
+          for (const option of itemType.attributes) extra.push(...this.choiceOptionDescriptions(option));
+        } else if (isRosettaRecordType(itemType)) {
+          for (const feature of itemType.features) extra.push(this.createDescription(feature, feature.name));
         }
         break;
       }
@@ -1060,6 +1079,15 @@ export class RuneDslScopeProvider extends DefaultScopeProvider {
     }
 
     const func = AstUtils.getContainerOfType(node, isRosettaFunction);
+    const constructorField = AstUtils.getContainerOfType(node, isConstructorKeyValuePair)?.key.ref;
+    const fieldEnum =
+      constructorField && 'typeCall' in constructorField ? constructorField.typeCall.type.ref : undefined;
+    if (isRosettaEnumeration(fieldEnum))
+      extra.push(...getEnumValues(fieldEnum).map((value) => this.createDescription(value, value.name)));
+    const outputEnum = func?.output?.typeCall?.type?.ref;
+    if (isRosettaEnumeration(outputEnum)) {
+      extra.push(...getEnumValues(outputEnum).map((value) => this.createDescription(value, value.name)));
+    }
     if (func?.dispatchAttribute) {
       const signature = this.dispatchSignature(func);
       const attributes = [...signature.inputs, ...(signature.output ? [signature.output] : []), ...signature.shortcuts];
@@ -1077,10 +1105,8 @@ export class RuneDslScopeProvider extends DefaultScopeProvider {
    * Resolve the element type of a collection expression.
    * e.g. `list -> field` where field is a list of Data → returns the Data element type.
    */
-  private resolveCollectionElementType(expr: RosettaExpression): Data | undefined {
-    const t = this.resolveExpressionType(expr);
-    if (t && isData(t)) return t;
-    return undefined;
+  private resolveCollectionElementType(expr: RosettaExpression): Data | Choice | RosettaRecordType | undefined {
+    return this.resolveExpressionType(expr);
   }
 
   /**
@@ -1091,30 +1117,11 @@ export class RuneDslScopeProvider extends DefaultScopeProvider {
     if (!constructor?.typeRef) {
       return EMPTY_SCOPE;
     }
-    let constructedType = this.resolveExpressionType(constructor.typeRef);
-
-    // When the typeRef is a symbol reference, always check if a Choice type shares
-    // the same name and prefer it over any Data type.  CDM uses `choice Index` as a
-    // constructor type while FpML has a same-named `type Index` (Data); without this
-    // preference the wrong type is used and its choice options aren't in scope.
-    if (isRosettaSymbolReference(constructor.typeRef)) {
-      const refText = constructor.typeRef.symbol?.$refText;
-      if (refText) {
-        const choiceType = this.resolveChoiceByName(refText);
-        if (choiceType) {
-          constructedType = choiceType;
-        } else if (!constructedType) {
-          constructedType = this.resolveDataByName(refText);
-        }
-      }
-    }
+    const constructedType = this.resolveExpressionType(constructor.typeRef);
 
     const baseScope = this.buildTypedScope(constructedType, node);
-    const metaDescs = this.getMetaTypeDescriptions();
-    if (metaDescs.length > 0) {
-      return new MapScope(metaDescs, baseScope);
-    }
-    return baseScope;
+    const metaDescs = this.getMetaTypeDescriptions().filter((description) => !baseScope.getElement(description.name));
+    return metaDescs.length > 0 ? new MapScope(metaDescs, baseScope) : baseScope;
   }
 
   /**
@@ -1168,25 +1175,8 @@ export class RuneDslScopeProvider extends DefaultScopeProvider {
     if (!enumRef || !isRosettaEnumeration(enumRef)) {
       return EMPTY_SCOPE;
     }
-    const descriptions = this.collectEnumValues(enumRef).map((v) => this.createDescription(v, v.name));
+    const descriptions = getEnumValues(enumRef).map((v) => this.createDescription(v, v.name));
     return descriptions.length > 0 ? new MapScope(descriptions) : EMPTY_SCOPE;
-  }
-
-  /**
-   * Collect all enum values from an enumeration including inherited ones
-   * via its `extends` parent chain.
-   */
-  private collectEnumValues(enumeration: RosettaEnumeration, visited?: Set<string>): RosettaEnumValue[] {
-    if (!visited) visited = new Set();
-    if (visited.has(enumeration.name)) return [];
-    visited.add(enumeration.name);
-
-    const values = [...enumeration.enumValues];
-    const parent = enumeration.parent?.ref;
-    if (parent && isRosettaEnumeration(parent)) {
-      values.push(...this.collectEnumValues(parent, visited));
-    }
-    return values;
   }
 
   /**
@@ -1276,11 +1266,18 @@ export class RuneDslScopeProvider extends DefaultScopeProvider {
     const model = AstUtils.getContainerOfType(context.container, (n): n is RosettaModel => n.$type === 'RosettaModel');
     if (!model) return base;
 
-    // Build alias → namespace list from the document's imports.
-    const aliasMap = this.buildImportAliasMap(model.imports);
-    if (aliasMap.size === 0) return base;
-
-    return new AliasResolvingScope(base, aliasMap);
+    const namespaces = [
+      model.name,
+      ...model.imports
+        .filter((entry) => !entry.namespaceAlias && entry.importedNamespace.endsWith('.*'))
+        .map((entry) => entry.importedNamespace.slice(0, -2))
+    ];
+    const imports = new Map(
+      model.imports
+        .filter((entry) => !entry.namespaceAlias && !entry.importedNamespace.endsWith('.*'))
+        .map((entry) => [entry.importedNamespace.split('.').pop()!, entry.importedNamespace])
+    );
+    return new AliasResolvingScope(base, this.buildImportAliasMap(model.imports), namespaces, imports);
   }
 
   /**

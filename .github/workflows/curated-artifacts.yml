@@ -43,9 +43,11 @@ jobs:
         run: pnpm install --frozen-lockfile
 
       - name: Build core (required for Langium services)
-        run: pnpm --filter '@rune-langium/core...' run build
+        run: pnpm --filter '@rune-langium/core...' --filter '@rune-langium/curated-schema' run build
 
       - name: Build serialized artifacts
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
         run: node --max-old-space-size=4096 scripts/build-serialized-artifacts.mjs
 
       - name: Upload artifacts to R2
@@ -59,5 +61,7 @@ jobs:
         uses: actions/upload-artifact@v7
         with:
           name: curated-artifacts-meta
-          path: dist/curated-artifacts/*/artifact-meta.json
+          path: |
+            dist/curated-artifacts/*/artifact-meta.json
+            dist/curated-artifacts/resolved-sources.json
           retention-days: 7

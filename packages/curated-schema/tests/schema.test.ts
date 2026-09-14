@@ -24,6 +24,10 @@ const VALID_MANIFEST = {
 };
 
 describe('CuratedManifestSchema', () => {
+  it('accepts a subset of known bundle dependencies and rejects unknown bundles', () => {
+    expect(parseManifest({ ...VALID_MANIFEST, dependencies: { fpml: 'latest' } }).ok).toBe(true);
+    expect(parseManifest({ ...VALID_MANIFEST, dependencies: { unknown: 'latest' } }).ok).toBe(false);
+  });
   it('accepts a valid manifest', () => {
     const r = parseManifest(VALID_MANIFEST);
     expect(r.ok).toBe(true);

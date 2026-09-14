@@ -19,21 +19,37 @@ export function callableExportName(declaration: CallableDeclaration): string {
 
 /** One name allocation shared by imports, calls, and bundled exports. */
 export class CallableNames {
+  private readonly functionExports = new Map<string, string>();
   private readonly owners = new Map<string, Set<string>>();
   private readonly aliases = new Map<string, string>();
 
   constructor(registry: NamespaceRegistry) {
     for (const [namespace, manifest] of registry.namespaces) {
+      const typeNames = new Set([
+        ...manifest.exportedDataNames,
+        ...manifest.exportedEnumNames,
+        ...manifest.exportedTypeAliasNames,
+        ...manifest.exportedAnnotationNames
+      ]);
+      const reserved = new Set([...typeNames, ...manifest.exportedFuncNames, ...manifest.exportedLibraryFuncNames]);
+      for (const name of [...manifest.exportedFuncNames, ...manifest.exportedLibraryFuncNames].sort()) {
+        if (!typeNames.has(name)) continue;
+        const base = `${name}Function`;
+        let exported = base;
+        for (let suffix = 1; reserved.has(exported); suffix++) exported = `${base}${suffix}`;
+        reserved.add(exported);
+        this.functionExports.set(`${namespace}.${name}`, exported);
+      }
       const names = new Set([
         ...manifest.exportedDataNames,
         ...[...manifest.exportedDataNames].flatMap((name) => [`${name}Shape`, `is${name}`]),
         ...manifest.exportedEnumNames,
         ...[...manifest.exportedEnumNames].flatMap((name) => [`${name}Values`, `${name}DisplayNames`]),
-        ...manifest.exportedFuncNames,
+        ...[...manifest.exportedFuncNames].map((name) => this.exported(namespace, name)),
         ...manifest.exportedTypeAliasNames,
         ...manifest.exportedAnnotationNames,
         ...[...manifest.exportedAnnotationNames].map((name) => `${name}Args`),
-        ...manifest.exportedLibraryFuncNames,
+        ...[...manifest.exportedLibraryFuncNames].map((name) => this.exported(namespace, name)),
         ...[...manifest.exportedRuleNames].flatMap((name) => [`extract${name}`, `validate${name}`]),
         ...(manifest.exportedRuleNames.size ? ['runeReportRules'] : [])
       ]);
@@ -53,6 +69,10 @@ export class CallableNames {
         this.aliases.set(`${namespace}.${name}`, alias);
       }
     }
+  }
+
+  exported(namespace: string, name: string): string {
+    return this.functionExports.get(`${namespace}.${name}`) ?? name;
   }
 
   alias(namespace: string, name: string): string {

@@ -1,13 +1,16 @@
 // SPDX-License-Identifier: MIT
 // Copyright (c) 2026 Pradeep Mouli
 import { describe, expect, it } from 'vitest';
-import { createRuneDslServices } from '@rune-langium/core';
+import { createRuneDslServices, assertValidDocuments, BASICTYPES_ROSETTA } from '@rune-langium/core';
 import { URI } from 'langium';
 import ts from 'typescript-classic';
 import { resolve } from 'node:path';
+import { createRequire } from 'node:module';
+import { Temporal } from '@js-temporal/polyfill';
 import { generate } from '../../src/export.js';
+import { mixedChoiceSource, mixedChoiceCases } from '../helpers/mixed-choice.js';
 
-async function compile(source: string | string[], typeAssertions = '') {
+async function compile(source: string | string[], typeAssertions = '', checkLinks = false) {
   const { RuneDsl } = createRuneDslServices();
   const docs = (Array.isArray(source) ? source : [source]).map((content, index) =>
     RuneDsl.shared.workspace.LangiumDocumentFactory.fromString(
@@ -17,7 +20,8 @@ async function compile(source: string | string[], typeAssertions = '') {
   );
   await RuneDsl.shared.workspace.DocumentBuilder.build(docs);
   for (const doc of docs) expect(doc.parseResult.parserErrors).toEqual([]);
-  const outputs = await generate(docs, { target: 'typescript' });
+  if (checkLinks) assertValidDocuments(docs);
+  const outputs = await generate(docs, { target: 'typescript', typescript: { layout: 'single-file' } });
   expect(outputs.flatMap((output) => output.diagnostics.filter((d) => d.severity === 'error'))).toEqual([]);
   const code = outputs[0]!.content;
   const fileName = resolve(import.meta.dirname, 'generated-function-runtime.ts');
@@ -40,11 +44,658 @@ async function compile(source: string | string[], typeAssertions = '') {
     compilerOptions: { target: ts.ScriptTarget.ES2022, module: ts.ModuleKind.CommonJS }
   }).outputText;
   const exports: Record<string, (input: Record<string, unknown>) => unknown> = {};
-  new Function('exports', js)(exports);
+  new Function('exports', 'require', js)(exports, createRequire(import.meta.url));
   return exports;
 }
 
 describe('generated TypeScript function execution', () => {
+  it('selects basic, calendar, enum and alias Choice arms while retaining enum-value switches', async () => {
+    const funcs = await compile(
+      [
+        BASICTYPES_ROSETTA,
+        `namespace test.switches
+enum Kind:
+ A
+ B
+typeAlias Text: string
+type Payload:
+ amount int (1..1)
+typeAlias PayloadAlias: Payload
+choice Value:
+ number
+ date
+ Kind
+ Text
+ PayloadAlias
+func Select:
+ inputs: value Value (1..1)
+ output: result int (1..1)
+ set result: value switch number then 1, com.rosetta.model.date then 2, Kind then 3, test.switches.Text then 4, PayloadAlias then 5, default 0
+func EnumValue:
+ inputs: value Kind (1..1)
+ output: result int (1..1)
+ set result: value switch A then 1, B then 2, default 0
+`
+      ],
+      '',
+      true
+    );
+    expect(funcs.Select!({ value: { number: 42 } })).toBe(1);
+    expect(funcs.Select!({ value: { date: '2026-09-12' } })).toBe(2);
+    expect(funcs.Select!({ value: { kind: 'A' } })).toBe(3);
+    expect(funcs.Select!({ value: { text: 'text' } })).toBe(4);
+    expect(funcs.Select!({ value: { payloadAlias: { amount: 7 } } })).toBe(5);
+    expect(funcs.EnumValue!({ value: 'A' })).toBe(1);
+    expect(funcs.EnumValue!({ value: 'B' })).toBe(2);
+  });
+
+  it('links calendar constructors and preserves conversion types through navigation and comparisons', async () => {
+    const funcs = await compile(
+      [
+        BASICTYPES_ROSETTA,
+        `namespace test.conversion
+func Day:
+ inputs: value string (1..1)
+ output: result date (0..1)
+ set result: (value to-zoned-date-time) -> date
+func Year:
+ inputs: value string (1..1)
+ output: result int (0..1)
+ alias converted: value to-zoned-date-time
+ set result: converted -> date -> year
+func DateYear:
+ inputs: value string (1..1)
+ output: result int (0..1)
+ set result: (value to-date then item) -> year
+func Clock:
+ inputs: value string (1..1)
+ output: result time (0..1)
+ set result: (value to-date-time) -> time
+func ImplicitYear:
+ inputs: value string (1..1) year int (0..1)
+ output: result int (0..1)
+ set result: value to-date then year
+func Before:
+ inputs: left string (1..1) right string (1..1)
+ output: result boolean (1..1)
+ alias start: left to-zoned-date-time
+ set result: start < (right to-zoned-date-time)
+func Make:
+ inputs: day date (1..1)
+ output: zonedDateTime zonedDateTime (0..1)
+ set zonedDateTime: zonedDateTime {date: day, time: "12:30:00" to-time, timezone: "Z"}
+`
+      ],
+      '',
+      true
+    );
+    expect(funcs.Day!({ value: '2026-09-11T12:30:00Z' })).toBe('2026-09-11');
+    expect(funcs.Day!({ value: '2026-01-01T00:30:00+05:30' })).toBe('2026-01-01');
+    expect(funcs.Year!({ value: '2026-01-01T00:30:00+05:30' })).toBe(2026);
+    expect(funcs.DateYear!({ value: '2026-09-11' })).toBe(2026);
+    expect(funcs.ImplicitYear!({ value: '2026-09-11', year: 1900 })).toBe(2026);
+    expect(funcs.Clock!({ value: '2026-09-11T12:30:00' })).toBe('12:30:00');
+    expect(funcs.Before!({ left: '2026-01-01T00:30:00+05:30', right: '2025-12-31T20:00:00Z' })).toBe(true);
+    expect(funcs.Make!({ day: '2026-09-11' })).toBe('2026-09-11T12:30:00+00:00[UTC]');
+  });
+
+  it('keeps constructor fields ahead of metadata keywords and converts scalar fields to lists', async () => {
+    const funcs = await compile(`namespace test.address
+annotation metadata:
+ address string (0..1)
+type Address:
+ country string (1..1)
+type Contact:
+ address Address (0..*)
+func Build:
+ output: result Contact (1..1)
+ set result: Contact {address: Address {country: "US"}}
+`);
+    expect(funcs.Build!({})).toEqual({ address: [{ country: 'US' }] });
+  });
+
+  it('selects nested Choice paths through reference metadata', async () => {
+    const funcs = await compile(`namespace test.paths
+type Basket:
+ amount int (1..1)
+type Cash:
+ currency string (1..1)
+choice Observable:
+ Basket
+ Cash
+choice Underlier:
+ Observable
+  [metadata reference]
+func Amount:
+ inputs: underlier Underlier (1..1)
+ output: result int (0..1)
+ set result: (underlier as Basket) -> amount
+`);
+    expect(funcs.Amount!({ underlier: { observable: { value: { basket: { amount: 7 } } } } })).toBe(7);
+    expect(funcs.Amount!({ underlier: { observable: { externalReference: 'unresolved' } } })).toBeUndefined();
+    expect(funcs.Amount!({ underlier: { observable: { value: { cash: { currency: 'USD' } } } } })).toBeUndefined();
+  });
+
+  it('uses the declared Choice arm ahead of same-named imported aliases', async () => {
+    const funcs = await compile([
+      `namespace test.aliases
+typeAlias Rate: string`,
+      `namespace test.rates
+import test.aliases.*
+type Rate:
+ amount int (1..1)
+type Fixed:
+ amount int (1..1)
+choice Index:
+ Rate
+ Fixed
+func Amount:
+ inputs: index Index (1..1)
+ output: result int (1..1)
+ set result: index switch Rate then amount, default 0
+`
+    ]);
+    expect(funcs.Amount!({ index: { rate: { amount: 7 } } })).toBe(7);
+    expect(funcs.Amount!({ index: { fixed: { amount: 2 } } })).toBe(0);
+  });
+
+  it('retains element types through nested collection projections', async () => {
+    const funcs = await compile(`namespace test.nested
+type Link:
+ value string (1..1)
+ scheme string (1..1)
+type Party:
+ links Link (0..*)
+type Identifier:
+ value string (1..1)
+  [metadata scheme]
+func Map:
+ inputs: parties Party (0..*)
+ output: result Identifier (0..*)
+ set result: parties extract links extract Identifier {value: value with-meta {scheme: scheme}}
+`);
+    expect(funcs.Map!({ parties: [{ links: [{ value: 'id', scheme: 'uri' }] }, {}] })).toEqual([
+      { value: { value: 'id', meta: { scheme: 'uri' } } }
+    ]);
+  });
+
+  it('propagates empty arithmetic and orders absent sort keys consistently', async () => {
+    const funcs = await compile(`namespace test.operators
+type Entry:
+ key int (0..1)
+func Add:
+ inputs: a int (0..*) b int (0..1)
+ output: result int (0..1)
+ set result: a + b
+func Ordered:
+ inputs: entries Entry (0..*)
+ output: result Entry (0..*)
+ set result: entries sort [key]
+func Minimum:
+ inputs: entries Entry (0..*)
+ output: result Entry (0..1)
+ set result: entries min [key]
+func Maximum:
+ inputs: entries Entry (0..*)
+ output: result Entry (0..1)
+ set result: entries max [key]
+`);
+    expect(funcs.Add!({ a: [2], b: 3 })).toBe(5);
+    expect(funcs.Add!({ a: [2, 4], b: 3 })).toBeUndefined();
+    expect(funcs.Add!({ a: [], b: 3 })).toBeUndefined();
+    const entries = [{}, { key: 3 }, { key: 1 }];
+    expect(funcs.Ordered!({ entries })).toEqual([{ key: 1 }, { key: 3 }, {}]);
+    expect(funcs.Minimum!({ entries })).toEqual({ key: 1 });
+    expect(funcs.Maximum!({ entries })).toEqual({ key: 3 });
+  });
+
+  it('emits inherited enums, narrowed fields, and base classes before derived classes', async () => {
+    const funcs = await compile(
+      `namespace test.declarations
+enum BaseKind:
+ Cash
+enum Kind extends BaseKind:
+ Credit
+type Child extends Parent:
+ excluded int (0..0)
+type Parent:
+ excluded int (0..*)
+ bounded int (0..2)
+func Parse:
+ inputs: text string (0..1)
+ output: result Kind (0..1)
+ set result: text to-enum Kind
+`,
+      `const child: ChildShape = {};
+// @ts-expect-error zero cardinality excludes populated fields
+const invalid: ChildShape = {excluded: [1]};`
+    );
+    expect(funcs.Parse!({ text: 'Cash' })).toBe('Cash');
+    expect(funcs.Parse!({ text: 'Credit' })).toBe('Credit');
+    expect(funcs.Parse!({ text: 'Other' })).toBeUndefined();
+    expect(Reflect.construct(funcs.Child!, [{}])).toBeInstanceOf(funcs.Parent!);
+  });
+
+  it('allocates distinct type and function exports without losing calls', async () => {
+    const funcs = await compile(`namespace test.names
+type Value:
+ amount int (1..1)
+func Value:
+ output: result int (1..1)
+ set result: 7
+func ValueFunction:
+ output: result int (1..1)
+ set result: 3
+func Read:
+ output: result int (1..1)
+ set result: Value() + ValueFunction()
+`);
+    expect(funcs.Read!({})).toBe(10);
+    expect(funcs.ValueFunction1!({})).toBe(7);
+    expect(Reflect.construct(funcs.Value!, [{ amount: 2 }])).toHaveProperty('amount', 2);
+  });
+
+  it('constructs reference-only metadata from empty without inventing payloads', async () => {
+    const funcs = await compile(`namespace test.referenceOnly
+type Target:
+ name string (1..1)
+func Reference:
+ inputs: id string (1..1)
+ output: result Target (0..1)
+  [metadata reference]
+ set result: empty with-meta {reference: id}
+`);
+    expect(funcs.Reference!({ id: 'party-1' })).toEqual({ value: undefined, externalReference: 'party-1' });
+  });
+
+  it('resolves explicit calls despite enum members with the same name', async () => {
+    const funcs = await compile(`namespace test.calls
+ enum Operation:
+  Min
+ library function Min(x number, y number) number
+ func Pick:
+  inputs: a number (1..1) b number (1..1)
+  output: result number (1..1)
+  set result: Min(a, b)
+`);
+    expect(funcs.Pick!({ a: 7, b: 3 })).toBe(3);
+  });
+
+  it('flattens extracted collections and enforces scalar assignment bounds', async () => {
+    const funcs = await compile(`namespace test.collection
+ type Box:
+  values int (0..*)
+ func Extract:
+  inputs: boxes Box (0..*)
+  output: result int (0..*)
+  set result: boxes extract values
+ func Single:
+  inputs: values int (0..*)
+  output: result int (0..1)
+  set result: values
+ func Combine:
+  inputs: a int (0..*) b int (0..*)
+  output: result int (0..*)
+  set result: [a, b]
+`);
+    expect(funcs.Extract!({ boxes: [{ values: [1, 2] }, {}, { values: [3] }] })).toEqual([1, 2, 3]);
+    expect(funcs.Single!({ values: [] })).toBeUndefined();
+    expect(funcs.Single!({ values: [7] })).toBe(7);
+    expect(() => funcs.Single!({ values: [1, 2] })).toThrow('Expected at most one value');
+    expect(funcs.Combine!({ a: [1, 2], b: [3] })).toEqual([1, 2, 3]);
+  });
+
+  it('reads and constructs calendar records and converts model Temporal values at calls', async () => {
+    const funcs = await compile(`namespace test.calendar
+ recordType date { day int month int year int }
+ recordType dateTime { date date time time }
+ recordType zonedDateTime { date date time time timezone string }
+ func Year:
+  inputs: value date (0..1)
+  output: result int (0..1)
+  set result: value -> year
+ func MakeDate:
+  inputs: year int (1..1) month int (1..1) day int (1..1)
+  output: date date (0..1)
+  set date: date { year: year, month: month, day: day }
+ func Zoned:
+  inputs: day date (1..1) clock time (1..1) zone string (1..1)
+  output: zonedDateTime zonedDateTime (0..1)
+  set zonedDateTime: zonedDateTime {date: day, time: clock, timezone: zone}
+ func Day:
+  inputs: value zonedDateTime (0..1)
+  output: result date (0..1)
+  set result: value -> date
+ type Event:
+  eventDate date (1..1)
+  condition Current: Year(eventDate) = 2026
+`);
+    expect(funcs.Year!({ value: '2024-02-29' })).toBe(2024);
+    expect(funcs.Year!({})).toBeUndefined();
+    expect(funcs.MakeDate!({ year: 2024, month: 2, day: 29 })).toBe('2024-02-29');
+    expect(() => funcs.MakeDate!({ year: 2023, month: 2, day: 29 })).toThrow();
+    const zoned = funcs.Zoned!({ day: '2026-07-01', clock: '12:00:00', zone: 'America/New_York' });
+    expect(zoned).toBe('2026-07-01T12:00:00-04:00[America/New_York]');
+    expect(funcs.Day!({ value: zoned })).toBe('2026-07-01');
+    const event = Reflect.construct(funcs.Event!, [{ eventDate: Temporal.PlainDate.from('2026-01-01') }]);
+    expect(event.validateCurrent().valid).toBe(true);
+  });
+
+  it('reads and compares offset-only zoned inputs without losing their local calendar', async () => {
+    const funcs = await compile(`namespace test.offset
+recordType date { year int month int day int }
+recordType zonedDateTime { date date time time timezone string }
+func Day:
+ inputs: value zonedDateTime (0..1)
+ output: result date (0..1)
+ set result: value -> date
+func Year:
+ inputs: value zonedDateTime (0..1)
+ output: result int (0..1)
+ set result: value -> date -> year
+func Clock:
+ inputs: value zonedDateTime (0..1)
+ output: result time (0..1)
+ set result: value -> time
+func Zone:
+ inputs: value zonedDateTime (0..1)
+ output: result string (0..1)
+ set result: value -> timezone
+func Before:
+ inputs: left zonedDateTime (1..1) right zonedDateTime (1..1)
+ output: result boolean (1..1)
+ set result: left < right
+func Parse:
+ inputs: value string (1..1)
+ output: result zonedDateTime (0..1)
+ set result: value to-zoned-date-time
+`);
+    for (const [value, date, time, zone] of [
+      ['2026-09-11T12:30:00Z', '2026-09-11', '12:30:00', 'UTC'],
+      ['2026-01-01T00:30:00.123+05:30', '2026-01-01', '00:30:00.123', '+05:30'],
+      ['2026-12-31T23:30:00-04:00', '2026-12-31', '23:30:00', '-04:00'],
+      ['2026-07-01T12:00:00-04:00[America/New_York]', '2026-07-01', '12:00:00', 'America/New_York']
+    ]) {
+      expect(funcs.Day!({ value })).toBe(date);
+      expect(funcs.Year!({ value })).toBe(2026);
+      expect(funcs.Clock!({ value })).toBe(time);
+      expect(funcs.Zone!({ value })).toBe(zone);
+      expect(funcs.Day!({ value: funcs.Parse!({ value }) })).toBe(date);
+    }
+    expect(funcs.Day!({})).toBeUndefined();
+    expect(() => funcs.Day!({ value: '2026-02-30T12:00:00Z' })).toThrow();
+    expect(funcs.Before!({ left: '2026-01-01T00:30:00+05:30', right: '2025-12-31T20:00:00Z' })).toBe(true);
+    expect(funcs.Before!({ left: '2026-01-01T00:30:00+05:30', right: '2025-12-31T19:00:00Z' })).toBe(false);
+  });
+
+  it('compares implicit temporal pipeline operands chronologically', async () => {
+    const funcs = await compile(
+      [
+        BASICTYPES_ROSETTA,
+        `namespace test.pipeline
+func AllBefore:
+ inputs: values zonedDateTime (0..*) cutoff zonedDateTime (1..1)
+ output: result boolean (1..1)
+ set result: values then all < cutoff
+func AnyAfter:
+ inputs: values zonedDateTime (0..*) cutoff zonedDateTime (1..1)
+ output: result boolean (1..1)
+ set result: values then any > cutoff
+`
+      ],
+      '',
+      true
+    );
+    const values = ['2026-01-01T00:30:00+05:30'];
+    expect(funcs.AllBefore!({ values, cutoff: '2025-12-31T20:00:00Z' })).toBe(true);
+    expect(funcs.AllBefore!({ values, cutoff: '2025-12-31T19:00:00Z' })).toBe(false);
+    expect(funcs.AnyAfter!({ values, cutoff: '2025-12-31T18:00:00Z' })).toBe(true);
+    expect(funcs.AnyAfter!({ values, cutoff: '2025-12-31T20:00:00Z' })).toBe(false);
+  });
+
+  it('narrows optional values and unwraps metadata collections in validators', async () => {
+    const funcs = await compile(`namespace test.validator
+type Values:
+ values int (0..*)
+  [metadata scheme]
+ limit int (0..1)
+ condition One: values count = 1
+ condition Limit: if limit exists then limit <= 10
+`);
+    const present = Reflect.construct(funcs.Values!, [{ values: [{ value: 7, meta: {} }], limit: 8 }]);
+    expect(present.validateOne().valid).toBe(true);
+    expect(present.validateLimit().valid).toBe(true);
+    const absent = Reflect.construct(funcs.Values!, [{}]);
+    expect(absent.validateOne().valid).toBe(false);
+    expect(absent.validateLimit().valid).toBe(true);
+  });
+
+  it('normalizes empty scalar branches and preserves enum types in constructors', async () => {
+    const funcs = await compile(`namespace test.scalar
+enum Currency:
+ USD
+ EUR
+type Amount:
+ currency Currency (1..1)
+func Build:
+ output: result Amount (1..1)
+ set result: Amount {currency: Currency -> USD}
+func Optional:
+ inputs: value int (1..1)
+ output: result int (0..1)
+ set result: if value > 0 then value else empty
+`);
+    expect(funcs.Build!({})).toEqual({ currency: 'USD' });
+    expect(funcs.Optional!({ value: 2 })).toBe(2);
+    expect(funcs.Optional!({ value: -2 })).toBeUndefined();
+  });
+  it('retains metadata when narrowing data subtypes', async () => {
+    const funcs = await compile(`namespace test.dataMetaNarrow
+ type Base:
+  name string (1..1)
+ type Loan extends Base:
+  amount int (1..1)
+ func Pick:
+  inputs: value Base (1..1)
+   [metadata scheme]
+  output: result Loan (0..1)
+   [metadata scheme]
+  set result: value as Loan
+ func Plain:
+  inputs: value Base (1..1)
+   [metadata scheme]
+  output: result int (0..1)
+  set result: value as Loan -> amount
+`);
+    const value = { value: { name: 'L', amount: 7 }, meta: { scheme: 'urn:loan' } };
+    expect(funcs.Pick!({ value })).toEqual(value);
+    expect(funcs.Plain!({ value })).toBe(7);
+    expect(funcs.Pick!({ value: { value: { name: 'B' }, meta: {} } })).toBeUndefined();
+  });
+  it('preserves selected choice metadata in scalar, collection, and headless narrowing', async () => {
+    const funcs = await compile(`namespace test.metaNarrow
+ typeAlias Code: string
+ typeAlias Other: string
+ choice Codes:
+  Code
+   [metadata scheme]
+  Other
+ func Pick:
+  inputs: value Codes (1..1)
+  output: result Code (0..1)
+   [metadata scheme]
+  set result: value as Code
+ func Plain:
+  inputs: value Codes (1..1)
+  output: result Code (0..1)
+  set result: value as Code
+ func Many:
+  inputs: values Codes (0..*)
+  output: result Code (0..*)
+   [metadata scheme]
+  set result: values as Code
+ func Pipe:
+  inputs: value Codes (1..1)
+   [metadata scheme]
+  output: result Code (0..1)
+   [metadata scheme]
+  set result: value then as Code
+`);
+    const code = { value: 'A', meta: { scheme: 'urn:code' } };
+    const value = { code };
+    expect(funcs.Pick!({ value })).toEqual(code);
+    expect(funcs.Plain!({ value })).toBe('A');
+    expect(funcs.Many!({ values: [value, { other: 'B' }] })).toEqual([code]);
+    expect(funcs.Pipe!({ value: { value, meta: { scheme: 'urn:outer' } } })).toEqual(code);
+  });
+
+  it('normalizes each matching Choice path before combining mixed metadata selections', async () => {
+    const funcs = await compile(`${mixedChoiceSource}
+func Pick:
+ inputs: value Outer (0..1)
+ output: result Payload (0..1)
+  [metadata reference]
+ set result: value as Payload
+func Plain:
+ inputs: value Outer (0..1)
+ output: result Payload (0..1)
+ set result: value as Payload
+func Many:
+ inputs: values Outer (0..*)
+ output: result Payload (0..*)
+  [metadata reference]
+ set result: values as Payload
+func Pipe:
+ inputs: value Outer (0..1)
+ output: result Payload (0..1)
+ set result: value then as Payload
+func Read:
+ inputs: value Outer (0..1)
+ output: result int (0..1)
+ set result: (value as Payload) -> amount
+func SwitchPlain:
+ inputs: value Outer (0..1)
+ output: result Payload (0..1)
+ set result: value switch Payload then item, default empty
+func SwitchPick:
+ inputs: value Outer (0..1)
+ output: result Payload (0..1)
+  [metadata reference]
+ set result: value switch Payload then item, default empty
+`);
+    for (const { input, wrapped } of mixedChoiceCases) {
+      expect(funcs.Pick!({ value: input })).toEqual(wrapped);
+      expect(funcs.SwitchPick!({ value: input })).toEqual(wrapped);
+      expect(funcs.Plain!({ value: input })).toEqual(wrapped.value);
+      expect(funcs.SwitchPlain!({ value: input })).toEqual(wrapped.value);
+      expect(funcs.Pipe!({ value: input })).toEqual(wrapped.value);
+      expect(funcs.Read!({ value: input })).toEqual(wrapped.value?.amount);
+    }
+    expect(funcs.Many!({ values: mixedChoiceCases.map(({ input }) => input) })).toEqual(
+      mixedChoiceCases.map(({ wrapped }) => wrapped)
+    );
+    for (const value of [
+      undefined,
+      { other: { string: 'unmatched' } },
+      { wrapped: { externalReference: 'missing intermediate' } }
+    ]) {
+      expect(funcs.Pick!({ value })).toBeUndefined();
+      expect(funcs.SwitchPick!({ value })).toBeUndefined();
+    }
+  });
+
+  it('combines raw and field-only Choice paths without reading payload value fields as metadata', async () => {
+    const funcs = await compile(`${mixedChoiceSource.replace('\n Referenced\n', '\n')}
+func Plain:
+ inputs: value Outer (0..1)
+ output: result Payload (0..1)
+ set result: value as Payload
+func Pick:
+ inputs: value Outer (0..1)
+ output: result Payload (0..1)
+  [metadata scheme]
+ set result: value as Payload
+`);
+    for (const { input, wrapped } of mixedChoiceCases.slice(0, 2)) {
+      expect(funcs.Plain!({ value: input })).toEqual(wrapped.value);
+      expect(funcs.Pick!({ value: input })).toEqual({ value: wrapped.value, meta: wrapped.meta ?? {} });
+    }
+    expect(funcs.Pick!({})).toBeUndefined();
+  });
+
+  it('narrows nested choice arms with as, filters collections, and preserves pipeline inputs', async () => {
+    const funcs = await compile(`namespace test.narrow
+ type Loan:
+  amount int (1..1)
+ type Bond:
+  coupon int (1..1)
+ choice Inner:
+  Loan
+  Bond
+ choice Outer:
+  Inner
+  Bond
+ func Pick:
+  inputs: value Outer (0..1)
+  output: result int (0..1)
+  set result: value as Loan -> amount
+ func Total:
+  inputs: values Outer (0..*)
+  output: result int (1..1)
+  set result: values as Loan -> amount sum
+ func Pipe:
+  inputs: value Outer (1..1)
+  output: result int (0..1)
+  set result: value then as Loan -> amount
+ func Pass:
+  inputs: value Outer (1..1)
+  output: result int (0..1)
+  set result: Pick(value)
+`);
+    const loan = { inner: { loan: { amount: 7 } } };
+    const bond = { bond: { coupon: 3 } };
+    expect(funcs.Pick!({ value: loan })).toBe(7);
+    expect(funcs.Pick!({ value: bond })).toBeUndefined();
+    expect(funcs.Pick!({})).toBeUndefined();
+    expect(funcs.Total!({ values: [loan, bond, loan] })).toBe(14);
+    expect(funcs.Total!({ values: [] })).toBe(0);
+    expect(funcs.Pipe!({ value: loan })).toBe(7);
+    expect(funcs.Pass!({ value: loan })).toBe(7);
+  });
+
+  it('keeps same-base aliases distinct when narrowing a choice', async () => {
+    const funcs = await compile(`namespace test.aliasNarrow
+ typeAlias CodeA: string
+ typeAlias CodeB: string
+ choice Codes:
+  CodeA
+  CodeB
+ func Pick:
+  inputs: value Codes (1..1)
+  output: result string (0..1)
+  set result: value as CodeB
+`);
+    expect(funcs.Pick!({ value: { codeB: 'B' } })).toBe('B');
+    expect(funcs.Pick!({ value: { codeA: 'A' } })).toBeUndefined();
+  });
+
+  it('narrows data subtypes and leaves unmatched values absent', async () => {
+    const funcs = await compile(`namespace test.dataNarrow
+ type Base:
+  name string (1..1)
+ type Loan extends Base:
+  amount int (1..1)
+ type Bond extends Base:
+  coupon int (1..1)
+ func Pick:
+  inputs: value Base (1..1)
+  output: result int (0..1)
+  set result: value as Loan -> amount
+`);
+    expect(funcs.Pick!({ value: { name: 'L', amount: 7 } })).toBe(7);
+    expect(funcs.Pick!({ value: { name: 'B', coupon: 3 } })).toBeUndefined();
+  });
+
   it.each(
     ['', 'scheme', 'reference'].flatMap((annotation) =>
       (
@@ -187,8 +838,7 @@ func Retain:
  inputs: value Envelope (1..1)
  output: result Envelope (1..1)
  set result: value`,
-      `import { Temporal } from '@js-temporal/polyfill';
-const input: Parameters<typeof Retain>[0] = {value: {events: [{eventDate: ${JSON.stringify(value)}}]}};
+      `const input: Parameters<typeof Retain>[0] = {value: {events: [{eventDate: ${JSON.stringify(value)}}]}};
 // @ts-expect-error Temporal objects are not wire values.
 const invalid: Parameters<typeof Retain>[0] = {value: {events: [{eventDate: {} as Temporal.${type === 'date' ? 'PlainDate' : type === 'time' ? 'PlainTime' : type === 'dateTime' ? 'PlainDateTime' : 'ZonedDateTime'}}]}};`
     );
@@ -1508,6 +2158,44 @@ func Compute:
     expect(() => funcs.Compute!({ amount: { value: 3 } })).toThrow('requires an implementation');
     Object.assign(funcs.Adjust!, { implementation: (value: number) => value + 10 });
     expect(funcs.Compute!({ amount: { value: 3 } })).toBe(13);
+  });
+
+  it('preserves library array parameters in explicit and implicit calls', async () => {
+    const funcs = await compile(
+      [
+        BASICTYPES_ROSETTA,
+        `namespace test.libraryArrays
+library function Total(values number[]) number
+library function WeightedTotal(scale number, values number[]) number
+func Explicit:
+ inputs: values number (0..*)
+ output: result number (1..1)
+ set result: WeightedTotal(2, values)
+func Implicit:
+ inputs: values number (0..*)
+ output: result number (1..1)
+ set result: values then Total
+func Scalar:
+ inputs: value number (0..1)
+ output: result number (1..1)
+ set result: Total(value)
+`
+      ],
+      `Total.implementation = (values: number[]): number => values.reduce((sum, value) => sum + value, 0);
+WeightedTotal.implementation = (scale: number, values: number[]): number => scale * Total(values);`,
+      true
+    );
+    const total = (values: number[]) => values.reduce((sum, value) => sum + value, 0);
+    Object.assign(funcs.Total!, { implementation: total });
+    Object.assign(funcs.WeightedTotal!, {
+      implementation: (scale: number, values: number[]) => scale * total(values)
+    });
+    for (const values of [[], [3], [3, 7]]) {
+      expect(funcs.Explicit!({ values })).toBe(2 * total(values));
+      expect(funcs.Implicit!({ values })).toBe(total(values));
+    }
+    expect(funcs.Scalar!({ value: 5 })).toBe(5);
+    expect(funcs.Scalar!({})).toBe(0);
   });
 
   it('counts scalars and validates one-of across declared object fields', async () => {

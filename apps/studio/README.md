@@ -264,11 +264,14 @@ in a separate terminal after `dev:full` is up:
 pnpm --filter @rune-langium/curated-mirror-worker run seed:local
 ```
 
-This writes 3 tiny fixture bundles (one .rosetta type each) plus their
-serialized JSON artifacts at the same R2 paths the production cron
-publisher uses. Then click the CDM / FpML / rune-dsl chips in the
-loader — they'll populate with real type counts and the namespaces
-appear in the explorer.
+Populate `.resources/cdm`, `.resources/rune-fpml`, and `.resources/rune-dsl`
+with repository-root clones of the corresponding upstream projects. The seed
+preserves repository-relative paths beneath one archive wrapper, so CDM sources
+retain `rosetta-source/src/main/rosetta/` exactly once. The artifact builder
+selects production sources and excludes test fixtures.
+
+The seed writes source archives and serialized JSON artifacts to local R2.
+Then click the CDM / FpML / rune-dsl chips in the loader to browse their types.
 
 ### Workflow choice cheat-sheet
 

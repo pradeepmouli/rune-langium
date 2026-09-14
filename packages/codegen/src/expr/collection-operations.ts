@@ -2,7 +2,7 @@
 // Copyright (c) 2026 Pradeep Mouli
 import { unwrapMetadata } from './metadata-runtime.js';
 import { expressionMetadataKind } from './metadata-type.js';
-import { inlineContext, freshLocal } from './inline-function.js';
+import { inlineContext, freshLocal, arrowBody } from './inline-function.js';
 
 import {
   isFilterOperation,
@@ -32,7 +32,11 @@ export function renderCollectionOperation(
   const argumentCtx =
     isMapOperation(expr) && expr.function && ctx.emitMode.startsWith('ts-') ? { ...ctx, preserveMetadata: true } : ctx;
   const argument = expr.argument ? render(expr.argument, argumentCtx) : ctx.selfName;
-  const kind = argumentCtx.preserveMetadata ? expressionMetadataKind(expr.argument) : undefined;
+  const kind = argumentCtx.preserveMetadata
+    ? expr.argument
+      ? expressionMetadataKind(expr.argument)
+      : ctx.implicitMetadata?.kind
+    : undefined;
   const metadata = kind ? { kind, many: false } : undefined;
   const fn = 'function' in expr ? expr.function : undefined;
   const param = freshLocal(ctx, fn?.parameters?.[0]?.name ?? 'item');
@@ -45,7 +49,9 @@ export function renderCollectionOperation(
       : fn
         ? render(fn.body, inlineContext(fn, ctx, [param], metadata))
         : param;
-    return `(${argument} ?? []).${isFilterOperation(expr) ? 'filter' : 'map'}((${param}) => ${body})`;
+    return isFilterOperation(expr)
+      ? `runeList(${argument}).filter((${param}) => ${arrowBody(body)})`
+      : `runeList(${argument}).flatMap((${param}) => runeList(${body}))`;
   }
   if (isSortOperation(expr)) {
     const a = freshLocal(ctx, '__sortA');
@@ -54,7 +60,7 @@ export function renderCollectionOperation(
     const keyB = freshLocal(ctx, '__keyB');
     const ka = key(a);
     const kb = key(b);
-    return `[...(${argument} ?? [])].sort((${a}, ${b}) => { const ${keyA} = (${ka}); const ${keyB} = (${kb}); return ${keyA} < ${keyB} ? -1 : ${keyA} > ${keyB} ? 1 : 0; })`;
+    return `runeList(${argument}).slice().sort((${a}, ${b}) => { const ${keyA} = (${ka}); const ${keyB} = (${kb}); return runeOrder(${keyA}, ${keyB}, (a, b) => a < b ? -1 : a > b ? 1 : 0); })`;
   }
   if (isMinOperation(expr) || isMaxOperation(expr)) {
     const item = freshLocal(ctx, '__item');
@@ -63,7 +69,7 @@ export function renderCollectionOperation(
     const itemKey = key(item);
     const bestKey = key(best);
     const sign = isMinOperation(expr) ? '<' : '>';
-    return `(() => { const ${values} = (${argument} ?? []); if (${values}.length === 0) return undefined; return ${values}.slice(1).reduce((${best}, ${item}) => (${itemKey}) ${sign} (${bestKey}) ? ${item} : ${best}, ${values}[0]); })()`;
+    return `(() => { const ${values} = runeList(${argument}); if (${values}.length === 0) return undefined; return ${values}.slice(1).reduce((${best}, ${item}) => runeOrder((${itemKey}), (${bestKey}), (a, b) => a < b ? -1 : a > b ? 1 : 0, ${isMinOperation(expr)}) ${sign} 0 ? ${item} : ${best}, ${values}[0]); })()`;
   }
   return undefined;
 }

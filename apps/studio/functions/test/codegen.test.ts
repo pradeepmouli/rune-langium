@@ -279,7 +279,7 @@ type Quantity:
   currency string (0..1)
 `
     );
-    const mod = await import('../lib/curated-fetch.js');
+    const mod = await import('../../src/services/curated-fetch.js');
     const V = '2026-05-22';
     vi.spyOn(mod, 'fetchCuratedManifest').mockResolvedValue({
       schemaVersion: 2,
@@ -334,7 +334,7 @@ type Quantity:
   currency string (0..1)
 `
     );
-    const mod = await import('../lib/curated-fetch.js');
+    const mod = await import('../../src/services/curated-fetch.js');
     const V = '2026-05-22';
     const manifestSpy = vi.spyOn(mod, 'fetchCuratedManifest').mockResolvedValue({
       schemaVersion: 2,
@@ -423,7 +423,7 @@ type Quantity:
     // join(',')`) produces the identical "cdm.a,cdm.b" for both, letting
     // the second, differently-shaped request incorrectly reuse the
     // first's (unrelated) cached documents.
-    const mod = await import('../lib/curated-fetch.js');
+    const mod = await import('../../src/services/curated-fetch.js');
     const manifestSpy = vi.spyOn(mod, 'fetchCuratedManifest').mockResolvedValue({
       schemaVersion: 2,
       modelId: 'cdm',
@@ -477,7 +477,7 @@ type Quantity:
       'cdm/base/other.rosetta',
       'namespace cdm.base.other\n\ntype Other:\n  value string (1..1)\n'
     );
-    const fetchMod = await import('../lib/curated-fetch.js');
+    const fetchMod = await import('../../src/services/curated-fetch.js');
     const V = '2026-05-22';
     let manifestCallCount = 0;
     let cacheKeysWhenSecondManifestFetchStarted: string[] | undefined;
@@ -545,7 +545,7 @@ type Quantity:
       'cdm/base/math.rosetta',
       'namespace cdm.base.math\n\ntype Quantity:\n  amount number (1..1)\n'
     );
-    const fetchMod = await import('../lib/curated-fetch.js');
+    const fetchMod = await import('../../src/services/curated-fetch.js');
     const V = '2026-05-22';
     vi.spyOn(fetchMod, 'fetchCuratedManifest').mockResolvedValue({
       schemaVersion: 2,
@@ -617,7 +617,7 @@ type Quantity:
       'cdm/base/other.rosetta',
       'namespace cdm.base.other\n\ntype Other:\n  value string (1..1)\n'
     );
-    const fetchMod = await import('../lib/curated-fetch.js');
+    const fetchMod = await import('../../src/services/curated-fetch.js');
     const V = '2026-05-22';
 
     // Each fetchCuratedManifest call gets its OWN externally-resolvable
@@ -708,7 +708,7 @@ type Quantity:
       'cdm/base/math.rosetta',
       'namespace cdm.base.math\n\ntype Quantity:\n  amount number (1..1)\n'
     );
-    const fetchMod = await import('../lib/curated-fetch.js');
+    const fetchMod = await import('../../src/services/curated-fetch.js');
     const V = '2026-05-22';
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     let manifestResolve: ((value: any) => void) | undefined;
@@ -767,7 +767,7 @@ type Quantity:
     // different documents. A sorted cache key would let a reversed-order
     // request incorrectly reuse a cached result built with the opposite
     // precedence.
-    const mod = await import('../lib/curated-fetch.js');
+    const mod = await import('../../src/services/curated-fetch.js');
     const manifestSpy = vi.spyOn(mod, 'fetchCuratedManifest').mockResolvedValue({
       schemaVersion: 2,
       modelId: 'cdm',
@@ -818,7 +818,7 @@ type Quantity:
       'cdm/base/math.rosetta',
       'namespace cdm.base.math\n\ntype Quantity:\n  amount number (1..1)\n'
     );
-    const fetchMod = await import('../lib/curated-fetch.js');
+    const fetchMod = await import('../../src/services/curated-fetch.js');
     const V = '2026-05-22';
     const manifestSpy = vi
       .spyOn(fetchMod, 'fetchCuratedManifest')
@@ -894,7 +894,7 @@ type Quantity:
       'cdm/base/other.rosetta',
       'namespace cdm.base.other\n\ntype Other:\n  value string (1..1)\n'
     );
-    const fetchMod = await import('../lib/curated-fetch.js');
+    const fetchMod = await import('../../src/services/curated-fetch.js');
     const V = '2026-05-22';
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const deferreds: Array<{ resolve: (value: any) => void }> = [];
@@ -1003,7 +1003,7 @@ type Quantity:
       'cdm/base/math.rosetta',
       'namespace cdm.base.math\n\ntype Quantity:\n  amount number (1..1)\n'
     );
-    const fetchMod = await import('../lib/curated-fetch.js');
+    const fetchMod = await import('../../src/services/curated-fetch.js');
     const V = '2026-05-22';
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const deferreds: Array<{ resolve: (value: any) => void }> = [];
@@ -1097,7 +1097,7 @@ type Quantity:
       'cdm/base/other.rosetta',
       'namespace cdm.base.other\n\ntype Other:\n  value string (1..1)\n'
     );
-    const fetchMod = await import('../lib/curated-fetch.js');
+    const fetchMod = await import('../../src/services/curated-fetch.js');
     const V = '2026-05-22';
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const deferreds: Array<{ resolve: (value: any) => void }> = [];
@@ -1179,7 +1179,7 @@ type Quantity:
       'cdm/base/other.rosetta',
       'namespace cdm.base.other\n\ntype Other:\n  value string (1..1)\n'
     );
-    const fetchMod = await import('../lib/curated-fetch.js');
+    const fetchMod = await import('../../src/services/curated-fetch.js');
     const V = '2026-05-22';
     const manifest = (nsKey: string) => ({
       schemaVersion: 2,
@@ -1264,7 +1264,7 @@ type Quantity:
       'cdm/base/other.rosetta',
       'namespace cdm.base.other\n\ntype Other:\n  value string (1..1)\n'
     );
-    const fetchMod = await import('../lib/curated-fetch.js');
+    const fetchMod = await import('../../src/services/curated-fetch.js');
     const V = '2026-05-22';
     const manifest = (nsKey: string) => ({
       schemaVersion: 2,
@@ -1387,7 +1387,7 @@ type Quantity:
       'cdm/base/other.rosetta',
       'namespace cdm.base.other\n\ntype Other:\n  value string (1..1)\n'
     );
-    const fetchMod = await import('../lib/curated-fetch.js');
+    const fetchMod = await import('../../src/services/curated-fetch.js');
     const V = '2026-05-22';
     const manifest = (nsKey: string) => ({
       schemaVersion: 2,
@@ -1496,7 +1496,7 @@ type Quantity:
       'cdm/base/math.rosetta',
       'namespace cdm.base.math\n\ntype Quantity:\n  amount number (1..1)\n'
     );
-    const mod = await import('../lib/curated-fetch.js');
+    const mod = await import('../../src/services/curated-fetch.js');
     const V = '2026-05-22';
     vi.spyOn(mod, 'fetchCuratedManifest').mockResolvedValue({
       schemaVersion: 2,
@@ -1575,8 +1575,8 @@ type Quantity:
   });
 
   it('returns 502 with curated_bundle_unavailable when fetch fails', async () => {
-    const { CuratedBundleUnavailableError } = await import('../lib/curated-fetch.js');
-    const mod = await import('../lib/curated-fetch.js');
+    const { CuratedBundleUnavailableError } = await import('../../src/services/curated-fetch.js');
+    const mod = await import('../../src/services/curated-fetch.js');
     vi.spyOn(mod, 'fetchCuratedManifest').mockRejectedValue(new CuratedBundleUnavailableError('cdm', 'latest', 404));
 
     const res = await onRequestPost({
@@ -1657,7 +1657,7 @@ type Quantity:
   };
 
   it('path C: closure-scoped curated load — whole-bundle never fetched, unrelated ns skipped', async () => {
-    const mod = await import('../lib/curated-fetch.js');
+    const mod = await import('../../src/services/curated-fetch.js');
     vi.spyOn(mod, 'fetchCuratedManifest').mockResolvedValue(CG_MANIFEST as never);
     vi.spyOn(mod, 'fetchCuratedNamespace').mockImplementation(async (_id, _v, artifactKey) => {
       const ns = Object.keys(CG_NS_DOCS).find((n) => artifactKey.includes(`/ns/${n}.json.gz`));
@@ -1688,7 +1688,7 @@ type Quantity:
   });
 
   it('path C: missing manifest namespaces → 502 (no whole-bundle fallback)', async () => {
-    const mod = await import('../lib/curated-fetch.js');
+    const mod = await import('../../src/services/curated-fetch.js');
     vi.spyOn(mod, 'fetchCuratedManifest').mockResolvedValue({ ...CG_MANIFEST, namespaces: {} } as never);
     const bundleSpy = vi.spyOn(mod, 'fetchCuratedBundle');
     const res = await onRequestPost({
@@ -1712,7 +1712,7 @@ type Quantity:
     // seeds the closure must be the whole bundle, not empty (which would 400
     // with "No output generated"). Contrast the scoped path-C test above, which
     // seeds via an import and excludes cdm.other.
-    const mod = await import('../lib/curated-fetch.js');
+    const mod = await import('../../src/services/curated-fetch.js');
     vi.spyOn(mod, 'fetchCuratedManifest').mockResolvedValue(CG_MANIFEST as never);
     vi.spyOn(mod, 'fetchCuratedNamespace').mockImplementation(async (_id, _v, artifactKey) => {
       const ns = Object.keys(CG_NS_DOCS).find((n) => artifactKey.includes(`/ns/${n}.json.gz`));
@@ -1749,7 +1749,7 @@ type Quantity:
       'cdm/base/math.rosetta',
       'namespace cdm.base.math\n\ntype Quantity:\n  amount number (1..1)\n'
     );
-    const mod = await import('../lib/curated-fetch.js');
+    const mod = await import('../../src/services/curated-fetch.js');
     const manifestSpy = vi.spyOn(mod, 'fetchCuratedManifest');
     const nsSpy = vi.spyOn(mod, 'fetchCuratedNamespace');
     const bundleSpy = vi.spyOn(mod, 'fetchCuratedBundle');
@@ -1789,7 +1789,7 @@ type Quantity:
       'cdm/base/math.rosetta',
       'namespace cdm.base.math\n\ntype Quantity:\n  amount number (1..1)\n'
     );
-    const mod = await import('../lib/curated-fetch.js');
+    const mod = await import('../../src/services/curated-fetch.js');
     const manifestSpy = vi.spyOn(mod, 'fetchCuratedManifest').mockResolvedValue({
       schemaVersion: 2,
       modelId: 'cdm',
@@ -1840,7 +1840,7 @@ type Quantity:
       'cdm/base/math.rosetta',
       'namespace cdm.base.math\n\ntype Quantity:\n  amount number (1..1)\n'
     );
-    const mod = await import('../lib/curated-fetch.js');
+    const mod = await import('../../src/services/curated-fetch.js');
     const manifestSpy = vi.spyOn(mod, 'fetchCuratedManifest');
     const nsSpy = vi.spyOn(mod, 'fetchCuratedNamespace');
     const bundleSpy = vi.spyOn(mod, 'fetchCuratedBundle');

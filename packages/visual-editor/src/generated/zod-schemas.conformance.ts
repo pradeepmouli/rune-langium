@@ -10,6 +10,7 @@ import {
   AnnotationRefSchema,
   ArithmeticOperationSchema,
   AsKeyOperationSchema,
+  AsOperationSchema,
   AttributeSchema,
   ChoiceSchema,
   ChoiceOperationSchema,
@@ -108,6 +109,7 @@ import {
   RosettaSynonymValueBaseSchema,
   RosettaTypeAliasSchema,
   RuleReferenceAnnotationSchema,
+  SchemaSchema,
   SegmentSchema,
   ShortcutDeclarationSchema,
   SortOperationSchema,
@@ -169,6 +171,9 @@ type _Rev_ArithmeticOperation =
 
 type _Fwd_AsKeyOperation = z.infer<typeof AsKeyOperationSchema> extends _Surface<AST.AsKeyOperation> ? true : never;
 type _Rev_AsKeyOperation = _Surface<AST.AsKeyOperation> extends z.infer<typeof AsKeyOperationSchema> ? true : never;
+
+type _Fwd_AsOperation = z.infer<typeof AsOperationSchema> extends _Surface<AST.AsOperation> ? true : never;
+type _Rev_AsOperation = _Surface<AST.AsOperation> extends z.infer<typeof AsOperationSchema> ? true : never;
 
 type _Fwd_Attribute =
   z.infer<typeof AttributeSchema> extends Pick<_Surface<AST.Attribute>, '$type' | 'name' | 'typeCall' | 'card'>
@@ -658,6 +663,9 @@ type _Fwd_RuleReferenceAnnotation =
   z.infer<typeof RuleReferenceAnnotationSchema> extends _Surface<AST.RuleReferenceAnnotation> ? true : never;
 type _Rev_RuleReferenceAnnotation =
   _Surface<AST.RuleReferenceAnnotation> extends z.infer<typeof RuleReferenceAnnotationSchema> ? true : never;
+
+type _Fwd_Schema = z.infer<typeof SchemaSchema> extends _Surface<AST.Schema> ? true : never;
+type _Rev_Schema = _Surface<AST.Schema> extends z.infer<typeof SchemaSchema> ? true : never;
 
 type _Fwd_Segment = z.infer<typeof SegmentSchema> extends _Surface<AST.Segment> ? true : never;
 type _Rev_Segment = _Surface<AST.Segment> extends z.infer<typeof SegmentSchema> ? true : never;

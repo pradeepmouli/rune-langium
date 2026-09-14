@@ -46,12 +46,13 @@
  *   curated-artifacts.yml workflow heap budget.
  */
 
-import { mkdtempSync, rmSync, writeFileSync, readFileSync, readdirSync, statSync } from 'node:fs';
+import { mkdtempSync, rmSync, writeFileSync, readFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
-import { join, dirname, relative } from 'node:path';
+import { join, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { execFileSync, spawnSync } from 'node:child_process';
 import { createHash } from 'node:crypto';
+import { loadLocalFixtures } from './local-fixtures.js';
 import { buildSerializedWorkspaceArtifact } from '../src/serialized-artifact.js';
 import type { CuratedManifest, CuratedModelId } from '@rune-langium/curated-schema';
 
@@ -61,105 +62,7 @@ const REPO_ROOT = dirname(dirname(WORKER_ROOT));
 const RESOURCES_ROOT = join(REPO_ROOT, '.resources');
 const BUCKET = 'rune-curated-mirror';
 
-/**
- * Recursively collect `*.rosetta` files from a `.resources/` subdirectory
- * and return them keyed by their tar archive path (production archive
- * layout: wrapper directory at the root, then `rosetta-source/` or a
- * bundle-specific subpath). The seed reads from the real local CDM/FpML/
- * rune-dsl corpora under `.resources/` so dev:full exercises the same
- * scale of data the production CF Pages deploy serves (~142 CDM files /
- * ~42 FpML files / ~2 rune-dsl files).
- *
- * The archive wrapper paths mirror what `buildSerializedWorkspaceArtifact`
- * already expects to strip (it walks tar entries and removes the top-
- * level wrapper directory to match the URI convention the curated-loader
- * uses on the studio side).
- */
-function loadResourceTree(resourceSubdir: string, archiveWrapper: string): Record<string, string> {
-  const root = join(RESOURCES_ROOT, resourceSubdir);
-  // Verify the resource root exists up-front. P1 review (PR #210): silently
-  // returning `{}` for a missing corpus produced a downstream tar failure
-  // ("Cowardly refusing to create an empty archive") that masked the actual
-  // misconfiguration. Fail loudly with a setup hint so fresh checkouts get
-  // an actionable error instead of an opaque archive-creation crash.
-  try {
-    const st = statSync(root);
-    if (!st.isDirectory()) {
-      throw new Error(`.resources/${resourceSubdir} exists but is not a directory`);
-    }
-  } catch (err) {
-    if (err && typeof err === 'object' && 'code' in err && (err as { code: string }).code === 'ENOENT') {
-      throw new Error(
-        `[seed] Missing corpus directory: ${root}\n` +
-          `       The '.resources/' tree is gitignored and must be populated locally before\n` +
-          `       running 'seed:local'. Expected subdirectory: .resources/${resourceSubdir}/\n` +
-          `       Populate it by cloning the upstream model repo into that location, e.g.:\n` +
-          `         git clone https://github.com/finos/common-domain-model .resources/cdm\n` +
-          `         git clone https://github.com/finos/rune-dsl .resources/rune-dsl\n` +
-          `         git clone https://github.com/finos/rune-fpml .resources/rune-fpml\n` +
-          `       (The seed walks each subtree recursively for *.rosetta files.)`
-      );
-    }
-    throw err;
-  }
-
-  // P2 review (PR #210): walk the subtree recursively so common Rosetta
-  // corpus layouts (e.g. `<repo>/rosetta-source/src/main/rosetta/...`)
-  // produce non-empty fixture sets. The previous flat readdir dropped every
-  // nested directory and returned `{}` for any non-flat layout. Keys are
-  // computed relative to `root` and prefixed with `archiveWrapper` so the
-  // tar archive preserves the subdirectory structure (matching the on-disk
-  // layout, which is what `buildSerializedWorkspaceArtifact` expects after
-  // stripping the wrapper directory).
-  const out: Record<string, string> = {};
-  const stack: string[] = [root];
-  while (stack.length > 0) {
-    const dir = stack.pop()!;
-    for (const name of readdirSync(dir)) {
-      const full = join(dir, name);
-      const st = statSync(full);
-      if (st.isDirectory()) {
-        stack.push(full);
-        continue;
-      }
-      if (!st.isFile() || !name.endsWith('.rosetta')) continue;
-      // Preserve nested path relative to the resource root so the archive
-      // mirrors the on-disk layout. Posix separators (`/`) are required by
-      // tar; relative() uses platform separators on Windows so normalize.
-      const rel = relative(root, full).split(/[\\/]/).join('/');
-      out[`${archiveWrapper}/${rel}`] = readFileSync(full, 'utf8');
-    }
-  }
-
-  if (Object.keys(out).length === 0) {
-    throw new Error(
-      `[seed] No *.rosetta files found under ${root}.\n` +
-        `       The directory exists but contains no Rosetta sources. Verify the corpus\n` +
-        `       was cloned completely and that '*.rosetta' files are present somewhere\n` +
-        `       under .resources/${resourceSubdir}/.`
-    );
-  }
-
-  return out;
-}
-
-/**
- * Per-model fixtures, sourced from the real corpora under `.resources/`.
- * User feedback: the previous 3-file synthetic fixture was too sparse to
- * exercise Structure / Graph / Excel codegen meaningfully — and the only
- * way to validate performance characteristics (auto-fit, mutex panes,
- * font-scale zoom) at production data scale is to bundle the same
- * volume that the prod CF Pages deploy serves.
- *
- * Paths inside the tar mimic the production archive layout
- * (codeload.github.com wraps the repo root in `{repo}-{ref}/`);
- * `buildSerializedWorkspaceArtifact` strips the top-level wrapper.
- */
-const FIXTURES: Record<CuratedModelId, Record<string, string>> = {
-  cdm: loadResourceTree('cdm', 'common-domain-model-local/rosetta-source'),
-  fpml: loadResourceTree('rune-fpml', 'fpml-local'),
-  'rune-dsl': loadResourceTree('rune-dsl', 'rune-dsl-local')
-};
+const FIXTURES = loadLocalFixtures(RESOURCES_ROOT);
 
 const PUBLIC_ROOT = 'https://www.daikonic.dev/curated';
 const LOCAL_LANGIUM_VERSION = '4.2.2'; // matches LANGIUM_VERSION in serialized-artifact.ts

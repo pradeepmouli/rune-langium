@@ -13,23 +13,28 @@
 //
 // Outputs to dist/curated-artifacts/<modelId>/ for R2 upload via wrangler.
 
+import { parseArgs } from 'node:util';
+import { join } from 'node:path';
 import { createHash } from 'node:crypto';
-import { writeFile, mkdir } from 'node:fs/promises';
+import { writeFile, mkdir, readFile } from 'node:fs/promises';
 import { gunzipSync, gzipSync } from 'node:zlib';
 import { computeNamespaceGraph, nsArtifactSlug } from './lib/namespace-graph.mjs';
+import { resolveCuratedSources } from './lib/curated-sources.mjs';
+import { isCuratedSourceFile } from '../packages/curated-schema/dist/index.js';
 
 const corePkgDir = new URL('../packages/core/', import.meta.url);
 const langiumIndex = new URL('node_modules/langium/lib/index.js', corePkgDir);
 const { URI } = await import(langiumIndex);
 
-const SOURCES = [
-  { id: 'cdm', owner: 'REGnosys', repo: 'rosetta-cdm', ref: 'master' },
-  { id: 'fpml', owner: 'rosetta-models', repo: 'rune-fpml', ref: 'master' },
-  { id: 'rune-dsl', owner: 'finos', repo: 'rune-dsl', ref: 'main' }
-];
+const { values: options } = parseArgs({
+  options: { sources: { type: 'string' }, 'out-dir': { type: 'string' }, 'cache-dir': { type: 'string' } }
+});
+const SOURCES = options.sources ? JSON.parse(await readFile(options.sources, 'utf8')) : await resolveCuratedSources();
 
-const LANGIUM_VERSION = '4.2.2';
-const OUT_DIR = 'dist/curated-artifacts';
+const LANGIUM_VERSION = JSON.parse(
+  await readFile(new URL('node_modules/langium/package.json', corePkgDir), 'utf8')
+).version;
+const OUT_DIR = options['out-dir'] ?? 'dist/curated-artifacts';
 // Public base for absolute artifact URLs in the manifest (matches archiveUrl +
 // artifacts.serializedWorkspace.url). Per-namespace `artifact` values MUST be
 // absolute so any consumer can fetch them directly without prefixing — relative
@@ -41,11 +46,28 @@ function sha256Hex(bytes) {
 }
 
 async function downloadArchive(source) {
-  const url = `https://codeload.github.com/${source.owner}/${source.repo}/tar.gz/refs/heads/${source.ref}`;
+  const cache =
+    options['cache-dir'] && source.commit
+      ? join(options['cache-dir'], `${source.id}-${source.commit}.tar.gz`)
+      : undefined;
+  if (cache) {
+    try {
+      return new Uint8Array(await readFile(cache));
+    } catch (error) {
+      if (error.code !== 'ENOENT') throw error;
+    }
+  }
+  const ref = source.commit ?? `refs/heads/${source.ref}`;
+  const url = `https://codeload.github.com/${source.owner}/${source.repo}/tar.gz/${ref}`;
   console.log(`  Downloading ${url}`);
   const res = await fetch(url);
   if (!res.ok) throw new Error(`HTTP ${res.status} for ${url}`);
-  return new Uint8Array(await res.arrayBuffer());
+  const bytes = new Uint8Array(await res.arrayBuffer());
+  if (cache) {
+    await mkdir(options['cache-dir'], { recursive: true });
+    await writeFile(cache, bytes);
+  }
+  return bytes;
 }
 
 function readTarString(block, start, end) {
@@ -109,24 +131,21 @@ function stampNamespacesIntoModelJson(modelJson, namespace, bigIntReplacer) {
   return JSON.stringify(parsed, bigIntReplacer);
 }
 
-async function buildArtifact(source, archiveBytes) {
-  const { createRuneDslServices, serializeRuneModel, runeBigIntReplacer, namespaceFromModelName } =
+async function buildArtifact(source, archiveBytes, RuneDsl, documentMap) {
+  const { serializeRuneModel, runeBigIntReplacer, namespaceFromModelName } =
     await import('../packages/core/dist/index.js');
 
-  const rosettaFiles = extractRosettaFiles(archiveBytes);
+  const rosettaFiles = extractRosettaFiles(archiveBytes).filter((file) => isCuratedSourceFile(source.id, file.path));
   console.log(`  Found ${rosettaFiles.length} .rosetta files`);
   if (rosettaFiles.length === 0) throw new Error(`${source.id}: no .rosetta files`);
 
-  const { RuneDsl } = createRuneDslServices();
-  const factory = RuneDsl.shared.workspace.LangiumDocumentFactory;
-  const builder = RuneDsl.shared.workspace.DocumentBuilder;
   const serializer = RuneDsl.serializer.JsonSerializer;
 
-  console.log(`  Parsing through Langium...`);
-  const documents = rosettaFiles.map((file) =>
-    factory.fromString(file.content, URI.parse(`[${source.id}]/${file.path}`))
-  );
-  await builder.build(documents, { validation: false });
+  const documents = rosettaFiles.map((file) => {
+    const document = documentMap.get(`${source.id}/${file.path}`);
+    if (!document) throw new Error(`Missing parsed document: ${file.path}`);
+    return document;
+  });
 
   console.log(`  Serializing with textRegions...`);
   const version = new Date().toISOString().slice(0, 10);
@@ -166,6 +185,7 @@ async function buildArtifact(source, archiveBytes) {
       const rawModelJson = serializeRuneModel(serializer, model);
       return {
         path: rosettaFiles[i].path,
+        content: rosettaFiles[i].content,
         modelJson: ns ? stampNamespacesIntoModelJson(rawModelJson, ns, runeBigIntReplacer) : rawModelJson,
         exports
       };
@@ -186,6 +206,34 @@ async function buildArtifact(source, archiveBytes) {
 
 async function main() {
   await mkdir(OUT_DIR, { recursive: true });
+  await writeFile(`${OUT_DIR}/resolved-sources.json`, JSON.stringify(SOURCES, null, 2) + '\n');
+  const { createRuneDslServices, assertValidDocuments, addLegacyAnnotations } =
+    await import('../packages/core/dist/index.js');
+  const archives = new Map(
+    await Promise.all(SOURCES.map(async (source) => [source.id, await downloadArchive(source)]))
+  );
+  const { RuneDsl } = createRuneDslServices();
+  const factory = RuneDsl.shared.workspace.LangiumDocumentFactory;
+  const documentMap = new Map(
+    SOURCES.flatMap((source) =>
+      extractRosettaFiles(archives.get(source.id))
+        .filter((file) => isCuratedSourceFile(source.id, file.path))
+        .map((file) => {
+          const document = factory.fromString(file.content, URI.parse(`[${source.id}]/${file.path}`));
+          return [
+            `${source.id}/${file.path}`,
+            source.id === 'rune-dsl' && file.path.endsWith('/annotations.rosetta')
+              ? addLegacyAnnotations(document, factory)
+              : document
+          ];
+        })
+    )
+  );
+  const documents = [...documentMap.values()];
+  console.log(`Parsing ${documents.length} production documents in one workspace...`);
+  await RuneDsl.shared.workspace.DocumentBuilder.build(documents, { validation: false });
+  assertValidDocuments(documents);
+  const namespacesByKey = new Map([...documentMap].map(([key, document]) => [key, document.parseResult.value.name]));
   let failed = false;
 
   for (const source of SOURCES) {
@@ -194,17 +242,27 @@ async function main() {
     await mkdir(outDir, { recursive: true });
 
     try {
-      const archiveBytes = await downloadArchive(source);
+      const archiveBytes = archives.get(source.id);
       const archiveSha = sha256Hex(archiveBytes);
       console.log(`  Archive: ${archiveBytes.byteLength} bytes, SHA: ${archiveSha.slice(0, 16)}...`);
 
-      const result = await buildArtifact(source, archiveBytes);
+      const result = await buildArtifact(source, archiveBytes, RuneDsl, documentMap);
       console.log(`  Artifact: ${result.sizeBytes} bytes, ${result.documentCount} documents`);
 
       await writeFile(`${outDir}/latest.serialized.json.gz`, result.bytes);
 
       // ── Per-namespace artifacts ────────────────────────────────────────────
-      const graph = computeNamespaceGraph(result.documents, source.id);
+      const graph = computeNamespaceGraph(result.documents, source.id, namespacesByKey);
+      const dependencies = {};
+      for (const entry of Object.values(graph))
+        for (const dependency of entry.deps) {
+          const prefix = dependency.endsWith('.*') ? dependency.slice(0, -2) : dependency;
+          for (const [key, namespace] of namespacesByKey) {
+            const owner = key.slice(0, key.indexOf('/'));
+            if (owner !== source.id && (namespace === prefix || namespace.startsWith(prefix + '.')))
+              dependencies[owner] = 'latest';
+          }
+        }
 
       // Build a path→ns lookup so we group by the graph's assignments
       const pathToNs = new Map();
@@ -261,7 +319,7 @@ async function main() {
       // Build namespaces map for the meta. The map KEY is the real namespace
       // (used by /api/parse for closure + the explorer); the `artifact` value
       // uses the R2-safe slug so the key matches the uploaded blob filename.
-      const version = result.version;
+      const version = `${result.version}-${result.sha256.slice(0, 12)}`;
       const namespacesMap = {};
       for (const [ns, entry] of Object.entries(graph)) {
         namespacesMap[ns] = {
@@ -278,13 +336,16 @@ async function main() {
         JSON.stringify(
           {
             modelId: source.id,
+            upstreamCommit: source.commit,
+            langiumVersion: LANGIUM_VERSION,
             version,
             sha256: result.sha256,
             sizeBytes: result.sizeBytes,
             documentCount: result.documentCount,
             archiveSha256: archiveSha,
             archiveSizeBytes: archiveBytes.byteLength,
-            namespaces: namespacesMap
+            namespaces: namespacesMap,
+            dependencies
           },
           null,
           2

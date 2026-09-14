@@ -20,8 +20,9 @@
  * (test/fixtures/choice-typed-attribute-crossns/).
  */
 
+import { generatedDirectory } from '../helpers/generated-directory.js';
 import { readFileSync, readdirSync } from 'node:fs';
-import { mkdtemp, writeFile, mkdir } from 'node:fs/promises';
+import { writeFile, mkdir } from 'node:fs/promises';
 import { join, dirname, resolve } from 'node:path';
 import { tmpdir } from 'node:os';
 import { pathToFileURL } from 'node:url';
@@ -81,7 +82,7 @@ describe('TS emitter — Choice-typed attribute cross-namespace import', () => {
     const outputs = await generate(docs, { target: 'typescript' });
     expect(outputs.length).toBeGreaterThanOrEqual(2);
 
-    const tmpDir = await mkdtemp(join(tmpdir(), 'rune-codegen-choice-attr-crossns-'));
+    const tmpDir = await generatedDirectory(join(tmpdir(), 'rune-codegen-choice-attr-crossns-'));
     let holderPath = '';
     for (const output of outputs) {
       const outPath = join(tmpDir, output.relativePath);

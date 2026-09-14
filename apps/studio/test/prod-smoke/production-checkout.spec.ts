@@ -4,6 +4,7 @@
 import { Buffer } from 'node:buffer';
 import { execFileSync } from 'node:child_process';
 import { expect, test } from '@playwright/test';
+import { expectSourceReadOnly } from '../prod-ux/readiness.js';
 
 const CF_PAGES_PROJECT = 'daikonic-dev';
 const CF_PRODUCTION_BRANCH = 'master';
@@ -74,7 +75,7 @@ async function loadCdm(page: import('@playwright/test').Page) {
 test.describe('production checkout smoke', () => {
   test.skip(!process.env.PLAYWRIGHT_PROD_SMOKE, 'set PLAYWRIGHT_PROD_SMOKE=1 to run against a deployed Studio');
 
-  test('loads CDM and updates explorer-driven panes with reference-only design', async ({ page }) => {
+  test('loads CDM and updates explorer-driven panes with original curated source', async ({ page }) => {
     await loadCdm(page);
     const centerStack = page.getByTestId('center-stack');
 
@@ -102,7 +103,10 @@ test.describe('production checkout smoke', () => {
     await expect(centerStack.getByText('cdm.base.datetime', { exact: true })).toBeVisible();
     await expect(centerStack.getByText('Reference Only', { exact: true })).toBeVisible();
     await page.getByRole('button', { name: 'Source' }).click();
-    await expect(centerStack.getByText('namespace example', { exact: false })).toBeVisible();
+    await expect(page.getByLabel('Source file path')).toContainText('base-datetime-type.rosetta');
+    const source = page.getByTestId('source-editor').locator('.cm-content');
+    await expect(source).toContainText('type BusinessCenters');
+    await expectSourceReadOnly(source);
   });
 
   test('Inspector populates members on first navigation to a never-hydrated curated namespace', async ({ page }) => {
@@ -138,6 +142,12 @@ test.describe('production checkout smoke', () => {
     // when fields.length + inheritedCount > 0, so /Attributes \([1-9]/ ensures
     // at least one attribute; being explicit here documents the intent clearly.
     await expect(centerStack.getByText(/Attributes \([1-9]/)).toBeVisible({ timeout: 30_000 });
+
+    await page.getByRole('button', { name: 'Source' }).click();
+    await expect(page.getByLabel('Source file path')).toContainText('base-staticdata-party-type.rosetta');
+    const source = page.getByTestId('source-editor').locator('.cm-content');
+    await expect(source).toContainText('type Counterparty');
+    await expectSourceReadOnly(source);
   });
 
   test('graph node shows a hydrating spinner while a never-hydrated namespace loads', async ({ page }) => {

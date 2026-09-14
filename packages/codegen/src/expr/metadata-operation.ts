@@ -8,7 +8,7 @@
  * `as-key` creates a reference-metadata object carrying the source global and
  * external keys. Returning the argument directly loses that information.
  */
-import { isAsKeyOperation, isWithMetaOperation, type RosettaExpression } from '@rune-langium/core';
+import { isListLiteral, isAsKeyOperation, isWithMetaOperation, type RosettaExpression } from '@rune-langium/core';
 import { expressionMetadataKind } from './metadata-type.js';
 import type { ExpressionTranspilerContext } from './transpiler.js';
 
@@ -27,7 +27,8 @@ export function renderMetadataOperation(
   render: Render
 ): string | undefined {
   if (isWithMetaOperation(expr)) {
-    const argument = render(expr.argument, ctx);
+    const argument =
+      isListLiteral(expr.argument) && expr.argument.elements.length === 0 ? 'undefined' : render(expr.argument, ctx);
     const entries = expr.entries
       .map((entry) => {
         const key = entry.key?.ref && 'name' in entry.key.ref ? entry.key.ref.name : entry.key?.$refText;

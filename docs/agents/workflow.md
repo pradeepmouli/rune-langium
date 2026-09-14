@@ -25,6 +25,12 @@ pnpm --filter @rune-langium/codegen run generate:sql-node-types
 ```
 
 Run only the generators affected by the change.
+Domain generation applies the same safe lint fixes as the commit hook before
+formatting, so its type-only imports reproduce in CI.
+The current Langium CLI's JSON-schema validation fails with `Invalid URL` on
+Node 24/26. Node 22.13.0 was verified for grammar generation. When the CLI asks
+whether to delete additional generated files, retain `domain.ts` and
+`zod-schemas.ts`; their separate generators own them.
 `langium-zod` is exactly pinned in workspace overrides and core/visual-editor
 manifests; update those together if deliberately upgrading the generator.
 SQL node types derive from the exactly pinned `@l1xnan/tree-sitter-sql` grammar.
@@ -32,7 +38,9 @@ SQL node types derive from the exactly pinned `@l1xnan/tree-sitter-sql` grammar.
 ## Testing and Editor Setup
 
 - Use Vitest for public APIs and shared architecture seams. Prefer focused package checks for isolated changes; broaden for affected consumers.
+- Full TypeScript corpus verification: build core, curated-schema, and codegen, then run `pnpm run verify:codegen-corpus`. The check pins upstream commits in `scripts/fixtures/codegen-corpus.json`, reuses the production artifact builder and cached archives, and strictly compiles every generated file. To check a browser download, run `pnpm run verify:codegen-corpus --zip /absolute/path/typescript-output.zip`. Dependencies must be installed; the check uses the real Temporal package. Caches and serialized artifacts stay under ignored `dist/`.
 - Real CDM/Rune/FpML fixtures live under hidden `.resources/`. Prefer them for corpus repros, and guard or skip corpus-dependent tests when absent.
+- Verify fixture revisions before claiming upstream parity. The September 12 refresh found a February Rune reference checkout; current production CDM/FpML needed `as` narrowing and schema declarations. A successful parse or ZIP download does not establish that the entire generated corpus passes strict TypeScript compilation.
 - Studio Playwright tests must wait for visible readiness, not `networkidle`, when workers or LSP traffic remain active.
 - Production smoke: `pnpm --filter @rune-langium/studio run test:prod-smoke`. Endpoint and fuller UX checks are documented in [TESTING.md](../TESTING.md).
 - Tailwind IntelliSense uses `.vscode/settings.json`: `tailwindCSS.experimental.configFile` maps `apps/studio/src/app.css` to Studio, design-system, and visual-editor source trees.
@@ -104,3 +112,22 @@ entry is preserved and requires `rust-analyzer` on PATH.
 After changing the config, exit and relaunch Copilot CLI, then run `/lsp` to
 check status. This config does not add an LSP tool to an already-running Codex
 session. The native server can also be queried over standard LSP stdio.
+
+Curated publication changes: run `node --test scripts/lib/curated-sources.test.mjs scripts/upload-serialized-artifacts.test.mjs`. These verify source selection, dependency ordering, immutable cohort manifests, and failures at every latest-pointer step without writing to R2. Run Studio Pages Function tests for shared parse/download closure and cohort selection, and mirror-worker tests for cron metadata preservation when changing publication.
+
+The nightly artifact builder follows CDM `master`, resolves that exact commit's
+`rune-fpml.version` and `rosetta.dsl.version` to released dependency commits, and
+records the cohort in `resolved-sources.json`. CDM's direct Rune dependency can
+upgrade FpML's older transitive requirement within the same major version;
+newer or cross-major requirements fail selection. Every selected document must
+still pass the linking gate. `--sources` accepts an explicit cohort for reproducible
+checks; `scripts/fixtures/codegen-corpus.json` records the verified cohort.
+
+CDM still uses legacy function annotations removed by
+[Rune's schema migration](https://github.com/finos/rune-dsl/commit/5ed7142f1a6b2e82885e9ab1e9cb5b8479d67c8b).
+Both artifact builders apply core's `addLegacyAnnotations` to the runtime annotation
+document before linking. It adds only missing `ingest`, `enrich`, and `projection`
+declarations, reusing the same definitions as the bundled standard library.
+Upstream declarations and newer schema annotations are preserved; unknown names
+remain errors. Serialized annotation documents include this explicit dialect
+compatibility bridge; upstream archive bytes and their hashes remain unchanged.

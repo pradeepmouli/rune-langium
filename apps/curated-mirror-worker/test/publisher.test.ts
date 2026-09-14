@@ -174,59 +174,66 @@ describe('publishCuratedMirrors (T025)', () => {
     expect(manifest.artifacts).toBeUndefined();
   });
 
-  it('preserves namespaces + serializedWorkspace from the prior manifest across a cron rewrite', async () => {
-    // The CI artifact build (curated-artifacts.yml) leaves the manifest at v2
-    // with a namespaces map + serializedWorkspace ref. The cron must NOT drop
-    // those when it rewrites manifest.json, else /api/parse's fast-path blinks
-    // back to the whole-bundle (1102) fallback until the next CI run.
-    const priorNamespaces = {
-      'cdm.base': {
-        deps: ['cdm.base.math'],
-        exports: [{ type: 'Data', name: 'Foo' }],
-        artifact: 'artifacts/2026-05-01/ns/cdm.base.json.gz'
-      }
-    };
-    const priorSerializedWorkspace = {
-      schemaVersion: 1 as const,
-      kind: 'langium-json-serializer' as const,
-      url: 'https://www.daikonic.dev/curated/cdm/latest.serialized.json.gz',
-      sha256: 'a'.repeat(64),
-      sizeBytes: 10,
-      documentCount: 1,
-      langiumVersion: '4.2.2'
-    };
-    await bucket.put(
-      'curated/cdm/manifest.json',
-      JSON.stringify({
-        schemaVersion: 2,
-        modelId: 'cdm',
-        version: '2026-05-01',
-        sha256: 'b'.repeat(64),
-        sizeBytes: 1,
-        generatedAt: 'old',
-        upstreamCommit: '',
-        upstreamRef: 'master',
-        archiveUrl: 'https://www.daikonic.dev/curated/cdm/latest.tar.gz',
-        history: [],
-        artifacts: { serializedWorkspace: priorSerializedWorkspace },
-        namespaces: priorNamespaces
-      })
-    );
-    // The preserved namespaces point at artifacts/2026-05-01/ns/… — seed that
-    // version's archive so it stays within retention (else the guard drops it).
-    await bucket.put('curated/cdm/archives/2026-05-01.tar.gz', new Uint8Array([1]));
+  it.each([undefined, `cohort-${'c'.repeat(64)}`])(
+    'preserves artifact metadata across cron rewrites for cohort %s',
+    async (cohort) => {
+      // The CI artifact build (curated-artifacts.yml) leaves the manifest at v2
+      // with a namespaces map + serializedWorkspace ref. The cron must NOT drop
+      // those when it rewrites manifest.json, else /api/parse's fast-path blinks
+      // back to the whole-bundle (1102) fallback until the next CI run.
+      const priorNamespaces = {
+        'cdm.base': {
+          deps: ['cdm.base.math'],
+          exports: [{ type: 'Data', name: 'Foo' }],
+          artifact: `artifacts/${cohort ? '2026-05-01-contenthash' : '2026-05-01'}/ns/cdm.base.json.gz`
+        }
+      };
+      const priorSerializedWorkspace = {
+        schemaVersion: 1 as const,
+        kind: 'langium-json-serializer' as const,
+        url: 'https://www.daikonic.dev/curated/cdm/latest.serialized.json.gz',
+        sha256: 'a'.repeat(64),
+        sizeBytes: 10,
+        documentCount: 1,
+        langiumVersion: '4.2.2'
+      };
+      await bucket.put(
+        'curated/cdm/manifest.json',
+        JSON.stringify({
+          schemaVersion: 2,
+          cohort,
+          dependencies: { 'rune-dsl': cohort ?? 'latest' },
+          modelId: 'cdm',
+          version: '2026-05-01',
+          sha256: 'b'.repeat(64),
+          sizeBytes: 1,
+          generatedAt: 'old',
+          upstreamCommit: '',
+          upstreamRef: 'master',
+          archiveUrl: 'https://www.daikonic.dev/curated/cdm/latest.tar.gz',
+          history: [],
+          artifacts: { serializedWorkspace: priorSerializedWorkspace },
+          namespaces: priorNamespaces
+        })
+      );
+      // The preserved namespaces point at artifacts/2026-05-01/ns/… — seed that
+      // version's archive so it stays within retention (else the guard drops it).
+      await bucket.put('curated/cdm/archives/2026-05-01.tar.gz', new Uint8Array([1]));
 
-    await publishCuratedMirrors({ sources: [SOURCES[0]!], bucket, retention: 14 });
+      await publishCuratedMirrors({ sources: [SOURCES[0]!], bucket, retention: 14 });
 
-    const manifest = JSON.parse(await bucket.getText('curated/cdm/manifest.json'));
-    // v2 fast-path fields carried forward verbatim…
-    expect(manifest.schemaVersion).toBe(2);
-    expect(manifest.namespaces).toEqual(priorNamespaces);
-    expect(manifest.artifacts.serializedWorkspace).toEqual(priorSerializedWorkspace);
-    // …while the tarball-derived fields refresh for the new mirror run.
-    expect(manifest.version).toMatch(/^\d{4}-\d{2}-\d{2}$/);
-    expect(manifest.generatedAt).not.toBe('old');
-  });
+      const manifest = JSON.parse(await bucket.getText('curated/cdm/manifest.json'));
+      // v2 fast-path fields carried forward verbatim…
+      expect(manifest.schemaVersion).toBe(2);
+      expect(manifest.namespaces).toEqual(priorNamespaces);
+      expect(manifest.cohort).toBe(cohort);
+      expect(manifest.dependencies).toEqual({ 'rune-dsl': cohort ?? 'latest' });
+      expect(manifest.artifacts.serializedWorkspace).toEqual(priorSerializedWorkspace);
+      // …while the tarball-derived fields refresh for the new mirror run.
+      expect(manifest.version).toMatch(/^\d{4}-\d{2}-\d{2}$/);
+      expect(manifest.generatedAt).not.toBe('old');
+    }
+  );
 
   it('drops preserved namespaces when their artifact version has been pruned', async () => {
     // Prior manifest's namespaces reference artifacts/2026-04-01/ns/… but CI has

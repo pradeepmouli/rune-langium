@@ -1092,6 +1092,10 @@ function getSummaryMessage(schema: FormPreviewSchema, status: PreviewStatus, sam
     return 'Ready to validate sample';
   }
 
+  if (sample.validationPending) {
+    return 'Validating sample';
+  }
+
   if (status.state === 'invalid' || !sample.valid) {
     const count = Object.keys(sample.errors).length;
     return count > 0 ? `Invalid sample (${count} issue${count === 1 ? '' : 's'})` : 'Invalid sample';

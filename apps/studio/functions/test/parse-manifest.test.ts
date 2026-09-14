@@ -159,7 +159,7 @@ describe('POST /api/parse — manifest fast-path (v2), manifest required (no v1 
   });
 
   it('Test 1 — manifest fast-path: only closure namespaces fetched; whole-bundle path never taken', async () => {
-    const mod = await import('../lib/curated-fetch.js');
+    const mod = await import('../../src/services/curated-fetch.js');
 
     vi.spyOn(mod, 'fetchCuratedManifest').mockResolvedValue(MANIFEST as never);
 
@@ -221,7 +221,7 @@ describe('POST /api/parse — manifest fast-path (v2), manifest required (no v1 
   });
 
   it('Test 1b — non-closure deferredExports filePath starts with bundle id, not "artifacts/"', async () => {
-    const mod = await import('../lib/curated-fetch.js');
+    const mod = await import('../../src/services/curated-fetch.js');
 
     vi.spyOn(mod, 'fetchCuratedManifest').mockResolvedValue(MANIFEST as never);
 
@@ -252,7 +252,7 @@ describe('POST /api/parse — manifest fast-path (v2), manifest required (no v1 
   });
 
   it('Test 3 — empty namespaces map returns 502 (manifest required, no v1 fallback)', async () => {
-    const mod = await import('../lib/curated-fetch.js');
+    const mod = await import('../../src/services/curated-fetch.js');
     vi.spyOn(mod, 'fetchCuratedManifest').mockResolvedValue({ ...MANIFEST, namespaces: {} } as never);
     const nsSpy = vi.spyOn(mod, 'fetchCuratedNamespace');
 
@@ -271,7 +271,7 @@ describe('POST /api/parse — manifest fast-path (v2), manifest required (no v1 
   });
 
   it('Test 3b — manifest fetch failure returns 502 (no whole-bundle fallback)', async () => {
-    const mod = await import('../lib/curated-fetch.js');
+    const mod = await import('../../src/services/curated-fetch.js');
     vi.spyOn(mod, 'fetchCuratedManifest').mockRejectedValue(
       new mod.CuratedBundleUnavailableError('cdm', 'latest', 503)
     );
@@ -290,7 +290,7 @@ describe('POST /api/parse — manifest fast-path (v2), manifest required (no v1 
   });
 
   it('Test 4a — non-array hydrateNamespaces (e.g. a string) does NOT 500 and is ignored', async () => {
-    const mod = await import('../lib/curated-fetch.js');
+    const mod = await import('../../src/services/curated-fetch.js');
 
     vi.spyOn(mod, 'fetchCuratedManifest').mockResolvedValue(MANIFEST as never);
     vi.spyOn(mod, 'fetchCuratedNamespace').mockResolvedValue([]);
@@ -317,7 +317,7 @@ describe('POST /api/parse — manifest fast-path (v2), manifest required (no v1 
     // cdm.other has no transitive deps and would NOT enter the closure via user
     // imports (there are none). Sending hydrateNamespaces: ['cdm.other'] is the
     // ONLY reason it should appear in hydrationState.documents.
-    const mod = await import('../lib/curated-fetch.js');
+    const mod = await import('../../src/services/curated-fetch.js');
 
     vi.spyOn(mod, 'fetchCuratedManifest').mockResolvedValue(MANIFEST as never);
 

@@ -1,5 +1,6 @@
 // SPDX-License-Identifier: MIT
 // Copyright (c) 2026 Pradeep Mouli
+import { choiceOptionFieldName } from '@rune-langium/core';
 
 import type { RosettaCardinality, Data, Choice, Condition, RosettaRule } from '@rune-langium/core';
 import { isData, isChoice } from '@rune-langium/core';
@@ -145,9 +146,7 @@ function contributeChoiceOptionsAsAttributes(choice: Choice, map: Map<string, st
  * duplicated privately in both emitters) so `buildAttrAccessorNamesMap`
  * can share the exact same mapping.
  */
-export function choiceOptionFieldName(optionTypeName: string): string {
-  return optionTypeName.charAt(0).toLowerCase() + optionTypeName.slice(1);
-}
+export { choiceOptionFieldName } from '@rune-langium/core';
 
 /**
  * Build a map of pseudo-attribute name (the bare option TYPE name, e.g.

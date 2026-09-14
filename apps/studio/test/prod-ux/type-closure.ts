@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: FSL-1.1-ALv2
 // Copyright (c) 2026 Pradeep Mouli
 
+import { waitForHydratedNode } from './readiness.js';
 import type { Page } from '@playwright/test';
 import { BUILTIN_TYPES } from '@rune-langium/visual-editor';
 
@@ -15,17 +16,6 @@ export interface TypeClosureResult {
 
 const VISITED_CAP = 150;
 const NAV_TESTID_PREFIX = 'ns-type-nav-';
-
-// Playwright's page.evaluate callback type-checks against the DOM lib's own
-// Window type, which doesn't see apps/studio/src's `declare global`
-// augmentation (type-graph-window-bridge.ts) — re-declared locally so this
-// module type-checks standalone, same pattern as fixtures.ts's OpLogEntry
-// bridge declaration.
-declare global {
-  interface Window {
-    __runeStudioTypeGraph?: { snapshot(): Array<{ id: string; data: unknown }> };
-  }
-}
 
 const BUILTIN_TYPE_SET: ReadonlySet<string> = new Set(BUILTIN_TYPES);
 
@@ -231,17 +221,7 @@ export async function walkTypeClosure(
 
     await page.getByTestId(`${NAV_TESTID_PREFIX}${resolvedFqn}`).click();
     hydrationsTriggered++;
-    // Matches J04a/J04b's own proven post-nav wait — confirms selection (and
-    // for a never-hydrated curated namespace, hydration) has landed before
-    // reading the bridge snapshot.
-    await page
-      .getByText(resolvedFqn, { exact: true })
-      .first()
-      .waitFor({ state: 'visible', timeout: 15000 })
-      .catch(() => {
-        /* best-effort — fall through to the snapshot check below regardless */
-      });
-
+    await waitForHydratedNode(page, resolvedFqn);
     const snapshot = await page.evaluate(() => window.__runeStudioTypeGraph?.snapshot() ?? []);
     const node = snapshot.find((n) => n.id === resolvedFqn);
     if (!node) {

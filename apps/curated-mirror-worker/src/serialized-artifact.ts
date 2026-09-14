@@ -1,7 +1,13 @@
 // SPDX-License-Identifier: FSL-1.1-ALv2
 // Copyright (c) 2026 Pradeep Mouli
 
-import { createRuneDslServices, serializeRuneModel } from '@rune-langium/core';
+import {
+  createRuneDslServices,
+  serializeRuneModel,
+  assertValidDocuments,
+  addLegacyAnnotations
+} from '@rune-langium/core';
+import { isCuratedSourceFile } from '@rune-langium/curated-schema';
 import type { CuratedModelId, CuratedSerializedWorkspaceArtifact } from '@rune-langium/curated-schema';
 import { URI } from 'langium';
 import { gzip, inflate } from 'pako';
@@ -10,11 +16,6 @@ import { computeNamespaceGraph, type NamespaceGraphEntry } from './namespace-gra
 
 const BLOCK = 512;
 const LANGIUM_VERSION = '4.2.2';
-
-const { RuneDsl } = createRuneDslServices();
-const factory = RuneDsl.shared.workspace.LangiumDocumentFactory;
-const builder = RuneDsl.shared.workspace.DocumentBuilder;
-const serializer = RuneDsl.serializer.JsonSerializer;
 
 interface TarEntry {
   path: string;
@@ -36,15 +37,27 @@ export async function buildSerializedWorkspaceArtifact(
   version: string,
   archiveBytes: Uint8Array
 ): Promise<SerializedArtifactBuildResult> {
-  const rosettaFiles = readRosettaFilesFromTarGz(archiveBytes);
+  const rosettaFiles = readRosettaFilesFromTarGz(archiveBytes).filter((file) =>
+    isCuratedSourceFile(modelId, file.path)
+  );
   if (rosettaFiles.length === 0) {
     throw new Error(`curated source ${modelId}@${version} contained no .rosetta files`);
   }
 
-  const documents = rosettaFiles.map((file) =>
-    factory.fromString(file.content, URI.parse(`[${modelId}]/${file.path}`))
-  );
+  const { RuneDsl } = createRuneDslServices();
+  await RuneDsl.shared.workspace.WorkspaceManager.initializeWorkspace([]);
+  const factory = RuneDsl.shared.workspace.LangiumDocumentFactory;
+  const builder = RuneDsl.shared.workspace.DocumentBuilder;
+  const serializer = RuneDsl.serializer.JsonSerializer;
+
+  const documents = rosettaFiles.map((file) => {
+    const document = factory.fromString(file.content, URI.parse(`[${modelId}]/${file.path}`));
+    return modelId === 'rune-dsl' && file.path.endsWith('/annotations.rosetta')
+      ? addLegacyAnnotations(document, factory)
+      : document;
+  });
   await builder.build(documents, { validation: false });
+  assertValidDocuments(documents);
 
   const perDocArray = documents.map((document, index) => {
     const model = document.parseResult.value;
@@ -82,6 +95,7 @@ export async function buildSerializedWorkspaceArtifact(
     }
     return {
       path: rosettaFiles[index]!.path,
+      content: rosettaFiles[index]!.content,
       modelJson: serializeRuneModel(serializer, document.parseResult.value),
       exports
     };
