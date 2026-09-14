@@ -428,6 +428,31 @@ func Parse:
     expect(funcs.Before!({ left: '2026-01-01T00:30:00+05:30', right: '2025-12-31T19:00:00Z' })).toBe(false);
   });
 
+  it('compares implicit temporal pipeline operands chronologically', async () => {
+    const funcs = await compile(
+      [
+        BASICTYPES_ROSETTA,
+        `namespace test.pipeline
+func AllBefore:
+ inputs: values zonedDateTime (0..*) cutoff zonedDateTime (1..1)
+ output: result boolean (1..1)
+ set result: values then all < cutoff
+func AnyAfter:
+ inputs: values zonedDateTime (0..*) cutoff zonedDateTime (1..1)
+ output: result boolean (1..1)
+ set result: values then any > cutoff
+`
+      ],
+      '',
+      true
+    );
+    const values = ['2026-01-01T00:30:00+05:30'];
+    expect(funcs.AllBefore!({ values, cutoff: '2025-12-31T20:00:00Z' })).toBe(true);
+    expect(funcs.AllBefore!({ values, cutoff: '2025-12-31T19:00:00Z' })).toBe(false);
+    expect(funcs.AnyAfter!({ values, cutoff: '2025-12-31T18:00:00Z' })).toBe(true);
+    expect(funcs.AnyAfter!({ values, cutoff: '2025-12-31T20:00:00Z' })).toBe(false);
+  });
+
   it('narrows optional values and unwraps metadata collections in validators', async () => {
     const funcs = await compile(`namespace test.validator
 type Values:

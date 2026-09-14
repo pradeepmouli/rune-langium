@@ -898,7 +898,7 @@ export function transpileComparison(expr: RosettaExpression, ctx: ExpressionTran
       dateTime: 'PlainDateTime',
       zonedDateTime: 'ZonedDateTime'
     };
-    const name = expressionType(expr.left)?.name;
+    const name = expressionType(expr.left ?? getOperationArgument(expr))?.name;
     const kind = name && name in temporal ? temporal[name as keyof typeof temporal] : undefined;
     const parser = kind === 'ZonedDateTime' ? 'runeParseZonedDateTime' : `Temporal.${kind}.from`;
     const comparison = kind
