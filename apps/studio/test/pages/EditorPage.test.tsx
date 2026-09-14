@@ -215,7 +215,7 @@ class MockWorker {
   }
 }
 
-vi.mock('@rune-langium/visual-editor', () => ({
+vi.mock('@rune-langium/visual-editor', async () => ({
   RuneTypeGraph: React.forwardRef(
     (
       {
@@ -263,7 +263,9 @@ vi.mock('@rune-langium/visual-editor', () => ({
   CardinalityCell: structureViewMockState.SENTINEL_CARD_CELL,
   TypePickerCell: structureViewMockState.SENTINEL_TYPE_CELL,
   BUILTIN_TYPES: [],
-  AST_TYPE_TO_NODE_TYPE: {},
+  AST_TYPE_TO_NODE_TYPE: (
+    await vi.importActual<typeof import('@rune-langium/visual-editor')>('@rune-langium/visual-editor')
+  ).AST_TYPE_TO_NODE_TYPE,
   // Mirrors the production helper's fallback chain
   // (data.$type → data.typeKind → node.type → 'data'). Kept as a tiny
   // hand-rolled stub instead of re-importing the real helper so the mock
