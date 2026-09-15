@@ -47,7 +47,7 @@ export { AttributeEditor } from './components/editors/AttributeEditor.js';
 export type { AttributeEditorProps } from './components/editors/AttributeEditor.js';
 
 // New editor form sub-components
-export { TypeSelector, getKindBadgeClasses, getKindLabel } from './components/editors/TypeSelector.js';
+export { TypeSelector, getKindBadgeClasses, getKindDotClass, getKindLabel } from './components/editors/TypeSelector.js';
 export type {
   TypeSelectorProps,
   TypeSelectorTriggerProps,
@@ -140,6 +140,7 @@ export type { GroupInfo } from './layout/grouped-layout.js';
 
 // Namespace tree utilities
 export { buildNamespaceTree, filterNamespaceTree } from './utils/namespace-tree.js';
+export { buildTypeOptions } from './utils/type-options.js';
 
 // Node-id utilities (dot-form helpers for 3A′ consumers)
 export { makeNodeId, nameFromNodeId, splitNodeId } from './store/node-projection.js';

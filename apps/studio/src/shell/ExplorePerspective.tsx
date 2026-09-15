@@ -35,9 +35,8 @@ import {
   NameCell,
   CardinalityCell,
   TypePickerCell,
-  BUILTIN_TYPES,
   AST_TYPE_TO_NODE_TYPE,
-  resolveNodeKind,
+  buildTypeOptions,
   annotationsToDisplay,
   conditionsToDisplay,
   useEditorStore,
@@ -1567,20 +1566,7 @@ export const ExplorePerspective = withInstrumentation(
       return warnings;
     }, [combinedDiagnostics.errors, combinedDiagnostics.warnings, getSerializedFiles]);
 
-    const availableTypes: TypeOption[] = useMemo(() => {
-      const builtinOptions: TypeOption[] = BUILTIN_TYPES.map((t) => ({
-        value: `builtin::${t}`,
-        label: t,
-        kind: 'builtin' as const
-      }));
-      const graphOptions: TypeOption[] = storeNodes.map((n) => ({
-        value: n.id,
-        label: n.data.name,
-        kind: resolveNodeKind(n) as TypeOption['kind'],
-        namespace: n.meta.namespace
-      }));
-      return [...builtinOptions, ...graphOptions];
-    }, [storeNodes]);
+    const availableTypes: TypeOption[] = useMemo(() => buildTypeOptions(nodeRepository), [nodeRepository]);
 
     const synonymSourceOptions: SourceRefOption[] = useMemo(() => {
       const out: SourceRefOption[] = [];
