@@ -1,5 +1,7 @@
 # Prototype Workspace — Phase 1 Design (Instance Authoring + JSON I/O)
 
+**UX follow-on:** The [September 14 workspace UX design](2026-09-14-prototype-workspace-ux-design.md) records the agreed replacement layout and preview-to-instance navigation. Its implementation is pending; this document retains the historical Phase 1 scope and decisions.
+
 **Renumbered spec**: `023-studio-prototype-workspace` (the originally-drafted `021` collides with the merged/closed `specs/021-codegen-inbound`, and a remote `021-codegen-curated-bundles` branch also exists; `022` is likewise taken by `022-curated-form-preview`).
 
 **Scope of this design**: Phase 1 only — **US1** (create/edit a persistent instance) and **US2** (JSON import/export, including bundles). US3 (references), US4 (instance graph), and the persistent-instance-binding half of US5 (function execution) are deferred to a follow-on Phase 2 spec, written once Phase 1 has landed. US6 (synonym-source import/export) stays gated on `019-codegen-inbound` (already merged) and is added later as a second `ImportCodec`, not part of this design.
