@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: FSL-1.1-ALv2
 // Copyright (c) 2026 Pradeep Mouli
-import { describe, it, expect, beforeEach } from 'vitest';
+import { describe, it, expect, beforeEach, vi } from 'vitest';
 import { render, act } from '@testing-library/react';
 import { useState } from 'react';
 
@@ -156,6 +156,40 @@ describe('CodegenProvider', () => {
       reason: 'unsupported-target',
       message: 'No form preview schema is available for test.instance.Unsupported.'
     });
+  });
+
+  it('waits for this instance file-sync receipt before requesting schema and validation', async () => {
+    render(
+      <WorkspaceStateContext.Provider value={wsState('ws-instance-ready')}>
+        <CodegenProvider>
+          <div />
+        </CodegenProvider>
+      </WorkspaceStateContext.Provider>
+    );
+
+    const worker = FakeWorker.instances[0]!;
+    const id = useInstanceStore.getState().createInstance('user.missing.Type', 'Missing type');
+    const fileRequest = worker.posted.filter((message) => message.type === 'preview:setFiles').at(-1)!;
+    expect(worker.posted.some((message) => message.type === 'instance:generateSchema')).toBe(false);
+
+    act(() => {
+      for (const listener of worker.listeners.message ?? []) {
+        listener({
+          data: {
+            type: 'preview:files-ready',
+            requestId: fileRequest.requestId,
+            filesRevision: fileRequest.filesRevision
+          }
+        });
+      }
+    });
+
+    await vi.waitFor(() => {
+      const types = worker.posted.map((message) => message.type);
+      expect(types).toContain('instance:generateSchema');
+      expect(types).toContain('instance:validate');
+    });
+    expect(useInstanceStore.getState().validationStatus[id]).toBe('pending');
   });
 
   it('still routes an ordinary preview:result matching currentPreviewRequestIdRef to usePreviewStore', () => {

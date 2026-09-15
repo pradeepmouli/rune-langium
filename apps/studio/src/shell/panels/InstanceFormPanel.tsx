@@ -19,15 +19,18 @@ export const InstanceFormPanel = withInstrumentation(
     const schemaError = useInstanceStore((s) => (record ? s.schemaErrors.get(record.typeFqn) : undefined));
     const updateInstanceData = useInstanceStore((s) => s.updateInstanceData);
     const rawDiagnostics = useInstanceStore((s) => s.validationErrors[instanceId]);
+    const validationStatus = useInstanceStore((s) => s.validationStatus[instanceId]);
+    const prepareInstance = useInstanceStore((s) => s.prepareInstance);
+    const retryInstance = useInstanceStore((s) => s.retryInstance);
 
     useEffect(() => {
       if (!record) return;
-      useInstanceStore.getState().dispatchGenerateSchema(record.typeFqn);
+      void prepareInstance(record.id);
       // Only re-dispatch when the target type changes, not on every store
       // update (updateInstanceData/receiveValidateResult also touch this
       // store and must not retrigger a schema fetch).
       // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [record?.typeFqn]);
+    }, [record?.id, record?.typeFqn, prepareInstance]);
 
     if (!record) {
       return (
@@ -51,13 +54,25 @@ export const InstanceFormPanel = withInstrumentation(
     // flight) — treat as "nothing to show yet", matching the uncontrolled
     // panel's own pre-first-validation convention, rather than surfacing a
     // stale/empty result as either "all valid" or "all invalid".
-    const { errors, valid, validated } = rawDiagnostics
-      ? {
-          errors: Object.fromEntries(rawDiagnostics.map((d) => [d.path, d.message])),
-          valid: rawDiagnostics.length === 0,
-          validated: true
-        }
-      : { errors: {}, valid: true, validated: false };
+    const { errors, valid, validated } =
+      rawDiagnostics && validationStatus !== 'pending'
+        ? {
+            errors: Object.fromEntries(rawDiagnostics.map((d) => [d.path, d.message])),
+            valid: rawDiagnostics.length === 0,
+            validated: true
+          }
+        : { errors: {}, valid: false, validated: false };
+
+    if (validationStatus === 'unavailable') {
+      return (
+        <section aria-label="Instance form" className="space-y-3 p-3 text-sm text-muted-foreground">
+          <p>{schemaError?.message ?? 'Instance validation is unavailable.'}</p>
+          <button type="button" className="rounded border px-2 py-1" onClick={() => void retryInstance(instanceId)}>
+            Retry
+          </button>
+        </section>
+      );
+    }
 
     return (
       <FormPreviewPanel

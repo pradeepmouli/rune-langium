@@ -16,6 +16,7 @@ import {
   createPreviewSetFilesMessage,
   isInstanceGenerateSchemaResultMessage,
   isInstanceGenerateSchemaStaleMessage,
+  isPreviewFilesReadyMessage,
   isPreviewWorkerMessage
 } from '../../src/services/codegen-service.js';
 
@@ -226,10 +227,12 @@ describe('preview worker message helpers', () => {
     expect(
       createPreviewSetFilesMessage(
         [{ uri: 'file:///trade.rosetta', content: 'namespace "x"' }],
-        'preview:test.preview.Trade:1'
+        'preview:test.preview.Trade:1',
+        1
       )
     ).toEqual({
       type: 'preview:setFiles',
+      filesRevision: 1,
       files: [{ uri: 'file:///trade.rosetta', content: 'namespace "x"' }],
       requestId: 'preview:test.preview.Trade:1'
     });
@@ -313,7 +316,7 @@ describe('preview worker message helpers', () => {
   });
 
   it('does not treat preview request messages as worker output payloads', () => {
-    expect(isPreviewWorkerMessage({ type: 'preview:setFiles', files: [] })).toBe(false);
+    expect(isPreviewWorkerMessage({ type: 'preview:setFiles', filesRevision: 1, files: [] })).toBe(false);
     expect(
       isPreviewWorkerMessage({
         type: 'preview:generate',
@@ -321,6 +324,16 @@ describe('preview worker message helpers', () => {
         requestId: 'preview:test.preview.Trade:6'
       })
     ).toBe(false);
+  });
+
+  it('recognizes only well-formed preview file readiness receipts', () => {
+    expect(isPreviewFilesReadyMessage({ type: 'preview:files-ready', requestId: 'files:1', filesRevision: 4 })).toBe(
+      true
+    );
+    expect(isPreviewFilesReadyMessage({ type: 'preview:files-ready', requestId: 'files:1' })).toBe(false);
+    expect(isPreviewFilesReadyMessage({ type: 'preview:files-ready', requestId: 'files:1', filesRevision: -1 })).toBe(
+      false
+    );
   });
 
   it('rejects malformed preview worker messages that only match on type', () => {

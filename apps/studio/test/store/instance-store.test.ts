@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: FSL-1.1-ALv2
 // Copyright (c) 2026 Pradeep Mouli
-import { beforeEach, describe, expect, it } from 'vitest';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { useInstanceStore } from '../../src/store/instance-store.js';
 import { OpfsFs } from '../../src/opfs/opfs-fs.js';
 import { readInstance, writeInstance } from '../../src/opfs/instances-fs.js';
@@ -13,7 +13,57 @@ async function flush(): Promise<void> {
 
 describe('instance-store', () => {
   beforeEach(() => {
-    useInstanceStore.setState({ instances: {} });
+    useInstanceStore.getState().setReadiness(undefined);
+    useInstanceStore.getState().setWorker(undefined);
+    useInstanceStore.setState({
+      instances: {},
+      validationErrors: {},
+      validationStatus: {},
+      schemas: new Map(),
+      schemaErrors: new Map()
+    });
+  });
+
+  it('regenerates the schema and validates a restored instance after readiness acknowledges worker files', async () => {
+    const postMessage = vi.fn();
+    const ensure = vi.fn(async () => 11);
+    useInstanceStore.getState().setWorker({ postMessage } as unknown as Worker);
+    useInstanceStore.getState().setReadiness({ ensure, dispose: vi.fn() });
+    const id = useInstanceStore.getState().createInstance('curated.Party', 'Restored Party');
+
+    await vi.waitFor(() => expect(postMessage).toHaveBeenCalledTimes(2));
+    expect(ensure).toHaveBeenCalledWith('curated.Party', expect.any(AbortSignal));
+    expect(postMessage.mock.calls.map(([message]) => message.type)).toEqual([
+      'instance:generateSchema',
+      'instance:validate'
+    ]);
+    expect(useInstanceStore.getState().validationStatus[id]).toBe('pending');
+  });
+
+  it('prepares OPFS-restored instances when readiness is installed after the worker', async () => {
+    const fs = new OpfsFs(createOpfsRoot() as never);
+    await writeInstance(fs, '/ws-ready-after-restore', {
+      id: '01J000000000000000000099',
+      name: 'Restored first',
+      typeFqn: 'curated.Party',
+      data: {},
+      createdAt: 1000,
+      modifiedAt: 1000
+    });
+    useInstanceStore.getState().setOpfsContext(fs, '/ws-ready-after-restore');
+    await flush();
+
+    const postMessage = vi.fn();
+    const ensure = vi.fn(async () => 12);
+    useInstanceStore.getState().setWorker({ postMessage } as unknown as Worker);
+    useInstanceStore.getState().setReadiness({ ensure, dispose: vi.fn() });
+
+    await vi.waitFor(() => expect(postMessage).toHaveBeenCalledTimes(2));
+    expect(ensure).toHaveBeenCalledWith('curated.Party', expect.any(AbortSignal));
+    expect(postMessage.mock.calls.map(([message]) => message.type)).toEqual([
+      'instance:generateSchema',
+      'instance:validate'
+    ]);
   });
 
   it('createInstance adds a record keyed by id, with provenance defaulting to manual authoring', () => {

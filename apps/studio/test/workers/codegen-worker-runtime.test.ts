@@ -49,6 +49,7 @@ describe('codegen-worker parsed/emitted function execution', () => {
       const { scope, dispatch } = await loadRealWorker();
       dispatch({
         type: 'preview:setFiles',
+        filesRevision: 1,
         files: [
           ...BASE_TYPE_FILES.map((f) => ({ uri: f.path, content: f.content })),
           ...['func', 'type', 'enum'].map((kind) => ({
@@ -81,6 +82,7 @@ describe('codegen-worker parsed/emitted function execution', () => {
     const { scope, dispatch } = await loadRealWorker();
     dispatch({
       type: 'preview:setFiles',
+      filesRevision: 1,
       files: [
         {
           uri: 'file:///objects.rosetta',
@@ -108,6 +110,7 @@ func Wrap:
     const { scope, dispatch } = await loadRealWorker();
     dispatch({
       type: 'preview:setFiles',
+      filesRevision: 1,
       requestId: 'bindings:files',
       files: [
         {
@@ -148,6 +151,7 @@ func Read:
       const { scope, dispatch } = await loadRealWorker();
       dispatch({
         type: 'preview:setFiles',
+        filesRevision: 1,
         requestId: 'metadata:files',
         files: [
           {
@@ -222,6 +226,7 @@ func Derived extends Base:
     const { scope, dispatch } = await loadRealWorker();
     dispatch({
       type: 'preview:setFiles',
+      filesRevision: 1,
       requestId: 'qualified:files',
       files: [
         {
@@ -258,6 +263,7 @@ func Echo:
     const { scope, dispatch } = await loadRealWorker();
     dispatch({
       type: 'preview:setFiles',
+      filesRevision: 1,
       files: [
         {
           uri: 'file:///real-preview.rosetta',

@@ -168,6 +168,22 @@ async function flushWorker() {
 }
 
 describe('codegen-worker preview messages', () => {
+  it('acknowledges the exact installed preview file revision', async () => {
+    const { scope, dispatch } = await loadWorkerModule();
+    dispatch({
+      type: 'preview:setFiles',
+      filesRevision: 42,
+      requestId: 'files:ack',
+      files: [{ uri: 'file:///trade.rosetta', content: 'namespace "beta"' }]
+    });
+    await flushWorker();
+    expect(scope.postMessage).toHaveBeenCalledWith({
+      type: 'preview:files-ready',
+      requestId: 'files:ack',
+      filesRevision: 42
+    });
+  });
+
   beforeEach(() => {
     buildMock.mockReset();
     buildMock.mockImplementation(async () => undefined);
@@ -232,6 +248,7 @@ describe('codegen-worker preview messages', () => {
 
     dispatch({
       type: 'preview:setFiles',
+      filesRevision: 1,
       files: [{ uri: 'file:///trade.rosetta', content: 'namespace "beta"' }],
       requestId: 'preview:beta.Trade:3'
     });
@@ -264,6 +281,7 @@ describe('codegen-worker preview messages', () => {
 
     dispatch({
       type: 'preview:setFiles',
+      filesRevision: 1,
       files: [{ uri: 'file:///trade.rosetta', content: 'namespace "beta"' }],
       requestId: 'cache:1'
     });
@@ -314,7 +332,7 @@ describe('codegen-worker preview messages', () => {
     const files = [{ uri: 'file:///trade.rosetta', content: 'namespace "beta"' }];
     const { dispatch } = await loadWorkerModule();
 
-    dispatch({ type: 'preview:setFiles', files, requestId: 'inval:1' });
+    dispatch({ type: 'preview:setFiles', filesRevision: 1, files, requestId: 'inval:1' });
     await flushWorker();
     dispatch({ type: 'preview:generate', targetId: 'beta.Trade', requestId: 'inval:2' });
     await flushWorker();
@@ -322,7 +340,7 @@ describe('codegen-worker preview messages', () => {
     // Resend the IDENTICAL file content — must still invalidate the cache.
     // previewFilesVersion bumps unconditionally on every preview:setFiles
     // call, not on a content diff (see the design doc's Decision #1).
-    dispatch({ type: 'preview:setFiles', files: [...files], requestId: 'inval:3' });
+    dispatch({ type: 'preview:setFiles', filesRevision: 1, files: [...files], requestId: 'inval:3' });
     await flushWorker();
     dispatch({ type: 'preview:generate', targetId: 'beta.Trade', requestId: 'inval:4' });
     await flushWorker();
@@ -353,6 +371,7 @@ describe('codegen-worker preview messages', () => {
     // Call #1 starts against file set A and suspends inside builder.build.
     dispatch({
       type: 'preview:setFiles',
+      filesRevision: 1,
       files: [{ uri: 'file:///trade.rosetta', content: 'namespace "A"' }],
       requestId: 'race:1'
     });
@@ -366,6 +385,7 @@ describe('codegen-worker preview messages', () => {
     // which also suspends inside its own builder.build.
     dispatch({
       type: 'preview:setFiles',
+      filesRevision: 1,
       files: [{ uri: 'file:///trade.rosetta', content: 'namespace "B"' }],
       requestId: 'race:3'
     });
@@ -407,6 +427,7 @@ describe('codegen-worker preview messages', () => {
 
     dispatch({
       type: 'preview:setFiles',
+      filesRevision: 1,
       files: [{ uri: 'file:///trade.rosetta', content: 'namespace "beta"' }],
       requestId: 'preview:beta.Trade:4'
     });
@@ -437,6 +458,7 @@ describe('codegen-worker preview messages', () => {
 
     dispatch({
       type: 'preview:setFiles',
+      filesRevision: 1,
       files: [{ uri: 'file:///trade.rosetta', content: 'namespace "beta"' }],
       requestId: 'preview:beta.Trade:6'
     });
@@ -469,6 +491,7 @@ describe('codegen-worker preview messages', () => {
 
     dispatch({
       type: 'preview:setFiles',
+      filesRevision: 1,
       files: [{ uri: 'file:///trade.rosetta', content: 'broken syntax' }],
       requestId: 'preview:beta.Trade:parser-error'
     });
@@ -499,6 +522,7 @@ describe('codegen-worker preview messages', () => {
 
     dispatch({
       type: 'preview:setFiles',
+      filesRevision: 1,
       files: [{ uri: 'file:///trade.rosetta', content: 'namespace "beta"' }],
       requestId: 'preview:beta.Trade:8'
     });
@@ -542,6 +566,7 @@ describe('codegen-worker preview messages', () => {
 
     dispatch({
       type: 'preview:setFiles',
+      filesRevision: 1,
       files: [{ uri: 'file:///trade.rosetta', content: 'namespace "beta"' }]
     });
     await flushWorker();
@@ -566,6 +591,7 @@ describe('codegen-worker preview messages', () => {
     // Files are loaded and the Preview perspective selects `beta.Trade`.
     dispatch({
       type: 'preview:setFiles',
+      filesRevision: 1,
       files: [{ uri: 'file:///trade.rosetta', content: 'namespace "beta"' }],
       requestId: 'preview:beta.Trade:1'
     });
@@ -596,6 +622,7 @@ describe('codegen-worker preview messages', () => {
     // LAST target — must still be `beta.Trade`, not `instance.Party`.
     dispatch({
       type: 'preview:setFiles',
+      filesRevision: 1,
       files: [{ uri: 'file:///trade.rosetta', content: 'namespace "beta" // edited' }],
       requestId: 'preview:beta.Trade:3'
     });
@@ -616,6 +643,7 @@ describe('codegen-worker preview messages', () => {
 
     dispatch({
       type: 'preview:setFiles',
+      filesRevision: 1,
       files: [{ uri: 'file:///trade.rosetta', content: 'namespace "beta"' }],
       requestId: 'preview:beta.Trade:1'
     });
@@ -662,7 +690,11 @@ describe('codegen-worker execute messages', () => {
 
   it.each(['build', 'generate'])('returns a terminal execution error when %s fails', async (stage) => {
     const { scope, dispatch } = await loadWorkerModule();
-    dispatch({ type: 'preview:setFiles', files: [{ uri: 'file:///failed.rosetta', content: 'namespace failed' }] });
+    dispatch({
+      type: 'preview:setFiles',
+      filesRevision: 1,
+      files: [{ uri: 'file:///failed.rosetta', content: 'namespace failed' }]
+    });
     const failing = stage === 'build' ? buildMock : generateMock;
     failing.mockImplementationOnce(() => {
       throw new Error(`${stage} failed`);
@@ -773,6 +805,7 @@ describe('codegen-worker previewGenerateCache (executeFunction)', () => {
 
     dispatch({
       type: 'preview:setFiles',
+      filesRevision: 1,
       files: [{ uri: 'file:///trade.rosetta', content: 'namespace "alpha"' }],
       requestId: 'qualified:1'
     });
@@ -806,6 +839,7 @@ describe('codegen-worker previewGenerateCache (executeFunction)', () => {
 
     dispatch({
       type: 'preview:setFiles',
+      filesRevision: 1,
       files: [{ uri: 'file:///trade.rosetta', content: 'namespace "alpha"' }],
       requestId: 'hit:1'
     });
@@ -834,6 +868,7 @@ describe('codegen-worker previewGenerateCache (executeFunction)', () => {
 
     dispatch({
       type: 'preview:setFiles',
+      filesRevision: 1,
       files: [{ uri: 'file:///trade.rosetta', content: 'namespace "alpha"' }],
       requestId: 'inv:1'
     });
@@ -843,6 +878,7 @@ describe('codegen-worker previewGenerateCache (executeFunction)', () => {
 
     dispatch({
       type: 'preview:setFiles',
+      filesRevision: 1,
       files: [{ uri: 'file:///trade.rosetta', content: 'namespace "alpha"' }],
       requestId: 'inv:3'
     });
@@ -874,6 +910,7 @@ describe('codegen-worker previewGenerateCache (executeFunction)', () => {
     const { scope, dispatch } = await loadWorkerModule();
     dispatch({
       type: 'preview:setFiles',
+      filesRevision: 1,
       files: [{ uri: 'file:///trade.rosetta', content: 'namespace "alpha"' }],
       requestId: 'generic:1'
     });
@@ -908,6 +945,7 @@ describe('codegen-worker previewGenerateCache (executeFunction)', () => {
     const { scope, dispatch } = await loadWorkerModule();
     dispatch({
       type: 'preview:setFiles',
+      filesRevision: 1,
       files: [{ uri: 'file:///dates.rosetta', content: 'namespace "alpha"' }],
       requestId: 'date:1'
     });
@@ -952,6 +990,7 @@ describe('codegen-worker previewGenerateCache (executeFunction)', () => {
     const { scope, dispatch } = await loadWorkerModule();
     dispatch({
       type: 'preview:setFiles',
+      filesRevision: 1,
       files: [{ uri: 'file:///trade.rosetta', content: 'namespace "alpha"' }],
       requestId: 'modules:1'
     });
@@ -992,6 +1031,7 @@ describe('codegen-worker previewGenerateCache (executeFunction)', () => {
     const { scope, dispatch } = await loadWorkerModule();
     dispatch({
       type: 'preview:setFiles',
+      filesRevision: 1,
       files: [{ uri: 'file:///trade.rosetta', content: 'namespace "alpha"' }],
       requestId: 'blocked:1'
     });
@@ -1171,6 +1211,7 @@ describe('codegen-worker code preview messages', () => {
 
     dispatch({
       type: 'preview:setFiles',
+      filesRevision: 1,
       files: [
         // Curated entry — content empty, serializedModelJson set.
         {
@@ -1220,6 +1261,7 @@ describe('codegen-worker code preview messages', () => {
 
     dispatch({
       type: 'preview:setFiles',
+      filesRevision: 1,
       files: [
         { uri: 'file:///user.rosetta', content: 'namespace user' },
         {
@@ -1261,6 +1303,7 @@ describe('codegen-worker code preview messages', () => {
 
     dispatch({
       type: 'preview:setFiles',
+      filesRevision: 1,
       files: [
         { uri: 'file:///user.rosetta', content: 'namespace user' },
         { uri: 'file:///cdm/cdm.base.math', content: '' },
@@ -1325,6 +1368,7 @@ describe('codegen-worker preview:setFiles curated document relinking', () => {
 
     dispatch({
       type: 'preview:setFiles',
+      filesRevision: 1,
       requestId: 'files:1',
       files: [{ uri: 'curated:///fpml/consolidated/shared/Scheme.rosetta', content: '', serializedModelJson: '{}' }]
     });
@@ -1338,6 +1382,7 @@ describe('codegen-worker preview:setFiles curated document relinking', () => {
     // do-nothing idempotent skip.
     dispatch({
       type: 'preview:setFiles',
+      filesRevision: 1,
       requestId: 'files:2',
       files: [
         { uri: 'curated:///fpml/consolidated/shared/Scheme.rosetta', content: '', serializedModelJson: '{}' },
@@ -1361,14 +1406,14 @@ describe('codegen-worker preview:setFiles curated document relinking', () => {
       { uri: 'curated:///fpml/consolidated/shared/Scheme.rosetta', content: '', serializedModelJson: '{}' }
     ];
 
-    dispatch({ type: 'preview:setFiles', requestId: 'files:1', files });
+    dispatch({ type: 'preview:setFiles', filesRevision: 1, requestId: 'files:1', files });
     await flushWorker();
     deleteDocumentMock.mockClear();
     addDocumentMock.mockClear();
 
     // Same curated entries, unchanged — as happens when only a user-authored
     // file was edited and the curated set along for the ride is identical.
-    dispatch({ type: 'preview:setFiles', requestId: 'files:2', files: [...files] });
+    dispatch({ type: 'preview:setFiles', filesRevision: 1, requestId: 'files:2', files: [...files] });
     await flushWorker();
 
     expect(deleteDocumentMock).not.toHaveBeenCalled();
@@ -1401,6 +1446,7 @@ describe('codegen-worker previewSchemaCache (shared across preview/instance hand
 
     dispatch({
       type: 'preview:setFiles',
+      filesRevision: 1,
       files: [{ uri: 'file:///trade.rosetta', content: 'namespace "beta"' }],
       requestId: 'shared:1'
     });
@@ -1424,6 +1470,7 @@ describe('codegen-worker previewSchemaCache (shared across preview/instance hand
 
     dispatch({
       type: 'preview:setFiles',
+      filesRevision: 1,
       files: [{ uri: 'file:///trade.rosetta', content: 'namespace "beta"' }],
       requestId: 'hit:1'
     });
@@ -1446,6 +1493,7 @@ describe('codegen-worker previewSchemaCache (shared across preview/instance hand
 
     dispatch({
       type: 'preview:setFiles',
+      filesRevision: 1,
       files: [{ uri: 'file:///trade.rosetta', content: 'namespace "beta"' }],
       requestId: 'multi:1'
     });
@@ -1468,6 +1516,7 @@ describe('codegen-worker previewSchemaCache (shared across preview/instance hand
 
     dispatch({
       type: 'preview:setFiles',
+      filesRevision: 1,
       files: [{ uri: 'file:///trade.rosetta', content: 'namespace "beta"' }],
       requestId: 'inv:1'
     });
@@ -1477,6 +1526,7 @@ describe('codegen-worker previewSchemaCache (shared across preview/instance hand
 
     dispatch({
       type: 'preview:setFiles',
+      filesRevision: 1,
       files: [{ uri: 'file:///trade.rosetta', content: 'namespace "beta"' }],
       requestId: 'inv:3'
     });
@@ -1512,6 +1562,7 @@ describe('codegen-worker previewSchemaCache (shared across preview/instance hand
 
     dispatch({
       type: 'preview:setFiles',
+      filesRevision: 1,
       files: [{ uri: 'file:///trade.rosetta', content: 'namespace "A"' }],
       requestId: 'poison:1'
     });
@@ -1528,6 +1579,7 @@ describe('codegen-worker previewSchemaCache (shared across preview/instance hand
     // File set changes to B WHILE the call above is still suspended.
     dispatch({
       type: 'preview:setFiles',
+      filesRevision: 1,
       files: [{ uri: 'file:///trade.rosetta', content: 'namespace "B"' }],
       requestId: 'poison:3'
     });
@@ -1584,6 +1636,7 @@ describe('codegen-worker validateInstance (real standalone Zod validator)', () =
   async function setFilesAndFlush(dispatch: (data: unknown) => void, flush: () => Promise<void>) {
     dispatch({
       type: 'preview:setFiles',
+      filesRevision: 1,
       files: [{ uri: 'file:///trade.rosetta', content: 'namespace "beta"' }],
       requestId: 'setup:1'
     });
@@ -1901,6 +1954,7 @@ export const TradeSchema = z.object({ orders: z.array(z.object({ lines: z.array(
 
     dispatch({
       type: 'preview:setFiles',
+      filesRevision: 1,
       files: [{ uri: 'file:///trade.rosetta', content: 'namespace "beta" // changed' }],
       requestId: 'setup:2'
     });

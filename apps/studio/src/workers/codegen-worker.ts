@@ -134,6 +134,7 @@ let lastCodegenRequestId: string | undefined;
 let lastPreviewTargetId: string | undefined;
 let lastPreviewRequestId: string | undefined;
 let previewFilesVersion = 0;
+let previewFilesRevision = 0;
 const documentsCache = new Map<string, VersionedEntry<LangiumDocument[]>>();
 const previewSchemaCache = new Map<string, VersionedEntry<FormPreviewSchema[]>>();
 const previewGenerateCache = new Map<string, VersionedEntry<GeneratorOutput[]>>();
@@ -1049,8 +1050,17 @@ if (isWorkerGlobalScope()) {
         hydrateCuratedDocuments(msg.files);
         currentPreviewFiles = msg.files;
         previewFilesVersion++;
+        // The provider owns this monotonic sequence. Echo the exact revision
+        // that installed so a readiness waiter cannot resolve from another
+        // dispatch's receipt.
+        previewFilesRevision = msg.filesRevision;
         if (msg.requestId) {
           lastPreviewRequestId = msg.requestId;
+          (self as unknown as DedicatedWorkerGlobalScope).postMessage({
+            type: 'preview:files-ready',
+            requestId: msg.requestId,
+            filesRevision: previewFilesRevision
+          });
         }
         const requestId = msg.requestId ?? lastPreviewRequestId;
         if (lastPreviewTargetId && requestId) {

@@ -7,6 +7,7 @@ import type { InstanceRecord, ValidationDiagnostic } from '@rune-langium/codegen
 import type { FormPreviewSchema } from '@rune-langium/codegen/export';
 import type { PreviewStaleReason } from './preview-store.js';
 import { useOutputStore, fmtLine } from './output-store.js';
+import type { InstanceReadiness } from '../services/instance-readiness.js';
 import { create } from 'zustand';
 
 function ulid(): string {
@@ -19,8 +20,9 @@ function ulid(): string {
 // not store state, since a Worker instance isn't serializable/comparable
 // the way zustand state is expected to be.
 let workerRef: Worker | undefined;
+let readinessRef: InstanceReadiness | undefined;
 let requestCounter = 0;
-const pendingRequests = new Map<string, string>(); // requestId -> instanceId
+const pendingRequests = new Map<string, { instanceId: string; epoch: number }>();
 // Tracks the LATEST outstanding validate requestId per instance so an
 // out-of-order response (an older request's result arriving after a newer
 // one, e.g. from rapid edits) can be dropped instead of overwriting fresher
@@ -37,7 +39,9 @@ const latestValidateRequestForInstance = new Map<string, string>(); // instanceI
 // which target the Preview perspective re-generates on the next workspace
 // file change.
 let schemaRequestCounter = 0;
-const pendingSchemaRequests = new Map<string, string>(); // requestId -> typeFqn
+const pendingSchemaRequests = new Map<string, { typeFqn: string; epoch: number }>();
+const latestSchemaRequestForType = new Map<string, string>();
+const preparationControllers = new Map<string, AbortController>();
 
 // OPFS persistence context (finding #1) — set once both an `OpfsFs` instance
 // and the active workspace's root path are available. Follows the same
@@ -119,12 +123,19 @@ function persistDelete(id: string): void {
 interface InstanceStoreState {
   instances: Record<string, InstanceRecord>;
   validationErrors: Record<string, ValidationDiagnostic[]>;
+  validationStatus: Record<string, 'pending' | 'valid' | 'invalid' | 'unavailable'>;
   schemas: Map<string, FormPreviewSchema>;
   schemaErrors: Map<string, { reason: PreviewStaleReason; message: string }>;
+  workspaceEpoch: number;
   createInstance(typeFqn: string, name: string): string;
   updateInstanceData(id: string, data: Record<string, unknown>): void;
   removeInstance(id: string): void;
-  setWorker(worker: Worker): void;
+  setWorker(worker: Worker | undefined): void;
+  setReadiness(readiness: InstanceReadiness | undefined): void;
+  prepareInstance(id: string): Promise<void>;
+  retryInstance(id: string): Promise<void>;
+  revalidateInstances(): void;
+  advanceWorkspaceEpoch(): void;
   dispatchValidate(id: string): void;
   receiveValidateResult(requestId: string, diagnostics: ValidationDiagnostic[]): void;
   dispatchGenerateSchema(typeFqn: string): void;
@@ -137,8 +148,10 @@ interface InstanceStoreState {
 export const useInstanceStore = create<InstanceStoreState>((set, get) => ({
   instances: {},
   validationErrors: {},
+  validationStatus: {},
   schemas: new Map(),
   schemaErrors: new Map(),
+  workspaceEpoch: 0,
 
   createInstance(typeFqn, name) {
     const id = ulid();
@@ -155,7 +168,8 @@ export const useInstanceStore = create<InstanceStoreState>((set, get) => ({
     // with required fields showed as valid until the user happened to edit
     // it. dispatchValidate already no-ops gracefully if workerRef isn't set
     // yet, so this is safe to call unconditionally.
-    get().dispatchValidate(id);
+    if (readinessRef) void get().prepareInstance(id);
+    else get().dispatchValidate(id);
     return id;
   },
 
@@ -172,10 +186,13 @@ export const useInstanceStore = create<InstanceStoreState>((set, get) => ({
       return { instances: { ...state.instances, [id]: updated } };
     });
     if (updated) persistInstance(updated);
-    get().dispatchValidate(id);
+    if (readinessRef) void get().prepareInstance(id);
+    else get().dispatchValidate(id);
   },
 
   removeInstance(id) {
+    preparationControllers.get(id)?.abort();
+    preparationControllers.delete(id);
     set((state) => {
       const { [id]: _removed, ...rest } = state.instances;
       return { instances: rest };
@@ -187,26 +204,107 @@ export const useInstanceStore = create<InstanceStoreState>((set, get) => ({
     workerRef = worker;
   },
 
+  setReadiness(readiness) {
+    readinessRef = readiness;
+    if (!readiness) return;
+    for (const id of Object.keys(get().instances)) void get().prepareInstance(id);
+  },
+
+  async prepareInstance(id) {
+    const record = get().instances[id];
+    const readiness = readinessRef;
+    if (!record) return;
+    if (!readiness) {
+      get().dispatchGenerateSchema(record.typeFqn);
+      get().dispatchValidate(id);
+      return;
+    }
+
+    preparationControllers.get(id)?.abort();
+    const controller = new AbortController();
+    preparationControllers.set(id, controller);
+    const epoch = get().workspaceEpoch;
+    const revision = record.modifiedAt;
+    set((state) => ({
+      validationStatus: { ...state.validationStatus, [id]: 'pending' },
+      validationErrors: Object.fromEntries(Object.entries(state.validationErrors).filter(([key]) => key !== id))
+    }));
+
+    try {
+      await readiness.ensure(record.typeFqn, controller.signal);
+      const current = get().instances[id];
+      if (controller.signal.aborted || get().workspaceEpoch !== epoch || !current || current.modifiedAt !== revision) {
+        return;
+      }
+      get().dispatchGenerateSchema(current.typeFqn);
+      get().dispatchValidate(id);
+    } catch (error) {
+      if (controller.signal.aborted || get().workspaceEpoch !== epoch || !get().instances[id]) return;
+      const message = error instanceof Error ? error.message : String(error);
+      set((state) => ({
+        validationStatus: { ...state.validationStatus, [id]: 'unavailable' },
+        schemaErrors: new Map(state.schemaErrors).set(record.typeFqn, { reason: 'generation-error', message })
+      }));
+    } finally {
+      if (preparationControllers.get(id) === controller) preparationControllers.delete(id);
+    }
+  },
+
+  retryInstance(id) {
+    return get().prepareInstance(id);
+  },
+
+  revalidateInstances() {
+    for (const id of Object.keys(get().instances)) {
+      const record = get().instances[id];
+      if (!record) continue;
+      set((state) => ({ validationStatus: { ...state.validationStatus, [id]: 'pending' } }));
+      get().dispatchGenerateSchema(record.typeFqn);
+      get().dispatchValidate(id);
+    }
+  },
+
+  advanceWorkspaceEpoch() {
+    for (const controller of preparationControllers.values()) controller.abort();
+    preparationControllers.clear();
+    pendingRequests.clear();
+    pendingSchemaRequests.clear();
+    latestSchemaRequestForType.clear();
+    set((state) => ({
+      workspaceEpoch: state.workspaceEpoch + 1,
+      validationErrors: {},
+      validationStatus: {},
+      schemas: new Map(),
+      schemaErrors: new Map()
+    }));
+  },
+
   dispatchValidate(id) {
     const record = get().instances[id];
     if (!record || !workerRef) return;
     requestCounter++;
     const requestId = `validate:${id}:${requestCounter}`;
-    pendingRequests.set(requestId, id);
+    pendingRequests.set(requestId, { instanceId: id, epoch: get().workspaceEpoch });
     latestValidateRequestForInstance.set(id, requestId);
+    set((state) => ({ validationStatus: { ...state.validationStatus, [id]: 'pending' } }));
     workerRef.postMessage(
       createInstanceValidateMessage(record.typeFqn, record.data as Record<string, unknown>, requestId)
     );
   },
 
   receiveValidateResult(requestId, diagnostics) {
-    const id = pendingRequests.get(requestId);
-    if (!id) return;
+    const pending = pendingRequests.get(requestId);
+    if (!pending) return;
     pendingRequests.delete(requestId);
+    const { instanceId: id, epoch } = pending;
+    if (epoch !== get().workspaceEpoch) return;
     // Drop an out-of-order response: only the LATEST request issued for
     // this instance is allowed to write validationErrors (finding #9).
     if (latestValidateRequestForInstance.get(id) !== requestId) return;
-    set((state) => ({ validationErrors: { ...state.validationErrors, [id]: diagnostics } }));
+    set((state) => ({
+      validationErrors: { ...state.validationErrors, [id]: diagnostics },
+      validationStatus: { ...state.validationStatus, [id]: diagnostics.length === 0 ? 'valid' : 'invalid' }
+    }));
   },
 
   // Dispatches unconditionally (does not gate on schemas.has(typeFqn)) —
@@ -218,13 +316,16 @@ export const useInstanceStore = create<InstanceStoreState>((set, get) => ({
     if (!workerRef) return;
     schemaRequestCounter++;
     const requestId = `schema:${typeFqn}:${schemaRequestCounter}`;
-    pendingSchemaRequests.set(requestId, typeFqn);
+    pendingSchemaRequests.set(requestId, { typeFqn, epoch: get().workspaceEpoch });
+    latestSchemaRequestForType.set(typeFqn, requestId);
     workerRef.postMessage(createInstanceGenerateSchemaMessage(typeFqn, requestId));
   },
 
   receiveSchemaResult(requestId, schema) {
-    if (!pendingSchemaRequests.has(requestId)) return false;
+    const pending = pendingSchemaRequests.get(requestId);
+    if (!pending || pending.epoch !== get().workspaceEpoch) return false;
     pendingSchemaRequests.delete(requestId);
+    if (latestSchemaRequestForType.get(pending.typeFqn) !== requestId) return false;
     set((state) => {
       const schemas = new Map(state.schemas);
       schemas.set(schema.targetId, schema);
@@ -236,9 +337,11 @@ export const useInstanceStore = create<InstanceStoreState>((set, get) => ({
   },
 
   receiveSchemaStale(requestId, reason, message) {
-    const typeFqn = pendingSchemaRequests.get(requestId);
-    if (!typeFqn) return false;
+    const pending = pendingSchemaRequests.get(requestId);
+    if (!pending || pending.epoch !== get().workspaceEpoch) return false;
+    const { typeFqn } = pending;
     pendingSchemaRequests.delete(requestId);
+    if (latestSchemaRequestForType.get(typeFqn) !== requestId) return false;
     set((state) => {
       // Also drop any previously-cached schema for this typeFqn (Codex
       // round-2 finding #3) — InstanceFormPanel checks `schema` BEFORE
@@ -249,7 +352,11 @@ export const useInstanceStore = create<InstanceStoreState>((set, get) => ({
       schemas.delete(typeFqn);
       const schemaErrors = new Map(state.schemaErrors);
       schemaErrors.set(typeFqn, { reason, message });
-      return { schemas, schemaErrors };
+      const validationStatus = { ...state.validationStatus };
+      for (const [id, record] of Object.entries(state.instances)) {
+        if (record.typeFqn === typeFqn) validationStatus[id] = 'unavailable';
+      }
+      return { schemas, schemaErrors, validationStatus };
     });
     return true;
   },
@@ -287,8 +394,19 @@ export const useInstanceStore = create<InstanceStoreState>((set, get) => ({
   setOpfsContext(fs, workspaceRoot) {
     opfsFs = fs;
     opfsWorkspaceRoot = workspaceRoot;
+    for (const controller of preparationControllers.values()) controller.abort();
+    preparationControllers.clear();
+    pendingRequests.clear();
     pendingSchemaRequests.clear();
-    set({ instances: {}, validationErrors: {}, schemas: new Map(), schemaErrors: new Map() });
+    latestSchemaRequestForType.clear();
+    set((state) => ({
+      instances: {},
+      validationErrors: {},
+      validationStatus: {},
+      schemas: new Map(),
+      schemaErrors: new Map(),
+      workspaceEpoch: state.workspaceEpoch + 1
+    }));
     void get().loadInstancesFromOpfs();
   },
 
@@ -358,7 +476,8 @@ export const useInstanceStore = create<InstanceStoreState>((set, get) => ({
         // "never revalidated at all".
         for (const id of Object.keys(loaded)) {
           try {
-            get().dispatchValidate(id);
+            if (readinessRef) void get().prepareInstance(id);
+            else get().dispatchValidate(id);
           } catch (err) {
             // The instance itself already loaded successfully (set() above
             // already applied it) — this is only a validation-dispatch
