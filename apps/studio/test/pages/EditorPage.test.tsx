@@ -266,6 +266,8 @@ vi.mock('@rune-langium/visual-editor', async () => ({
   AST_TYPE_TO_NODE_TYPE: (
     await vi.importActual<typeof import('@rune-langium/visual-editor')>('@rune-langium/visual-editor')
   ).AST_TYPE_TO_NODE_TYPE,
+  buildTypeOptions: (await vi.importActual<typeof import('@rune-langium/visual-editor')>('@rune-langium/visual-editor'))
+    .buildTypeOptions,
   // Mirrors the production helper's fallback chain
   // (data.$type → data.typeKind → node.type → 'data'). Kept as a tiny
   // hand-rolled stub instead of re-importing the real helper so the mock
@@ -321,7 +323,7 @@ vi.mock('@rune-langium/visual-editor', async () => ({
     byType: () => [],
     byNamespace: () => [],
     namespaces: () => [],
-    all: () => []
+    all: () => [...(nodesById?.values() ?? [])]
   })
 }));
 

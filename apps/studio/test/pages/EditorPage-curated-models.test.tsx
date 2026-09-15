@@ -92,7 +92,7 @@ class MockWorker {
   }
 }
 
-vi.mock('@rune-langium/visual-editor', () => ({
+vi.mock('@rune-langium/visual-editor', async () => ({
   RuneTypeGraph: React.forwardRef((_props: unknown, ref: React.ForwardedRef<unknown>) => {
     useImperativeHandle(ref, () => ({
       fitView: () => {},
@@ -112,6 +112,8 @@ vi.mock('@rune-langium/visual-editor', () => ({
   BUILTIN_TYPES: [],
   AST_TYPE_TO_NODE_TYPE: {},
   resolveNodeKind: () => 'data',
+  buildTypeOptions: (await vi.importActual<typeof import('@rune-langium/visual-editor')>('@rune-langium/visual-editor'))
+    .buildTypeOptions,
   useEditorStore,
   useModelSourceSync: () => {},
   // Mirrors the real hook: a ref synced to the latest value via
@@ -128,7 +130,7 @@ vi.mock('@rune-langium/visual-editor', () => ({
     byType: () => [],
     byNamespace: () => [],
     namespaces: () => [],
-    all: () => []
+    all: () => [...(nodesById?.values() ?? [])]
   })
 }));
 
