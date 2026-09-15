@@ -12,15 +12,19 @@
  * navigation moved to a dedicated chevron-right nav button per finding 4.
  */
 
-import { describe, it, expect, vi } from 'vitest';
+import { afterEach, describe, it, expect, vi } from 'vitest';
 import { render, screen, fireEvent } from '@testing-library/react';
+import userEvent from '@testing-library/user-event';
 import { NamespaceExplorerPanel } from '../../src/components/panels/NamespaceExplorerPanel.js';
 import type { TypeGraphNode, AnyGraphNode } from '../../src/types.js';
 import { TYPE_REF_PAYLOAD_MIME, isTypeRefPayload, typeRefMimeForKind } from '../../src/types/structure-view.js';
 import { testMeta } from '../helpers/node-meta.js';
 import { selectNodeRepository } from '../../src/store/node-repository.js';
 
-// Mock @tanstack/react-virtual to render all items in jsdom (no real scroll container)
+const virtualTreeTestState = vi.hoisted(() => ({ visibleIndices: undefined as number[] | undefined }));
+
+// Mock @tanstack/react-virtual so tests can select a small viewport without a
+// real scroll container.
 vi.mock('@tanstack/react-virtual', () => ({
   useVirtualizer: ({ count, estimateSize }: { count: number; estimateSize: (i: number) => number }) => {
     let offset = 0;
@@ -31,11 +35,18 @@ vi.mock('@tanstack/react-virtual', () => ({
       return item;
     });
     return {
-      getVirtualItems: () => items,
+      getVirtualItems: () =>
+        virtualTreeTestState.visibleIndices === undefined
+          ? items
+          : items.filter((item) => virtualTreeTestState.visibleIndices!.includes(item.index)),
       getTotalSize: () => offset
     };
   }
 }));
+
+afterEach(() => {
+  virtualTreeTestState.visibleIndices = undefined;
+});
 
 function makeNode(ns: string, name: string, astType: string = 'Data'): TypeGraphNode {
   const nodeTypeMap: Record<string, string> = {
@@ -335,16 +346,37 @@ describe('NamespaceExplorerPanel', () => {
     });
   });
 
-  it('supports Space activation on a selection checkbox', () => {
+  it('supports Space activation on a selection checkbox', async () => {
     const onChange = vi.fn();
     renderPanel({ selection: { explicit: new Set(), requiredBy: new Map(), onChange } });
     const checkbox = screen.getByTestId('ns-type-checkbox-com.model.Trade');
+    const user = userEvent.setup();
 
     checkbox.focus();
-    fireEvent.keyDown(checkbox, { key: ' ' });
-    fireEvent.click(checkbox);
+    await user.keyboard(' ');
 
     expect(onChange).toHaveBeenCalledOnce();
+  });
+
+  it('includes a selected row that is outside the mounted virtual viewport', () => {
+    virtualTreeTestState.visibleIndices = [0];
+    const nodes = Array.from({ length: 30 }, (_, index) => makeNode('large', `Type${String(index).padStart(2, '0')}`));
+    const offscreenId = 'large.Type29';
+    const onChange = vi.fn();
+    renderPanel({
+      nodeRepository: repoFrom(nodes),
+      selection: { explicit: new Set([offscreenId]), requiredBy: new Map(), onChange }
+    });
+
+    expect(screen.queryByTestId(`ns-type-${offscreenId}`)).toBeNull();
+    expect(screen.getByTestId('ns-seg-checkbox-large')).toHaveAttribute('data-indeterminate');
+    fireEvent.click(screen.getByTestId('ns-seg-checkbox-large'));
+
+    expect(onChange).toHaveBeenCalledWith(new Set(nodes.map((node) => node.id)), {
+      kind: 'namespace',
+      namespaces: ['large'],
+      checked: true
+    });
   });
 
   it('highlights selected node', () => {

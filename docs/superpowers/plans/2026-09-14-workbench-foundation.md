@@ -18,7 +18,7 @@
 - DRY is the primary correctness rule. Do not add another model inventory or hydration implementation.
 - Existing `workspace.layout` and Explore keep-alive behavior must remain compatible. New perspective settings must not overwrite them.
 - `packages/` source uses MIT SPDX headers; `apps/studio/` uses FSL-1.1-ALv2. Studio is source-available.
-- No new dependencies, generated AST edits, production mutations, or grammar regeneration are needed for this plan.
+- No new runtime dependencies, generated AST edits, production mutations, or grammar regeneration are needed. For reliable keyboard interaction tests, visual-editor may reuse Studio's existing @testing-library/user-event version as a devDependency.
 
 ---
 
