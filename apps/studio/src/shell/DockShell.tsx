@@ -23,17 +23,11 @@
  * assertions remain reachable.
  */
 
-import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react';
 import type React from 'react';
-import type {
-  DockviewApi,
-  DockviewReadyEvent,
-  IDockviewHeaderActionsProps,
-  IDockviewPanelHeaderProps,
-  IDockviewPanelProps
-} from 'dockview-react';
+import type { ComponentType } from 'react';
+import type { DockviewApi, IDockviewHeaderActionsProps, IDockviewPanelHeaderProps } from 'dockview-react';
 import { ArrowLeft, ArrowRight, ChevronDown, ChevronUp } from 'lucide-react';
-import { DockLayout } from '@rune-langium/design-system/ui/dock-layout';
 import { useLatestRef } from '@rune-langium/visual-editor';
 import { FileTreePanel } from './panels/FileTreePanel.js';
 import { EditorPanel } from './panels/EditorPanel.js';
@@ -45,10 +39,12 @@ import { OutputPanel } from './panels/OutputPanel.js';
 // segment in CenterStackPanel wired from EditorPage.
 import { FormPreviewPanel } from './panels/FormPreviewPanel.js';
 import { CodePreviewPanel as CodePreviewPanelShell } from './panels/CodePreviewPanel.js';
-import { buildDefaultLayout, LAYOUT_SCHEMA_VERSION, PANEL_COMPONENT_NAMES } from './layout-factory.js';
+import { buildDefaultLayout, LAYOUT_SCHEMA_VERSION, PANEL_COMPONENT_NAMES, PANEL_TITLES } from './layout-factory.js';
 import type { LayoutPreset } from './layout-factory.js';
 import { sanitizeLayoutWithDiagnostics } from './layout-migrations.js';
-import { applyLayout, serializeLayout } from './dockview-bridge.js';
+import { applyLayout } from './dockview-bridge.js';
+import { WorkbenchHost, resetWorkbench } from './WorkbenchHost.js';
+import type { WorkbenchDefinition } from './workbench-types.js';
 import { installShellShortcuts, type ShellAction } from './keyboard.js';
 import type { PanelLayoutRecord } from '../workspace/persistence.js';
 import { Button } from '@rune-langium/design-system/ui/button';
@@ -123,22 +119,12 @@ const _CENTER_PANE_OPTIONS: Array<{ id: CenterPane; label: string; panel: string
   { id: 'inspector', label: 'Inspector', panel: 'workspace.inspector' }
 ];
 
-type ZeroArgRenderer = () => React.ReactElement | null;
 interface PanelTabMeta {
   count?: number;
 }
 
-type PanelOverrides = Partial<{
-  'workspace.fileTree': ZeroArgRenderer;
-  'workspace.editor': ZeroArgRenderer;
-  'workspace.inspector': ZeroArgRenderer;
-  'workspace.problems': ZeroArgRenderer;
-  'workspace.activity': ZeroArgRenderer;
-  'workspace.output': ZeroArgRenderer;
-  'workspace.visualPreview': ZeroArgRenderer;
-  'workspace.formPreview': ZeroArgRenderer;
-  'workspace.codePreview': ZeroArgRenderer;
-}>;
+type PanelComponentName = (typeof PANEL_COMPONENT_NAMES)[number];
+type PanelOverrides = Partial<Record<PanelComponentName, ComponentType>>;
 
 interface DockShellProps {
   studioVersion: string;
@@ -167,22 +153,19 @@ interface DockShellProps {
   canNavigateForward?: boolean;
 }
 
-type PanelComponentName = keyof PanelOverrides;
-type PanelRegistry = Record<PanelComponentName, ZeroArgRenderer>;
+type PanelRegistry = Record<PanelComponentName, ComponentType>;
 
 const DEFAULT_PANEL_REGISTRY: PanelRegistry = {
-  'workspace.fileTree': () => FileTreePanel({}),
-  'workspace.editor': () => EditorPanel({}),
-  'workspace.inspector': () => InspectorPanel({}),
-  'workspace.problems': () => ProblemsPanel(),
-  'workspace.activity': () => ActivityPanel(),
-  'workspace.output': () => OutputPanel(),
+  'workspace.fileTree': FileTreePanel,
+  'workspace.editor': EditorPanel,
+  'workspace.inspector': InspectorPanel,
+  'workspace.problems': ProblemsPanel,
+  'workspace.activity': ActivityPanel,
+  'workspace.output': OutputPanel,
   'workspace.visualPreview': () => null,
-  'workspace.formPreview': () => FormPreviewPanel(),
-  'workspace.codePreview': () => CodePreviewPanelShell({})
+  'workspace.formPreview': FormPreviewPanel,
+  'workspace.codePreview': CodePreviewPanelShell
 };
-
-const PanelRegistryContext = createContext<PanelRegistry>(DEFAULT_PANEL_REGISTRY);
 
 function mergePanelRegistry(overrides: PanelOverrides | undefined): PanelRegistry {
   return {
@@ -190,26 +173,6 @@ function mergePanelRegistry(overrides: PanelOverrides | undefined): PanelRegistr
     ...overrides
   };
 }
-
-function createDockviewPanelBridge(name: PanelComponentName): React.FC<IDockviewPanelProps> {
-  function DockviewPanelBridge() {
-    const registry = useContext(PanelRegistryContext);
-    // Call the registry function directly (not as JSX) so React does NOT see a
-    // new component type when the function reference changes — which would
-    // unmount and remount the subtree (destroying the CodeMirror editor).
-    // Registry entries are explicitly typed as zero-arg renderers so this is
-    // safe without any cast.
-    const renderPanel = registry[name];
-    return renderPanel();
-  }
-
-  DockviewPanelBridge.displayName = `DockviewPanelBridge(${name})`;
-  return DockviewPanelBridge;
-}
-
-const DOCKVIEW_COMPONENTS: Record<string, React.FC<IDockviewPanelProps>> = Object.fromEntries(
-  PANEL_COMPONENT_NAMES.map((name) => [name, createDockviewPanelBridge(name)])
-);
 
 function applyPanelTabMeta(
   api: DockviewApi | null,
@@ -280,7 +243,6 @@ export const DockShell = withInstrumentation(
     const { showToast } = useStudioToast();
     const showToastRef = useLatestRef(showToast);
     const apiRef = useRef<DockviewApi | null>(null);
-    const layoutChangeDisposableRef = useRef<{ dispose(): void } | null>(null);
     const suppressLayoutPersistenceRef = useRef(false);
     const onLayoutChangeRef = useLatestRef(onLayoutChange);
 
@@ -325,109 +287,63 @@ export const DockShell = withInstrumentation(
     // Refs kept current so stable callbacks always read the latest values
     // without needing them as useCallback deps.
     const layoutRef = useLatestRef(layout);
-    const studioVersionRef = useLatestRef(studioVersion);
     const panelTabMetaRef = useLatestRef(panelTabMeta);
+    const panelRegistry = useMemo(() => mergePanelRegistry(panelComponents), [panelComponents]);
+    const workbenchDefinition = useMemo<WorkbenchDefinition>(
+      () => ({
+        id: 'explore',
+        panels: panelRegistry,
+        titles: PANEL_TITLES,
+        buildDefault(api) {
+          applyLayout(api, layoutRef.current);
+        }
+      }),
+      [panelRegistry]
+    );
+    const initialNativeLayout = layout.dockview?.shape === 'native' ? layout.dockview.json : undefined;
 
-    // onReady is called exactly once by dockview (on mount). Including
-    // layout/studioVersion as deps would recreate the callback whenever
-    // those change, but the new function would never be invoked — the old
-    // closure would remain permanently stale. Using refs avoids the dep
-    // while guaranteeing we always read the current value.
-    const onReady = useCallback(
-      (event: DockviewReadyEvent) => {
-        const currentLayout = layoutRef.current;
-        const currentVersion = studioVersionRef.current;
-        apiRef.current = event.api;
-        layoutChangeDisposableRef.current?.dispose();
-        let appliedLayout = currentLayout;
-
+    const handleNativeLayoutChange = useCallback(
+      (json: unknown) => {
+        if (!onLayoutChangeRef.current || suppressLayoutPersistenceRef.current) return;
         try {
-          applyLayout(event.api, currentLayout);
-          applyPanelTabMeta(event.api, panelTabMetaRef.current);
-          if (currentLayout.dockview?.shape === 'factory') {
-            setUtilitiesCollapsedState(currentLayout.dockview.bottomGroup.collapsed);
-          } else {
-            // Native layouts (persisted after user interaction) restore the
-            // bottom group height via fromJSON without carrying an explicit
-            // `collapsed` flag — derive it from the restored group height so
-            // the chevron direction and first toggle behave correctly.
-            // Look up by registered component name, not panel id — native
-            // snapshots may key utility panels with arbitrary ids
-            // (e.g. "p-problems") while contentComponent stays stable.
-            const bottomGroup = event.api.panels.find((p) => UTILITY_PANEL_IDS.has(p.api.component))?.group;
-            if (bottomGroup) {
-              setUtilitiesCollapsedState(bottomGroup.api.height <= COLLAPSED_UTILITY_HEIGHT + 8);
-            }
-          }
-        } catch (err) {
-          const fallback = buildDefaultLayout({
-            studioVersion: currentVersion,
-            viewportWidth: getViewportWidth()
+          onLayoutChangeRef.current({
+            version: LAYOUT_SCHEMA_VERSION,
+            writtenBy: studioVersion,
+            dockview: { shape: 'native', json }
           });
-          console.error('[DockShell] Failed to apply layout, falling back to default layout', err);
+        } catch (err) {
+          console.error('[DockShell] Failed to serialize layout change', err);
           useOutputStore
             .getState()
             .addLine(
-              fmtLine(
-                'layout',
-                'failed to apply saved layout, using default',
-                err instanceof Error ? err.message : String(err)
-              ),
+              fmtLine('layout', 'failed to persist layout change', err instanceof Error ? err.message : String(err)),
               'warn'
             );
-          showToast({
-            title: 'Layout restored to default',
-            description: 'Your saved layout could not be applied.',
-            variant: 'default'
+          showToastRef.current({
+            title: 'Layout not saved',
+            description: 'Could not persist the current panel arrangement.',
+            variant: 'destructive'
           });
-          appliedLayout = fallback;
-          setLayout(fallback);
-          setLayoutPreset(fallback.dockview?.shape === 'factory' ? (fallback.dockview.preset ?? 'edit') : 'edit');
-          setUtilitiesCollapsedState(
-            fallback.dockview?.shape === 'factory' ? fallback.dockview.bottomGroup.collapsed : false
-          );
-          event.api.clear();
-          applyLayout(event.api, fallback);
-          applyPanelTabMeta(event.api, panelTabMetaRef.current);
         }
-
-        // Persist on every layout change. The serialized JSON replaces our
-        // factory-shape layout so subsequent mounts go through fromJSON.
-        layoutChangeDisposableRef.current = event.api.onDidLayoutChange(() => {
-          if (!onLayoutChangeRef.current) return;
-          if (suppressLayoutPersistenceRef.current) return;
-          if (event.api.panels.length === 0) {
-            console.warn('[DockShell] Skipping persistence of empty dock layout');
-            return;
-          }
-          try {
-            const dockviewJson = serializeLayout(event.api);
-            onLayoutChangeRef.current({
-              version: LAYOUT_SCHEMA_VERSION,
-              writtenBy: studioVersionRef.current,
-              dockview: dockviewJson
-            });
-          } catch (err) {
-            console.error('[DockShell] Failed to serialize layout change', err);
-            useOutputStore
-              .getState()
-              .addLine(
-                fmtLine('layout', 'failed to persist layout change', err instanceof Error ? err.message : String(err)),
-                'warn'
-              );
-            showToastRef.current({
-              title: 'Layout not saved',
-              description: 'Could not persist the current panel arrangement.',
-              variant: 'destructive'
-            });
-          }
-        });
-        onLayoutChangeRef.current?.(appliedLayout);
       },
-      [] // stable — reads layout and studioVersion via refs above
+      [studioVersion]
     );
 
-    const panelRegistry = useMemo(() => mergePanelRegistry(panelComponents), [panelComponents]);
+    const handleWorkbenchReady = useCallback((api: DockviewApi) => {
+      apiRef.current = api;
+      applyPanelTabMeta(api, panelTabMetaRef.current);
+      const currentLayout = layoutRef.current;
+      if (currentLayout.dockview?.shape === 'factory') {
+        setUtilitiesCollapsedState(currentLayout.dockview.bottomGroup.collapsed);
+      } else {
+        const bottomGroup = api.panels.find((panel) => UTILITY_PANEL_IDS.has(panel.api.component))?.group;
+        if (bottomGroup) {
+          bottomGroup.api.setConstraints({ minimumHeight: COLLAPSED_UTILITY_HEIGHT });
+          setUtilitiesCollapsedState(bottomGroup.api.height <= COLLAPSED_UTILITY_HEIGHT + 8);
+        }
+      }
+      onLayoutChangeRef.current?.(currentLayout);
+    }, []);
 
     const suppressLayoutPersistence = useCallback((work: () => void) => {
       suppressLayoutPersistenceRef.current = true;
@@ -526,14 +442,6 @@ export const DockShell = withInstrumentation(
       });
     }, [onAction]);
 
-    useEffect(
-      () => () => {
-        layoutChangeDisposableRef.current?.dispose();
-        layoutChangeDisposableRef.current = null;
-      },
-      []
-    );
-
     useEffect(() => {
       applyPanelTabMeta(apiRef.current, panelTabMeta);
     }, [panelTabMeta]);
@@ -553,10 +461,14 @@ export const DockShell = withInstrumentation(
       setUtilitiesCollapsedState(fresh.dockview?.shape === 'factory' ? fresh.dockview.bottomGroup.collapsed : false);
       if (apiRef.current) {
         try {
+          const resetDefinition: WorkbenchDefinition = {
+            ...workbenchDefinition,
+            buildDefault(api) {
+              applyLayout(api, fresh);
+            }
+          };
           suppressLayoutPersistence(() => {
-            apiRef.current?.clear();
-            if (!apiRef.current) return;
-            applyLayout(apiRef.current, fresh);
+            resetWorkbench(apiRef.current as DockviewApi, resetDefinition, getViewportWidth());
             applyPanelTabMeta(apiRef.current, panelTabMetaRef.current);
           });
         } catch (err) {
@@ -676,21 +588,21 @@ export const DockShell = withInstrumentation(
           </Alert>
         ) : null}
         <CenterPanesContext.Provider value={centerPanesContextValue}>
-          <PanelRegistryContext.Provider value={panelRegistry}>
-            <UtilityTrayContext.Provider value={utilityTrayContextValue}>
-              <UtilityHeaderActionsProvider>
-                <div className="min-h-0 min-w-0 flex-1">
-                  <DockLayout
-                    components={DOCKVIEW_COMPONENTS}
-                    defaultTabComponent={StudioDockTab}
-                    rightHeaderActionsComponent={UtilityGroupHeaderActions}
-                    onReady={onReady}
-                    className="h-full min-w-0 w-full"
-                  />
-                </div>
-              </UtilityHeaderActionsProvider>
-            </UtilityTrayContext.Provider>
-          </PanelRegistryContext.Provider>
+          <UtilityTrayContext.Provider value={utilityTrayContextValue}>
+            <UtilityHeaderActionsProvider>
+              <div className="min-h-0 min-w-0 flex-1">
+                <WorkbenchHost
+                  definition={workbenchDefinition}
+                  initialNativeLayout={initialNativeLayout}
+                  onNativeLayoutChange={handleNativeLayoutChange}
+                  onReady={handleWorkbenchReady}
+                  defaultTabComponent={StudioDockTab}
+                  rightHeaderActionsComponent={UtilityGroupHeaderActions}
+                  className="h-full min-w-0 w-full"
+                />
+              </div>
+            </UtilityHeaderActionsProvider>
+          </UtilityTrayContext.Provider>
         </CenterPanesContext.Provider>
       </div>
     );

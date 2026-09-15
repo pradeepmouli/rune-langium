@@ -79,23 +79,11 @@ export const applyLayout = withInstrumentation(
     }
     // shape === 'native'
     try {
-      api.fromJSON(payload.json as Parameters<DockviewApi['fromJSON']>[0]);
-      const restoredPanels = api.panels;
-      if (restoredPanels.length === 0) {
-        throw new Error('restored layout contains no panels');
-      }
-      const unknownPanels: string[] = [];
-      for (const panel of restoredPanels) {
-        const component = panel.api.component;
-        if (!KNOWN_COMPONENTS.has(component)) unknownPanels.push(component);
-      }
-      if (unknownPanels.length > 0) {
-        throw new Error(`restored layout contains unknown panels: ${unknownPanels.join(', ')}`);
-      }
+      restoreNativeLayout(api, payload.json, KNOWN_COMPONENTS);
       // Look up by registered component name, not panel id — native
       // snapshots may key utility panels with arbitrary ids, and the tray
       // may hold any subset of the utility tabs (e.g. Activity only).
-      restoredPanels
+      api.panels
         .find((panel) => UTILITY_COMPONENTS.has(panel.api.component))
         ?.group.api.setConstraints({ minimumHeight: BOTTOM_GROUP_MIN_HEIGHT });
     } catch (err) {
@@ -122,6 +110,23 @@ export const applyLayout = withInstrumentation(
     // confidently safe, so left uncaptured.
   },
   { op: 'applyLayout' }
+);
+
+export const restoreNativeLayout = withInstrumentation(
+  function restoreNativeLayout(api: DockviewApi, json: unknown, panels: ReadonlySet<string>): void {
+    api.fromJSON(json as Parameters<DockviewApi['fromJSON']>[0]);
+    const restoredPanels = api.panels;
+    if (restoredPanels.length === 0) {
+      throw new Error('restored layout contains no panels');
+    }
+    const unknownPanels = restoredPanels
+      .map((panel) => panel.api.component)
+      .filter((component) => !panels.has(component));
+    if (unknownPanels.length > 0) {
+      throw new Error(`restored layout contains unknown panels: ${unknownPanels.join(', ')}`);
+    }
+  },
+  { op: 'restoreNativeLayout' }
 );
 
 function defaultFactoryShape(layout: PanelLayoutRecord): FactoryShape {
