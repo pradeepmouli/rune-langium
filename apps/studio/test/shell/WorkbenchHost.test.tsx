@@ -7,6 +7,7 @@ import type { ComponentType } from 'react';
 
 class FakeApi {
   panels: Array<{ api: { component: string } }> = [];
+  private layoutChangeListener: (() => void) | null = null;
   clear = vi.fn(() => {
     this.panels = [];
   });
@@ -14,7 +15,16 @@ class FakeApi {
     if (json.component) this.panels = [{ api: { component: json.component } }];
   });
   toJSON = vi.fn(() => ({ component: 'editor' }));
-  onDidLayoutChange = vi.fn(() => ({ dispose: disposeListener }));
+  emitLayoutChange = () => this.layoutChangeListener?.();
+  onDidLayoutChange = vi.fn((listener: () => void) => {
+    this.layoutChangeListener = listener;
+    return {
+      dispose: () => {
+        if (this.layoutChangeListener === listener) this.layoutChangeListener = null;
+        disposeListener();
+      }
+    };
+  });
 }
 
 const disposeListener = vi.fn();
@@ -94,13 +104,38 @@ describe('WorkbenchHost', () => {
     expect(disposeListener).toHaveBeenCalled();
   });
 
-  it('resets the supplied host without touching another definition', () => {
-    const buildDefault = vi.fn();
-    const otherDefault = vi.fn();
-    const current = definition(buildDefault);
-    resetWorkbench(api as never, current, 960);
-    expect(api.clear).toHaveBeenCalledOnce();
-    expect(buildDefault).toHaveBeenCalledWith(api, 960);
-    expect(otherDefault).not.toHaveBeenCalled();
+  it('routes a native serialization failure to the host error callback', () => {
+    const onNativeLayoutError = vi.fn();
+    render(
+      <WorkbenchHost
+        definition={definition()}
+        initialNativeLayout={{ component: 'editor' }}
+        onNativeLayoutChange={vi.fn()}
+        onNativeLayoutError={onNativeLayoutError}
+      />
+    );
+    api.toJSON.mockImplementationOnce(() => {
+      throw new Error('serialization failed');
+    });
+
+    api.emitLayoutChange();
+
+    expect(onNativeLayoutError).toHaveBeenCalledWith(expect.objectContaining({ message: 'serialization failed' }));
+  });
+
+  it('resets one concrete host without touching another host API or definition', () => {
+    const firstApi = new FakeApi();
+    const secondApi = new FakeApi();
+    secondApi.panels = [{ api: { component: 'editor' } }];
+    const firstDefault = vi.fn();
+    const secondDefault = vi.fn();
+
+    resetWorkbench(firstApi as never, definition(firstDefault), 960);
+
+    expect(firstApi.clear).toHaveBeenCalledOnce();
+    expect(firstDefault).toHaveBeenCalledWith(firstApi, 960);
+    expect(secondApi.panels).toEqual([{ api: { component: 'editor' } }]);
+    expect(secondApi.clear).not.toHaveBeenCalled();
+    expect(secondDefault).not.toHaveBeenCalled();
   });
 });

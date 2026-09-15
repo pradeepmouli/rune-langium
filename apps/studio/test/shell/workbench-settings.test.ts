@@ -42,31 +42,27 @@ describe('workbench settings', () => {
   });
 
   it('serializes writes for one setting key', async () => {
-    let resolveFirst!: () => void;
-    let resolveSecond!: () => void;
-    persistence.saveSetting
-      .mockImplementationOnce(
-        () =>
-          new Promise<void>((resolve) => {
-            resolveFirst = resolve;
-          })
-      )
-      .mockImplementationOnce(
-        () =>
-          new Promise<void>((resolve) => {
-            resolveSecond = resolve;
-          })
-      );
+    const writes: Array<() => void> = [];
+    persistence.saveSetting.mockImplementation(
+      (key: string, value: unknown) =>
+        new Promise<void>((resolve) => {
+          writes.push(() => {
+            persistence.values.set(key, value);
+            resolve();
+          });
+        })
+    );
 
     const first = writeWorkbenchSettings('workspace-a', 'prototype', { selectedId: 'first' });
     const second = writeWorkbenchSettings('workspace-a', 'prototype', { selectedId: 'second' });
 
     expect(persistence.saveSetting).toHaveBeenCalledTimes(1);
-    resolveFirst();
+    writes[0]?.();
     await first;
     await vi.waitFor(() => expect(persistence.saveSetting).toHaveBeenCalledTimes(2));
-    resolveSecond();
+    writes[1]?.();
     await second;
+    expect(await readWorkbenchSettings('workspace-a', 'prototype', {})).toEqual({ selectedId: 'second' });
   });
 
   it('allows a later write to retry after the previous write fails', async () => {

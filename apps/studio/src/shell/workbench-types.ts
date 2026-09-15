@@ -15,7 +15,10 @@ export interface WorkbenchDefinition {
 export interface WorkbenchHostProps {
   definition: WorkbenchDefinition;
   initialNativeLayout?: unknown;
+  initialLayout?(api: DockviewApi, width: number): void;
   onNativeLayoutChange(json: unknown): void;
+  onNativeLayoutError?(error: unknown): void;
+  onRestoreFallback?(): void;
   onReady?(api: DockviewApi): void;
   className?: DockLayoutProps['className'];
   defaultTabComponent?: DockLayoutProps['defaultTabComponent'];

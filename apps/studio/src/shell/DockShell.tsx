@@ -287,6 +287,7 @@ export const DockShell = withInstrumentation(
     // Refs kept current so stable callbacks always read the latest values
     // without needing them as useCallback deps.
     const layoutRef = useLatestRef(layout);
+    const restoredDefaultRef = useRef<PanelLayoutRecord | null>(null);
     const panelTabMetaRef = useLatestRef(panelTabMeta);
     const panelRegistry = useMemo(() => mergePanelRegistry(panelComponents), [panelComponents]);
     const workbenchDefinition = useMemo<WorkbenchDefinition>(
@@ -294,45 +295,58 @@ export const DockShell = withInstrumentation(
         id: 'explore',
         panels: panelRegistry,
         titles: PANEL_TITLES,
-        buildDefault(api) {
-          applyLayout(api, layoutRef.current);
+        buildDefault(api, width) {
+          const fresh = buildDefaultLayout({ studioVersion, viewportWidth: width });
+          restoredDefaultRef.current = fresh;
+          applyLayout(api, fresh);
         }
       }),
-      [panelRegistry]
+      [panelRegistry, studioVersion]
     );
     const initialNativeLayout = layout.dockview?.shape === 'native' ? layout.dockview.json : undefined;
+    const applyInitialLayout = useCallback((api: DockviewApi) => {
+      applyLayout(api, layoutRef.current);
+    }, []);
 
     const handleNativeLayoutChange = useCallback(
       (json: unknown) => {
         if (!onLayoutChangeRef.current || suppressLayoutPersistenceRef.current) return;
-        try {
-          onLayoutChangeRef.current({
-            version: LAYOUT_SCHEMA_VERSION,
-            writtenBy: studioVersion,
-            dockview: { shape: 'native', json }
-          });
-        } catch (err) {
-          console.error('[DockShell] Failed to serialize layout change', err);
-          useOutputStore
-            .getState()
-            .addLine(
-              fmtLine('layout', 'failed to persist layout change', err instanceof Error ? err.message : String(err)),
-              'warn'
-            );
-          showToastRef.current({
-            title: 'Layout not saved',
-            description: 'Could not persist the current panel arrangement.',
-            variant: 'destructive'
-          });
-        }
+        onLayoutChangeRef.current({
+          version: LAYOUT_SCHEMA_VERSION,
+          writtenBy: studioVersion,
+          dockview: { shape: 'native', json }
+        });
       },
       [studioVersion]
     );
 
+    const reportNativeLayoutError = useCallback((err: unknown) => {
+      console.error('[DockShell] Failed to serialize layout change', err);
+      useOutputStore
+        .getState()
+        .addLine(
+          fmtLine('layout', 'failed to persist layout change', err instanceof Error ? err.message : String(err)),
+          'warn'
+        );
+      showToastRef.current({
+        title: 'Layout not saved',
+        description: 'Could not persist the current panel arrangement.',
+        variant: 'destructive'
+      });
+    }, []);
+
+    const handleRestoreFallback = useCallback(() => {
+      const fresh = restoredDefaultRef.current;
+      if (!fresh) return;
+      setLayout(fresh);
+      setLayoutPreset(fresh.dockview?.shape === 'factory' ? (fresh.dockview.preset ?? 'edit') : 'edit');
+      setUtilitiesCollapsedState(fresh.dockview?.shape === 'factory' ? fresh.dockview.bottomGroup.collapsed : false);
+    }, []);
+
     const handleWorkbenchReady = useCallback((api: DockviewApi) => {
       apiRef.current = api;
       applyPanelTabMeta(api, panelTabMetaRef.current);
-      const currentLayout = layoutRef.current;
+      const currentLayout = restoredDefaultRef.current ?? layoutRef.current;
       if (currentLayout.dockview?.shape === 'factory') {
         setUtilitiesCollapsedState(currentLayout.dockview.bottomGroup.collapsed);
       } else {
@@ -594,7 +608,10 @@ export const DockShell = withInstrumentation(
                 <WorkbenchHost
                   definition={workbenchDefinition}
                   initialNativeLayout={initialNativeLayout}
+                  initialLayout={initialNativeLayout === undefined ? applyInitialLayout : undefined}
                   onNativeLayoutChange={handleNativeLayoutChange}
+                  onNativeLayoutError={reportNativeLayoutError}
+                  onRestoreFallback={handleRestoreFallback}
                   onReady={handleWorkbenchReady}
                   defaultTabComponent={StudioDockTab}
                   rightHeaderActionsComponent={UtilityGroupHeaderActions}

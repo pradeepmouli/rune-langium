@@ -42,7 +42,10 @@ export const WorkbenchHost = withInstrumentation(
   function WorkbenchHost({
     definition,
     initialNativeLayout,
+    initialLayout,
     onNativeLayoutChange,
+    onNativeLayoutError,
+    onRestoreFallback,
     onReady,
     className,
     defaultTabComponent,
@@ -51,8 +54,13 @@ export const WorkbenchHost = withInstrumentation(
     const definitionRef = useRef(definition);
     definitionRef.current = definition;
     const initialNativeLayoutRef = useRef(initialNativeLayout);
+    const initialLayoutRef = useRef(initialLayout);
     const onNativeLayoutChangeRef = useRef(onNativeLayoutChange);
     onNativeLayoutChangeRef.current = onNativeLayoutChange;
+    const onNativeLayoutErrorRef = useRef(onNativeLayoutError);
+    onNativeLayoutErrorRef.current = onNativeLayoutError;
+    const onRestoreFallbackRef = useRef(onRestoreFallback);
+    onRestoreFallbackRef.current = onRestoreFallback;
     const onReadyRef = useRef(onReady);
     onReadyRef.current = onReady;
     const listenerRef = useRef<{ dispose(): void } | null>(null);
@@ -76,17 +84,24 @@ export const WorkbenchHost = withInstrumentation(
             initialNativeLayoutRef.current,
             new Set(Object.keys(currentDefinition.panels))
           );
+        } else if (initialLayoutRef.current) {
+          initialLayoutRef.current(event.api, viewportWidth());
         } else {
           currentDefinition.buildDefault(event.api, viewportWidth());
         }
       } catch {
         event.api.clear();
         currentDefinition.buildDefault(event.api, viewportWidth());
+        onRestoreFallbackRef.current?.();
       }
 
       listenerRef.current = event.api.onDidLayoutChange(() => {
         if (event.api.panels.length === 0) return;
-        onNativeLayoutChangeRef.current(event.api.toJSON());
+        try {
+          onNativeLayoutChangeRef.current(event.api.toJSON());
+        } catch (error) {
+          onNativeLayoutErrorRef.current?.(error);
+        }
       });
       onReadyRef.current?.(event.api);
     }, []);
