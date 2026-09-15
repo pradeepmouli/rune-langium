@@ -20,6 +20,7 @@ import { Input } from '@rune-langium/design-system/ui/input';
 import { Button } from '@rune-langium/design-system/ui/button';
 import { IconButtonGroup } from '@rune-langium/design-system/ui/icon-button-group';
 import { NumberChiclet } from '@rune-langium/design-system/ui/number-chiclet';
+import { Checkbox } from '@rune-langium/design-system/ui/checkbox';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@rune-langium/design-system/ui/tooltip';
 import { KindBadge, KIND_LABEL } from '../KindBadge.js';
 import {
@@ -40,6 +41,9 @@ import {
   collectSegmentSubtreePaths
 } from '../../utils/namespace-tree.js';
 import type { FlatTreeRow } from '../../utils/namespace-tree.js';
+import type { SegmentNode } from '../../utils/namespace-tree.js';
+import { selectionState, toggleVisible } from '../../utils/explorer-selection.js';
+import type { ExplorerSelection } from '../../utils/explorer-selection.js';
 import { useVirtualTree } from '../../hooks/useVirtualTree.js';
 import { TYPE_REF_PAYLOAD_MIME, typeRefMimeForKind } from '../../types/structure-view.js';
 import type { TypeRefPayload, TypeRefKind } from '../../types/structure-view.js';
@@ -90,6 +94,8 @@ export interface NamespaceExplorerPanelProps {
    * Retained on the interface for back-compat with EditorPage pass-through.
    */
   onClearDragSource?: () => void;
+  /** Optional controlled export-style selection; navigation remains independent. */
+  selection?: ExplorerSelection;
 }
 
 // ---------------------------------------------------------------------------
@@ -187,6 +193,7 @@ export const NamespaceExplorerPanel = memo(function NamespaceExplorerPanel({
   hiddenRefCounts,
   dragSourceId,
   onSetDragSource,
+  selection,
   // Kept on the public props interface for back-compat only (see the
   // "intentionally NOT forwarded" comment at its TypeItemRow call site
   // below) — same no-op pass-through pattern as `_onToggleNamespace` above.
@@ -264,6 +271,80 @@ export const NamespaceExplorerPanel = memo(function NamespaceExplorerPanel({
       return row;
     });
   }, [filteredRoots, effectiveTreeExpanded, hiddenNodeIds]);
+
+  const selectionIds = useMemo(() => {
+    const byNode = new Map<string, string>();
+    if (selection === undefined) return { all: [] as string[], byNode };
+
+    const selectionIdForNode = (nodeId: string): string => {
+      const node = nodeRepository.byId(nodeId);
+      const selectionId = node === undefined ? nodeId : (selection.getSelectionId?.(node) ?? node.id);
+      byNode.set(nodeId, selectionId);
+      return selectionId;
+    };
+
+    const visit = (segment: SegmentNode): string[] => {
+      const ids = segment.types.map((type) => selectionIdForNode(type.nodeId));
+      for (const child of segment.children) ids.push(...visit(child));
+      return ids;
+    };
+
+    const all = [...new Set(filteredRoots.flatMap(visit))];
+    return { all, byNode };
+  }, [filteredRoots, nodeRepository, selection]);
+
+  const namespaceSelection = useMemo(() => {
+    const bySegment = new Map<string, { ids: string[]; namespaces: string[] }>();
+    if (selection === undefined) return bySegment;
+
+    const selectionIdForNode = (nodeId: string): string => {
+      const node = nodeRepository.byId(nodeId);
+      return node === undefined ? nodeId : (selection.getSelectionId?.(node) ?? node.id);
+    };
+    const namespaces = nodeRepository.namespaces();
+
+    const visit = (segment: SegmentNode): string[] => {
+      const ids = segment.types.map((type) => selectionIdForNode(type.nodeId));
+      for (const child of segment.children) ids.push(...visit(child));
+      const descendantNamespaces = namespaces.filter(
+        (namespace) =>
+          namespace === segment.fullPath || (segment.fullPath !== '' && namespace.startsWith(`${segment.fullPath}.`))
+      );
+      bySegment.set(segment.fullPath, {
+        namespaces: descendantNamespaces,
+        ids: [...new Set(ids)]
+      });
+      return ids;
+    };
+
+    for (const root of segmentedRootsRaw) visit(root);
+    return bySegment;
+  }, [nodeRepository, segmentedRootsRaw, selection]);
+
+  const selectedSelectionIds = useMemo(
+    () => new Set(selection === undefined ? [] : [...selection.explicit, ...selection.requiredBy.keys()]),
+    [selection]
+  );
+
+  const toggleSelection = useCallback(
+    (ids: readonly string[], checked: boolean) => {
+      if (selection !== undefined) selection.onChange(toggleVisible(ids, selection.explicit, checked));
+    },
+    [selection]
+  );
+
+  const toggleNamespaceSelection = useCallback(
+    (ids: readonly string[], namespaces: readonly string[], checked: boolean) => {
+      if (selection !== undefined) {
+        selection.onChange(toggleVisible(ids, selection.explicit, checked), {
+          kind: 'namespace',
+          namespaces,
+          checked
+        });
+      }
+    },
+    [selection]
+  );
 
   const virtualizer = useVirtualTree(flatRows, scrollRef);
 
@@ -372,6 +453,30 @@ export const NamespaceExplorerPanel = memo(function NamespaceExplorerPanel({
           </IconButtonGroup>
         </div>
 
+        {selection !== undefined && (
+          <div className="flex items-center gap-2 border-b px-3 py-1.5">
+            <Button
+              type="button"
+              variant="secondary"
+              size="xs"
+              data-testid="select-visible-results"
+              onClick={() => toggleSelection(selectionIds.all, true)}
+            >
+              Select visible results
+            </Button>
+            <Button
+              type="button"
+              variant="ghost"
+              size="xs"
+              data-testid="clear-selection"
+              disabled={selection.explicit.size === 0}
+              onClick={() => selection.onChange(new Set())}
+            >
+              Clear selection
+            </Button>
+          </div>
+        )}
+
         {/* Kind filter pills — a LOCAL explorer filter (independent of graph
             visibility / GraphFilterMenu). All-on by default; toggling a pill off
             prunes that kind from the tree and prunes now-empty namespaces. */}
@@ -454,7 +559,15 @@ export const NamespaceExplorerPanel = memo(function NamespaceExplorerPanel({
                         onToggleTreeExpand={() => toggleTreeExpand(row.namespace)}
                       />
                     ) : row.kind === 'segment' ? (
-                      <SegmentHeaderRow row={row} onToggleTreeExpand={() => toggleTreeExpand(row.fullPath)} />
+                      <SegmentHeaderRow
+                        row={row}
+                        onToggleTreeExpand={() => toggleTreeExpand(row.fullPath)}
+                        selectionIds={namespaceSelection.get(row.fullPath)?.ids ?? []}
+                        selectionNamespaces={namespaceSelection.get(row.fullPath)?.namespaces ?? []}
+                        selectedIds={selectedSelectionIds}
+                        onToggleSelection={toggleNamespaceSelection}
+                        showSelection={selection !== undefined}
+                      />
                     ) : row.kind === 'type' ? (
                       <TypeItemRow
                         row={row}
@@ -464,6 +577,8 @@ export const NamespaceExplorerPanel = memo(function NamespaceExplorerPanel({
                         onSelectNode={() => onSelectNode?.(row.nodeId)}
                         isDragSource={dragSourceId === row.nodeId}
                         onSetDragSource={onSetDragSource}
+                        selection={selection}
+                        selectionId={selectionIds.byNode.get(row.nodeId)}
                         // onClearDragSource is intentionally NOT forwarded — the TypeItemRow
                         // no longer uses it. The panel-level prop is kept for back-compat only.
                       />
@@ -548,9 +663,23 @@ function NamespaceHeaderRow({ row, isGraphVisible, onToggleTreeExpand }: Namespa
 interface SegmentHeaderRowProps {
   row: Extract<FlatTreeRow, { kind: 'segment' }>;
   onToggleTreeExpand: () => void;
+  selectionIds: readonly string[];
+  selectionNamespaces: readonly string[];
+  selectedIds: ReadonlySet<string>;
+  onToggleSelection: (ids: readonly string[], namespaces: readonly string[], checked: boolean) => void;
+  showSelection: boolean;
 }
 
-function SegmentHeaderRow({ row, onToggleTreeExpand }: SegmentHeaderRowProps): JSX.Element {
+function SegmentHeaderRow({
+  row,
+  onToggleTreeExpand,
+  selectionIds,
+  selectionNamespaces,
+  selectedIds,
+  onToggleSelection,
+  showSelection
+}: SegmentHeaderRowProps): JSX.Element {
+  const state = selectionState(selectionIds, selectedIds);
   return (
     <NamespaceSegmentHeaderRow
       data-testid={`ns-seg-${row.fullPath}`}
@@ -561,6 +690,19 @@ function SegmentHeaderRow({ row, onToggleTreeExpand }: SegmentHeaderRowProps): J
       depth={row.depth}
       onToggle={onToggleTreeExpand}
       indentPx={TREE_INDENT_BASE}
+      leading={
+        showSelection ? (
+          <Checkbox
+            checked={state === true}
+            indeterminate={state === 'indeterminate'}
+            onClick={(event) => event.stopPropagation()}
+            onKeyDown={(event) => event.stopPropagation()}
+            onCheckedChange={(checked) => onToggleSelection(selectionIds, selectionNamespaces, checked === true)}
+            aria-label={`Select ${row.fullPath || 'default'} namespace`}
+            data-testid={`ns-seg-checkbox-${row.fullPath}`}
+          />
+        ) : undefined
+      }
     />
   );
 }
@@ -582,6 +724,8 @@ interface TypeItemRowProps {
    * mark this type as the active drag source. The row body is single-purpose.
    */
   onSetDragSource?: (payload: TypeRefPayload) => void;
+  selection?: ExplorerSelection;
+  selectionId?: string;
   // onClearDragSource is intentionally omitted — the TypeItemRow no longer
   // needs it. The panel-level prop is kept for interface back-compat only.
 }
@@ -599,7 +743,9 @@ function TypeItemRow({
   refCount,
   onSelectNode,
   isDragSource: _isDragSource,
-  onSetDragSource: _onSetDragSource
+  onSetDragSource: _onSetDragSource,
+  selection,
+  selectionId
 }: TypeItemRowProps): JSX.Element {
   // Every kind maps to a payload kind, so every row is a drag source. That
   // avoids the WebKit fallback where a non-draggable row text/region-selects on
@@ -665,6 +811,11 @@ function TypeItemRow({
     }
   }, []);
 
+  const requiredBy = selectionId === undefined ? undefined : selection?.requiredBy.get(selectionId);
+  const isRequired = requiredBy !== undefined && requiredBy.length > 0;
+  const isExplicit = selectionId !== undefined && selection?.explicit.has(selectionId) === true;
+  const isSelectionChecked = isExplicit || isRequired;
+
   // Flat layout: the tree carries `depth` for structure/expansion, but type
   // rows do NOT step right with depth. They get a single fixed membership
   // indent past the segment header's baseline so they read as belonging to the
@@ -689,6 +840,31 @@ function TypeItemRow({
       onDragStart={handleDragStart}
     >
       {isSelected && <span className="studio-type-pip" />}
+
+      {selection !== undefined && selectionId !== undefined && (
+        <>
+          <Checkbox
+            checked={isSelectionChecked}
+            disabled={isRequired && !isExplicit}
+            onClick={(event) => event.stopPropagation()}
+            onKeyDown={(event) => event.stopPropagation()}
+            onCheckedChange={(checked) =>
+              selection.onChange(toggleVisible([selectionId], selection.explicit, checked === true))
+            }
+            aria-label={isRequired ? `${row.name}, required by ${requiredBy.join(', ')}` : `Select ${row.name}`}
+            data-testid={`ns-type-checkbox-${row.nodeId}`}
+          />
+          {isRequired && (
+            <span
+              aria-label={`Required by ${requiredBy.join(', ')}`}
+              title={`Required by ${requiredBy.join(', ')}`}
+              className="text-muted-foreground"
+            >
+              <Link className="size-3" />
+            </span>
+          )}
+        </>
+      )}
 
       <KindBadge kind={row.typeKind} shape="glyph" />
 

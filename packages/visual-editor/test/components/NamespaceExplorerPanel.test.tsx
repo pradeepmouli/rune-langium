@@ -235,6 +235,118 @@ describe('NamespaceExplorerPanel', () => {
     expect(screen.getByText('No matching types or namespaces')).toBeTruthy();
   });
 
+  it('keeps navigation separate from controlled selection', () => {
+    const onChange = vi.fn();
+    const { props } = renderPanel({
+      selection: { explicit: new Set(), requiredBy: new Map(), onChange }
+    });
+
+    fireEvent.click(screen.getByTestId('ns-type-checkbox-com.model.Trade'));
+    expect(onChange).toHaveBeenCalledOnce();
+    expect(onChange).toHaveBeenLastCalledWith(new Set(['com.model.Trade']));
+
+    fireEvent.click(screen.getByTestId('ns-type-nav-com.model.Trade'));
+    expect(props.onSelectNode).toHaveBeenCalledOnce();
+    expect(onChange).toHaveBeenCalledOnce();
+  });
+
+  it('keeps required items selected while allowing their explicit selection to be removed', () => {
+    const onChange = vi.fn();
+    renderPanel({
+      selection: {
+        explicit: new Set(['canonical:Trade']),
+        requiredBy: new Map([['canonical:Trade', ['canonical:Root']]]),
+        getSelectionId: (node) => `canonical:${node.data.name}`,
+        onChange
+      }
+    });
+
+    const checkbox = screen.getByTestId('ns-type-checkbox-com.model.Trade');
+    expect(checkbox).toHaveAttribute('aria-label', 'Trade, required by canonical:Root');
+    expect(checkbox).toBeChecked();
+    fireEvent.click(checkbox);
+
+    expect(onChange).toHaveBeenCalledWith(new Set());
+    expect(checkbox).toBeChecked();
+  });
+
+  it('does not allow a required-only item to be removed', () => {
+    renderPanel({
+      selection: {
+        explicit: new Set(),
+        requiredBy: new Map([['com.model.Trade', ['com.model.Event']]]),
+        onChange: vi.fn()
+      }
+    });
+
+    expect(screen.getByTestId('ns-type-checkbox-com.model.Trade')).toBeDisabled();
+    expect(screen.getByLabelText('Required by com.model.Event')).toBeTruthy();
+  });
+
+  it('selects the complete filtered result set while preserving hidden selections', () => {
+    const onChange = vi.fn();
+    renderPanel({
+      selection: { explicit: new Set(['com.lib.Date']), requiredBy: new Map(), onChange }
+    });
+
+    fireEvent.change(screen.getByTestId('namespace-search'), { target: { value: 'Trade' } });
+    fireEvent.click(screen.getByTestId('select-visible-results'));
+
+    expect(onChange).toHaveBeenLastCalledWith(new Set(['com.lib.Date', 'cdm.trade.Trade', 'com.model.Trade']));
+  });
+
+  it('uses all namespace descendants for indeterminate selection state', () => {
+    renderPanel({
+      selection: { explicit: new Set(['com.model.Trade']), requiredBy: new Map(), onChange: vi.fn() }
+    });
+
+    expect(screen.getByTestId('ns-seg-checkbox-com.model')).toHaveAttribute('data-indeterminate');
+  });
+
+  it('includes collapsed descendants when selecting a namespace', () => {
+    const onChange = vi.fn();
+    const nestedNodes = [makeNode('org.a.deep', 'First'), makeNode('org.b.deep', 'Second')];
+    renderPanel({
+      nodeRepository: repoFrom(nestedNodes),
+      expandedNamespaces: new Set(['org.a.deep', 'org.b.deep']),
+      selection: { explicit: new Set(), requiredBy: new Map(), onChange }
+    });
+
+    fireEvent.click(screen.getByTestId('ns-seg-checkbox-org'));
+
+    expect(onChange).toHaveBeenCalledWith(new Set(['org.a.deep.First', 'org.b.deep.Second']), {
+      kind: 'namespace',
+      namespaces: ['org.a.deep', 'org.b.deep'],
+      checked: true
+    });
+  });
+
+  it('keeps namespace operations whole while bulk selection follows the filter', () => {
+    const onChange = vi.fn();
+    renderPanel({ selection: { explicit: new Set(), requiredBy: new Map(), onChange } });
+
+    fireEvent.change(screen.getByTestId('namespace-search'), { target: { value: 'Trade' } });
+    fireEvent.click(screen.getByTestId('ns-seg-checkbox-com'));
+
+    expect(onChange).toHaveBeenCalledWith(new Set(['com.lib.Date', 'com.model.Event', 'com.model.Trade']), {
+      kind: 'namespace',
+      namespaces: ['com.model', 'com.lib'],
+      checked: true
+    });
+  });
+
+  it('supports Space activation on a selection checkbox', () => {
+    const onChange = vi.fn();
+    renderPanel({ selection: { explicit: new Set(), requiredBy: new Map(), onChange } });
+    const checkbox = screen.getByTestId('ns-type-checkbox-com.model.Trade');
+
+    checkbox.focus();
+    fireEvent.keyDown(checkbox, { key: ' ' });
+    fireEvent.click(checkbox);
+
+    expect(onChange).toHaveBeenCalledOnce();
+  });
+
   it('highlights selected node', () => {
     renderPanel({ selectedNodeId: 'com.model.Trade' });
     const typeRow = screen.getByTestId('ns-type-com.model.Trade');

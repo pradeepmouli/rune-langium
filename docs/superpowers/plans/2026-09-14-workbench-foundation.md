@@ -152,7 +152,9 @@ const options = buildTypeOptions(repository, false);
 export interface ExplorerSelection {
   explicit: ReadonlySet<string>;
   requiredBy: ReadonlyMap<string, readonly string[]>;
-  onChange(next: Set<string>): void;
+  onChange(next: Set<string>, action?: {
+    kind: 'namespace'; namespaces: readonly string[]; checked: boolean
+  }): void;
   getSelectionId?(node: TypeGraphNode): string;
 }
 export function selectionState(ids: readonly string[], selected: ReadonlySet<string>) {
@@ -179,7 +181,7 @@ it('clears visible roots without clearing hidden roots', () => {
 
 Add a rendered explorer test: check a row; invoke its navigation button; assert `onSelectNode` fires without a second `onChange`. Required-only items expose the requiring roots and cannot be removed while those roots remain selected. An explicitly selected item may lose its explicit flag and remain required.
 - [ ] **Step 2: Run red.** `pnpm --filter @rune-langium/visual-editor exec vitest run test/utils/explorer-selection.test.ts test/components/NamespaceExplorerPanel.test.tsx`.
-- [ ] **Step 3: Implement the pure helpers and checkbox rendering.** Import `TypeGraphNode` from the existing visual-editor model types. Resolve checkbox keys with `selection.getSelectionId?.(node) ?? node.id`; apply the same mapping to rows, required markers, namespace descendants, and filtered bulk operations. Navigation continues to use the original node ID. Export supplies its canonical declaration key adapter. Use the existing segmented tree and filtered virtual rows as the source of visible IDs. Namespace checkboxes operate on all eligible descendants of that namespace, not just viewport-mounted rows. “Select visible results” operates on the complete filtered result set. “Clear selection” clears all explicit roots; required markers are derived anew by the caller. Checkbox clicks stop propagation; preserve existing drag and navigation callbacks outside selection mode. Use existing design-system Checkbox's indeterminate state.
+- [ ] **Step 3: Implement the pure helpers and checkbox rendering.** Import `TypeGraphNode` from the existing visual-editor model types. Resolve checkbox keys with `selection.getSelectionId?.(node) ?? node.id`; apply the same mapping to rows, required markers, namespace descendants, and filtered bulk operations. Navigation continues to use the original node ID. Export supplies its canonical declaration key adapter. Use the existing segmented tree and filtered virtual rows as the source of visible IDs. Namespace checkboxes operate on all eligible descendants of that namespace, independent of search/kind filters and not just viewport-mounted rows. Supply optional namespace action metadata with the actual descendant namespace names, so Export can retain namespace roots rather than infer user intent from the resulting selected IDs. “Select visible results” operates on the complete filtered result set. “Clear selection” clears all explicit roots; required markers are derived anew by the caller. Checkbox clicks stop propagation; preserve existing drag and navigation callbacks outside selection mode. Use existing design-system Checkbox's indeterminate state.
 - [ ] **Step 4: Verify keyboard and large-tree behavior.** Add tests for Space on a checkbox, filtered bulk selection, parent indeterminate state, an offscreen selected row, and no selection mode preserving existing callbacks. No AST hydration is triggered by merely expanding/filtering this inventory.
 - [ ] **Step 5: Run green checks and commit.** Run Step 2, visual-editor type-check, and the existing namespace explorer/virtual tree suite. Update architecture docs with controlled inclusion versus navigation. Commit `feat(visual-editor): add controlled explorer selection mode`.
 
