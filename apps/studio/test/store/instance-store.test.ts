@@ -521,6 +521,49 @@ describe('instance-store — OPFS persistence (finding #1)', () => {
     expect(useInstanceStore.getState().schemas.has('test.Party')).toBe(false);
   });
 
+  it('preserves new-workspace schema and validation state when old replies arrive after an epoch switch', () => {
+    const postMessage = vi.fn();
+    useInstanceStore.getState().setWorker({ postMessage } as unknown as Worker);
+    const oldId = useInstanceStore.getState().createInstance('old.Party', 'Old Party');
+    const validationRequest = postMessage.mock.calls.find(([message]) => message.type === 'instance:validate')![0];
+    useInstanceStore.getState().dispatchGenerateSchema('old.Party');
+    const schemaRequest = postMessage.mock.calls.find(([message]) => message.type === 'instance:generateSchema')![0];
+
+    useInstanceStore.getState().advanceWorkspaceEpoch();
+    const newSchema = {
+      schemaVersion: 1,
+      targetId: 'new.Party',
+      title: 'New Party',
+      status: 'ready',
+      fields: []
+    } as never;
+    useInstanceStore.setState({
+      instances: {
+        'new-instance': {
+          id: 'new-instance',
+          name: 'New Party',
+          typeFqn: 'new.Party',
+          data: {},
+          createdAt: 2,
+          modifiedAt: 2
+        }
+      },
+      schemas: new Map([['new.Party', newSchema]]),
+      validationErrors: { 'new-instance': [] },
+      validationStatus: { 'new-instance': 'valid' }
+    });
+
+    expect(useInstanceStore.getState().receiveSchemaResult(schemaRequest.requestId, newSchema)).toBe(false);
+    useInstanceStore
+      .getState()
+      .receiveValidateResult(validationRequest.requestId, [{ path: '', message: `old ${oldId} response` }]);
+
+    const state = useInstanceStore.getState();
+    expect(state.schemas.get('new.Party')).toBe(newSchema);
+    expect(state.validationErrors).toEqual({ 'new-instance': [] });
+    expect(state.validationStatus).toEqual({ 'new-instance': 'valid' });
+  });
+
   it('logs an op-log error when persisting an instance write fails, since the UI already shows the edit as saved', async () => {
     useOutputStore.setState({ lines: [] });
     const fs = new OpfsFs(createOpfsRoot() as never);

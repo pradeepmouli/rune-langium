@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: FSL-1.1-ALv2
 // Copyright (c) 2026 Pradeep Mouli
 import type React from 'react';
-import { useEffect, useRef, useState, useCallback } from 'react';
+import { useEffect, useLayoutEffect, useRef, useState, useCallback } from 'react';
 import { useEditorStore } from '@rune-langium/visual-editor';
 import { useStudioToast } from '../../components/StudioToastProvider.js';
 import { useWorkspace } from './workspace-context.js';
@@ -104,13 +104,33 @@ export const CodegenProvider = withInstrumentation(
     const filesRef = useRef(files);
     const deferredExportsRef = useRef(deferredExports);
     const workspaceEpochRef = useRef(0);
+    const committedFilesVersionRef = useRef(0);
     const workerFilesRevisionRef = useRef(0);
     const instanceHydrationSequenceRef = useRef(0);
     const workerFileWaitersRef = useRef(
-      new Map<string, { epoch: number; resolve: (revision: number) => void; reject: (reason: Error) => void }>()
+      new Map<
+        string,
+        { epoch: number; filesRevision: number; resolve: (revision: number) => void; reject: (reason: Error) => void }
+      >()
+    );
+    const workspaceCommitWaitersRef = useRef(
+      new Set<{ afterVersion: number; resolve: () => void; reject: (reason: Error) => void }>()
     );
     filesRef.current = files;
     deferredExportsRef.current = deferredExports;
+
+    // A hydration callback is delivered from the editor store before React has
+    // committed App's merged curated files. This layout effect is the concrete
+    // boundary after which filesRef is a real committed workspace snapshot.
+    useLayoutEffect(() => {
+      const version = ++committedFilesVersionRef.current;
+      for (const waiter of workspaceCommitWaitersRef.current) {
+        if (version > waiter.afterVersion) {
+          workspaceCommitWaitersRef.current.delete(waiter);
+          waiter.resolve();
+        }
+      }
+    }, [files]);
 
     const { showToast } = useStudioToast();
     const previewSelectedTargetId = usePreviewStore((s) => s.selectedTargetId);
@@ -210,6 +230,7 @@ export const CodegenProvider = withInstrumentation(
           signal?.addEventListener('abort', abort, { once: true });
           workerFileWaitersRef.current.set(requestId, {
             epoch,
+            filesRevision,
             resolve: (revision) => {
               signal?.removeEventListener('abort', abort);
               resolve(revision);
@@ -237,33 +258,70 @@ export const CodegenProvider = withInstrumentation(
       [handlePreviewWorkerFailure]
     );
 
-    const hydrateNamespaceForInstance = useCallback((namespace: string, signal: AbortSignal): Promise<void> => {
-      const orchestrator = orchestratorRef.current;
-      if (!orchestrator) return Promise.reject(new Error('Curated hydration is unavailable.'));
-      const targetId = `instance-readiness:${++instanceHydrationSequenceRef.current}`;
+    const waitForCommittedWorkspaceFiles = useCallback((afterVersion: number, signal: AbortSignal): Promise<void> => {
+      if (signal.aborted) return Promise.reject(new DOMException('Instance preparation was cancelled.', 'AbortError'));
+      if (committedFilesVersionRef.current > afterVersion) return Promise.resolve();
       return new Promise<void>((resolve, reject) => {
-        const finish = (error?: Error) => {
-          signal.removeEventListener('abort', onAbort);
-          if (error) reject(error);
-          else resolve();
-        };
-        const onAbort = () => finish(new DOMException('Instance preparation was cancelled.', 'AbortError'));
-        if (signal.aborted) return onAbort();
-        signal.addEventListener('abort', onAbort, { once: true });
-        orchestrator.requestHydration(namespace, {
-          retryFor: {
-            targetId,
-            onRetry: () => {
-              // HydrationOrchestrator intentionally fires on both success and
-              // dequeue-after-failure. Instance readiness must distinguish
-              // those outcomes rather than retrying a failed namespace forever.
-              if (useEditorStore.getState().hydratedNamespaces.includes(namespace)) finish();
-              else finish(new Error(`Could not hydrate curated namespace ${namespace}. Retry to try again.`));
-            }
+        const waiter = {
+          afterVersion,
+          resolve: () => {
+            signal.removeEventListener('abort', abort);
+            resolve();
+          },
+          reject: (reason: Error) => {
+            signal.removeEventListener('abort', abort);
+            reject(reason);
           }
-        });
+        };
+        const abort = () => {
+          workspaceCommitWaitersRef.current.delete(waiter);
+          reject(new DOMException('Instance preparation was cancelled.', 'AbortError'));
+        };
+        signal.addEventListener('abort', abort, { once: true });
+        workspaceCommitWaitersRef.current.add(waiter);
       });
     }, []);
+
+    const hydrateNamespaceForInstance = useCallback(
+      (namespace: string, signal: AbortSignal): Promise<void> => {
+        const orchestrator = orchestratorRef.current;
+        if (!orchestrator) return Promise.reject(new Error('Curated hydration is unavailable.'));
+        const targetId = `instance-readiness:${++instanceHydrationSequenceRef.current}`;
+        return new Promise<void>((resolve, reject) => {
+          let settled = false;
+          const finish = (error?: Error) => {
+            if (settled) return;
+            settled = true;
+            signal.removeEventListener('abort', onAbort);
+            if (error) reject(error);
+            else resolve();
+          };
+          const onAbort = () => finish(new DOMException('Instance preparation was cancelled.', 'AbortError'));
+          if (signal.aborted) return onAbort();
+          signal.addEventListener('abort', onAbort, { once: true });
+          orchestrator.requestHydration(namespace, {
+            retryFor: {
+              targetId,
+              onRetry: () => {
+                // HydrationOrchestrator intentionally fires on both success and
+                // dequeue-after-failure. Instance readiness must distinguish
+                // those outcomes rather than retrying a failed namespace forever.
+                if (useEditorStore.getState().hydratedNamespaces.includes(namespace)) {
+                  const versionBeforeCommit = committedFilesVersionRef.current;
+                  void waitForCommittedWorkspaceFiles(versionBeforeCommit, signal).then(
+                    () => finish(),
+                    (error: unknown) => finish(error instanceof Error ? error : new Error(String(error)))
+                  );
+                } else {
+                  finish(new Error(`Could not hydrate curated namespace ${namespace}. Retry to try again.`));
+                }
+              }
+            }
+          });
+        });
+      },
+      [waitForCommittedWorkspaceFiles]
+    );
 
     useEffect(() => {
       workspaceEpochRef.current++;
@@ -347,6 +405,10 @@ export const CodegenProvider = withInstrumentation(
           workerFileWaitersRef.current.delete(msg.requestId);
           if (waiter.epoch !== workspaceEpochRef.current) {
             waiter.reject(new Error('Workspace changed before worker files were ready.'));
+          } else if (waiter.filesRevision !== msg.filesRevision) {
+            waiter.reject(
+              new Error(`Worker acknowledged files revision ${msg.filesRevision}; expected ${waiter.filesRevision}.`)
+            );
           } else {
             waiter.resolve(msg.filesRevision);
           }
@@ -492,6 +554,10 @@ export const CodegenProvider = withInstrumentation(
           waiter.reject(new Error('Code generation worker was detached.'));
         }
         workerFileWaitersRef.current.clear();
+        for (const waiter of workspaceCommitWaitersRef.current) {
+          waiter.reject(new Error('Code generation worker was detached.'));
+        }
+        workspaceCommitWaitersRef.current.clear();
       };
     }, [
       codegenWorker,

@@ -169,6 +169,9 @@ describe('CodegenProvider', () => {
 
     const worker = FakeWorker.instances[0]!;
     const id = useInstanceStore.getState().createInstance('user.missing.Type', 'Missing type');
+    await act(async () => {
+      await Promise.resolve();
+    });
     const fileRequest = worker.posted.filter((message) => message.type === 'preview:setFiles').at(-1)!;
     expect(worker.posted.some((message) => message.type === 'instance:generateSchema')).toBe(false);
 
@@ -190,6 +193,104 @@ describe('CodegenProvider', () => {
       expect(types).toContain('instance:validate');
     });
     expect(useInstanceStore.getState().validationStatus[id]).toBe('pending');
+  });
+
+  it('rejects a receipt whose revision does not match the dispatched instance file snapshot', async () => {
+    render(
+      <WorkspaceStateContext.Provider value={wsState('ws-revision-mismatch')}>
+        <CodegenProvider>
+          <div />
+        </CodegenProvider>
+      </WorkspaceStateContext.Provider>
+    );
+
+    const worker = FakeWorker.instances[0]!;
+    const id = useInstanceStore.getState().createInstance('user.missing.Type', 'Missing type');
+    await act(async () => {
+      await Promise.resolve();
+    });
+    const fileRequest = worker.posted.filter((message) => message.type === 'preview:setFiles').at(-1)!;
+
+    await act(async () => {
+      for (const listener of worker.listeners.message ?? []) {
+        listener({
+          data: {
+            type: 'preview:files-ready',
+            requestId: fileRequest.requestId,
+            filesRevision: fileRequest.filesRevision + 1
+          }
+        });
+      }
+      await Promise.resolve();
+    });
+
+    expect(worker.posted.some((message) => message.type === 'instance:generateSchema')).toBe(false);
+    expect(worker.posted.some((message) => message.type === 'instance:validate')).toBe(false);
+    await vi.waitFor(() => expect(useInstanceStore.getState().validationStatus[id]).toBe('unavailable'));
+    expect(useInstanceStore.getState().schemaErrors.get('user.missing.Type')?.message).toContain('expected');
+  });
+
+  it('does not synchronize a hydrated instance until the hydrated workspace files commit', async () => {
+    let commitHydratedFiles: (() => void) | undefined;
+    function Host() {
+      const [workspace, setWorkspace] = useState<WorkspaceState>({
+        ...wsState('ws-hydration-commit'),
+        deferredExports: [
+          {
+            filePath: 'curated/bundle.rosetta',
+            namespace: 'curated',
+            exports: [{ type: 'data', name: 'Address' }]
+          }
+        ]
+      });
+      commitHydratedFiles = () =>
+        setWorkspace((current) => ({
+          ...current,
+          files: [
+            ...current.files,
+            {
+              name: 'address.rosetta',
+              path: 'curated/address.rosetta',
+              content: 'namespace curated',
+              dirty: false
+            }
+          ]
+        }));
+      return (
+        <WorkspaceStateContext.Provider value={workspace}>
+          <CodegenProvider>
+            <div />
+          </CodegenProvider>
+        </WorkspaceStateContext.Provider>
+      );
+    }
+
+    render(<Host />);
+    const worker = FakeWorker.instances[0]!;
+    useInstanceStore.getState().createInstance('curated.Address', 'Address');
+    await act(async () => {
+      await Promise.resolve();
+    });
+    expect(useEditorStore.getState().pendingHydrationNamespaces).toContain('curated');
+    const beforeHydration = worker.posted.filter((message) => message.type === 'preview:setFiles').length;
+
+    act(() => {
+      useEditorStore.getState().markNamespacesHydrated(['curated']);
+    });
+    await act(async () => {
+      await Promise.resolve();
+    });
+
+    expect(worker.posted.filter((message) => message.type === 'preview:setFiles')).toHaveLength(beforeHydration);
+
+    act(() => commitHydratedFiles?.());
+    await act(async () => {
+      await Promise.resolve();
+    });
+    const hydratedRequest = worker.posted.filter((message) => message.type === 'preview:setFiles').at(-1)!;
+    expect(hydratedRequest.files.some((file: { uri: string }) => file.uri.endsWith('/curated/address.rosetta'))).toBe(
+      true
+    );
   });
 
   it('still routes an ordinary preview:result matching currentPreviewRequestIdRef to usePreviewStore', () => {
