@@ -942,10 +942,13 @@ export const handleCodegenDownload = withInstrumentation(
         // target (019 Phase 0.5.5) — the studio's Download flow delegates
         // its layout choice to the server, so `body.options.<target>.layout`
         // is only set when a caller wants to override the server's choice.
-        const { generate, resolveExportSelection } = await import('@rune-langium/codegen/export');
+        const { generate, generateSelected } = await import('@rune-langium/codegen/export');
         const generatorOptions = applyPagesFunctionDefaults(body);
         if (resolvedNamespaces && body.namespaces) generatorOptions.namespaces = resolvedNamespaces;
-        const selectionReceipt = body.selection ? resolveExportSelection(documents, body.selection) : undefined;
+        const selectedGeneration = body.selection
+          ? await generateSelected(documents, body.selection, generatorOptions)
+          : undefined;
+        const selectionReceipt = selectedGeneration?.selection;
         if (selectionReceipt?.unknown.length) {
           return jsonError(
             400,
@@ -957,7 +960,7 @@ export const handleCodegenDownload = withInstrumentation(
             }))
           );
         }
-        const outputs = await generate(documents, generatorOptions);
+        const outputs = selectedGeneration?.outputs ?? (await generate(documents, generatorOptions));
 
         const errors = fatalDiagnostics(outputs);
         if (errors.length > 0) {

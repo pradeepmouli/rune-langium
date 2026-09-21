@@ -4,7 +4,7 @@
 import { describe, expect, it } from 'vitest';
 import { createRuneDslServices } from '@rune-langium/core';
 import { URI } from 'langium';
-import { generate, resolveExportSelection } from '../src/export.js';
+import { generate, generateSelected, resolveExportSelection } from '../src/export.js';
 
 describe('declaration selection', () => {
   it('includes a selected declaration dependency and excludes an unrelated sibling', async () => {
@@ -85,5 +85,34 @@ type Party:
     expect(outputs[0]?.diagnostics).toEqual(
       expect.arrayContaining([expect.objectContaining({ code: 'unknown-export-selection' })])
     );
+  });
+
+  it('returns the receipt used for declaration-scoped generation', async () => {
+    const { RuneDsl } = createRuneDslServices();
+    await RuneDsl.shared.workspace.WorkspaceManager.initializeWorkspace([]);
+    const doc = RuneDsl.shared.workspace.LangiumDocumentFactory.fromString(
+      `namespace test
+type Dep:
+  value string (1..1)
+type Party:
+  dep Dep (1..1)`,
+      URI.parse('inmemory:///selection-receipt.rosetta')
+    );
+    await RuneDsl.shared.workspace.DocumentBuilder.build([doc]);
+
+    const result = await generateSelected(
+      doc,
+      { namespaces: [], declarations: [{ namespace: 'test', name: 'Party', kind: 'Data' }] },
+      { target: 'typescript' }
+    );
+
+    expect(result.selection.explicit).toEqual([{ namespace: 'test', name: 'Party', kind: 'Data' }]);
+    expect(result.selection.included).toEqual(
+      expect.arrayContaining([
+        { namespace: 'test', name: 'Party', kind: 'Data' },
+        { namespace: 'test', name: 'Dep', kind: 'Data' }
+      ])
+    );
+    expect(result.outputs.flatMap((output) => output.diagnostics)).toEqual([]);
   });
 });

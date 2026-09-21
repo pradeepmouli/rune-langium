@@ -30,9 +30,10 @@
  */
 
 import type { LangiumDocument } from 'langium';
-import type { GeneratorOutput, GeneratorOptions, GeneratePreviewSchemaOptions } from './types.js';
+import type { ExportSelection, GeneratorOutput, GeneratorOptions, GeneratePreviewSchemaOptions } from './types.js';
 import { runGenerate, IMPLEMENTED_TARGETS } from './generator.js';
 import { generatePreviewSchemas as runGeneratePreviewSchemas } from './preview-schema.js';
+import { resolveExportSelection, type ResolvedExportSelection } from './selection/declaration-selection.js';
 
 export { IMPLEMENTED_TARGETS };
 export { normalizePreviewInputs } from './preview-schema.js';
@@ -119,6 +120,28 @@ export async function generate(
 ): Promise<GeneratorOutput[]> {
   const docs = Array.isArray(documents) ? documents : [documents];
   return runGenerate(docs, options ?? {});
+}
+
+/** Files and the dependency-closed receipt produced by a selected export. */
+export interface SelectedGeneration {
+  outputs: GeneratorOutput[];
+  selection: ResolvedExportSelection;
+}
+
+/**
+ * Generate a declaration-scoped export and return the exact selection receipt
+ * used by generation. This lets callers present or archive the dependency
+ * closure without resolving the source workspace a second time.
+ */
+export async function generateSelected(
+  documents: LangiumDocument | LangiumDocument[],
+  selection: ExportSelection,
+  options?: Omit<GeneratorOptions, 'selection'>
+): Promise<SelectedGeneration> {
+  const docs = Array.isArray(documents) ? documents : [documents];
+  const resolvedSelection = resolveExportSelection(docs, selection);
+  const outputs = await runGenerate(docs, { ...options, selection }, resolvedSelection);
+  return { outputs, selection: resolvedSelection };
 }
 
 /**
