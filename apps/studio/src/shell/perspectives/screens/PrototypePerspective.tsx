@@ -21,6 +21,8 @@ export const PrototypePerspective = withInstrumentation(
     const view = usePrototypeViewStore((state) => state.state);
     const activate = usePrototypeViewStore((state) => state.activate);
     const patch = usePrototypeViewStore((state) => state.patch);
+    const pendingIntent = usePrototypeNavigationStore((state) => state.pending);
+    const consumePrototypeIntent = usePrototypeNavigationStore((state) => state.consume);
     const [creating, setCreating] = useState(false);
     const [seed, setSeed] = useState<Parameters<typeof InstanceCreateDialog>[0]['seed']>();
     const [importError, setImportError] = useState<string | null>(null);
@@ -35,12 +37,12 @@ export const PrototypePerspective = withInstrumentation(
     }, [activate, workspace?.workspaceId]);
     useEffect(() => {
       if (!workspace?.workspaceId) return;
-      const intent = usePrototypeNavigationStore.getState().consume(workspace.workspaceId);
+      const intent = consumePrototypeIntent(workspace.workspaceId);
       if (intent?.kind === 'create') {
         setSeed(intent.seed);
         setCreating(true);
       }
-    }, [workspace?.workspaceId]);
+    }, [consumePrototypeIntent, pendingIntent, workspace?.workspaceId]);
     useEffect(() => setFocusedPayloadPointer(undefined), [selectedRecord?.id]);
 
     const importJson = async (event: ChangeEvent<HTMLInputElement>) => {
