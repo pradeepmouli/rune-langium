@@ -128,6 +128,8 @@ export interface GeneratorOptions {
    * passed directly may produce output with unresolved imports.
    */
   namespaces?: readonly string[];
+  /** Optional top-level declaration roots for a dependency-closed export. */
+  selection?: ExportSelection;
 
   // 019 spec §3.1 — per-target option blocks. Each emitter reads its
   // own slot. TS structural typing narrows access via `options[target]`
@@ -147,6 +149,19 @@ export interface GeneratorOptions {
   openapi?: OpenApiOptions;
   // 021 Phase 3 — no per-target option block yet; the XSD emitter has no
   // configurable knobs (unlike Excel/OpenAPI's Zod-schema option blocks).
+}
+
+/** Serializable identity for a selected top-level Rune declaration. */
+export interface ExportDeclarationSelection {
+  namespace: string;
+  name: string;
+  kind: string;
+}
+
+/** Namespace and declaration roots requested for an export. */
+export interface ExportSelection {
+  namespaces: readonly string[];
+  declarations: readonly ExportDeclarationSelection[];
 }
 
 /**

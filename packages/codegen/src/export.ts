@@ -42,6 +42,8 @@ export type {
   FormPreviewSchema,
   GeneratePreviewSchemaOptions,
   GeneratorOptions,
+  ExportDeclarationSelection,
+  ExportSelection,
   GeneratorOutput,
   GeneratorDiagnostic,
   PreviewField,
