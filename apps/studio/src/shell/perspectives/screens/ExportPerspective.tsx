@@ -165,15 +165,20 @@ export const ExportPerspective = withInstrumentation(
     return (
       <section data-testid="export-perspective" className="h-full overflow-hidden flex flex-col">
         <div className="flex flex-col flex-1 min-h-0">
-          <ExportSelectionPanel selection={exportSelection} onChange={setExportSelection} />
-          {/* Target selector — always visible */}
-          <div data-testid="export-targets-section" className="shrink-0">
-            <CodegenTargetsTable
-              onView={handleView}
-              onDownload={handleDownload}
-              inflightTarget={downloadingTarget}
-              activeTarget={activeTarget}
-            />
+          <div className="grid shrink-0 border-b border-border lg:grid-cols-[minmax(0,1fr)_minmax(22rem,0.8fr)]">
+            <ExportSelectionPanel selection={exportSelection} onChange={setExportSelection} />
+            {/* Target settings remain visible while the selection changes. */}
+            <div
+              data-testid="export-targets-section"
+              className="min-w-0 border-t border-border lg:border-l lg:border-t-0"
+            >
+              <CodegenTargetsTable
+                onView={handleView}
+                onDownload={handleDownload}
+                inflightTarget={downloadingTarget}
+                activeTarget={activeTarget}
+              />
+            </div>
           </div>
 
           {/* Read-only preview area */}

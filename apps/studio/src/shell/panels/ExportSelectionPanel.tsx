@@ -51,7 +51,7 @@ export const ExportSelectionPanel = withInstrumentation(
     };
 
     return (
-      <section data-testid="export-selection" className="flex min-h-0 flex-col gap-3 border-b border-border p-3">
+      <section data-testid="export-selection" className="flex min-h-0 flex-col gap-3 p-3">
         <div>
           <h2 className="text-sm font-semibold">Export selection</h2>
           <p className="text-xs text-muted-foreground">
