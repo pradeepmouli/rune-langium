@@ -27,6 +27,22 @@ export interface ExportArtifact {
   readText(path: string): Promise<string>;
 }
 
+/** Save the exact immutable ZIP Blob that was decoded for preview. */
+export const downloadExportArtifact = withInstrumentation(
+  function downloadExportArtifact(artifact: ExportArtifact): void {
+    const url = URL.createObjectURL(artifact.blob);
+    const anchor = document.createElement('a');
+    anchor.href = url;
+    anchor.download = artifact.filename;
+    anchor.style.display = 'none';
+    document.body.appendChild(anchor);
+    anchor.click();
+    document.body.removeChild(anchor);
+    URL.revokeObjectURL(url);
+  },
+  { op: 'downloadExportArtifact' }
+);
+
 function isArtifactFile(value: unknown): value is ExportArtifactFile {
   if (!value || typeof value !== 'object') return false;
   const file = value as Partial<ExportArtifactFile>;
