@@ -10,7 +10,7 @@
   "entryPointStrategy": "resolve",
   "tsconfig": "./tsconfig.typedoc.json",
   "out": "../api",
-  "plugin": ["typedoc-plugin-markdown", "typedoc-vitepress-theme", "typedoc-plugin-to-skills"],
+  "plugin": ["typedoc-plugin-markdown", "typedoc-vitepress-theme", "typedoc-plugin-skillit"],
   "llmsTxt": true,
   "llmsTxtOutDir": "../../public",
   "skipErrorChecking": true,
