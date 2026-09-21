@@ -4,7 +4,7 @@
 /** Declaration-scoped export workbench: roots, settings, then captured output. */
 
 import type { ReactElement } from 'react';
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type { ExportSelection } from '@rune-langium/codegen/export';
 import type { WorkspaceFile } from '../../../services/workspace.js';
 import { downloadExportArtifact } from '../../../services/export-artifact.js';
@@ -33,6 +33,7 @@ export const ExportPerspective = withInstrumentation(
     const invalidate = useExportWorkbenchStore((state) => state.invalidate);
     const setActiveFile = useExportWorkbenchStore((state) => state.setActiveFile);
     const [sourceRevision, setSourceRevision] = useState(0);
+    const sourceRevisionRef = useRef(sourceRevision);
     const requiredBy = useMemo(
       () =>
         new Map(
@@ -59,11 +60,10 @@ export const ExportPerspective = withInstrumentation(
       };
     }, [activate, configure, workspaceId]);
     useEffect(() => {
-      setSourceRevision((previous) => {
-        const revision = previous + 1;
-        invalidate(revision);
-        return revision;
-      });
+      const revision = sourceRevisionRef.current + 1;
+      sourceRevisionRef.current = revision;
+      setSourceRevision(revision);
+      invalidate(revision);
     }, [invalidate, sourceFingerprint]);
 
     const handleSelectionChange = useCallback(
