@@ -249,6 +249,27 @@ describe('ExportPerspective', () => {
       expect(mockDownloadTargetViaRouter.mock.calls[0]?.[1]).toBe('zod');
     });
 
+    it('passes a declaration selection without the legacy namespace allowlist', async () => {
+      render(<ExportPerspective files={makeFiles()} />);
+      act(() => {
+        capturedOnDownload?.('zod');
+      });
+      await act(async () => {
+        await capturedOnGenerate?.({
+          target: 'zod',
+          layout: undefined,
+          options: undefined,
+          namespaces: [],
+          selection: { namespaces: [], declarations: [{ namespace: 'test', name: 'Party', kind: 'Data' }] }
+        });
+      });
+      expect(mockDownloadTargetViaRouter.mock.calls[0]?.[4]).toEqual([]);
+      expect(mockDownloadTargetViaRouter.mock.calls[0]?.[6]).toEqual({
+        namespaces: [],
+        declarations: [{ namespace: 'test', name: 'Party', kind: 'Data' }]
+      });
+    });
+
     it('closes the modal when onClose is called', () => {
       render(<ExportPerspective files={makeFiles()} />);
       act(() => {

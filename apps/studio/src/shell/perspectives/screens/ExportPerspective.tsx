@@ -23,7 +23,7 @@
 
 import type { ReactElement } from 'react';
 import { useCallback, useMemo, useState } from 'react';
-import type { Target } from '@rune-langium/codegen/export';
+import type { ExportSelection, Target } from '@rune-langium/codegen/export';
 import { CodegenTargetsTable } from '../../../components/CodegenTargetsTable.js';
 import { DownloadConfigDialog, type DownloadConfig } from '../../../components/DownloadConfigDialog.js';
 import { ExcelOptionsFormAdapter } from '../../../codegen-forms/ExcelOptionsFormAdapter.js';
@@ -39,6 +39,7 @@ import { useOutputStore, fmtLine } from '../../../store/output-store.js';
 import { TARGET_LABELS } from '../../../components/codegen-ui.js';
 import { useStudioToast } from '../../../components/StudioToastProvider.js';
 import { withInstrumentation } from '../../../services/instrumentation/core.js';
+import { ExportSelectionPanel } from '../../panels/ExportSelectionPanel.js';
 
 export interface ExportPerspectiveProps {
   /**
@@ -62,6 +63,7 @@ export const ExportPerspective = withInstrumentation(
     // Download modal state (mirrors CodePreviewPanel's download flow).
     const [downloadModalTarget, setDownloadModalTarget] = useState<Target | undefined>(undefined);
     const [downloadingTarget, setDownloadingTarget] = useState<Target | undefined>(undefined);
+    const [exportSelection, setExportSelection] = useState<ExportSelection>({ namespaces: [], declarations: [] });
 
     const handleView = useCallback(
       (target: Target) => {
@@ -115,8 +117,9 @@ export const ExportPerspective = withInstrumentation(
             newTarget,
             options,
             curatedBundles,
-            config.namespaces,
-            curatedDocs
+            config.selection ? [] : config.namespaces,
+            curatedDocs,
+            config.selection
           );
         } catch (err) {
           if (err instanceof CodegenDownloadError) {
@@ -162,6 +165,7 @@ export const ExportPerspective = withInstrumentation(
     return (
       <section data-testid="export-perspective" className="h-full overflow-hidden flex flex-col">
         <div className="flex flex-col flex-1 min-h-0">
+          <ExportSelectionPanel selection={exportSelection} onChange={setExportSelection} />
           {/* Target selector — always visible */}
           <div data-testid="export-targets-section" className="shrink-0">
             <CodegenTargetsTable
@@ -255,6 +259,7 @@ export const ExportPerspective = withInstrumentation(
             target={downloadModalTarget}
             namespaces={namespaceList}
             dependencyGraph={dependencyGraph}
+            selection={exportSelection}
             onClose={() => setDownloadModalTarget(undefined)}
             onGenerate={handleModalGenerate}
             optionsForm={downloadModalTarget === 'excel' ? ExcelOptionsFormAdapter : undefined}
