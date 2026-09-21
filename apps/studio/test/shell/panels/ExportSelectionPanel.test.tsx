@@ -1,63 +1,74 @@
 // SPDX-License-Identifier: FSL-1.1-ALv2
 // Copyright (c) 2026 Pradeep Mouli
 
-import { act, fireEvent, render, screen } from '@testing-library/react';
+import { act, render } from '@testing-library/react';
 import { afterEach, expect, it, vi } from 'vitest';
-import { useEditorStore, type TypeOption } from '@rune-langium/visual-editor';
+import { useEditorStore, type ExplorerSelection, type ExplorerSelectionAction } from '@rune-langium/visual-editor';
 import { ExportSelectionPanel } from '../../../src/shell/panels/ExportSelectionPanel.js';
 
-let selectOption: ((option: TypeOption | null) => void) | undefined;
+let explorerSelection: ExplorerSelection | undefined;
 
-vi.mock('../../../src/components/WorkspaceTypePicker.js', () => ({
-  WorkspaceTypePicker: (props: { onSelectOption?: (option: TypeOption | null) => void }) => {
-    selectOption = props.onSelectOption;
-    return <button type="button">Add declaration</button>;
-  }
-}));
-
-const party: TypeOption = { value: 'test.Party', label: 'Party', namespace: 'test', kind: 'data' };
+vi.mock('@rune-langium/visual-editor', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('@rune-langium/visual-editor')>();
+  return {
+    ...actual,
+    NamespaceExplorerPanel: (props: { selection?: ExplorerSelection }) => {
+      explorerSelection = props.selection;
+      return <div data-testid="shared-type-explorer" />;
+    }
+  };
+});
 
 afterEach(() => {
+  explorerSelection = undefined;
   useEditorStore.setState({ nodesById: new Map() } as never);
 });
 
-it('adds, deduplicates, and removes declaration roots', () => {
-  const onChange = vi.fn();
-  const { rerender } = render(
-    <ExportSelectionPanel selection={{ namespaces: [], declarations: [] }} onChange={onChange} />
-  );
-
-  act(() => selectOption?.(party));
-  expect(onChange).toHaveBeenLastCalledWith({
-    namespaces: [],
-    declarations: [{ namespace: 'test', name: 'Party', kind: 'Data' }]
-  });
-
-  const selection = onChange.mock.calls[0]?.[0]!;
-  rerender(<ExportSelectionPanel selection={selection} onChange={onChange} />);
-  act(() => selectOption?.(party));
-  expect(onChange).toHaveBeenCalledOnce();
-
-  screen.getByRole('button', { name: 'Remove Party' }).click();
-  expect(onChange).toHaveBeenLastCalledWith({ namespaces: [], declarations: [] });
-});
-
-it('adds and removes whole namespace roots from the shared repository', () => {
+function setNodes(): void {
   const node = {
     id: 'test.Party',
     meta: { namespace: 'test' },
     data: { $type: 'Data', name: 'Party' }
   };
   useEditorStore.setState({ nodesById: new Map([[node.id, node]]) } as never);
+}
+
+it('converts shared explorer declaration selection into a codegen root', () => {
+  setNodes();
   const onChange = vi.fn();
   const { rerender } = render(
     <ExportSelectionPanel selection={{ namespaces: [], declarations: [] }} onChange={onChange} />
   );
 
-  fireEvent.change(screen.getByLabelText('Add export namespace'), { target: { value: 'test' } });
+  expect(explorerSelection?.explicit).toEqual(new Set());
+  act(() => explorerSelection?.onChange(new Set(['test\0Data\0Party'])));
+  expect(onChange).toHaveBeenLastCalledWith({
+    namespaces: [],
+    declarations: [{ namespace: 'test', name: 'Party', kind: 'Data' }]
+  });
+
+  rerender(
+    <ExportSelectionPanel
+      selection={{ namespaces: [], declarations: [{ namespace: 'test', name: 'Party', kind: 'Data' }] }}
+      onChange={onChange}
+    />
+  );
+  act(() => explorerSelection?.onChange(new Set()));
+  expect(onChange).toHaveBeenLastCalledWith({ namespaces: [], declarations: [] });
+});
+
+it('retains namespace roots from shared explorer namespace actions', () => {
+  setNodes();
+  const onChange = vi.fn();
+  const action: ExplorerSelectionAction = { kind: 'namespace', namespaces: ['test'], checked: true };
+  const { rerender } = render(
+    <ExportSelectionPanel selection={{ namespaces: [], declarations: [] }} onChange={onChange} />
+  );
+
+  act(() => explorerSelection?.onChange(new Set(['test\0Data\0Party']), action));
   expect(onChange).toHaveBeenLastCalledWith({ namespaces: ['test'], declarations: [] });
 
   rerender(<ExportSelectionPanel selection={{ namespaces: ['test'], declarations: [] }} onChange={onChange} />);
-  screen.getByRole('button', { name: 'Remove test' }).click();
+  act(() => explorerSelection?.onChange(new Set(), { ...action, checked: false }));
   expect(onChange).toHaveBeenLastCalledWith({ namespaces: [], declarations: [] });
 });
