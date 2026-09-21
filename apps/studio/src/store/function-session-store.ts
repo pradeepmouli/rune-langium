@@ -21,6 +21,7 @@ export interface FunctionSession {
   subscribe(listener: () => void): () => void;
   selectFunction(fqn: string): Promise<void>;
   setInput(name: string, value: unknown): void;
+  setInputs(inputs: Record<string, unknown>): void;
   bindInstance(parameter: string, record: InstanceRecord): void;
   run(): Promise<void>;
   dispose(): void;
@@ -78,6 +79,9 @@ export const createFunctionSession = withInstrumentation(
       },
       setInput(name, value) {
         patch({ inputs: { ...state.inputs, [name]: structuredClone(value) } });
+      },
+      setInputs(inputs) {
+        patch({ inputs: structuredClone(inputs) });
       },
       bindInstance(parameter, record) {
         patch({ boundParameter: parameter, inputs: { ...state.inputs, [parameter]: structuredClone(record.data) } });

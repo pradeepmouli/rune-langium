@@ -4,6 +4,7 @@
 import { useEffect, useRef, useSyncExternalStore, type ReactElement } from 'react';
 import { Button } from '@rune-langium/design-system/ui/button';
 import { WorkspaceTypePicker } from '../../components/WorkspaceTypePicker.js';
+import { FormPreviewPanel } from '../../components/FormPreviewPanel.js';
 import { usePreviewSessionFactory } from '../providers/preview-session-context.js';
 import {
   createFunctionSession,
@@ -54,7 +55,14 @@ export const InstanceFunctionPanel = withInstrumentation(
         ) : null}
         {state.schema ? (
           <>
-            <p className="text-sm font-medium">{state.schema.title}</p>
+            <FormPreviewPanel
+              schema={state.schema}
+              status={{ state: 'ready', targetId: state.schema.targetId }}
+              values={state.inputs}
+              onValuesChange={(inputs) => session.setInputs(inputs)}
+              onExecute={() => void session.run()}
+              presentation={{ mode: 'instance', showHeader: false, showPayload: false }}
+            />
             <Button type="button" size="sm" disabled={state.status === 'running'} onClick={() => void session.run()}>
               {state.status === 'running' ? 'Running…' : 'Run'}
             </Button>
