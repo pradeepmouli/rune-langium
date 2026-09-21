@@ -10,6 +10,7 @@ import type { WorkspaceFile } from '../../../services/workspace.js';
 import { downloadExportArtifact } from '../../../services/export-artifact.js';
 import { withInstrumentation } from '../../../services/instrumentation/core.js';
 import { useExportWorkbenchStore } from '../../../store/export-workbench-store.js';
+import { useExportNavigationStore } from '../../../services/export-navigation.js';
 import { ExportSelectionPanel } from '../../panels/ExportSelectionPanel.js';
 import { ExportSettingsPanel } from '../../panels/ExportSettingsPanel.js';
 import { ExportPreviewPanel } from '../../panels/ExportPreviewPanel.js';
@@ -39,8 +40,17 @@ export const ExportPerspective = withInstrumentation(
     );
 
     useEffect(() => {
-      if (workspaceId) void activate(workspaceId);
-    }, [activate, workspaceId]);
+      if (!workspaceId) return;
+      let cancelled = false;
+      void activate(workspaceId).then(() => {
+        if (cancelled) return;
+        const intent = useExportNavigationStore.getState().consume(workspaceId);
+        if (intent) configure({ ...useExportWorkbenchStore.getState().config, selection: intent.selection });
+      });
+      return () => {
+        cancelled = true;
+      };
+    }, [activate, configure, workspaceId]);
     useEffect(() => {
       setSourceRevision((previous) => {
         const revision = previous + 1;
