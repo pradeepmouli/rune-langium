@@ -74,6 +74,59 @@ describe('instance-store', () => {
     expect(record?.data).toEqual({});
   });
 
+  it('copies incoming preview data and assigns a truthful saved state after flushing OPFS', async () => {
+    const fs = new OpfsFs(createOpfsRoot() as never);
+    useInstanceStore.getState().setOpfsContext(fs, '/ws-snapshot');
+    await flush();
+    const payload = { address: { city: 'London' } };
+    const id = useInstanceStore.getState().createInstance('test.Party', 'Party', { data: payload });
+    payload.address.city = 'Paris';
+
+    await useInstanceStore.getState().flushInstance(id);
+    expect(useInstanceStore.getState().instances[id]?.data).toEqual({ address: { city: 'London' } });
+    expect(useInstanceStore.getState().saveStates[id]?.state).toBe('saved');
+    expect((await readInstance(fs, '/ws-snapshot', id)).data).toEqual({ address: { city: 'London' } });
+  });
+
+  it('renames and duplicates with independent data and a unique display name', async () => {
+    const fs = new OpfsFs(createOpfsRoot() as never);
+    useInstanceStore.getState().setOpfsContext(fs, '/ws-lifecycle');
+    await flush();
+    const id = useInstanceStore.getState().createInstance('test.Party', 'Party', { data: { name: 'Alice' } });
+    await useInstanceStore.getState().flushInstance(id);
+    useInstanceStore.getState().renameInstance(id, 'Review Party');
+    const copyId = useInstanceStore.getState().duplicateInstance(id);
+    useInstanceStore.getState().updateInstanceData(copyId, { name: 'Bob' });
+    await useInstanceStore.getState().flushInstance(copyId);
+
+    expect(useInstanceStore.getState().instances[id]).toMatchObject({ name: 'Review Party', data: { name: 'Alice' } });
+    expect(useInstanceStore.getState().instances[copyId]).toMatchObject({
+      name: 'Review Party 2',
+      data: { name: 'Bob' }
+    });
+    expect(() => useInstanceStore.getState().renameInstance(id, '   ')).toThrow('cannot be empty');
+  });
+
+  it('keeps a failed record visible and retries its current revision', async () => {
+    const fs = new OpfsFs(createOpfsRoot() as never);
+    const originalWrite = fs.writeFile.bind(fs);
+    let fail = true;
+    vi.spyOn(fs, 'writeFile').mockImplementation(async (path: string, value: never) => {
+      if (fail) throw new Error('disk full');
+      return originalWrite(path, value);
+    });
+    useInstanceStore.getState().setOpfsContext(fs, '/ws-retry');
+    await flush();
+    const id = useInstanceStore.getState().createInstance('test.Party', 'Retry me');
+    await vi.waitFor(() => expect(useInstanceStore.getState().saveStates[id]).toMatchObject({ state: 'failed' }));
+    expect(useInstanceStore.getState().instances[id]?.name).toBe('Retry me');
+    fail = false;
+    await useInstanceStore.getState().retrySave(id);
+
+    expect(useInstanceStore.getState().saveStates[id]?.state).toBe('saved');
+    expect((await readInstance(fs, '/ws-retry', id)).name).toBe('Retry me');
+  });
+
   it('updateInstanceData replaces the record data with the full given object and bumps modifiedAt', () => {
     const id = useInstanceStore.getState().createInstance('test.Party', 'My Party');
     const before = useInstanceStore.getState().instances[id]!.modifiedAt;
@@ -83,9 +136,9 @@ describe('instance-store', () => {
     expect(after.modifiedAt).toBeGreaterThanOrEqual(before);
   });
 
-  it('deleteInstance removes the record', () => {
+  it('deleteInstance removes the record', async () => {
     const id = useInstanceStore.getState().createInstance('test.Party', 'My Party');
-    useInstanceStore.getState().removeInstance(id);
+    await useInstanceStore.getState().removeInstance(id);
     expect(useInstanceStore.getState().instances[id]).toBeUndefined();
   });
 
@@ -310,7 +363,7 @@ describe('instance-store — OPFS persistence (finding #1)', () => {
 
     const id = useInstanceStore.getState().createInstance('test.Party', 'My Party');
     await flush();
-    useInstanceStore.getState().removeInstance(id);
+    await useInstanceStore.getState().removeInstance(id);
     await flush();
 
     await expect(readInstance(fs, '/ws1', id)).rejects.toThrow();
@@ -589,8 +642,7 @@ describe('instance-store — OPFS persistence (finding #1)', () => {
     useOutputStore.setState({ lines: [] });
 
     vi.spyOn(fs, 'unlink').mockRejectedValue(new Error('permission denied'));
-    useInstanceStore.getState().removeInstance(id);
-    await flush();
+    await expect(useInstanceStore.getState().removeInstance(id)).rejects.toThrow('permission denied');
 
     const entry = useOutputStore.getState().lines.find((l) => l.op === 'instance' && l.subject === id);
     expect(entry).toBeDefined();
