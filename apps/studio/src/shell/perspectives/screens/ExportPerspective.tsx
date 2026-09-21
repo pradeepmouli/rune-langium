@@ -41,6 +41,7 @@ import { useStudioToast } from '../../../components/StudioToastProvider.js';
 import { withInstrumentation } from '../../../services/instrumentation/core.js';
 import { ExportSelectionPanel } from '../../panels/ExportSelectionPanel.js';
 import { ExportPreviewPanel } from '../../panels/ExportPreviewPanel.js';
+import { ExportSettingsPanel } from '../../panels/ExportSettingsPanel.js';
 import { downloadExportArtifact } from '../../../services/export-artifact.js';
 import { useExportWorkbenchStore } from '../../../store/export-workbench-store.js';
 
@@ -196,6 +197,15 @@ export const ExportPerspective = withInstrumentation(
       [files, generateArtifact, sourceRevision, workspaceId, showToast]
     );
 
+    const handleFocusedGenerate = useCallback(() => {
+      void handleModalGenerate({
+        target: exportConfig.target,
+        namespaces: [],
+        selection: exportConfig.selection,
+        options: exportConfig.options
+      });
+    }, [exportConfig, handleModalGenerate]);
+
     // Derive read-only preview content from the store snapshot.
     const activeContent = useMemo(() => {
       if (snapshot.status !== 'ready' && snapshot.status !== 'stale') return undefined;
@@ -226,6 +236,14 @@ export const ExportPerspective = withInstrumentation(
                 inflightTarget={downloadingTarget}
                 activeTarget={activeTarget}
               />
+              {focusedSelection && (
+                <ExportSettingsPanel
+                  config={exportConfig}
+                  onChange={configureExport}
+                  onGenerate={handleFocusedGenerate}
+                  generating={exportRun.status === 'generating'}
+                />
+              )}
             </div>
           </div>
 

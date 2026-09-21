@@ -31,40 +31,7 @@ import { RadioGroup, RadioGroupItem } from '@rune-langium/design-system/ui/radio
 import { InteractiveDialog } from '@rune-langium/design-system/ui/interactive-dialog';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@rune-langium/design-system/ui/tooltip';
 import { withInstrumentation, Capture } from '../services/instrumentation/core.js';
-
-/** One layout choice rendered as a radio option. */
-export interface LayoutChoice {
-  value: string;
-  label: string;
-  hint?: string;
-}
-
-/**
- * Per-target content-panel config (§5.1 "per-target content panels").
- * Studio-local UI metadata — the *labels* and *control kinds* are a
- * presentation concern, distinct from the codegen package's option types.
- * Only the implemented targets (zod / typescript / json-schema) carry
- * layouts today; Phase 2 targets extend this map as their emitters land.
- */
-interface TargetPanelConfig {
-  layouts: LayoutChoice[];
-  /** Opinionated download default (§10.1) — overrides the library default. */
-  defaultLayout?: string;
-}
-
-const PER_NS: LayoutChoice = {
-  value: 'per-namespace',
-  label: 'Per-namespace',
-  hint: 'One file per namespace + barrel'
-};
-const BARREL: LayoutChoice = { value: 'barrel', label: 'Barrel', hint: 'Barrel + per-namespace files' };
-const SINGLE: LayoutChoice = { value: 'single-file', label: 'Single file', hint: 'All types in one file' };
-
-const TARGET_PANELS: Partial<Record<Target, TargetPanelConfig>> = {
-  zod: { layouts: [PER_NS, BARREL, SINGLE], defaultLayout: 'barrel' },
-  typescript: { layouts: [PER_NS, BARREL, SINGLE], defaultLayout: 'barrel' },
-  'json-schema': { layouts: [PER_NS, SINGLE], defaultLayout: 'single-file' }
-};
+import { TARGET_PANELS } from './export-target-settings.js';
 
 /** Final config emitted on [Generate]. */
 export interface DownloadConfig {
