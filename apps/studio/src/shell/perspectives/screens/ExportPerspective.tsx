@@ -75,8 +75,9 @@ export const ExportPerspective = withInstrumentation(
     const generateArtifact = useExportWorkbenchStore((state) => state.generate);
     const invalidateArtifact = useExportWorkbenchStore((state) => state.invalidate);
     const sourceFingerprint = useMemo(
-      () => JSON.stringify((files ?? []).map((file) => [file.path, file.content, file.serializedModelJson])),
-      [files]
+      () =>
+        JSON.stringify([workspaceId, (files ?? []).map((file) => [file.path, file.content, file.serializedModelJson])]),
+      [files, workspaceId]
     );
     const [sourceRevision, setSourceRevision] = useState(0);
 
@@ -87,6 +88,10 @@ export const ExportPerspective = withInstrumentation(
         return revision;
       });
     }, [invalidateArtifact, sourceFingerprint]);
+
+    useEffect(() => {
+      setExportSelection({ namespaces: [], declarations: [] });
+    }, [workspaceId]);
 
     const handleView = useCallback(
       (target: Target) => {
