@@ -40,6 +40,11 @@ export type PayloadView =
   | { kind: 'inputs'; value: Record<string, unknown> }
   | { kind: 'result'; value: unknown };
 
+export interface InstanceSeed {
+  typeFqn: string;
+  data: Record<string, unknown>;
+}
+
 const SCRATCH_PRESENTATION: PreviewPresentation = {
   mode: 'scratch',
   showPayload: true,
@@ -62,6 +67,7 @@ export interface FormPreviewPanelProps {
   valid?: boolean;
   validated?: boolean;
   presentation?: PreviewPresentation;
+  onCreateInstance?: (seed: InstanceSeed) => void;
 }
 
 export const FormPreviewPanel = withInstrumentation(
@@ -76,7 +82,8 @@ export const FormPreviewPanel = withInstrumentation(
     errors: controlledErrors,
     valid: controlledValid,
     validated: controlledValidated,
-    presentation = SCRATCH_PRESENTATION
+    presentation = SCRATCH_PRESENTATION,
+    onCreateInstance
   }: FormPreviewPanelProps): ReactElement {
     const isControlled = values !== undefined;
     const ensureSample = usePreviewStore((s) => s.ensureSample);
@@ -444,6 +451,18 @@ export const FormPreviewPanel = withInstrumentation(
               <Button type="button" variant="ghost" size="xs" onClick={handleReset}>
                 {presentation.mode === 'instance' ? 'Reset values' : 'Reset'}
               </Button>
+              {onCreateInstance && (schema.kind === 'data' || schema.kind === 'choice') ? (
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="xs"
+                  onClick={() =>
+                    onCreateInstance({ typeFqn: schema.targetId, data: structuredClone(activeSample?.values ?? {}) })
+                  }
+                >
+                  Create instance…
+                </Button>
+              ) : null}
             </div>
           </header>
         ) : null}

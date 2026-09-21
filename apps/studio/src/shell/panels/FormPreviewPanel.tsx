@@ -6,6 +6,7 @@ import type React from 'react';
 import { FormPreviewPanel as FormPreviewPanelView } from '../../components/FormPreviewPanel.js';
 import { usePreviewStore } from '../../store/preview-store.js';
 import { withInstrumentation } from '../../services/instrumentation/core.js';
+import { requestPrototype } from '../../services/prototype-navigation.js';
 
 export const FormPreviewPanel = withInstrumentation(
   function FormPreviewPanel(): React.ReactElement {
@@ -25,6 +26,7 @@ export const FormPreviewPanel = withInstrumentation(
         target={selectedTarget}
         getFieldSource={(fieldPath) => getFieldSource(selectedTargetId, fieldPath)}
         onExecute={dispatchExecute}
+        onCreateInstance={(seed) => requestPrototype({ kind: 'create', seed })}
       />
     );
   },
