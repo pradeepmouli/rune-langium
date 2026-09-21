@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: FSL-1.1-ALv2
 // Copyright (c) 2026 Pradeep Mouli
 
-import { act, render } from '@testing-library/react';
+import { act, render, screen } from '@testing-library/react';
 import { afterEach, expect, it, vi } from 'vitest';
 import { useEditorStore, type ExplorerSelection, type ExplorerSelectionAction } from '@rune-langium/visual-editor';
 import { ExportSelectionPanel } from '../../../src/shell/panels/ExportSelectionPanel.js';
@@ -77,4 +77,26 @@ it('retains namespace roots from shared explorer namespace actions', () => {
   rerender(<ExportSelectionPanel selection={{ namespaces: ['test'], declarations: [] }} onChange={onChange} />);
   act(() => explorerSelection?.onChange(new Set(), { ...action, checked: false }));
   expect(onChange).toHaveBeenLastCalledWith({ namespaces: [], declarations: [] });
+});
+
+it('shows receipt-derived dependency count only after generation', () => {
+  setNodes();
+  const { rerender } = render(
+    <ExportSelectionPanel
+      selection={{ namespaces: [], declarations: [{ namespace: 'test', name: 'Party', kind: 'Data' }] }}
+      onChange={vi.fn()}
+    />
+  );
+
+  expect(screen.getByTestId('export-selection-summary')).toHaveTextContent(
+    '1 root selected · Dependencies resolve on generation'
+  );
+  rerender(
+    <ExportSelectionPanel
+      selection={{ namespaces: [], declarations: [{ namespace: 'test', name: 'Party', kind: 'Data' }] }}
+      includedCount={2}
+      onChange={vi.fn()}
+    />
+  );
+  expect(screen.getByTestId('export-selection-summary')).toHaveTextContent('1 root selected · 2 declarations included');
 });

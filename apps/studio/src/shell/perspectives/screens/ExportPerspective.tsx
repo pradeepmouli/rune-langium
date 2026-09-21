@@ -86,6 +86,9 @@ export const ExportPerspective = withInstrumentation(
             <ExportSelectionPanel
               selection={config.selection}
               requiredBy={requiredBy}
+              includedCount={
+                run.status === 'ready' ? run.artifact.manifest.resolvedSelection?.included.length : undefined
+              }
               onChange={handleSelectionChange}
             />
           </div>

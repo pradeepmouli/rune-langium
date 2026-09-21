@@ -16,12 +16,18 @@ import { withInstrumentation } from '../../services/instrumentation/core.js';
 export interface ExportSelectionPanelProps {
   selection: ExportSelection;
   requiredBy?: ReadonlyMap<string, readonly string[]>;
+  includedCount?: number;
   onChange(selection: ExportSelection): void;
 }
 
 /** Reuses the shared type explorer to collect semantic export roots. */
 export const ExportSelectionPanel = withInstrumentation(
-  function ExportSelectionPanel({ selection, requiredBy, onChange }: ExportSelectionPanelProps): ReactElement {
+  function ExportSelectionPanel({
+    selection,
+    requiredBy,
+    includedCount,
+    onChange
+  }: ExportSelectionPanelProps): ReactElement {
     const nodesById = useEditorStore((state) => state.nodesById);
     const repository = selectNodeRepository(nodesById);
     const namespaces = useMemo(() => repository.namespaces(), [repository]);
@@ -32,6 +38,7 @@ export const ExportSelectionPanel = withInstrumentation(
     }, [namespaces]);
 
     const explicit = useMemo(() => exportSelectionToExplorerSet(selection, repository), [repository, selection]);
+    const explicitCount = selection.namespaces.length + selection.declarations.length;
     const handleChange = useCallback(
       (next: Set<string>, action?: ExplorerSelectionAction) => {
         onChange(exportSelectionFromExplorer(next, selection, repository, action));
@@ -45,6 +52,13 @@ export const ExportSelectionPanel = withInstrumentation(
           <h2 className="text-sm font-semibold">Export selection</h2>
           <p className="text-xs text-muted-foreground">
             Select declarations or namespaces. Referenced declarations are included automatically when generated.
+          </p>
+          <p className="mt-1 text-xs text-muted-foreground" data-testid="export-selection-summary">
+            {explicitCount === 0
+              ? 'No export roots selected'
+              : includedCount === undefined
+                ? `${explicitCount} ${explicitCount === 1 ? 'root' : 'roots'} selected · Dependencies resolve on generation`
+                : `${explicitCount} ${explicitCount === 1 ? 'root' : 'roots'} selected · ${includedCount} declarations included`}
           </p>
         </div>
         <div className="min-h-0 flex-1">
