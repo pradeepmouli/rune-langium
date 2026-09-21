@@ -43,7 +43,7 @@ docs/html/
 # Generated API docs (typedoc)
 docs/api/
 
-# Generated llms.txt / llms-full.txt — emitted by typedoc-plugin-to-skills
+# Generated llms.txt / llms-full.txt — emitted by typedoc-plugin-skillit
 # at repo root on every docs build.
 /public/
 
