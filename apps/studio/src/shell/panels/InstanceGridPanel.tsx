@@ -3,6 +3,7 @@
 
 import type { ReactElement } from 'react';
 import { Input } from '@rune-langium/design-system/ui/input';
+import { Button } from '@rune-langium/design-system/ui/button';
 import { WorkspaceTypePicker } from '../../components/WorkspaceTypePicker.js';
 import { useInstanceStore } from '../../store/instance-store.js';
 import { filterInstances, usePrototypeViewStore } from '../../store/prototype-view-store.js';
@@ -13,6 +14,8 @@ export const InstanceGridPanel = withInstrumentation(
     const instances = useInstanceStore((state) => state.instances);
     const validationStatus = useInstanceStore((state) => state.validationStatus);
     const saveStates = useInstanceStore((state) => state.saveStates);
+    const duplicateInstance = useInstanceStore((state) => state.duplicateInstance);
+    const removeInstance = useInstanceStore((state) => state.removeInstance);
     const view = usePrototypeViewStore((state) => state.state);
     const patch = usePrototypeViewStore((state) => state.patch);
     const rows = filterInstances(Object.values(instances), view.query, view.typeFqn);
@@ -51,6 +54,7 @@ export const InstanceGridPanel = withInstrumentation(
                 <th className="p-2">Type</th>
                 <th className="p-2">Validation</th>
                 <th className="p-2">Save</th>
+                <th className="p-2">Actions</th>
               </tr>
             </thead>
             <tbody>
@@ -73,6 +77,39 @@ export const InstanceGridPanel = withInstrumentation(
                   <td className="p-2 text-muted-foreground">{record.typeFqn}</td>
                   <td className="p-2 capitalize">{validationStatus[record.id] ?? 'pending'}</td>
                   <td className="p-2 capitalize">{saveStates[record.id]?.state ?? 'unsaved'}</td>
+                  <td className="p-2">
+                    <div className="flex gap-1">
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="xs"
+                        onClick={(event) => {
+                          event.stopPropagation();
+                          patch({ selectedId: duplicateInstance(record.id), inspectorTab: 'form' });
+                        }}
+                      >
+                        Duplicate
+                      </Button>
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="xs"
+                        onClick={(event) => {
+                          event.stopPropagation();
+                          void removeInstance(record.id).then(() => {
+                            if (
+                              useInstanceStore.getState().instances[record.id] === undefined &&
+                              view.selectedId === record.id
+                            ) {
+                              patch({ selectedId: null });
+                            }
+                          });
+                        }}
+                      >
+                        Delete
+                      </Button>
+                    </div>
+                  </td>
                 </tr>
               ))}
             </tbody>
