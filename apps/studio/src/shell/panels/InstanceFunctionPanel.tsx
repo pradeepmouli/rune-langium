@@ -1,8 +1,9 @@
 // @instrumentation-codemod-applied
 // SPDX-License-Identifier: FSL-1.1-ALv2
 // Copyright (c) 2026 Pradeep Mouli
-import { useEffect, useRef, useSyncExternalStore, type ReactElement } from 'react';
+import { useEffect, useMemo, useRef, useSyncExternalStore, type ReactElement } from 'react';
 import { Button } from '@rune-langium/design-system/ui/button';
+import { useEditorStore } from '@rune-langium/visual-editor';
 import { WorkspaceTypePicker } from '../../components/WorkspaceTypePicker.js';
 import { FormPreviewPanel } from '../../components/FormPreviewPanel.js';
 import { useInstanceStore } from '../../store/instance-store.js';
@@ -13,6 +14,8 @@ import {
   type FunctionSessionState
 } from '../../store/function-session-store.js';
 import { withInstrumentation } from '../../services/instrumentation/core.js';
+import { resolveFunctionOutputTarget } from '../../services/function-output-target.js';
+import { requestPrototype } from '../../services/prototype-navigation.js';
 
 const NO_SESSION_STATE: FunctionSessionState = {
   functionFqn: null,
@@ -26,6 +29,7 @@ export const InstanceFunctionPanel = withInstrumentation(
   function InstanceFunctionPanel({ instanceId }: { instanceId: string }): ReactElement {
     const factory = usePreviewSessionFactory();
     const instance = useInstanceStore((state) => state.instances[instanceId]);
+    const nodesById = useEditorStore((state) => state.nodesById);
     const sessionRef = useRef<FunctionSession | undefined>(undefined);
     if (!sessionRef.current && factory) sessionRef.current = createFunctionSession(factory());
     const session = sessionRef.current;
@@ -34,6 +38,16 @@ export const InstanceFunctionPanel = withInstrumentation(
       (listener) => session?.subscribe(listener) ?? (() => undefined),
       () => session?.getState() ?? NO_SESSION_STATE
     );
+    const outputTarget = useMemo(
+      () => resolveFunctionOutputTarget(nodesById, state.functionFqn),
+      [nodesById, state.functionFqn]
+    );
+    const canSaveResult =
+      state.status === 'succeeded' &&
+      outputTarget !== undefined &&
+      state.result !== null &&
+      typeof state.result === 'object' &&
+      !Array.isArray(state.result);
     if (!factory || !session)
       return <p className="p-3 text-sm text-muted-foreground">Function execution is preparing…</p>;
     return (
@@ -88,7 +102,23 @@ export const InstanceFunctionPanel = withInstrumentation(
           </>
         ) : null}
         {state.status === 'succeeded' ? (
-          <pre aria-label="Function result">{JSON.stringify(state.result, null, 2)}</pre>
+          <>
+            <pre aria-label="Function result">{JSON.stringify(state.result, null, 2)}</pre>
+            {canSaveResult ? (
+              <Button
+                type="button"
+                size="sm"
+                onClick={() =>
+                  requestPrototype({
+                    kind: 'create',
+                    seed: { typeFqn: outputTarget.typeFqn, data: structuredClone(state.result) }
+                  })
+                }
+              >
+                Save result as instance…
+              </Button>
+            ) : null}
+          </>
         ) : null}
       </section>
     );
