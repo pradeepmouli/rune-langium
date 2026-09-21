@@ -19,6 +19,12 @@ export const ExportPreviewPanel = withInstrumentation(
     const artifact = run.status === 'ready' || run.status === 'stale' ? run.artifact : undefined;
     const textFiles = artifact?.manifest.files.filter((file) => file.kind === 'text') ?? [];
     const textFile = textFiles.find((file) => file.path === selectedPath) ?? textFiles[0];
+    const dependencyCount = artifact?.manifest.resolvedSelection
+      ? Math.max(
+          0,
+          artifact.manifest.resolvedSelection.included.length - artifact.manifest.resolvedSelection.explicit.length
+        )
+      : 0;
 
     useEffect(() => {
       if (!textFiles.some((file) => file.path === selectedPath)) setSelectedPath(textFiles[0]?.path);
@@ -71,6 +77,14 @@ export const ExportPreviewPanel = withInstrumentation(
       <section data-testid="export-artifact-preview" className="flex h-full min-h-0 flex-col">
         <div className="flex shrink-0 items-center gap-3 border-b border-border px-3 py-1.5">
           <span className="truncate text-sm font-medium">{textFile.path}</span>
+          {dependencyCount > 0 && (
+            <span
+              className="text-xs text-muted-foreground"
+              title="Declarations added because selected roots reference them"
+            >
+              Includes {dependencyCount} dependency {dependencyCount === 1 ? 'declaration' : 'declarations'}
+            </span>
+          )}
           {textFiles.length > 1 && (
             <select
               aria-label="Generated export file"

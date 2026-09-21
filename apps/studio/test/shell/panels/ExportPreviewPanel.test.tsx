@@ -32,6 +32,32 @@ it('does not offer a stale artifact for download', () => {
   expect(screen.getByRole('button', { name: 'Download export' })).toBeDisabled();
 });
 
+it('shows declarations included by the resolved dependency closure', () => {
+  render(
+    <ExportPreviewPanel
+      run={{
+        status: 'ready',
+        inputKey: 'input',
+        artifact: {
+          ...artifact,
+          manifest: {
+            ...artifact.manifest,
+            resolvedSelection: {
+              explicit: [{ namespace: 'test', name: 'Party', kind: 'Data' }],
+              included: [
+                { namespace: 'test', name: 'Party', kind: 'Data' },
+                { namespace: 'test', name: 'Address', kind: 'Data' }
+              ]
+            }
+          }
+        }
+      }}
+      onDownload={vi.fn()}
+    />
+  );
+  expect(screen.getByText('Includes 1 dependency declaration')).toBeTruthy();
+});
+
 it('switches between text files in one captured artifact', async () => {
   const multiFileArtifact = {
     ...artifact,
