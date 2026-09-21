@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: FSL-1.1-ALv2
 // Copyright (c) 2026 Pradeep Mouli
 
-import { render, screen } from '@testing-library/react';
+import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { InstanceInspectorPanel } from '../../../src/shell/panels/InstanceInspectorPanel.js';
 import { useInstanceStore } from '../../../src/store/instance-store.js';
@@ -61,5 +61,16 @@ describe('InstanceInspectorPanel', () => {
     screen.getByRole('button', { name: 'View type in Explore' }).click();
 
     expect(navigateToType).toHaveBeenCalledWith('test.Party');
+  });
+
+  it('flushes an instance before downloading its JSON payload', async () => {
+    const id = useInstanceStore.getState().createInstance('test.Party', 'My Party');
+    const flushInstance = vi.fn().mockResolvedValue(undefined);
+    useInstanceStore.setState({ flushInstance });
+
+    render(<InstanceInspectorPanel instanceId={id} />);
+    fireEvent.click(screen.getByRole('button', { name: 'Export' }));
+
+    await waitFor(() => expect(flushInstance).toHaveBeenCalledWith(id));
   });
 });

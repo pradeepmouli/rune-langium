@@ -32,6 +32,7 @@ export const InstanceInspectorPanel = withInstrumentation(
     const validationStatus = useInstanceStore((s) => s.validationStatus[instanceId]);
     const saveState = useInstanceStore((s) => s.saveStates[instanceId]);
     const retrySave = useInstanceStore((s) => s.retrySave);
+    const flushInstance = useInstanceStore((s) => s.flushInstance);
     const view = usePrototypeViewStore((s) => s.state);
     const patchView = usePrototypeViewStore((s) => s.patch);
 
@@ -113,7 +114,10 @@ export const InstanceInspectorPanel = withInstrumentation(
         </Tabs>
         <InstancePayloadPanel
           payload={{ kind: 'instance', value: record.data }}
-          onExport={() => downloadFile(JSON.stringify(record.data, null, 2), `${record.name}.json`, 'application/json')}
+          onExport={async () => {
+            await flushInstance(record.id);
+            downloadFile(JSON.stringify(record.data, null, 2), `${record.name}.json`, 'application/json');
+          }}
         />
       </div>
     );

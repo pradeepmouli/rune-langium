@@ -8,12 +8,13 @@ import { withInstrumentation } from '../services/instrumentation/core.js';
 
 export interface InstancePayloadPanelProps {
   payload: PayloadView;
-  onExport(): void;
+  onExport(): Promise<void>;
 }
 
 export const InstancePayloadPanel = withInstrumentation(
   function InstancePayloadPanel({ payload, onExport }: InstancePayloadPanelProps): ReactElement {
     const [copyFeedback, setCopyFeedback] = useState<string | null>(null);
+    const [exportFeedback, setExportFeedback] = useState<string | null>(null);
     const serialized = JSON.stringify(payload.value, null, 2);
 
     async function copyPayload(): Promise<void> {
@@ -29,6 +30,15 @@ export const InstancePayloadPanel = withInstrumentation(
       }
     }
 
+    async function exportPayload(): Promise<void> {
+      setExportFeedback(null);
+      try {
+        await onExport();
+      } catch (error) {
+        setExportFeedback(error instanceof Error ? error.message : 'Export failed. Try saving the instance again.');
+      }
+    }
+
     return (
       <section aria-label="Instance payload" className="border-t border-border p-3">
         <header className="flex items-center justify-between gap-3">
@@ -37,7 +47,7 @@ export const InstancePayloadPanel = withInstrumentation(
             <Button type="button" variant="ghost" size="xs" onClick={() => void copyPayload()}>
               Copy
             </Button>
-            <Button type="button" variant="ghost" size="xs" onClick={onExport}>
+            <Button type="button" variant="ghost" size="xs" onClick={() => void exportPayload()}>
               Export
             </Button>
           </div>
@@ -51,6 +61,11 @@ export const InstancePayloadPanel = withInstrumentation(
         {copyFeedback ? (
           <p role="status" className="mt-1 text-2xs text-muted-foreground">
             {copyFeedback}
+          </p>
+        ) : null}
+        {exportFeedback ? (
+          <p role="alert" className="mt-1 text-2xs text-destructive">
+            {exportFeedback}
           </p>
         ) : null}
       </section>
