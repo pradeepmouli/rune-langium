@@ -1,11 +1,13 @@
 // @instrumentation-codemod-applied
 // SPDX-License-Identifier: FSL-1.1-ALv2
 // Copyright (c) 2026 Pradeep Mouli
+import { useEffect } from 'react';
 import { useInstanceStore } from '../../store/instance-store.js';
 import { usePrototypeViewStore } from '../../store/prototype-view-store.js';
 import { InstancePayloadPanel } from '../../components/InstancePayloadPanel.js';
 import { downloadFile } from '../../services/export.js';
 import { viewTypeInExplore } from '../../services/explore-navigation.js';
+import { payloadPointerToFieldPath } from '../../services/instance-payload-graph.js';
 import { Button } from '@rune-langium/design-system/ui/button';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@rune-langium/design-system/ui/tabs';
 import { InstanceFormPanel } from './InstanceFormPanel.js';
@@ -14,6 +16,7 @@ import { withInstrumentation } from '../../services/instrumentation/core.js';
 
 export interface InstanceInspectorPanelProps {
   instanceId: string;
+  focusedPayloadPointer?: string;
 }
 
 function saveStatusText(saveState: { state: string; message?: string } | undefined): string {
@@ -23,7 +26,7 @@ function saveStatusText(saveState: { state: string; message?: string } | undefin
 }
 
 export const InstanceInspectorPanel = withInstrumentation(
-  function InstanceInspectorPanel({ instanceId }: InstanceInspectorPanelProps) {
+  function InstanceInspectorPanel({ instanceId, focusedPayloadPointer }: InstanceInspectorPanelProps) {
     const record = useInstanceStore((s) => s.instances[instanceId]);
     const diagnostics = useInstanceStore((s) => s.validationErrors[instanceId]) ?? [];
     const validationStatus = useInstanceStore((s) => s.validationStatus[instanceId]);
@@ -31,6 +34,21 @@ export const InstanceInspectorPanel = withInstrumentation(
     const retrySave = useInstanceStore((s) => s.retrySave);
     const view = usePrototypeViewStore((s) => s.state);
     const patchView = usePrototypeViewStore((s) => s.patch);
+
+    useEffect(() => {
+      const fieldPath = focusedPayloadPointer && payloadPointerToFieldPath(focusedPayloadPointer);
+      if (!fieldPath) return;
+      patchView({ inspectorTab: 'form' });
+      const frame = requestAnimationFrame(() => {
+        const target = Array.from(document.querySelectorAll<HTMLElement>('[data-field-path]')).find(
+          (element) => element.dataset.fieldPath === fieldPath
+        );
+        target?.scrollIntoView({ block: 'center', behavior: 'smooth' });
+        const input = target?.querySelector<HTMLElement>('input, button, [role="combobox"]');
+        (input ?? target)?.focus();
+      });
+      return () => cancelAnimationFrame(frame);
+    }, [focusedPayloadPointer, patchView]);
 
     if (!record) return null;
 

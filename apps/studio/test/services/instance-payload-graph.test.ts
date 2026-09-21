@@ -2,9 +2,19 @@
 // Copyright (c) 2026 Pradeep Mouli
 
 import { describe, expect, it } from 'vitest';
-import { buildPayloadGraph, payloadNodeId } from '../../src/services/instance-payload-graph.js';
+import {
+  buildPayloadGraph,
+  payloadNodeId,
+  payloadPointerToFieldPath
+} from '../../src/services/instance-payload-graph.js';
 
 describe('buildPayloadGraph', () => {
+  it('converts escaped containment pointers to concrete form field paths', () => {
+    expect(payloadPointerToFieldPath('/addresses/0/city')).toBe('addresses[0].city');
+    expect(payloadPointerToFieldPath('/metadata/a~1b~0c')).toBe('metadata.a/b~c');
+    expect(payloadPointerToFieldPath('')).toBeUndefined();
+  });
+
   it('uses containment only and does not infer an edge from a matching identifier', () => {
     const graph = buildPayloadGraph({
       id: 'one',

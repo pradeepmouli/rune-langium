@@ -8,12 +8,18 @@ import { buildPayloadGraph } from '../../services/instance-payload-graph.js';
 import { withInstrumentation } from '../../services/instrumentation/core.js';
 
 export const InstanceGraphPanel = withInstrumentation(
-  function InstanceGraphPanel({ record }: { record: InstanceRecord }) {
+  function InstanceGraphPanel({
+    record,
+    onSelectPointer
+  }: {
+    record: InstanceRecord;
+    onSelectPointer?(pointer: string): void;
+  }) {
     const graph = buildPayloadGraph(record);
     const nodes: Node[] = graph.nodes.map((node, index) => ({
       id: node.id,
       position: { x: (index % 3) * 180, y: Math.floor(index / 3) * 90 },
-      data: { label: node.pointer || node.label },
+      data: { label: node.pointer || node.label, pointer: node.pointer },
       type: 'default'
     }));
     const edges: Edge[] = graph.edges.map((edge) => ({ id: edge.id, source: edge.source, target: edge.target }));
@@ -36,6 +42,7 @@ export const InstanceGraphPanel = withInstrumentation(
             nodesDraggable={false}
             nodesConnectable={false}
             elementsSelectable={false}
+            onNodeClick={(_, node) => onSelectPointer?.((node.data as { pointer: string }).pointer)}
           >
             <Background />
           </ReactFlow>

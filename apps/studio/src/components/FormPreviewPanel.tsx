@@ -834,7 +834,7 @@ function PreviewFieldControl({
     // Data type's own (non-arm) attributes still render as plain fields.
     const { armFields, otherFields } = splitChoiceArmFields(field.children ?? [], field.choiceArmPaths);
     return (
-      <FieldSet className="gap-1.5 p-2">
+      <FieldSet data-field-path={fieldPath} tabIndex={-1} className="gap-1.5 p-2">
         <FieldLegend variant="label" className="text-muted-foreground">
           {/* Inline +/- icon button replaces the verbose
               "Add <FieldLabel>" / "Remove <FieldLabel>" text — the
@@ -905,7 +905,7 @@ function PreviewFieldControl({
     const [child] = field.children ?? [];
 
     return (
-      <FieldSet className="gap-1.5 p-2">
+      <FieldSet data-field-path={fieldPath} tabIndex={-1} className="gap-1.5 p-2">
         <FieldLegend variant="label" className="text-muted-foreground">
           {/* Inline + icon button for "add another item to the array",
               same pattern as the optional-object section. aria-label
@@ -1026,7 +1026,7 @@ function PreviewFieldControl({
 
   if (field.kind === 'boolean') {
     return (
-      <label className="flex items-center gap-2 text-xs font-medium">
+      <label data-field-path={fieldPath} className="flex items-center gap-2 text-xs font-medium">
         <Checkbox
           aria-label={resolvedFieldLabel(field, arrayIndices)}
           checked={Boolean(value)}
@@ -1043,7 +1043,7 @@ function PreviewFieldControl({
   }
 
   return (
-    <label className="block text-xs font-medium">
+    <label data-field-path={fieldPath} className="block text-xs font-medium">
       <span>{resolvedFieldLabel(field, arrayIndices)}</span>
       <Input
         aria-label={resolvedFieldLabel(field, arrayIndices)}

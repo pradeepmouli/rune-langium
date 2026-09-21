@@ -31,6 +31,25 @@ export const payloadNodeId = withInstrumentation(
 function escapePointer(segment: string): string {
   return segment.replace(/~/g, '~0').replace(/\//g, '~1');
 }
+
+function unescapePointer(segment: string): string {
+  return segment.replace(/~1/g, '/').replace(/~0/g, '~');
+}
+
+/** Converts a containment pointer into FormPreviewPanel's concrete field path. */
+export const payloadPointerToFieldPath = withInstrumentation(
+  function payloadPointerToFieldPath(pointer: string): string | undefined {
+    if (pointer === '') return undefined;
+    const segments = pointer.slice(1).split('/').map(unescapePointer);
+    return segments
+      .map((segment, index) => {
+        if (/^\d+$/.test(segment)) return `[${segment}]`;
+        return index === 0 ? segment : `.${segment}`;
+      })
+      .join('');
+  },
+  { op: 'payloadPointerToFieldPath' }
+);
 function isContainer(value: unknown): value is Record<string, unknown> | unknown[] {
   return Array.isArray(value) || (typeof value === 'object' && value !== null);
 }

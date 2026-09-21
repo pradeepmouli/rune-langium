@@ -24,6 +24,7 @@ export const PrototypePerspective = withInstrumentation(
     const [creating, setCreating] = useState(false);
     const [seed, setSeed] = useState<Parameters<typeof InstanceCreateDialog>[0]['seed']>();
     const [importError, setImportError] = useState<string | null>(null);
+    const [focusedPayloadPointer, setFocusedPayloadPointer] = useState<string | undefined>();
     const importInputRef = useRef<HTMLInputElement>(null);
     const selectedRecord = useInstanceStore((state) =>
       view.selectedId ? state.instances[view.selectedId] : undefined
@@ -40,6 +41,7 @@ export const PrototypePerspective = withInstrumentation(
         setCreating(true);
       }
     }, [workspace?.workspaceId]);
+    useEffect(() => setFocusedPayloadPointer(undefined), [selectedRecord?.id]);
 
     const importJson = async (event: ChangeEvent<HTMLInputElement>) => {
       const file = event.target.files?.[0];
@@ -86,7 +88,7 @@ export const PrototypePerspective = withInstrumentation(
         </div>
         <div className="min-h-0 flex-[2] border-b border-border">
           {view.selectedId ? (
-            <InstanceInspectorPanel instanceId={view.selectedId} />
+            <InstanceInspectorPanel instanceId={view.selectedId} focusedPayloadPointer={focusedPayloadPointer} />
           ) : (
             <div className="flex h-full items-center justify-center text-sm text-muted-foreground">
               Select or create an instance to inspect it.
@@ -101,7 +103,9 @@ export const PrototypePerspective = withInstrumentation(
             {importError}
           </p>
         ) : null}
-        {view.graphVisible && selectedRecord ? <InstanceGraphPanel record={selectedRecord} /> : null}
+        {view.graphVisible && selectedRecord ? (
+          <InstanceGraphPanel record={selectedRecord} onSelectPointer={setFocusedPayloadPointer} />
+        ) : null}
         <InstanceCreateDialog
           seed={seed}
           open={creating}
