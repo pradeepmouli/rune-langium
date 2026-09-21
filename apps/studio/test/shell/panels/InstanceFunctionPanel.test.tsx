@@ -7,6 +7,7 @@ import { useEditorStore } from '@rune-langium/visual-editor';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import type { PreviewSessionClient } from '../../../src/services/preview-session-client.js';
 import { PreviewSessionContext } from '../../../src/shell/providers/preview-session-context.js';
+import { WorkspaceStateContext, type WorkspaceState } from '../../../src/shell/providers/workspace-context.js';
 import { InstanceFunctionPanel } from '../../../src/shell/panels/InstanceFunctionPanel.js';
 import { usePrototypeNavigationStore } from '../../../src/services/prototype-navigation.js';
 import { usePrototypeViewStore } from '../../../src/store/prototype-view-store.js';
@@ -26,6 +27,18 @@ vi.mock('../../../src/components/FormPreviewPanel.js', () => ({
 function graphNode(id: string, namespace: string, data: object): TypeGraphNode {
   return { id, data, meta: { namespace } } as TypeGraphNode;
 }
+
+const workspace: WorkspaceState = {
+  workspaceId: 'workspace-a',
+  workspaceKind: 'browser-only',
+  workspaceName: 'workspace-a',
+  fileCount: 0,
+  files: [],
+  models: [],
+  parsedModels: [],
+  deferredExports: [],
+  parseErrors: new Map()
+};
 
 describe('InstanceFunctionPanel', () => {
   beforeEach(() => {
@@ -62,9 +75,11 @@ describe('InstanceFunctionPanel', () => {
       dispose: vi.fn()
     };
     render(
-      <PreviewSessionContext.Provider value={() => client}>
-        <InstanceFunctionPanel instanceId="missing-instance" />
-      </PreviewSessionContext.Provider>
+      <WorkspaceStateContext.Provider value={workspace}>
+        <PreviewSessionContext.Provider value={() => client}>
+          <InstanceFunctionPanel instanceId="missing-instance" />
+        </PreviewSessionContext.Provider>
+      </WorkspaceStateContext.Provider>
     );
 
     fireEvent.click(screen.getByRole('button', { name: 'Choose test.BuildParty' }));

@@ -56,7 +56,10 @@ export const exportSelectionFromExplorer = withInstrumentation(
       const namespaces = action.checked
         ? [...new Set([...previous.namespaces, ...action.namespaces])]
         : previous.namespaces.filter((namespace) => !action.namespaces.includes(namespace));
-      return { ...previous, namespaces };
+      const declarations = action.checked
+        ? previous.declarations
+        : previous.declarations.filter((declaration) => !action.namespaces.includes(declaration.namespace));
+      return { namespaces, declarations };
     }
 
     const declarations = repository.all().flatMap((node) => {

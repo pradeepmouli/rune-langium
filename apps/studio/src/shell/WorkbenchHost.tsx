@@ -14,8 +14,11 @@ export const WorkbenchDefinitionContext = createContext<WorkbenchDefinition | nu
 function PanelBody({ name }: { name: string }): React.ReactElement | null {
   const definition = useContext(WorkbenchDefinitionContext);
   if (!definition) throw new Error('PanelBody requires WorkbenchHost');
-  const Component = definition.panels[name];
-  return Component ? <Component /> : null;
+  // Panel renderers deliberately run inside this stable bridge. Rendering a
+  // changing callback as <Component /> changes React's element type and
+  // remounts its local state whenever surrounding perspective state updates.
+  const render = definition.panels[name] as ((props: object) => React.ReactElement | null) | undefined;
+  return render?.({}) ?? null;
 }
 
 function createDockviewPanelBridge(name: string): React.FC<IDockviewPanelProps> {

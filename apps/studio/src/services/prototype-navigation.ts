@@ -4,7 +4,6 @@
 import { create } from 'zustand';
 import type { InstanceSeed } from '../components/InstanceCreateDialog.js';
 import { usePerspectiveStore } from '../store/perspective-store.js';
-import { usePrototypeViewStore } from '../store/prototype-view-store.js';
 import { withInstrumentation } from './instrumentation/core.js';
 
 export type PrototypeIntent = { kind: 'create'; seed: InstanceSeed } | { kind: 'open'; instanceId: string };
@@ -14,18 +13,15 @@ interface StoredIntent {
 }
 interface PrototypeNavigationState {
   pending: StoredIntent | null;
-  request(intent: PrototypeIntent): void;
+  request(workspaceId: string, intent: PrototypeIntent): void;
   consume(workspaceId: string): PrototypeIntent | null;
 }
 
 export const usePrototypeNavigationStore = create<PrototypeNavigationState>((set, get) => ({
   pending: null,
-  request(intent) {
-    const workspaceId = usePrototypeViewStore.getState().workspaceId;
+  request(workspaceId, intent) {
     set({ pending: { workspaceId, intent: structuredClone(intent) } });
     usePerspectiveStore.getState().setActivePerspective('prototype');
-    if (intent.kind === 'open')
-      usePrototypeViewStore.getState().patch({ selectedId: intent.instanceId, inspectorTab: 'form' });
   },
   consume(workspaceId) {
     const pending = get().pending;
@@ -36,8 +32,8 @@ export const usePrototypeNavigationStore = create<PrototypeNavigationState>((set
 }));
 
 export const requestPrototype = withInstrumentation(
-  function requestPrototype(intent: PrototypeIntent): void {
-    usePrototypeNavigationStore.getState().request(intent);
+  function requestPrototype(workspaceId: string, intent: PrototypeIntent): void {
+    usePrototypeNavigationStore.getState().request(workspaceId, intent);
   },
   { op: 'requestPrototype' }
 );

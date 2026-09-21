@@ -16,6 +16,7 @@ import {
 import { withInstrumentation } from '../../services/instrumentation/core.js';
 import { resolveFunctionOutputTarget } from '../../services/function-output-target.js';
 import { requestPrototype } from '../../services/prototype-navigation.js';
+import { useWorkspaceOptional } from '../providers/workspace-context.js';
 
 const NO_SESSION_STATE: FunctionSessionState = {
   functionFqn: null,
@@ -27,6 +28,8 @@ const NO_SESSION_STATE: FunctionSessionState = {
 
 export const InstanceFunctionPanel = withInstrumentation(
   function InstanceFunctionPanel({ instanceId }: { instanceId: string }): ReactElement {
+    const workspace = useWorkspaceOptional();
+    const workspaceId = workspace?.workspaceId;
     const factory = usePreviewSessionFactory();
     const instance = useInstanceStore((state) => state.instances[instanceId]);
     const nodesById = useEditorStore((state) => state.nodesById);
@@ -104,12 +107,12 @@ export const InstanceFunctionPanel = withInstrumentation(
         {state.status === 'succeeded' ? (
           <>
             <pre aria-label="Function result">{JSON.stringify(state.result, null, 2)}</pre>
-            {canSaveResult ? (
+            {canSaveResult && workspaceId ? (
               <Button
                 type="button"
                 size="sm"
                 onClick={() =>
-                  requestPrototype({
+                  requestPrototype(workspaceId, {
                     kind: 'create',
                     seed: { typeFqn: outputTarget.typeFqn, data: structuredClone(state.result) }
                   })

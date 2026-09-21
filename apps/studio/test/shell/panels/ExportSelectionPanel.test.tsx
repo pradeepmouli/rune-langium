@@ -79,6 +79,17 @@ it('retains namespace roots from shared explorer namespace actions', () => {
   expect(onChange).toHaveBeenLastCalledWith({ namespaces: [], declarations: [] });
 });
 
+it('removes individually selected declaration roots when a namespace is cleared', () => {
+  setNodes();
+  const onChange = vi.fn();
+  const selection = { namespaces: [], declarations: [{ namespace: 'test', name: 'Party', kind: 'Data' }] };
+  render(<ExportSelectionPanel selection={selection} onChange={onChange} />);
+
+  act(() => explorerSelection?.onChange(new Set(), { kind: 'namespace', namespaces: ['test'], checked: false }));
+
+  expect(onChange).toHaveBeenLastCalledWith({ namespaces: [], declarations: [] });
+});
+
 it('shows receipt-derived dependency count only after generation', () => {
   setNodes();
   const { rerender } = render(

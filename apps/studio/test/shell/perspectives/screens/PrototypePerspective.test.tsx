@@ -170,8 +170,20 @@ describe('PrototypePerspective', () => {
   it('consumes a creation intent that arrives after Prototype is mounted', async () => {
     renderPerspective();
 
-    act(() => requestPrototype({ kind: 'create', seed: { typeFqn: 'test.Party', data: { name: 'Acme' } } }));
+    act(() =>
+      requestPrototype('workspace-a', { kind: 'create', seed: { typeFqn: 'test.Party', data: { name: 'Acme' } } })
+    );
 
     expect(await screen.findByRole('heading', { name: 'New instance' })).toBeVisible();
+  });
+
+  it('consumes an instance-opening intent after the workspace is active', () => {
+    const id = useInstanceStore.getState().createInstance('test.Party', 'Acme');
+    renderPerspective();
+
+    act(() => requestPrototype('workspace-a', { kind: 'open', instanceId: id }));
+
+    expect(usePrototypeViewStore.getState().state.selectedId).toBe(id);
+    expect(usePrototypeViewStore.getState().state.inspectorTab).toBe('form');
   });
 });

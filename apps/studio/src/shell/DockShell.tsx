@@ -133,7 +133,7 @@ interface DockShellProps {
   focusPanel?: { component: PanelComponentName; nonce: number } | null;
   /**
    * Override one or more panels with real content. Components are
-   * rendered as the body of their named dockview panel. Tests omit this
+   * rendered from a stable dockview panel bridge. Tests omit this
    * (the default stub panels are reachable via test-id); the live app
    * supplies real components from EditorPage so the dock shell hosts
    * the working studio surface.

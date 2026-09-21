@@ -28,18 +28,19 @@ describe('prototype navigation', () => {
     usePrototypeNavigationStore.setState({ pending: null });
   });
 
-  it('opens an existing instance without creating a duplicate', () => {
+  it('queues an existing instance without creating a duplicate', () => {
     const existingId = useInstanceStore.getState().createInstance('test.Party', 'Existing');
     const before = Object.keys(useInstanceStore.getState().instances).length;
-    requestPrototype({ kind: 'open', instanceId: existingId });
+    requestPrototype('one', { kind: 'open', instanceId: existingId });
 
     expect(Object.keys(useInstanceStore.getState().instances)).toHaveLength(before);
     expect(usePerspectiveStore.getState().activePerspective).toBe('prototype');
-    expect(usePrototypeViewStore.getState().state.selectedId).toBe(existingId);
+    expect(usePrototypeNavigationStore.getState().consume('one')).toEqual({ kind: 'open', instanceId: existingId });
   });
 
   it('does not consume a create intent after a workspace switch', () => {
-    requestPrototype({ kind: 'create', seed: { typeFqn: 'test.Party', data: { name: 'Alice' } } });
+    usePrototypeViewStore.setState({ workspaceId: 'stale' });
+    requestPrototype('one', { kind: 'create', seed: { typeFqn: 'test.Party', data: { name: 'Alice' } } });
     expect(usePrototypeNavigationStore.getState().consume('two')).toBeNull();
     expect(usePrototypeNavigationStore.getState().consume('one')).toMatchObject({ kind: 'create' });
   });

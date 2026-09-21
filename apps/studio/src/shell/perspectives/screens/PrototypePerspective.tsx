@@ -48,7 +48,9 @@ export const PrototypePerspective = withInstrumentation(
         setSeed(intent.seed);
         setCreating(true);
       }
-    }, [consumePrototypeIntent, pendingIntent, workspace?.workspaceId]);
+      if (intent?.kind === 'open')
+        patch({ selectedId: intent.instanceId, inspectorTab: 'form', compactPane: 'inspector' });
+    }, [consumePrototypeIntent, patch, pendingIntent, workspace?.workspaceId]);
     useEffect(() => setFocusedPayloadPointer(undefined), [selectedRecord?.id]);
 
     const importJson = async (event: ChangeEvent<HTMLInputElement>) => {

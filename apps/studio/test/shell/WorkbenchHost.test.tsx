@@ -2,7 +2,8 @@
 // Copyright (c) 2026 Pradeep Mouli
 
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { render, screen } from '@testing-library/react';
+import { fireEvent, render, screen } from '@testing-library/react';
+import { useState } from 'react';
 import type { ComponentType } from 'react';
 
 class FakeApi {
@@ -51,6 +52,15 @@ function EditorPanel() {
   return <div data-testid="editor-panel">editor</div>;
 }
 
+function StatefulPanel({ label }: { label: string }) {
+  const [count, setCount] = useState(0);
+  return (
+    <button type="button" onClick={() => setCount((value) => value + 1)}>
+      {label}: {count}
+    </button>
+  );
+}
+
 function definition(buildDefault = vi.fn()): WorkbenchDefinition {
   return {
     id: 'prototype',
@@ -74,6 +84,24 @@ describe('WorkbenchHost', () => {
       />
     );
     expect(screen.getByTestId('editor-panel')).toHaveTextContent('editor');
+  });
+
+  it('preserves panel state when a renderer callback changes', () => {
+    const firstDefinition: WorkbenchDefinition = {
+      ...definition(),
+      panels: { editor: () => <StatefulPanel label="first" /> }
+    };
+    const { rerender } = render(<WorkbenchHost definition={firstDefinition} onNativeLayoutChange={vi.fn()} />);
+    fireEvent.click(screen.getByRole('button', { name: 'first: 0' }));
+    expect(screen.getByRole('button', { name: 'first: 1' })).toBeInTheDocument();
+
+    const secondDefinition: WorkbenchDefinition = {
+      ...definition(),
+      panels: { editor: () => <StatefulPanel label="second" /> }
+    };
+    rerender(<WorkbenchHost definition={secondDefinition} onNativeLayoutChange={vi.fn()} />);
+
+    expect(screen.getByRole('button', { name: 'second: 1' })).toBeInTheDocument();
   });
 
   it('rejects unknown and empty restored layouts, then rebuilds only this host', () => {
