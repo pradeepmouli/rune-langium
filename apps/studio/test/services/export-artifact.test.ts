@@ -2,6 +2,8 @@
 // Copyright (c) 2026 Pradeep Mouli
 
 import { expect, it } from 'vitest';
+import JSZip from 'jszip';
+import { runInNewContext } from 'node:vm';
 import { handleCodegenDownload } from '../../src/services/codegen-download-handler.js';
 import { decodeExportArtifact } from '../../src/services/export-artifact.js';
 
@@ -57,4 +59,22 @@ it('rejects manifest paths that are not listed as text files', async () => {
     { status: 200 }
   );
   await expect(decodeExportArtifact(response)).rejects.toThrow('missing .rune/export.json');
+});
+
+it('decodes ZIP bytes returned from a different runtime realm', async () => {
+  const zip = new JSZip();
+  zip.file('.rune/export.json', JSON.stringify({ version: 1, target: 'typescript', files: [], diagnostics: [] }));
+  const bytes = await zip.generateAsync({ type: 'uint8array' });
+  const foreignBuffer = runInNewContext('new Uint8Array(bytes).buffer', { bytes: Array.from(bytes) }) as ArrayBuffer;
+  const blob = { arrayBuffer: async () => foreignBuffer } as Blob;
+  const response = {
+    ok: true,
+    status: 200,
+    headers: new Headers(),
+    blob: async () => blob
+  } as unknown as Response;
+
+  await expect(decodeExportArtifact(response)).resolves.toMatchObject({
+    manifest: { version: 1, files: [] }
+  });
 });

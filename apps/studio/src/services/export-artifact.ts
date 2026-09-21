@@ -80,7 +80,11 @@ export const decodeExportArtifact = withInstrumentation(
   async function decodeExportArtifact(response: Response): Promise<ExportArtifact> {
     if (!response.ok) throw new Error(`Cannot decode failed export response (${response.status}).`);
     const blob = await response.blob();
-    const zip = await JSZip.loadAsync(await blob.arrayBuffer());
+    // JSZip rejects ArrayBuffers created by a different runtime realm (for
+    // example, a Node Response in a browser-like test environment). Normalize
+    // the bytes into this realm before parsing while retaining the original
+    // Blob for the exact download artifact.
+    const zip = await JSZip.loadAsync(new Uint8Array(await blob.arrayBuffer()));
     const manifestEntry = zip.file('.rune/export.json');
     if (!manifestEntry) throw new Error('Export artifact is missing .rune/export.json.');
     const manifest: unknown = JSON.parse(await manifestEntry.async('string'));
