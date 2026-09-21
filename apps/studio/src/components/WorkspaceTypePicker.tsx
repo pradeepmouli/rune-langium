@@ -10,7 +10,7 @@ import {
   selectNodeRepository,
   useEditorStore
 } from '@rune-langium/visual-editor';
-import type { TypeKind } from '@rune-langium/visual-editor';
+import type { TypeKind, TypeOption } from '@rune-langium/visual-editor';
 import {
   Command,
   CommandEmpty,
@@ -26,6 +26,8 @@ import { withInstrumentation } from '../services/instrumentation/core.js';
 export interface WorkspaceTypePickerProps {
   value: string | null;
   onSelect(value: string | null): void;
+  /** Receives the selected repository option when callers need its identity metadata. */
+  onSelectOption?(option: TypeOption | null): void;
   filterKinds: TypeKind[];
   allowClear?: boolean;
   label: string;
@@ -41,6 +43,7 @@ export const WorkspaceTypePicker = withInstrumentation(
   function WorkspaceTypePicker({
     value,
     onSelect,
+    onSelectOption,
     filterKinds,
     allowClear = false,
     label
@@ -64,6 +67,7 @@ export const WorkspaceTypePicker = withInstrumentation(
           onSelect={(nextValue) => {
             resetPopover();
             onSelect(nextValue);
+            onSelectOption?.(options.find((option) => option.value === nextValue) ?? null);
           }}
           allowClear={allowClear}
           filterKinds={filterKinds}
