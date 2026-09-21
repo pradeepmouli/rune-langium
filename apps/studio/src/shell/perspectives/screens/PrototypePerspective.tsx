@@ -9,6 +9,8 @@ import { usePrototypeViewStore } from '../../../store/prototype-view-store.js';
 import { useWorkspaceOptional } from '../../providers/workspace-context.js';
 import { InstanceInspectorPanel } from '../../panels/InstanceInspectorPanel.js';
 import { InstanceGridPanel } from '../../panels/InstanceGridPanel.js';
+import { InstanceGraphPanel } from '../../panels/InstanceGraphPanel.js';
+import { useInstanceStore } from '../../../store/instance-store.js';
 import { withInstrumentation } from '../../../services/instrumentation/core.js';
 import { usePrototypeNavigationStore } from '../../../services/prototype-navigation.js';
 
@@ -20,6 +22,9 @@ export const PrototypePerspective = withInstrumentation(
     const patch = usePrototypeViewStore((state) => state.patch);
     const [creating, setCreating] = useState(false);
     const [seed, setSeed] = useState<Parameters<typeof InstanceCreateDialog>[0]['seed']>();
+    const selectedRecord = useInstanceStore((state) =>
+      view.selectedId ? state.instances[view.selectedId] : undefined
+    );
 
     useEffect(() => {
       if (workspace?.workspaceId) void activate(workspace.workspaceId);
@@ -37,6 +42,9 @@ export const PrototypePerspective = withInstrumentation(
       <section data-testid="prototype-perspective" className="flex h-full min-h-0 flex-col">
         <div className="flex items-center justify-between border-b border-border px-3 py-2">
           <p className="text-sm text-muted-foreground">Persistent instances</p>
+          <Button type="button" variant="ghost" size="sm" onClick={() => patch({ graphVisible: !view.graphVisible })}>
+            Payload graph
+          </Button>
           <Button
             type="button"
             size="sm"
@@ -60,6 +68,7 @@ export const PrototypePerspective = withInstrumentation(
         <div className="min-h-0 flex-1">
           <InstanceGridPanel />
         </div>
+        {view.graphVisible && selectedRecord ? <InstanceGraphPanel record={selectedRecord} /> : null}
         <InstanceCreateDialog
           seed={seed}
           open={creating}
