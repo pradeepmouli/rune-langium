@@ -435,7 +435,12 @@ async function loadAllDocuments(
   curatedFetcher: ((url: string, init?: RequestInit) => Promise<Response>) | undefined,
   requestedNamespaces: readonly string[],
   curatedDocs: ReadonlyArray<{ uri: string; serializedModel: string }>
-): Promise<{ docs: import('langium').LangiumDocument[]; curatedError?: Response; namespaces?: string[] }> {
+): Promise<{
+  docs: import('langium').LangiumDocument[];
+  curatedError?: Response;
+  namespaces?: string[];
+  resolvedCohorts?: Record<string, string>;
+}> {
   const [{ createRuneDslServices, hydrateModelDocuments }, { EmptyFileSystem, URI }] = await Promise.all([
     import('@rune-langium/core'),
     import('langium')
@@ -479,10 +484,14 @@ async function loadAllDocuments(
   // CDM at 128 MiB) — the manifest records the dependency graph so we walk
   // it here without fetching+parsing any documents upfront.
   let namespaces: string[] | undefined;
+  let resolvedCohorts: Record<string, string> | undefined;
   if (curatedBundles.length > 0) {
     try {
       const loaded = await loadCuratedWorkspace(curatedBundles, seeds, curatedFetcher, true);
       namespaces = [...new Set([...requestedNamespaces, ...loaded.closure])];
+      resolvedCohorts = Object.fromEntries(
+        loaded.bundles.flatMap((bundle) => (bundle.manifest.cohort ? [[bundle.id, bundle.manifest.cohort]] : []))
+      );
       const entries = loaded.bundles.flatMap((bundle) =>
         bundle.documents.map((entry) => ({ uri: curatedKeyToUri(entry.uri, URI), json: entry.serializedModel }))
       );
@@ -527,7 +536,7 @@ async function loadAllDocuments(
     await builder.build(userDocs, { validation: false });
   }
 
-  return { docs, namespaces };
+  return { docs, namespaces, ...(resolvedCohorts ? { resolvedCohorts } : {}) };
 }
 
 function hasParserErrors(docs: ReadonlyArray<import('langium').LangiumDocument>): GeneratorDiagnostic[] {
@@ -624,7 +633,8 @@ async function artifactEnvelopeResponse(
   outputs: readonly GeneratorOutput[],
   filename: string,
   selection: ExportSelection | undefined,
-  resolvedSelection?: ExportArtifactManifest['resolvedSelection']
+  resolvedSelection?: ExportArtifactManifest['resolvedSelection'],
+  resolvedCohorts?: ExportArtifactManifest['resolvedCohorts']
 ): Promise<Response> {
   const zip = new JSZip();
   const files: ExportArtifactManifest['files'] = [];
@@ -648,6 +658,7 @@ async function artifactEnvelopeResponse(
     target,
     ...(selection ? { selection } : {}),
     ...(resolvedSelection ? { resolvedSelection } : {}),
+    ...(resolvedCohorts && Object.keys(resolvedCohorts).length > 0 ? { resolvedCohorts } : {}),
     files,
     diagnostics: outputs.flatMap((output) => output.diagnostics)
   };
@@ -747,6 +758,7 @@ export const handleCodegenDownload = withInstrumentation(
 
       let documents: import('langium').LangiumDocument[];
       let resolvedNamespaces: string[] | undefined;
+      let resolvedCohorts: Record<string, string> | undefined;
       // Set whenever this request is consuming a cache entry (whether it
       // just registered it or coalesced onto an existing one) — released in
       // the outer `finally` below, which now spans from registration all the
@@ -890,6 +902,7 @@ export const handleCodegenDownload = withInstrumentation(
           }
           documents = result.docs;
           resolvedNamespaces = result.namespaces;
+          resolvedCohorts = result.resolvedCohorts;
         } else {
           // A non-cacheable request (has user files, so its own document set
           // can't safely be reused by a later request) can still compete for
@@ -928,6 +941,7 @@ export const handleCodegenDownload = withInstrumentation(
           if (result.curatedError) return result.curatedError;
           documents = result.docs;
           resolvedNamespaces = result.namespaces;
+          resolvedCohorts = result.resolvedCohorts;
         }
 
         const parseErrors = hasParserErrors(documents);
@@ -983,7 +997,8 @@ export const handleCodegenDownload = withInstrumentation(
                   included: selectionReceipt.included,
                   requiredBy: Object.fromEntries(selectionReceipt.requiredBy)
                 }
-              : undefined
+              : undefined,
+            resolvedCohorts
           );
         }
         if (outputs.length === 1) {

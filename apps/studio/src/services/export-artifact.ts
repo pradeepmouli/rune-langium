@@ -21,6 +21,8 @@ export interface ExportArtifactManifest {
     included: ExportSelection['declarations'];
     requiredBy: Record<string, readonly string[]>;
   };
+  /** Immutable curated bundle cohorts that supplied hydrated source documents. */
+  resolvedCohorts?: Record<string, string>;
   files: ExportArtifactFile[];
   diagnostics: GeneratorDiagnostic[];
 }
