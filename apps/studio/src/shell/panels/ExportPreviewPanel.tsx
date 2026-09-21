@@ -69,14 +69,18 @@ export const ExportPreviewPanel = withInstrumentation(
 
     if (run.status === 'generating') {
       return (
-        <p data-testid="export-artifact-status" className="p-4 text-sm text-muted-foreground">
+        <p id="export-run-status" data-testid="export-artifact-status" className="p-4 text-sm text-muted-foreground">
           Generating export…
         </p>
       );
     }
     if (run.status === 'failed') {
       return (
-        <div data-testid="export-artifact-status" className="space-y-2 p-4 text-sm text-destructive">
+        <div
+          id="export-run-status"
+          data-testid="export-artifact-status"
+          className="space-y-2 p-4 text-sm text-destructive"
+        >
           <p>{run.message}</p>
           {run.diagnostics.map((diagnostic) => (
             <p key={`${diagnostic.code}:${diagnostic.message}`} className="text-xs">
@@ -88,7 +92,7 @@ export const ExportPreviewPanel = withInstrumentation(
     }
     if (!artifact) {
       return (
-        <p data-testid="export-artifact-status" className="p-4 text-sm text-muted-foreground">
+        <p id="export-run-status" data-testid="export-artifact-status" className="p-4 text-sm text-muted-foreground">
           No export artifact yet.
         </p>
       );
