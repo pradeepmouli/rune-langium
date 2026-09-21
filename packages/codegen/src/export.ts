@@ -36,6 +36,8 @@ import { generatePreviewSchemas as runGeneratePreviewSchemas } from './preview-s
 
 export { IMPLEMENTED_TARGETS };
 export { normalizePreviewInputs } from './preview-schema.js';
+export { resolveExportSelection } from './selection/declaration-selection.js';
+export type { ResolvedExportSelection } from './selection/declaration-selection.js';
 
 export type {
   FormPreviewKind,
