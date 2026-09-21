@@ -28,6 +28,7 @@ export const PrototypePerspective = withInstrumentation(
     const [importError, setImportError] = useState<string | null>(null);
     const [focusedPayloadPointer, setFocusedPayloadPointer] = useState<string | undefined>();
     const importInputRef = useRef<HTMLInputElement>(null);
+    const activationRef = useRef<{ workspaceId: string; promise: Promise<void> } | undefined>(undefined);
     const selectedRecord = useInstanceStore((state) =>
       view.selectedId ? state.instances[view.selectedId] : undefined
     );
@@ -39,17 +40,25 @@ export const PrototypePerspective = withInstrumentation(
         : view.compactPane;
 
     useEffect(() => {
-      if (workspace?.workspaceId) void activate(workspace.workspaceId);
-    }, [activate, workspace?.workspaceId]);
-    useEffect(() => {
-      if (!workspace?.workspaceId) return;
-      const intent = consumePrototypeIntent(workspace.workspaceId);
-      if (intent?.kind === 'create') {
-        setSeed(intent.seed);
-        setCreating(true);
+      const workspaceId = workspace?.workspaceId;
+      if (!workspaceId) return;
+      if (activationRef.current?.workspaceId !== workspaceId) {
+        activationRef.current = { workspaceId, promise: activate(workspaceId) };
       }
-      if (intent?.kind === 'open')
-        patch({ selectedId: intent.instanceId, inspectorTab: 'form', compactPane: 'inspector' });
+      let cancelled = false;
+      void activationRef.current.promise.then(() => {
+        if (cancelled) return;
+        const intent = consumePrototypeIntent(workspaceId);
+        if (intent?.kind === 'create') {
+          setSeed(intent.seed);
+          setCreating(true);
+        }
+        if (intent?.kind === 'open')
+          patch({ selectedId: intent.instanceId, inspectorTab: 'form', compactPane: 'inspector' });
+      });
+      return () => {
+        cancelled = true;
+      };
     }, [consumePrototypeIntent, patch, pendingIntent, workspace?.workspaceId]);
     useEffect(() => setFocusedPayloadPointer(undefined), [selectedRecord?.id]);
 

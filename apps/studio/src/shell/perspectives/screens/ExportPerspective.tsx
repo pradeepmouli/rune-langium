@@ -10,6 +10,7 @@ import type { WorkspaceFile } from '../../../services/workspace.js';
 import { downloadExportArtifact } from '../../../services/export-artifact.js';
 import { withInstrumentation } from '../../../services/instrumentation/core.js';
 import { useExportWorkbenchStore } from '../../../store/export-workbench-store.js';
+import { exportSourceFingerprint } from '../../../services/export-request.js';
 import { useExportNavigationStore } from '../../../services/export-navigation.js';
 import { ExportSelectionPanel } from '../../panels/ExportSelectionPanel.js';
 import { ExportSettingsPanel } from '../../panels/ExportSettingsPanel.js';
@@ -42,11 +43,7 @@ export const ExportPerspective = withInstrumentation(
         ),
       [run]
     );
-    const sourceFingerprint = useMemo(
-      () =>
-        JSON.stringify([workspaceId, (files ?? []).map((file) => [file.path, file.content, file.serializedModelJson])]),
-      [files, workspaceId]
-    );
+    const sourceFingerprint = useMemo(() => exportSourceFingerprint(workspaceId, files ?? []), [files, workspaceId]);
 
     useEffect(() => {
       if (!workspaceId) return;

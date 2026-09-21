@@ -3,8 +3,11 @@
 
 import { act, fireEvent, render, screen } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
+const { mockReadWorkbenchSettings } = vi.hoisted(() => ({
+  mockReadWorkbenchSettings: vi.fn(async (_workspaceId: string, _key: string, fallback: unknown) => fallback)
+}));
 vi.mock('../../../../src/shell/workbench-settings.js', () => ({
-  readWorkbenchSettings: vi.fn(async (_workspaceId: string, _key: string, fallback: unknown) => fallback),
+  readWorkbenchSettings: mockReadWorkbenchSettings,
   writeWorkbenchSettings: vi.fn(async () => undefined)
 }));
 import { PrototypePerspective } from '../../../../src/shell/perspectives/screens/PrototypePerspective.js';
@@ -16,6 +19,10 @@ import { installFakeValidatingWorkerForInstances } from '../../../helpers/fake-v
 
 describe('PrototypePerspective', () => {
   beforeEach(() => {
+    mockReadWorkbenchSettings.mockReset();
+    mockReadWorkbenchSettings.mockImplementation(
+      async (_workspaceId: string, _key: string, fallback: unknown) => fallback
+    );
     useInstanceStore.setState({
       instances: {},
       validationErrors: {},
@@ -177,11 +184,30 @@ describe('PrototypePerspective', () => {
     expect(await screen.findByRole('heading', { name: 'New instance' })).toBeVisible();
   });
 
-  it('consumes an instance-opening intent after the workspace is active', () => {
+  it('consumes an instance-opening intent after the workspace is active', async () => {
     const id = useInstanceStore.getState().createInstance('test.Party', 'Acme');
     renderPerspective();
 
     act(() => requestPrototype('workspace-a', { kind: 'open', instanceId: id }));
+
+    await vi.waitFor(() => expect(usePrototypeViewStore.getState().state.selectedId).toBe(id));
+    expect(usePrototypeViewStore.getState().state.inspectorTab).toBe('form');
+  });
+
+  it('applies an opening intent after delayed workspace preferences restore', async () => {
+    let resolveSettings!: (value: unknown) => void;
+    mockReadWorkbenchSettings.mockImplementation(
+      () =>
+        new Promise((resolve) => {
+          resolveSettings = resolve;
+        })
+    );
+    usePrototypeViewStore.setState({ workspaceId: null });
+    const id = useInstanceStore.getState().createInstance('test.Party', 'Acme');
+    renderPerspective();
+
+    act(() => requestPrototype('workspace-a', { kind: 'open', instanceId: id }));
+    await act(async () => resolveSettings({ selectedId: 'restored', compactPane: 'grid' }));
 
     expect(usePrototypeViewStore.getState().state.selectedId).toBe(id);
     expect(usePrototypeViewStore.getState().state.inspectorTab).toBe('form');

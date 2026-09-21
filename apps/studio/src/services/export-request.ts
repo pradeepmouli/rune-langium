@@ -20,6 +20,29 @@ export interface ExportInput {
   files: readonly WorkspaceFile[];
 }
 
+/** The exact workspace-file fields that can change a generated export. */
+export const exportSourceFiles = withInstrumentation(
+  function exportSourceFiles(files: readonly WorkspaceFile[]) {
+    return files.map(({ path, content, readOnly, serializedModelJson, bundleId, bundleVersion }) => ({
+      path,
+      content,
+      readOnly: Boolean(readOnly),
+      serializedModelJson,
+      bundleId,
+      bundleVersion
+    }));
+  },
+  { op: 'exportSourceFiles' }
+);
+
+/** Stable identity for source changes that invalidate an export artifact. */
+export const exportSourceFingerprint = withInstrumentation(
+  function exportSourceFingerprint(workspaceId: string | undefined, files: readonly WorkspaceFile[]): string {
+    return JSON.stringify(canonicalize({ workspaceId, files: exportSourceFiles(files) }));
+  },
+  { op: 'exportSourceFingerprint' }
+);
+
 function canonicalize(value: unknown): unknown {
   if (Array.isArray(value)) return value.map(canonicalize);
   if (value && typeof value === 'object') {
@@ -40,12 +63,7 @@ export const exportInputKey = withInstrumentation(
         workspaceId: input.workspaceId,
         sourceRevision: input.sourceRevision,
         config: input.config,
-        files: input.files.map((file) => ({
-          path: file.path,
-          content: file.content,
-          readOnly: Boolean(file.readOnly),
-          serializedModelJson: file.serializedModelJson
-        }))
+        files: exportSourceFiles(input.files)
       })
     );
   },

@@ -2,9 +2,8 @@
 // Copyright (c) 2026 Pradeep Mouli
 
 import { fireEvent, render, screen } from '@testing-library/react';
-import type { TypeGraphNode } from '@rune-langium/visual-editor';
-import { useEditorStore } from '@rune-langium/visual-editor';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
+import type { RosettaModel } from '@rune-langium/core';
 import type { PreviewSessionClient } from '../../../src/services/preview-session-client.js';
 import { PreviewSessionContext } from '../../../src/shell/providers/preview-session-context.js';
 import { WorkspaceStateContext, type WorkspaceState } from '../../../src/shell/providers/workspace-context.js';
@@ -24,8 +23,18 @@ vi.mock('../../../src/components/FormPreviewPanel.js', () => ({
   FormPreviewPanel: () => <div data-testid="function-input-form" />
 }));
 
-function graphNode(id: string, namespace: string, data: object): TypeGraphNode {
-  return { id, data, meta: { namespace } } as TypeGraphNode;
+function functionModels(): RosettaModel[] {
+  const model = { name: 'test', elements: [] } as unknown as RosettaModel;
+  const party = { $type: 'Data', name: 'Party', $container: model };
+  const buildParty = {
+    $type: 'RosettaFunction',
+    name: 'BuildParty',
+    $container: model,
+    inputs: [],
+    output: { card: { inf: 1, sup: 1 }, typeCall: { type: { ref: party } } }
+  };
+  model.elements.push(party as never, buildParty as never);
+  return [model];
 }
 
 const workspace: WorkspaceState = {
@@ -34,7 +43,7 @@ const workspace: WorkspaceState = {
   workspaceName: 'workspace-a',
   fileCount: 0,
   files: [],
-  models: [],
+  models: functionModels(),
   parsedModels: [],
   deferredExports: [],
   parseErrors: new Map()
@@ -42,18 +51,7 @@ const workspace: WorkspaceState = {
 
 describe('InstanceFunctionPanel', () => {
   beforeEach(() => {
-    useEditorStore.setState({
-      nodesById: new Map([
-        [
-          'test.BuildParty',
-          graphNode('test.BuildParty', 'test', {
-            $type: 'RosettaFunction',
-            output: { typeCall: { type: { $refText: 'Party' } }, card: { inf: 1, sup: 1 } }
-          })
-        ],
-        ['test.Party', graphNode('test.Party', 'test', { $type: 'Data', name: 'Party' })]
-      ])
-    });
+    workspace.models = functionModels();
     usePrototypeViewStore.setState({
       workspaceId: 'workspace-a',
       state: {

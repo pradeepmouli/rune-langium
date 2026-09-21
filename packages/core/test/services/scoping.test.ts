@@ -8,6 +8,7 @@ import {
   isRosettaFunction,
   isRosettaSymbolReference,
   getFunctionSignature,
+  getFunctionOutput,
   createRuneDslServices
 } from '../../src/index.js';
 import type { Data, RosettaFunction, RosettaEnumeration, RosettaModel } from '../../src/index.js';
@@ -119,6 +120,7 @@ func Compute(kind: Kind -> Cash):
     const overload = funcs.find((func) => func.dispatchAttribute)!;
     const base = funcs.find((func) => !func.dispatchAttribute && func.$container.name === 'split')!;
     expect(getFunctionSignature(overload)).toBe(base);
+    expect(getFunctionOutput(overload)).toBe(base.output);
     expect(overload.dispatchAttribute?.ref).toBe(base.inputs[0]);
     expect(overload.operations[0]?.assignRoot.ref).toBe(base.output);
   });

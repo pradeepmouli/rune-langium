@@ -3,7 +3,6 @@
 // Copyright (c) 2026 Pradeep Mouli
 import { useEffect, useMemo, useRef, useSyncExternalStore, type ReactElement } from 'react';
 import { Button } from '@rune-langium/design-system/ui/button';
-import { useEditorStore } from '@rune-langium/visual-editor';
 import { WorkspaceTypePicker } from '../../components/WorkspaceTypePicker.js';
 import { FormPreviewPanel } from '../../components/FormPreviewPanel.js';
 import { useInstanceStore } from '../../store/instance-store.js';
@@ -32,7 +31,6 @@ export const InstanceFunctionPanel = withInstrumentation(
     const workspaceId = workspace?.workspaceId;
     const factory = usePreviewSessionFactory();
     const instance = useInstanceStore((state) => state.instances[instanceId]);
-    const nodesById = useEditorStore((state) => state.nodesById);
     const sessionRef = useRef<FunctionSession | undefined>(undefined);
     if (!sessionRef.current && factory) sessionRef.current = createFunctionSession(factory());
     const session = sessionRef.current;
@@ -42,8 +40,8 @@ export const InstanceFunctionPanel = withInstrumentation(
       () => session?.getState() ?? NO_SESSION_STATE
     );
     const outputTarget = useMemo(
-      () => resolveFunctionOutputTarget(nodesById, state.functionFqn),
-      [nodesById, state.functionFqn]
+      () => resolveFunctionOutputTarget(workspace?.models ?? [], state.functionFqn),
+      [state.functionFqn, workspace?.models]
     );
     const canSaveResult =
       state.status === 'succeeded' &&

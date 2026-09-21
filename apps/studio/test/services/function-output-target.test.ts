@@ -2,47 +2,66 @@
 // Copyright (c) 2026 Pradeep Mouli
 
 import { describe, expect, it } from 'vitest';
-import type { TypeGraphNode } from '@rune-langium/visual-editor';
+import type { RosettaModel } from '@rune-langium/core';
 import { resolveFunctionOutputTarget } from '../../src/services/function-output-target.js';
 
-function node(id: string, namespace: string, data: object): TypeGraphNode {
-  return { id, data, meta: { namespace } } as TypeGraphNode;
+function model(name: string, elements: object[]): RosettaModel {
+  return { name, elements } as unknown as RosettaModel;
 }
 
 describe('resolveFunctionOutputTarget', () => {
-  it('resolves a singular same-namespace Data output', () => {
-    const nodes = new Map([
-      [
-        'test.Rename',
-        node('test.Rename', 'test', {
-          $type: 'RosettaFunction',
-          output: { typeCall: { type: { $refText: 'Party' } }, card: { inf: 1, sup: 1 } }
-        })
-      ],
-      ['test.Party', node('test.Party', 'test', { $type: 'Data', name: 'Party' })]
-    ]);
-    expect(resolveFunctionOutputTarget(nodes, 'test.Rename')).toEqual({ typeFqn: 'test.Party', kind: 'data' });
+  it('resolves a linked singular imported Data output', () => {
+    const models = model('models', []);
+    const funcs = model('funcs', []);
+    const party = { $type: 'Data', name: 'Party', $container: models };
+    const rename = {
+      $type: 'RosettaFunction',
+      name: 'Rename',
+      $container: funcs,
+      inputs: [],
+      output: { card: { inf: 1, sup: 1 }, typeCall: { type: { ref: party } } }
+    };
+    models.elements.push(party as never);
+    funcs.elements.push(rename as never);
+
+    expect(resolveFunctionOutputTarget([models, funcs], 'funcs.Rename')).toEqual({
+      typeFqn: 'models.Party',
+      kind: 'data'
+    });
   });
 
-  it('rejects collection and primitive outputs', () => {
-    const nodes = new Map([
-      [
-        'test.Many',
-        node('test.Many', 'test', {
-          $type: 'RosettaFunction',
-          output: { typeCall: { type: { $refText: 'Party' } }, card: { inf: 0, sup: 2 } }
-        })
-      ],
-      [
-        'test.Text',
-        node('test.Text', 'test', {
-          $type: 'RosettaFunction',
-          output: { typeCall: { type: { $refText: 'string' } }, card: { inf: 1, sup: 1 } }
-        })
-      ],
-      ['test.Party', node('test.Party', 'test', { $type: 'Data', name: 'Party' })]
-    ]);
-    expect(resolveFunctionOutputTarget(nodes, 'test.Many')).toBeUndefined();
-    expect(resolveFunctionOutputTarget(nodes, 'test.Text')).toBeUndefined();
+  it('uses the inherited output and rejects collection outputs', () => {
+    const types = model('types', []);
+    const funcs = model('funcs', []);
+    const party = { $type: 'Data', name: 'Party', $container: types };
+    const base = {
+      $type: 'RosettaFunction',
+      name: 'Base',
+      $container: funcs,
+      inputs: [],
+      output: { card: { inf: 1, sup: 1 }, typeCall: { type: { ref: party } } }
+    };
+    const inherited = {
+      $type: 'RosettaFunction',
+      name: 'Inherited',
+      $container: funcs,
+      inputs: [],
+      superFunction: { ref: base }
+    };
+    const many = {
+      $type: 'RosettaFunction',
+      name: 'Many',
+      $container: funcs,
+      inputs: [],
+      output: { card: { inf: 0, sup: 2 }, typeCall: { type: { ref: party } } }
+    };
+    types.elements.push(party as never);
+    funcs.elements.push(base as never, inherited as never, many as never);
+
+    expect(resolveFunctionOutputTarget([types, funcs], 'funcs.Inherited')).toEqual({
+      typeFqn: 'types.Party',
+      kind: 'data'
+    });
+    expect(resolveFunctionOutputTarget([types, funcs], 'funcs.Many')).toBeUndefined();
   });
 });

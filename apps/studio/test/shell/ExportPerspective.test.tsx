@@ -79,6 +79,27 @@ it('composes stable selection, settings, and preview workbench panels', () => {
   expect(mockActivate).toHaveBeenCalledWith('workspace-a');
 });
 
+it('invalidates the artifact when a curated bundle version changes', () => {
+  const files = [
+    {
+      name: '.bundle-marker',
+      path: '[cdm]/.bundle-marker',
+      content: '',
+      dirty: false,
+      readOnly: true,
+      serializedModelJson: '{}',
+      bundleId: 'cdm',
+      bundleVersion: 'first'
+    }
+  ];
+  const { rerender } = render(<ExportPerspective workspaceId="workspace-a" files={files} />);
+  expect(mockInvalidate).toHaveBeenCalledTimes(1);
+
+  rerender(<ExportPerspective workspaceId="workspace-a" files={[{ ...files[0]!, bundleVersion: 'second' }]} />);
+
+  expect(mockInvalidate).toHaveBeenCalledTimes(2);
+});
+
 it('captures the selected roots and workspace files exactly once when generating', () => {
   state.config = {
     ...state.config,
