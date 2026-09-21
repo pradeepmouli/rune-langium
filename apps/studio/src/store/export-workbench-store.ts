@@ -54,6 +54,12 @@ function isAbort(error: unknown): boolean {
   return error instanceof DOMException && error.name === 'AbortError';
 }
 
+function errorDiagnostics(error: unknown): GeneratorDiagnostic[] {
+  if (!error || typeof error !== 'object' || !('diagnostics' in error)) return [];
+  const diagnostics = (error as { diagnostics?: unknown }).diagnostics;
+  return Array.isArray(diagnostics) ? (diagnostics as GeneratorDiagnostic[]) : [];
+}
+
 /** Create export state with an injected generator so races are independently testable. */
 export const createExportWorkbench = withInstrumentation(
   function createExportWorkbench(generateExportArtifact: GenerateExport = generateExport) {
@@ -133,7 +139,7 @@ export const createExportWorkbench = withInstrumentation(
             run: {
               status: 'failed',
               message: error instanceof Error ? error.message : String(error),
-              diagnostics: []
+              diagnostics: errorDiagnostics(error)
             }
           });
         } finally {

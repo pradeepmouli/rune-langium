@@ -76,6 +76,22 @@ it('uses the same key for option objects with different insertion order', () => 
   expect(exportInputKey(reordered)).toBe(exportInputKey(original));
 });
 
+it('retains structured diagnostics for a failed export', async () => {
+  const store = createExportWorkbench(async () => {
+    throw Object.assign(new Error('Unknown selection'), {
+      diagnostics: [{ severity: 'error', code: 'unknown-export-selection', message: 'Party is unavailable' }]
+    });
+  });
+
+  await store.getState().generate(input);
+
+  expect(store.getState().run).toEqual({
+    status: 'failed',
+    message: 'Unknown selection',
+    diagnostics: [{ severity: 'error', code: 'unknown-export-selection', message: 'Party is unavailable' }]
+  });
+});
+
 it('restores and persists preferences by workspace without retaining the artifact', async () => {
   mockReadWorkbenchSettings.mockResolvedValue({
     config: { ...input.config, target: 'zod' },

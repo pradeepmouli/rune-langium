@@ -63,9 +63,14 @@ export const ExportPreviewPanel = withInstrumentation(
     }
     if (run.status === 'failed') {
       return (
-        <p data-testid="export-artifact-status" className="p-4 text-sm text-destructive">
-          {run.message}
-        </p>
+        <div data-testid="export-artifact-status" className="space-y-2 p-4 text-sm text-destructive">
+          <p>{run.message}</p>
+          {run.diagnostics.map((diagnostic) => (
+            <p key={`${diagnostic.code}:${diagnostic.message}`} className="text-xs">
+              {diagnostic.message}
+            </p>
+          ))}
+        </div>
       );
     }
     if (!artifact) {
