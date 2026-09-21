@@ -21,6 +21,11 @@ the legacy `GeneratorOptions.namespaces` allowlist when exporting individual
 declarations; the two scopes are intentionally mutually exclusive in Studio's
 download API.
 
+Use `generateSelected()` when the caller also needs a receipt. It returns the
+generated files and the exact explicit and dependency-included declarations
+used for emission, without resolving the workspace a second time. Studio stores
+that receipt in its downloadable artifact envelope.
+
 ## TypeScript functions
 
 Rune functions emit named exports with a single typed input object and an explicit
