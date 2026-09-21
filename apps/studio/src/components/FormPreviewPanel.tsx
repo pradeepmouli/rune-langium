@@ -29,6 +29,23 @@ import {
 } from '../services/preview-validator.js';
 import { withInstrumentation } from '../services/instrumentation/core.js';
 
+export interface PreviewPresentation {
+  mode: 'scratch' | 'instance';
+  showPayload: boolean;
+  showHeader: boolean;
+}
+
+export type PayloadView =
+  | { kind: 'instance'; value: unknown }
+  | { kind: 'inputs'; value: Record<string, unknown> }
+  | { kind: 'result'; value: unknown };
+
+const SCRATCH_PRESENTATION: PreviewPresentation = {
+  mode: 'scratch',
+  showPayload: true,
+  showHeader: true
+};
+
 export interface FormPreviewPanelProps {
   schema?: FormPreviewSchema;
   status: PreviewStatus;
@@ -44,6 +61,7 @@ export interface FormPreviewPanelProps {
   errors?: Record<string, string>;
   valid?: boolean;
   validated?: boolean;
+  presentation?: PreviewPresentation;
 }
 
 export const FormPreviewPanel = withInstrumentation(
@@ -57,7 +75,8 @@ export const FormPreviewPanel = withInstrumentation(
     onValuesChange,
     errors: controlledErrors,
     valid: controlledValid,
-    validated: controlledValidated
+    validated: controlledValidated,
+    presentation = SCRATCH_PRESENTATION
   }: FormPreviewPanelProps): ReactElement {
     const isControlled = values !== undefined;
     const ensureSample = usePreviewStore((s) => s.ensureSample);
@@ -415,17 +434,19 @@ export const FormPreviewPanel = withInstrumentation(
         data-testid="panel-formPreview"
         className="studio-scroll flex h-full flex-col overflow-auto"
       >
-        <header className="flex items-center justify-between gap-3 border-b border-border px-3 py-2">
-          <h2 className="truncate text-sm font-semibold">{schema.title}</h2>
-          <div className="flex shrink-0 items-center gap-1.5">
-            <Button type="button" variant="ghost" size="xs" onClick={handleCopySample}>
-              Copy
-            </Button>
-            <Button type="button" variant="ghost" size="xs" onClick={handleReset}>
-              Reset
-            </Button>
-          </div>
-        </header>
+        {presentation.showHeader ? (
+          <header className="flex items-center justify-between gap-3 border-b border-border px-3 py-2">
+            <h2 className="truncate text-sm font-semibold">{schema.title}</h2>
+            <div className="flex shrink-0 items-center gap-1.5">
+              <Button type="button" variant="ghost" size="xs" onClick={handleCopySample}>
+                Copy
+              </Button>
+              <Button type="button" variant="ghost" size="xs" onClick={handleReset}>
+                {presentation.mode === 'instance' ? 'Reset values' : 'Reset'}
+              </Button>
+            </div>
+          </header>
+        ) : null}
         <p
           role={status.state === 'invalid' ? 'alert' : 'status'}
           aria-live="polite"
@@ -522,21 +543,23 @@ export const FormPreviewPanel = withInstrumentation(
               ) : null}
             </div>
           ) : null}
-          <details className="preview-panel__sample" data-testid="sample-data-view" open>
-            <summary className="cursor-pointer px-2 py-1 text-xs font-medium text-foreground">Sample data</summary>
-            <div className="space-y-2 border-t border-border p-2">
-              <pre
-                aria-label="Sample data output"
-                className="preview-panel__sample-output studio-scroll max-h-56 overflow-auto p-2 text-2xs leading-5 text-foreground"
-                data-testid="sample-data-output"
-              >
-                {activeSample?.serialized ?? '{}'}
-              </pre>
-              <p role="status" aria-live="polite" className="text-2xs text-muted-foreground">
-                {copyFeedback ?? 'Sample data stays in-memory until you explicitly copy it.'}
-              </p>
-            </div>
-          </details>
+          {presentation.showPayload ? (
+            <details className="preview-panel__sample" data-testid="sample-data-view" open>
+              <summary className="cursor-pointer px-2 py-1 text-xs font-medium text-foreground">Sample data</summary>
+              <div className="space-y-2 border-t border-border p-2">
+                <pre
+                  aria-label="Sample data output"
+                  className="preview-panel__sample-output studio-scroll max-h-56 overflow-auto p-2 text-2xs leading-5 text-foreground"
+                  data-testid="sample-data-output"
+                >
+                  {activeSample?.serialized ?? '{}'}
+                </pre>
+                <p role="status" aria-live="polite" className="text-2xs text-muted-foreground">
+                  {copyFeedback ?? 'Sample data stays in-memory until you explicitly copy it.'}
+                </p>
+              </div>
+            </details>
+          ) : null}
         </form>
       </section>
     );

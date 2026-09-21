@@ -7,11 +7,8 @@ import { Button } from '@rune-langium/design-system/ui/button';
 import { InstanceCreateDialog } from '../../../components/InstanceCreateDialog.js';
 import { usePrototypeViewStore } from '../../../store/prototype-view-store.js';
 import { useWorkspaceOptional } from '../../providers/workspace-context.js';
-import { InstanceFormPanel } from '../../panels/InstanceFormPanel.js';
 import { InstanceInspectorPanel } from '../../panels/InstanceInspectorPanel.js';
-import { InstanceFunctionPanel } from '../../panels/InstanceFunctionPanel.js';
 import { InstanceGridPanel } from '../../panels/InstanceGridPanel.js';
-import { Tabs, TabsList, TabsTrigger, TabsContent } from '@rune-langium/design-system/ui/tabs';
 import { withInstrumentation } from '../../../services/instrumentation/core.js';
 
 export const PrototypePerspective = withInstrumentation(
@@ -36,23 +33,7 @@ export const PrototypePerspective = withInstrumentation(
         </div>
         <div className="min-h-0 flex-[2] border-b border-border">
           {view.selectedId ? (
-            <Tabs
-              value={view.inspectorTab}
-              onValueChange={(value) => patch({ inspectorTab: value as 'form' | 'functions' })}
-              className="flex h-full flex-col"
-            >
-              <TabsList className="shrink-0">
-                <TabsTrigger value="form">Form</TabsTrigger>
-                <TabsTrigger value="functions">Functions</TabsTrigger>
-              </TabsList>
-              <TabsContent value="form" className="min-h-0 flex-1 overflow-auto">
-                <InstanceFormPanel key={view.selectedId} instanceId={view.selectedId} />
-                <InstanceInspectorPanel instanceId={view.selectedId} />
-              </TabsContent>
-              <TabsContent value="functions" className="min-h-0 flex-1">
-                <InstanceFunctionPanel />
-              </TabsContent>
-            </Tabs>
+            <InstanceInspectorPanel instanceId={view.selectedId} />
           ) : (
             <div className="flex h-full items-center justify-center text-sm text-muted-foreground">
               Select or create an instance to inspect it.

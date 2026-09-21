@@ -5,13 +5,23 @@ import { render, screen } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { InstanceInspectorPanel } from '../../../src/shell/panels/InstanceInspectorPanel.js';
 import { useInstanceStore } from '../../../src/store/instance-store.js';
+import { usePrototypeViewStore } from '../../../src/store/prototype-view-store.js';
 
 describe('InstanceInspectorPanel', () => {
   beforeEach(() => {
-    useInstanceStore.setState({ instances: {}, validationErrors: {} });
+    useInstanceStore.setState({
+      instances: {},
+      validationErrors: {},
+      validationStatus: {},
+      saveStates: {},
+      recordRevisions: {}
+    });
+    usePrototypeViewStore.setState({
+      state: { selectedId: null, query: '', typeFqn: null, inspectorTab: 'functions', graphVisible: false }
+    });
   });
 
-  it('shows raw JSON and a validation summary for the selected instance', () => {
+  it('keeps identity, validation, and a single payload surface with the selected instance', () => {
     const postMessage = vi.fn();
     useInstanceStore.getState().setWorker({ postMessage } as unknown as Worker);
     const id = useInstanceStore.getState().createInstance('test.Party', 'My Party');
@@ -20,8 +30,16 @@ describe('InstanceInspectorPanel', () => {
     // to simulate the worker's async reply, the same way real production code does.
     const requestId = postMessage.mock.calls.at(-1)?.[0]?.requestId as string;
     useInstanceStore.getState().receiveValidateResult(requestId, [{ path: 'name', message: 'too short' }]);
+    useInstanceStore.setState({
+      saveStates: { [id]: { state: 'saved', revision: 1 } },
+      validationStatus: { [id]: 'invalid' }
+    });
     render(<InstanceInspectorPanel instanceId={id} />);
+    expect(screen.getByRole('heading', { name: 'My Party' })).toBeVisible();
+    expect(screen.getByRole('status', { name: 'Save status' })).toHaveTextContent('Saved');
     expect(screen.getByText(/"Acme"/)).toBeInTheDocument();
     expect(screen.getByText('too short')).toBeInTheDocument();
+    expect(screen.getAllByLabelText('Instance payload')).toHaveLength(1);
+    expect(screen.queryByText('Raw JSON')).not.toBeInTheDocument();
   });
 });

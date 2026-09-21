@@ -46,7 +46,7 @@ describe('PrototypePerspective', () => {
     fireEvent.click(screen.getByRole('row', { name: /Acme/ }));
     expect(screen.getAllByText('Validation')).not.toHaveLength(0);
     expect(screen.getByText('Provenance')).toBeInTheDocument();
-    expect(screen.getByText('Raw JSON')).toBeInTheDocument();
+    expect(screen.getByLabelText('Instance payload')).toBeInTheDocument();
   });
 
   it('does not carry over stale field-level validation errors when switching between instances of the same type (finding #8)', () => {

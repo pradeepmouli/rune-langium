@@ -83,6 +83,7 @@ export const InstanceFormPanel = withInstrumentation(
         errors={errors}
         valid={valid}
         validated={validated}
+        presentation={{ mode: 'instance', showPayload: false, showHeader: false }}
       />
     );
   },
