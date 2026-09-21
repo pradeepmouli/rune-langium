@@ -105,6 +105,7 @@ export const CodegenProvider = withInstrumentation(
     const deferredExportsRef = useRef(deferredExports);
     const workspaceEpochRef = useRef(0);
     const committedFilesVersionRef = useRef(0);
+    const committedHydratedNamespacesRef = useRef(new Set<string>());
     const workerFilesRevisionRef = useRef(0);
     const instanceHydrationSequenceRef = useRef(0);
     const workerFileWaitersRef = useRef(
@@ -124,6 +125,7 @@ export const CodegenProvider = withInstrumentation(
     // boundary after which filesRef is a real committed workspace snapshot.
     useLayoutEffect(() => {
       const version = ++committedFilesVersionRef.current;
+      committedHydratedNamespacesRef.current = new Set(useEditorStore.getState().hydratedNamespaces);
       for (const waiter of workspaceCommitWaitersRef.current) {
         if (version > waiter.afterVersion) {
           workspaceCommitWaitersRef.current.delete(waiter);
@@ -307,11 +309,15 @@ export const CodegenProvider = withInstrumentation(
                 // dequeue-after-failure. Instance readiness must distinguish
                 // those outcomes rather than retrying a failed namespace forever.
                 if (useEditorStore.getState().hydratedNamespaces.includes(namespace)) {
-                  const versionBeforeCommit = committedFilesVersionRef.current;
-                  void waitForCommittedWorkspaceFiles(versionBeforeCommit, signal).then(
-                    () => finish(),
-                    (error: unknown) => finish(error instanceof Error ? error : new Error(String(error)))
-                  );
+                  if (committedHydratedNamespacesRef.current.has(namespace)) {
+                    finish();
+                  } else {
+                    const versionBeforeCommit = committedFilesVersionRef.current;
+                    void waitForCommittedWorkspaceFiles(versionBeforeCommit, signal).then(
+                      () => finish(),
+                      (error: unknown) => finish(error instanceof Error ? error : new Error(String(error)))
+                    );
+                  }
                 } else {
                   finish(new Error(`Could not hydrate curated namespace ${namespace}. Retry to try again.`));
                 }
