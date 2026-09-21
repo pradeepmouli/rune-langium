@@ -61,4 +61,15 @@ describe('createPreviewSessionClient', () => {
       output: 'late'
     });
   });
+
+  it('rejects pending requests when the worker fails', async () => {
+    const worker = new FakeWorker();
+    const client = createPreviewSessionClient(worker as unknown as Worker, readiness());
+    const result = client.execute('test.Rename', {}, new AbortController().signal);
+    await vi.waitFor(() => expect(worker.posted).toHaveLength(1));
+
+    worker.dispatchEvent(new Event('error'));
+
+    await expect(result).rejects.toThrow('Function execution worker is unavailable.');
+  });
 });

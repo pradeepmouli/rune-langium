@@ -62,6 +62,13 @@ export const createPreviewSessionClient = withInstrumentation(
         settle(msg.requestId, (entry) => entry.reject(new Error(msg.message)));
     }
     worker.addEventListener('message', onMessage as EventListener);
+    function onWorkerFailure(): void {
+      for (const [requestId] of pending) {
+        settle(requestId, (entry) => entry.reject(new Error('Function execution worker is unavailable.')));
+      }
+    }
+    worker.addEventListener('error', onWorkerFailure as EventListener);
+    worker.addEventListener('messageerror', onWorkerFailure as EventListener);
 
     function request<T>(message: unknown, signal: AbortSignal, timeoutMs: number): Promise<T> {
       if (disposed) return Promise.reject(new Error('Function session client has been disposed.'));
@@ -110,6 +117,8 @@ export const createPreviewSessionClient = withInstrumentation(
         if (disposed) return;
         disposed = true;
         worker.removeEventListener('message', onMessage as EventListener);
+        worker.removeEventListener('error', onWorkerFailure as EventListener);
+        worker.removeEventListener('messageerror', onWorkerFailure as EventListener);
         for (const [requestId, entry] of pending) {
           pending.delete(requestId);
           clearTimeout(entry.timer);
