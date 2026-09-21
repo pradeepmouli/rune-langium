@@ -31,7 +31,9 @@ import { withInstrumentation, Capture } from '../services/instrumentation/core.j
 // bootstrap) is never hijacked by this worker-side wiring. Same shared-gate
 // rationale as the message listener registered below (PR #214).
 if (isWorkerGlobalScope()) {
-  installInstrumentationWorkerSink((msg) => (self as unknown as DedicatedWorkerGlobalScope).postMessage(msg));
+  installInstrumentationWorkerSink((msg) =>
+    (self as unknown as { postMessage(message: unknown): void }).postMessage(msg)
+  );
 }
 
 export interface ParseRequest {
