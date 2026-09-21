@@ -23,6 +23,7 @@ import {
   isInstanceGenerateSchemaStaleMessage
 } from '../../services/codegen-service.js';
 import { createInstanceReadiness } from '../../services/instance-readiness.js';
+import { isPrototypeSessionRequest } from '../../services/preview-session-client.js';
 import { pathToUri } from '../../utils/uri.js';
 import { getRuneStudioTestApi } from '../../test-api.js';
 import { BUNDLE_MARKER_SUFFIX } from '../../services/workspace.js';
@@ -421,10 +422,12 @@ export const CodegenProvider = withInstrumentation(
           return;
         }
         if (isPreviewExecuteResultMessage(msg)) {
+          if (isPrototypeSessionRequest(msg.requestId)) return;
           receiveExecutionResult(msg.funcName, msg.output);
           return;
         }
         if (isPreviewExecuteErrorMessage(msg)) {
+          if (isPrototypeSessionRequest(msg.requestId)) return;
           receiveExecutionError(msg.funcName, msg.error);
           return;
         }
