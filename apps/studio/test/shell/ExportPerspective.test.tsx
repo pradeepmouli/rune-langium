@@ -5,30 +5,34 @@ import { act, render, screen } from '@testing-library/react';
 import { beforeEach, expect, it, vi } from 'vitest';
 import { ExportPerspective } from '../../src/shell/perspectives/screens/ExportPerspective.js';
 
-const { state, mockGenerate, mockActivate, mockConfigure, mockInvalidate, mockSetActiveFile } = vi.hoisted(() => {
-  const store = {
-    config: {
-      target: 'typescript' as const,
-      selection: { namespaces: [], declarations: [] },
-      options: { typescript: { layout: 'barrel' } }
-    },
-    run: { status: 'idle' as const },
-    activeFile: undefined as string | undefined,
-    generate: vi.fn(),
-    activate: vi.fn().mockResolvedValue(undefined),
-    configure: vi.fn(),
-    invalidate: vi.fn(),
-    setActiveFile: vi.fn()
-  };
-  return {
-    state: store,
-    mockGenerate: store.generate,
-    mockActivate: store.activate,
-    mockConfigure: store.configure,
-    mockInvalidate: store.invalidate,
-    mockSetActiveFile: store.setActiveFile
-  };
-});
+const { state, mockGenerate, mockActivate, mockConfigure, mockInvalidate, mockSetActiveFile, mockCancel } = vi.hoisted(
+  () => {
+    const store = {
+      config: {
+        target: 'typescript' as const,
+        selection: { namespaces: [], declarations: [] },
+        options: { typescript: { layout: 'barrel' } }
+      },
+      run: { status: 'idle' as const },
+      activeFile: undefined as string | undefined,
+      generate: vi.fn(),
+      activate: vi.fn().mockResolvedValue(undefined),
+      configure: vi.fn(),
+      invalidate: vi.fn(),
+      setActiveFile: vi.fn(),
+      cancel: vi.fn()
+    };
+    return {
+      state: store,
+      mockGenerate: store.generate,
+      mockActivate: store.activate,
+      mockConfigure: store.configure,
+      mockInvalidate: store.invalidate,
+      mockSetActiveFile: store.setActiveFile,
+      mockCancel: store.cancel
+    };
+  }
+);
 
 let capturedGenerate: (() => void) | undefined;
 
@@ -63,6 +67,7 @@ beforeEach(() => {
   mockConfigure.mockClear();
   mockInvalidate.mockClear();
   mockSetActiveFile.mockClear();
+  mockCancel.mockClear();
 });
 
 it('composes stable selection, settings, and preview workbench panels', () => {

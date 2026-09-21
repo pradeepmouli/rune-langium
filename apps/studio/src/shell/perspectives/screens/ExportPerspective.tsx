@@ -28,6 +28,7 @@ export const ExportPerspective = withInstrumentation(
     const activate = useExportWorkbenchStore((state) => state.activate);
     const configure = useExportWorkbenchStore((state) => state.configure);
     const generate = useExportWorkbenchStore((state) => state.generate);
+    const cancel = useExportWorkbenchStore((state) => state.cancel);
     const invalidate = useExportWorkbenchStore((state) => state.invalidate);
     const setActiveFile = useExportWorkbenchStore((state) => state.setActiveFile);
     const [sourceRevision, setSourceRevision] = useState(0);
@@ -72,7 +73,8 @@ export const ExportPerspective = withInstrumentation(
               config={config}
               onChange={configure}
               onGenerate={handleGenerate}
-              generating={run.status === 'generating'}
+              onCancel={cancel}
+              status={run.status}
             />
           </div>
         </div>

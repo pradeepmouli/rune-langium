@@ -6,17 +6,19 @@ import { Button } from '@rune-langium/design-system/ui/button';
 import type { ExportConfig } from '../../services/export-request.js';
 import { withInstrumentation } from '../../services/instrumentation/core.js';
 import { TARGET_PANELS } from '../../components/export-target-settings.js';
+import type { ExportRunState } from '../../store/export-workbench-store.js';
 
 export interface ExportSettingsPanelProps {
   config: ExportConfig;
   onChange(config: ExportConfig): void;
   onGenerate(): void;
-  generating: boolean;
+  onCancel(): void;
+  status: ExportRunState['status'];
 }
 
 /** Target and layout controls for a declaration-scoped export. */
 export const ExportSettingsPanel = withInstrumentation(
-  function ExportSettingsPanel({ config, onChange, onGenerate, generating }: ExportSettingsPanelProps) {
+  function ExportSettingsPanel({ config, onChange, onGenerate, onCancel, status }: ExportSettingsPanelProps) {
     const target = config.target;
     const panel = TARGET_PANELS[target];
     const targetOptions = (config.options[target] as Record<string, unknown> | undefined) ?? {};
@@ -65,9 +67,15 @@ export const ExportSettingsPanel = withInstrumentation(
             </select>
           </label>
         )}
-        <Button type="button" className="mt-auto" disabled={selectionCount === 0 || generating} onClick={onGenerate}>
-          {generating ? 'Generating…' : `Generate ${selectionCount} selected`}
-        </Button>
+        {status === 'generating' ? (
+          <Button type="button" className="mt-auto" variant="secondary" onClick={onCancel}>
+            Cancel generation
+          </Button>
+        ) : (
+          <Button type="button" className="mt-auto" disabled={selectionCount === 0} onClick={onGenerate}>
+            {status === 'failed' ? `Retry ${selectionCount} selected` : `Generate ${selectionCount} selected`}
+          </Button>
+        )}
       </section>
     );
   },
