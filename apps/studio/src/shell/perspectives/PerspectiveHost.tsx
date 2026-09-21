@@ -72,7 +72,7 @@ export const PerspectiveHost = withInstrumentation(
             <div className="min-h-0 min-w-0 flex-1">
               {effective === 'workspaces' && <WorkspacesPerspective />}
               {effective === 'git' && <GitSyncPerspective workspaceId={workspaceId} workspaceKind={workspaceKind} />}
-              {effective === 'export' && <ExportPerspective files={files} />}
+              {effective === 'export' && <ExportPerspective files={files} workspaceId={workspaceId} />}
               {effective === 'prototype' && <PrototypePerspective />}
               {effective === 'settings' && <SettingsPerspective />}
             </div>

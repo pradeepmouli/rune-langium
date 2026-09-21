@@ -34,6 +34,10 @@ import type { Target } from '@rune-langium/codegen/export';
 const { mockDownloadTargetViaRouter } = vi.hoisted(() => ({
   mockDownloadTargetViaRouter: vi.fn().mockResolvedValue(undefined)
 }));
+const { mockGenerateArtifact, mockInvalidateArtifact } = vi.hoisted(() => ({
+  mockGenerateArtifact: vi.fn().mockResolvedValue(undefined),
+  mockInvalidateArtifact: vi.fn()
+}));
 
 // ---------------------------------------------------------------------------
 // Mock heavy child components
@@ -81,6 +85,19 @@ vi.mock('../../src/services/workspace.js', async (importOriginal) => {
   };
 });
 
+vi.mock('../../src/store/export-workbench-store.js', () => {
+  const state = {
+    run: { status: 'idle' as const },
+    generate: mockGenerateArtifact,
+    invalidate: mockInvalidateArtifact
+  };
+  return {
+    useExportWorkbenchStore: Object.assign(<T,>(selector: (value: typeof state) => T) => selector(state), {
+      getState: () => state
+    })
+  };
+});
+
 // Ensure CodePreviewPanel is NOT pulled in (belt-and-suspenders: the new
 // ExportPerspective doesn't import it, but guard against regressions).
 vi.mock('../../src/components/CodePreviewPanel.js', () => ({
@@ -116,6 +133,8 @@ describe('ExportPerspective', () => {
     capturedOnGenerate = undefined;
     capturedOnClose = undefined;
     mockDownloadTargetViaRouter.mockClear();
+    mockGenerateArtifact.mockClear();
+    mockInvalidateArtifact.mockClear();
   });
 
   it('always renders data-testid="export-perspective"', () => {
@@ -263,11 +282,16 @@ describe('ExportPerspective', () => {
           selection: { namespaces: [], declarations: [{ namespace: 'test', name: 'Party', kind: 'Data' }] }
         });
       });
-      expect(mockDownloadTargetViaRouter.mock.calls[0]?.[4]).toEqual([]);
-      expect(mockDownloadTargetViaRouter.mock.calls[0]?.[6]).toEqual({
-        namespaces: [],
-        declarations: [{ namespace: 'test', name: 'Party', kind: 'Data' }]
-      });
+      expect(mockDownloadTargetViaRouter).not.toHaveBeenCalled();
+      expect(mockGenerateArtifact).toHaveBeenCalledWith(
+        expect.objectContaining({
+          config: {
+            target: 'zod',
+            selection: { namespaces: [], declarations: [{ namespace: 'test', name: 'Party', kind: 'Data' }] },
+            options: {}
+          }
+        })
+      );
     });
 
     it('closes the modal when onClose is called', () => {

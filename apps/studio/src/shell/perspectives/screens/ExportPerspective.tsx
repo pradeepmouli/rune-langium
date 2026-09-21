@@ -22,7 +22,7 @@
  */
 
 import type { ReactElement } from 'react';
-import { useCallback, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import type { ExportSelection, Target } from '@rune-langium/codegen/export';
 import { CodegenTargetsTable } from '../../../components/CodegenTargetsTable.js';
 import { DownloadConfigDialog, type DownloadConfig } from '../../../components/DownloadConfigDialog.js';
@@ -40,6 +40,9 @@ import { TARGET_LABELS } from '../../../components/codegen-ui.js';
 import { useStudioToast } from '../../../components/StudioToastProvider.js';
 import { withInstrumentation } from '../../../services/instrumentation/core.js';
 import { ExportSelectionPanel } from '../../panels/ExportSelectionPanel.js';
+import { ExportPreviewPanel } from '../../panels/ExportPreviewPanel.js';
+import { downloadExportArtifact } from '../../../services/export-artifact.js';
+import { useExportWorkbenchStore } from '../../../store/export-workbench-store.js';
 
 export interface ExportPerspectiveProps {
   /**
@@ -47,10 +50,12 @@ export interface ExportPerspectiveProps {
    * Used by the Download flow to POST to /api/codegen.
    */
   files?: ReadonlyArray<WorkspaceFile>;
+  /** Stable workspace identity for artifact ownership. */
+  workspaceId?: string;
 }
 
 export const ExportPerspective = withInstrumentation(
-  function ExportPerspective({ files }: ExportPerspectiveProps): ReactElement {
+  function ExportPerspective({ files, workspaceId }: ExportPerspectiveProps): ReactElement {
     const activeTarget = useCodegenStore((s) => s.activeTarget);
     const setActiveTarget = useCodegenStore((s) => s.setActiveTarget);
     const setCodePreviewTarget = useCodegenStore((s) => s.setCodePreviewTarget);
@@ -64,6 +69,22 @@ export const ExportPerspective = withInstrumentation(
     const [downloadModalTarget, setDownloadModalTarget] = useState<Target | undefined>(undefined);
     const [downloadingTarget, setDownloadingTarget] = useState<Target | undefined>(undefined);
     const [exportSelection, setExportSelection] = useState<ExportSelection>({ namespaces: [], declarations: [] });
+    const exportRun = useExportWorkbenchStore((state) => state.run);
+    const generateArtifact = useExportWorkbenchStore((state) => state.generate);
+    const invalidateArtifact = useExportWorkbenchStore((state) => state.invalidate);
+    const sourceFingerprint = useMemo(
+      () => JSON.stringify((files ?? []).map((file) => [file.path, file.content, file.serializedModelJson])),
+      [files]
+    );
+    const [sourceRevision, setSourceRevision] = useState(0);
+
+    useEffect(() => {
+      setSourceRevision((previous) => {
+        const revision = previous + 1;
+        invalidateArtifact(revision);
+        return revision;
+      });
+    }, [invalidateArtifact, sourceFingerprint]);
 
     const handleView = useCallback(
       (target: Target) => {
@@ -112,6 +133,15 @@ export const ExportPerspective = withInstrumentation(
         const options = config.layout || config.options ? { [newTarget]: { ...targetOptions, ...layoutOption } } : {};
         setDownloadingTarget(newTarget);
         try {
+          if (config.selection) {
+            await generateArtifact({
+              workspaceId: workspaceId ?? 'unsaved-workspace',
+              sourceRevision,
+              config: { target: newTarget, selection: config.selection, options },
+              files: fileList
+            });
+            return;
+          }
           await downloadTargetViaRouter(
             requestFiles,
             newTarget,
@@ -145,7 +175,7 @@ export const ExportPerspective = withInstrumentation(
           setDownloadingTarget(undefined);
         }
       },
-      [files, showToast]
+      [files, generateArtifact, sourceRevision, workspaceId, showToast]
     );
 
     // Derive read-only preview content from the store snapshot.
@@ -181,8 +211,17 @@ export const ExportPerspective = withInstrumentation(
             </div>
           </div>
 
-          {/* Read-only preview area */}
-          {activeTarget !== undefined ? (
+          {/* Captured focused-export preview, or the existing general code preview. */}
+          {exportRun.status !== 'idle' ? (
+            <div className="min-h-0 flex-1">
+              <ExportPreviewPanel
+                run={exportRun}
+                onDownload={() => {
+                  if (exportRun.status === 'ready') downloadExportArtifact(exportRun.artifact);
+                }}
+              />
+            </div>
+          ) : activeTarget !== undefined ? (
             <div className="flex-1 flex flex-col min-h-0 overflow-hidden">
               {/* Toolbar */}
               <div className="shrink-0 flex items-center gap-2 px-3 py-1.5 border-b border-border/70 bg-card/40">
