@@ -100,3 +100,20 @@ it('shows receipt-derived dependency count only after generation', () => {
   );
   expect(screen.getByTestId('export-selection-summary')).toHaveTextContent('1 root selected · 2 declarations included');
 });
+
+it('lists receipt dependencies absent from the current explorer catalog', () => {
+  setNodes();
+  render(
+    <ExportSelectionPanel
+      selection={{ namespaces: [], declarations: [{ namespace: 'test', name: 'Party', kind: 'Data' }] }}
+      included={[
+        { namespace: 'test', name: 'Party', kind: 'Data' },
+        { namespace: 'external', name: 'Address', kind: 'Data' }
+      ]}
+      requiredBy={new Map([['["external","Data","Address"]', ['["test","Data","Party"]']]])}
+      onChange={vi.fn()}
+    />
+  );
+
+  expect(screen.getByTestId('unavailable-export-dependencies')).toHaveTextContent('external.Address (Data)');
+});
