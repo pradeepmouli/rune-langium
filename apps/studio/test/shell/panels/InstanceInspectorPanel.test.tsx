@@ -6,6 +6,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { InstanceInspectorPanel } from '../../../src/shell/panels/InstanceInspectorPanel.js';
 import { useInstanceStore } from '../../../src/store/instance-store.js';
 import { usePrototypeViewStore } from '../../../src/store/prototype-view-store.js';
+import { useExploreNavigationStore } from '../../../src/services/explore-navigation.js';
 
 describe('InstanceInspectorPanel', () => {
   beforeEach(() => {
@@ -19,6 +20,7 @@ describe('InstanceInspectorPanel', () => {
     usePrototypeViewStore.setState({
       state: { selectedId: null, query: '', typeFqn: null, inspectorTab: 'functions', graphVisible: false }
     });
+    useExploreNavigationStore.setState({ navigateToType: undefined });
   });
 
   it('keeps identity, validation, and a single payload surface with the selected instance', () => {
@@ -41,5 +43,16 @@ describe('InstanceInspectorPanel', () => {
     expect(screen.getByText('too short')).toBeInTheDocument();
     expect(screen.getAllByLabelText('Instance payload')).toHaveLength(1);
     expect(screen.queryByText('Raw JSON')).not.toBeInTheDocument();
+  });
+
+  it('returns to the selected instance type through Explore navigation', () => {
+    const navigateToType = vi.fn();
+    useExploreNavigationStore.getState().setNavigateToType(navigateToType);
+    const id = useInstanceStore.getState().createInstance('test.Party', 'My Party');
+
+    render(<InstanceInspectorPanel instanceId={id} />);
+    screen.getByRole('button', { name: 'View type in Explore' }).click();
+
+    expect(navigateToType).toHaveBeenCalledWith('test.Party');
   });
 });

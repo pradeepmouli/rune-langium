@@ -110,6 +110,7 @@ import { resolveEditorFilePath, useExploreFileNavStore } from './explore-file-na
 import { useExportDialogStore } from './export-dialog-store.js';
 import { useImportDialogStore } from './import-dialog-store.js';
 import { HydrationOrchestrator } from '../services/hydration-orchestrator.js';
+import { useExploreNavigationStore } from '../services/explore-navigation.js';
 import { withInstrumentation } from '../services/instrumentation/core.js';
 
 /**
@@ -438,6 +439,7 @@ export const ExplorePerspective = withInstrumentation(
     const setShowExportDialog = useExportDialogStore((s) => s.setOpen);
     const showImportDialog = useImportDialogStore((s) => s.open);
     const setShowImportDialog = useImportDialogStore((s) => s.setOpen);
+    const setExploreNavigateToType = useExploreNavigationStore((s) => s.setNavigateToType);
     // Curated Models modal — wired from the ActivityBar's Database button.
     // The Welcome screen renders <ModelLoader /> inline; inside EditorPage we
     // reuse the same component in a Dialog so the affordance stays discoverable
@@ -1335,6 +1337,11 @@ export const ExplorePerspective = withInstrumentation(
       },
       [focusMode, showToast, shouldCenterNavigationTarget, nodeRepository, storeSelectNode]
     );
+
+    useEffect(() => {
+      setExploreNavigateToType(navigateToNode);
+      return () => setExploreNavigateToType(undefined);
+    }, [navigateToNode, setExploreNavigateToType]);
 
     const navigateBack = useCallback(() => {
       const prev = navigationHistoryRef.current.pop();

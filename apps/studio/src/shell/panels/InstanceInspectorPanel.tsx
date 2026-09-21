@@ -5,6 +5,8 @@ import { useInstanceStore } from '../../store/instance-store.js';
 import { usePrototypeViewStore } from '../../store/prototype-view-store.js';
 import { InstancePayloadPanel } from '../../components/InstancePayloadPanel.js';
 import { downloadFile } from '../../services/export.js';
+import { viewTypeInExplore } from '../../services/explore-navigation.js';
+import { Button } from '@rune-langium/design-system/ui/button';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@rune-langium/design-system/ui/tabs';
 import { InstanceFormPanel } from './InstanceFormPanel.js';
 import { InstanceFunctionPanel } from './InstanceFunctionPanel.js';
@@ -37,6 +39,15 @@ export const InstanceInspectorPanel = withInstrumentation(
         <header className="border-b border-border px-3 py-2">
           <h2 className="truncate text-sm font-semibold">{record.name}</h2>
           <p className="truncate text-xs text-muted-foreground">{record.typeFqn}</p>
+          <Button
+            type="button"
+            variant="ghost"
+            size="xs"
+            className="mt-1"
+            onClick={() => viewTypeInExplore(record.typeFqn)}
+          >
+            View type in Explore
+          </Button>
           <p role="status" aria-label="Save status" className="mt-1 text-xs text-muted-foreground">
             {saveStatusText(saveState)}
           </p>
