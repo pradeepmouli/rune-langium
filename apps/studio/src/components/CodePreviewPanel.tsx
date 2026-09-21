@@ -31,7 +31,7 @@ import {
 } from '../services/workspace.js';
 import { CodegenTargetsTable } from './CodegenTargetsTable.js';
 import { DownloadConfigDialog, type DownloadConfig } from './DownloadConfigDialog.js';
-import { ExcelOptionsFormAdapter } from '../codegen-forms/ExcelOptionsFormAdapter.js';
+import { TARGET_OPTION_FORMS } from './export-target-settings.js';
 import { useCodegenStore, type CodePreviewFile, type CodePreviewSnapshot } from '../store/codegen-store.js';
 import { useOutputStore, fmtLine } from '../store/output-store.js';
 import { usePreviewStore } from '../store/preview-store.js';
@@ -395,7 +395,7 @@ export const CodePreviewPanel = withInstrumentation(
             dependencyGraph={dependencyGraph}
             onClose={() => setDownloadModalTarget(undefined)}
             onGenerate={handleModalGenerate}
-            optionsForm={downloadModalTarget === 'excel' ? ExcelOptionsFormAdapter : undefined}
+            optionsForm={TARGET_OPTION_FORMS[downloadModalTarget]}
           />
         ) : null}
       </section>

@@ -2,6 +2,8 @@
 // Copyright (c) 2026 Pradeep Mouli
 
 import type { Target } from '@rune-langium/codegen/export';
+import type { ComponentType } from 'react';
+import { ExcelOptionsFormAdapter } from '../codegen-forms/ExcelOptionsFormAdapter.js';
 
 export interface LayoutChoice {
   value: string;
@@ -27,4 +29,11 @@ export const TARGET_PANELS: Partial<Record<Target, TargetPanelConfig>> = {
   zod: { layouts: [PER_NAMESPACE, BARREL, SINGLE_FILE], defaultLayout: 'barrel' },
   typescript: { layouts: [PER_NAMESPACE, BARREL, SINGLE_FILE], defaultLayout: 'barrel' },
   'json-schema': { layouts: [PER_NAMESPACE, SINGLE_FILE], defaultLayout: 'single-file' }
+};
+
+/** Controlled option forms shared by legacy downloads and the Export workbench. */
+export const TARGET_OPTION_FORMS: Partial<
+  Record<Target, ComponentType<{ value: Record<string, unknown>; onChange(value: Record<string, unknown>): void }>>
+> = {
+  excel: ExcelOptionsFormAdapter
 };

@@ -5,7 +5,7 @@ import { IMPLEMENTED_TARGETS, TARGET_DESCRIPTORS, type Target } from '@rune-lang
 import { Button } from '@rune-langium/design-system/ui/button';
 import type { ExportConfig } from '../../services/export-request.js';
 import { withInstrumentation } from '../../services/instrumentation/core.js';
-import { TARGET_PANELS } from '../../components/export-target-settings.js';
+import { TARGET_OPTION_FORMS, TARGET_PANELS } from '../../components/export-target-settings.js';
 import type { ExportRunState } from '../../store/export-workbench-store.js';
 
 export interface ExportSettingsPanelProps {
@@ -21,6 +21,7 @@ export const ExportSettingsPanel = withInstrumentation(
   function ExportSettingsPanel({ config, onChange, onGenerate, onCancel, status }: ExportSettingsPanelProps) {
     const target = config.target;
     const panel = TARGET_PANELS[target];
+    const OptionsForm = TARGET_OPTION_FORMS[target];
     const targetOptions = (config.options[target] as Record<string, unknown> | undefined) ?? {};
     const selectionCount = config.selection.namespaces.length + config.selection.declarations.length;
     return (
@@ -66,6 +67,15 @@ export const ExportSettingsPanel = withInstrumentation(
               ))}
             </select>
           </label>
+        )}
+        {OptionsForm && (
+          <div className="flex flex-col gap-1.5" data-testid="export-target-options">
+            <span className="text-xs font-medium">Options</span>
+            <OptionsForm
+              value={targetOptions}
+              onChange={(options) => onChange({ ...config, options: { ...config.options, [target]: options } })}
+            />
+          </div>
         )}
         {status === 'generating' ? (
           <Button type="button" className="mt-auto" variant="secondary" onClick={onCancel}>

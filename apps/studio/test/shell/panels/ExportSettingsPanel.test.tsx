@@ -6,6 +6,10 @@ import userEvent from '@testing-library/user-event';
 import { expect, it, vi } from 'vitest';
 import { ExportSettingsPanel } from '../../../src/shell/panels/ExportSettingsPanel.js';
 
+vi.mock('../../../src/codegen-forms/ExcelOptionsFormAdapter.js', () => ({
+  ExcelOptionsFormAdapter: () => <div data-testid="excel-options-form" />
+}));
+
 const config = {
   target: 'typescript' as const,
   selection: { namespaces: [], declarations: [{ namespace: 'test', name: 'Party', kind: 'Data' }] },
@@ -59,4 +63,19 @@ it('offers cancellation while generating and retry after an error', async () => 
     <ExportSettingsPanel config={config} onChange={vi.fn()} onGenerate={vi.fn()} onCancel={vi.fn()} status="failed" />
   );
   expect(screen.getByRole('button', { name: 'Retry 1 selected' })).toBeEnabled();
+});
+
+it('reuses the target options form registry for Excel exports', () => {
+  render(
+    <ExportSettingsPanel
+      config={{ ...config, target: 'excel', options: {} }}
+      onChange={vi.fn()}
+      onGenerate={vi.fn()}
+      onCancel={vi.fn()}
+      status="idle"
+    />
+  );
+
+  expect(screen.getByTestId('export-target-options')).toBeInTheDocument();
+  expect(screen.getByTestId('excel-options-form')).toBeInTheDocument();
 });
