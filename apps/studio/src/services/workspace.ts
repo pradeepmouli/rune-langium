@@ -10,6 +10,7 @@
 import { parse, parseWorkspace, createRuneDslServices, type RosettaModel } from '@rune-langium/core';
 import type { ExportSelection } from '@rune-langium/codegen/export';
 import { requestCodegenDownload } from './codegen-download-client.js';
+import { sanitizeDownloadFilename } from './export.js';
 import { EmptyFileSystem } from 'langium';
 import type { CuratedSerializedDocument } from '@rune-langium/curated-schema';
 import { CURATED_MODEL_IDS } from '@rune-langium/curated-schema';
@@ -1106,16 +1107,6 @@ export class CodegenDownloadError extends Error {
  * filenames, but a malicious or compromised response shouldn't be
  * able to coerce the browser into saving with a path-traversal name.
  */
-function sanitizeDownloadFilename(raw: string, fallback: string): string {
-  // Take the basename: drop everything up to and including the last
-  // slash or backslash. Handles posix, windows, and mixed separators.
-  const basename = raw.replace(/^.*[/\\]/, '');
-  // Strip control characters (including CR/LF) and quotes.
-  // eslint-disable-next-line no-control-regex
-  const cleaned = basename.replace(/[\x00-\x1f"]/g, '').trim();
-  return cleaned.length > 0 ? cleaned : fallback;
-}
-
 /**
  * Pull the `filename="..."` value from a Content-Disposition header.
  * Falls back to the given default when the header is missing or

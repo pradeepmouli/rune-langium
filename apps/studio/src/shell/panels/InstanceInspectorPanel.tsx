@@ -5,7 +5,7 @@ import { useEffect } from 'react';
 import { useInstanceStore } from '../../store/instance-store.js';
 import { usePrototypeViewStore } from '../../store/prototype-view-store.js';
 import { InstancePayloadPanel } from '../../components/InstancePayloadPanel.js';
-import { downloadFile } from '../../services/export.js';
+import { downloadFile, sanitizeDownloadFilename } from '../../services/export.js';
 import { viewTypeInExplore } from '../../services/explore-navigation.js';
 import { payloadPointerToFieldPath } from '../../services/instance-payload-graph.js';
 import { Button } from '@rune-langium/design-system/ui/button';
@@ -116,7 +116,11 @@ export const InstanceInspectorPanel = withInstrumentation(
           payload={{ kind: 'instance', value: record.data }}
           onExport={async () => {
             await flushInstance(record.id);
-            downloadFile(JSON.stringify(record.data, null, 2), `${record.name}.json`, 'application/json');
+            downloadFile(
+              JSON.stringify(record.data, null, 2),
+              sanitizeDownloadFilename(`${record.name}.json`, 'instance.json'),
+              'application/json'
+            );
           }}
         />
       </div>

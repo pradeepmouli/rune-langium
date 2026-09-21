@@ -4,6 +4,17 @@
 
 import { withInstrumentation } from './instrumentation/core.js';
 
+/** Reduces a user-controlled name to a safe browser download filename. */
+export const sanitizeDownloadFilename = withInstrumentation(
+  function sanitizeDownloadFilename(raw: string, fallback: string): string {
+    const basename = raw.replace(/^.*[/\\]/, '');
+    // eslint-disable-next-line no-control-regex
+    const cleaned = basename.replace(/[\x00-\x1f"]/g, '').trim();
+    return cleaned.length > 0 ? cleaned : fallback;
+  },
+  { op: 'sanitizeDownloadFilename' }
+);
+
 export const downloadFile = withInstrumentation(
   function downloadFile(content: string, filename: string, mimeType: string = 'text/plain'): void {
     const blob = new Blob([content], { type: mimeType });
