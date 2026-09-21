@@ -26,6 +26,7 @@ import { typescriptProfile } from './emit/typescript-profile.js';
 import { jsonSchemaProfile } from './emit/json-schema-profile.js';
 import { sqlProfile } from './emit/sql-profile.js';
 import { ExcelWholeModelEmitter } from './emit/excel-emitter.js';
+import { selectDeclarationDocuments } from './selection/declaration-selection.js';
 
 // 019 spec §3.2 — two-registry dispatch.
 //
@@ -231,7 +232,8 @@ export async function runGenerate(docs: LangiumDocument[], options: GeneratorOpt
     ];
   } else {
     // Group by namespace
-    const allByNamespace = groupByNamespace(docs);
+    const emissionDocs = options.selection ? selectDeclarationDocuments(docs, options.selection) : docs;
+    const allByNamespace = groupByNamespace(emissionDocs);
     if (allByNamespace.size === 0) {
       return [];
     }
