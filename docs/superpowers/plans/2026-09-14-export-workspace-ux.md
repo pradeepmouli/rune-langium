@@ -73,6 +73,7 @@ Add optional `selection?: ExportSelection` to GeneratorOptions. `kind` is valida
 ```ts
 async function parseSources(sources: string[]) {
   const { RuneDsl } = createRuneDslServices();
+  await RuneDsl.shared.workspace.WorkspaceManager.initializeWorkspace([]);
   const docs = sources.map((source, i) => RuneDsl.shared.workspace.LangiumDocumentFactory
     .fromString(source, URI.parse(`inmemory:///selection-${i}.rosetta`)));
   for (const doc of docs) RuneDsl.shared.workspace.LangiumDocuments.addDocument(doc);
@@ -90,11 +91,13 @@ it('includes a selected type dependency and excludes an unrelated sibling', asyn
   const output = await generate(docs, { target: 'typescript', selection: {
     namespaces: [], declarations: [{ namespace: 'test', name: 'Party', kind: 'Data' }]
   }});
-  expect(output.map(x => x.content).join('\n')).not.toContain('class Unrelated');
+  expect(output.map(x => x.content).join('\n')).not.toMatch(/(?:class|interface|type|enum) Unrelated\b/);
 });
 ```
 
 Import `createRuneDslServices` from core, `URI` from Langium, `generate` from the public codegen entry, and the new resolver/types. Assert parser/linker diagnostics are empty in the helper, throwing their messages if not; malformed fixtures must not accidentally prove closure behavior.
+
+Initialize the shared workspace before building fixtures so intrinsic references such as `string` resolve. Preserve linked intrinsic references even when their library documents are outside the supplied emission documents; distinguish semantic dependencies from declarations the generator actually emits using shared generator semantics.
 - [ ] **Step 2: Run red.** `pnpm --filter @rune-langium/codegen exec vitest run test/declaration-selection.test.ts`.
 - [ ] **Step 3: Build a declaration identity index over linked AST objects.** Index all top-level elements per namespace, including functions, dispatch variants, aliases, annotations, enums, rules, and Choice. Group same-kind/same-name function dispatch declarations under one key; preserve all members. A type and function with the same name have different keys. Walk each element and `AstUtils.streamAllContents(element)`, then `AstUtils.streamReferences(node)` for linked references. Climb a reference target's containment chain to its top-level element; local parameter/attribute references resolve to their owner and do not become new roots. Traverse with Sets to terminate cycles. Record requiring explicit roots for every transitive dependency, including diamond/cycle paths. Missing linked refs are fatal with source diagnostics; do not silently discard them.
 - [ ] **Step 4: Integrate selection before registry/walk/emission.** Preserve full linked docs for resolution, and build per-request read-only emission document views whose root `elements` arrays contain only included AST objects. Never change original `model.elements`, `$container`, references, or document caches. Pass those same views to registry, walker, TypeScript function extraction, and whole-model emitters. If a current emitter bypasses the supplied views, route its declaration enumeration through the selected walk; do not filter generated text. Keep the existing Data/Choice cycle graph for ordering; it is not a complete export-closure graph and must not be reused as one.
