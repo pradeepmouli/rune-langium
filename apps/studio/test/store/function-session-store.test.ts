@@ -4,6 +4,7 @@
 import { describe, expect, it, vi } from 'vitest';
 import { createFunctionSession } from '../../src/store/function-session-store.js';
 import type { PreviewSessionClient } from '../../src/services/preview-session-client.js';
+import type { InstanceRecord } from '@rune-langium/codegen/instances';
 
 describe('createFunctionSession', () => {
   it('drops a stale result after selecting another function', async () => {
@@ -33,5 +34,30 @@ describe('createFunctionSession', () => {
     await running;
 
     expect(session.getState()).toMatchObject({ functionFqn: 'test.Second', result: undefined, status: 'idle' });
+  });
+
+  it('wraps an instance when binding it to a collection input', async () => {
+    const client: PreviewSessionClient = {
+      schema: vi.fn().mockResolvedValue({
+        schemaVersion: 1,
+        targetId: 'test.BuildTrade',
+        title: 'Build trade',
+        status: 'ready',
+        kind: 'function',
+        fields: [{ path: 'parties', label: 'Parties', kind: 'array', item: { kind: 'object', fields: [] } }]
+      }),
+      execute: vi.fn(),
+      dispose: vi.fn()
+    };
+    const session = createFunctionSession(client);
+    await session.selectFunction('test.BuildTrade');
+    session.bindInstance('parties', {
+      id: 'party-1',
+      name: 'Acme',
+      typeFqn: 'test.Party',
+      data: { name: 'Acme' }
+    } as InstanceRecord);
+
+    expect(session.getState().inputs).toEqual({ parties: [{ name: 'Acme' }] });
   });
 });

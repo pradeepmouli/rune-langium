@@ -20,7 +20,9 @@ vi.mock('../../../src/components/WorkspaceTypePicker.js', () => ({
 }));
 
 vi.mock('../../../src/components/FormPreviewPanel.js', () => ({
-  FormPreviewPanel: () => <div data-testid="function-input-form" />
+  FormPreviewPanel: ({ onExecute }: { onExecute?: unknown }) => (
+    <div data-testid="function-input-form">{onExecute ? 'embedded run enabled' : 'embedded run unavailable'}</div>
+  )
 }));
 
 function functionModels(): RosettaModel[] {
@@ -81,6 +83,7 @@ describe('InstanceFunctionPanel', () => {
     );
 
     fireEvent.click(screen.getByRole('button', { name: 'Choose test.BuildParty' }));
+    expect(await screen.findByText('embedded run unavailable')).toBeVisible();
     fireEvent.click(await screen.findByRole('button', { name: 'Run' }));
 
     expect(await screen.findByRole('button', { name: 'Save result as instance…' })).toBeVisible();

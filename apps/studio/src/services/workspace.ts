@@ -1096,6 +1096,27 @@ export class CodegenDownloadError extends Error {
   }
 }
 
+/** Decode the documented /api/codegen failure envelope into its shared error type. */
+export const throwCodegenDownloadError = withInstrumentation(
+  async function throwCodegenDownloadError(response: Response): Promise<never> {
+    let envelope: { ok?: boolean; error?: string; diagnostics?: unknown } = {};
+    try {
+      envelope = (await response.json()) as typeof envelope;
+    } catch {
+      // A gateway can return a non-JSON failure before the application handler.
+    }
+    const diagnostics = Array.isArray(envelope.diagnostics)
+      ? (envelope.diagnostics as ReadonlyArray<{ severity: string; code: string; message: string }>)
+      : [];
+    throw new CodegenDownloadError(
+      envelope.error ?? `/api/codegen HTTP ${response.status}`,
+      response.status,
+      diagnostics
+    );
+  },
+  { op: 'throwCodegenDownloadError' }
+);
+
 /**
  * Sanitize a filename so it's safe to assign to `<a download="...">`.
  * Strips control chars (incl. CR/LF, which could enable header-style
@@ -1183,18 +1204,7 @@ export const downloadTargetViaRouter = withInstrumentation(
     const response = await requestCodegenDownload(body, signal);
 
     if (!response.ok) {
-      let envelope: { ok?: boolean; error?: string; diagnostics?: unknown } = {};
-      try {
-        envelope = (await response.json()) as typeof envelope;
-      } catch {
-        // Non-JSON response (e.g. 502 from the edge before reaching the
-        // function). Keep the empty envelope; the status code alone is
-        // enough information for the user.
-      }
-      const diags = Array.isArray(envelope.diagnostics)
-        ? (envelope.diagnostics as ReadonlyArray<{ severity: string; code: string; message: string }>)
-        : [];
-      throw new CodegenDownloadError(envelope.error ?? `/api/codegen HTTP ${response.status}`, response.status, diags);
+      return throwCodegenDownloadError(response);
     }
 
     const blob = await response.blob();

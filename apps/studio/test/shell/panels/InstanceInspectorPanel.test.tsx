@@ -63,6 +63,22 @@ describe('InstanceInspectorPanel', () => {
     expect(navigateToType).toHaveBeenCalledWith('test.Party');
   });
 
+  it('does not label an unavailable validation run as valid', () => {
+    const id = useInstanceStore.getState().createInstance('test.Party', 'My Party');
+    useInstanceStore.setState({
+      validationStatus: { [id]: 'unavailable' },
+      schemaErrors: new Map([
+        ['test.Party', { reason: 'generation-error', message: 'Curated dependency is unavailable.' }]
+      ])
+    });
+
+    render(<InstanceInspectorPanel instanceId={id} />);
+
+    expect(screen.getByText('Curated dependency is unavailable.')).toBeVisible();
+    expect(screen.getByRole('button', { name: 'Retry validation' })).toBeVisible();
+    expect(screen.queryByText('Valid')).not.toBeInTheDocument();
+  });
+
   it('flushes an instance before downloading its JSON payload', async () => {
     const id = useInstanceStore.getState().createInstance('test.Party', 'My Party');
     const flushInstance = vi.fn().mockResolvedValue(undefined);

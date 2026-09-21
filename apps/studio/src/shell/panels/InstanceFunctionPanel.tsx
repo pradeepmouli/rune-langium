@@ -94,7 +94,6 @@ export const InstanceFunctionPanel = withInstrumentation(
               status={{ state: 'ready', targetId: state.schema.targetId }}
               values={state.inputs}
               onValuesChange={(inputs) => session.setInputs(inputs)}
-              onExecute={() => void session.run()}
               presentation={{ mode: 'instance', showHeader: false, showPayload: false }}
             />
             <Button type="button" size="sm" disabled={state.status === 'running'} onClick={() => void session.run()}>

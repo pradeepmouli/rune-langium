@@ -30,8 +30,10 @@ export const InstanceInspectorPanel = withInstrumentation(
     const record = useInstanceStore((s) => s.instances[instanceId]);
     const diagnostics = useInstanceStore((s) => s.validationErrors[instanceId]) ?? [];
     const validationStatus = useInstanceStore((s) => s.validationStatus[instanceId]);
+    const schemaError = useInstanceStore((s) => (record ? s.schemaErrors.get(record.typeFqn) : undefined));
     const saveState = useInstanceStore((s) => s.saveStates[instanceId]);
     const retrySave = useInstanceStore((s) => s.retrySave);
+    const retryInstance = useInstanceStore((s) => s.retryInstance);
     const flushInstance = useInstanceStore((s) => s.flushInstance);
     const view = usePrototypeViewStore((s) => s.state);
     const patchView = usePrototypeViewStore((s) => s.patch);
@@ -80,6 +82,13 @@ export const InstanceInspectorPanel = withInstrumentation(
           <h3 className="font-semibold">Validation</h3>
           {validationStatus === 'pending' || !validationStatus ? (
             <p className="text-muted-foreground">Checking…</p>
+          ) : validationStatus === 'unavailable' ? (
+            <>
+              <p className="text-muted-foreground">{schemaError?.message ?? 'Instance validation is unavailable.'}</p>
+              <button type="button" className="mt-1 text-xs underline" onClick={() => void retryInstance(instanceId)}>
+                Retry validation
+              </button>
+            </>
           ) : diagnostics.length === 0 ? (
             <p className="text-muted-foreground">Valid</p>
           ) : (

@@ -84,7 +84,9 @@ export const createFunctionSession = withInstrumentation(
         patch({ inputs: structuredClone(inputs) });
       },
       bindInstance(parameter, record) {
-        patch({ boundParameter: parameter, inputs: { ...state.inputs, [parameter]: structuredClone(record.data) } });
+        const field = state.schema?.fields.find((candidate) => candidate.path === parameter);
+        const value = field?.kind === 'array' ? [record.data] : record.data;
+        patch({ boundParameter: parameter, inputs: { ...state.inputs, [parameter]: structuredClone(value) } });
       },
       async run() {
         if (!state.functionFqn || state.status === 'running') return;

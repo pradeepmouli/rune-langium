@@ -60,6 +60,17 @@ function findNamespacesForType(deferredExports: DeferredExportEntry[], typeFqn: 
     .map((entry) => entry.namespace);
 }
 
+function findUnhydratedNamespacesForUnresolved(
+  deferredExports: DeferredExportEntry[],
+  names: readonly string[],
+  hydratedNamespaces: readonly string[]
+): string[] {
+  const hydrated = new Set(hydratedNamespaces);
+  return [...new Set(names.flatMap((name) => findNamespacesForExport(deferredExports, name)))].filter(
+    (namespace) => !hydrated.has(namespace)
+  );
+}
+
 /** Extracts the referenced type names out of a form-preview schema's
  *  `unsupportedFeatures` list's `unresolved-reference:<name>` entries. */
 function extractUnresolvedNames(unsupportedFeatures: string[] | undefined): string[] {
@@ -398,6 +409,12 @@ export const CodegenProvider = withInstrumentation(
       setWorkerRef(codegenWorker);
       const readiness = createInstanceReadiness({
         findNamespaces: (typeFqn) => findNamespacesForType(deferredExportsRef.current, typeFqn),
+        findNamespacesForUnresolved: (names) =>
+          findUnhydratedNamespacesForUnresolved(
+            deferredExportsRef.current,
+            names,
+            useEditorStore.getState().hydratedNamespaces
+          ),
         hydrate: hydrateNamespaceForInstance,
         waitForWorkerFiles: (signal) => syncWorkerFiles(codegenWorker, signal)
       });
@@ -449,7 +466,33 @@ export const CodegenProvider = withInstrumentation(
         // codegen worker's `lastPreviewTargetId`/`lastPreviewRequestId`, which
         // `preview:setFiles` re-runs preview generation against).
         if (isInstanceGenerateSchemaResultMessage(msg)) {
-          useInstanceStore.getState().receiveSchemaResult(msg.requestId, msg.schema);
+          if (isPrototypeSessionRequest(msg.requestId)) return;
+          const unresolvedNamespaces = findUnhydratedNamespacesForUnresolved(
+            deferredExportsRef.current,
+            extractUnresolvedNames(msg.schema.unsupportedFeatures),
+            useEditorStore.getState().hydratedNamespaces
+          );
+          if (unresolvedNamespaces.length === 0) {
+            useInstanceStore.getState().receiveSchemaResult(msg.requestId, msg.schema);
+            return;
+          }
+          const controller = new AbortController();
+          void readiness.hydrateSchemaDependencies(msg.schema, controller.signal).then(
+            (hydrated) => {
+              const store = useInstanceStore.getState();
+              if (!hydrated) {
+                store.receiveSchemaResult(msg.requestId, msg.schema);
+                return;
+              }
+              const typeFqn = store.discardSchemaResult(msg.requestId);
+              if (!typeFqn) return;
+              store.dispatchGenerateSchema(typeFqn);
+              for (const [id, instance] of Object.entries(store.instances)) {
+                if (instance.typeFqn === typeFqn) store.dispatchValidate(id);
+              }
+            },
+            () => useInstanceStore.getState().receiveSchemaResult(msg.requestId, msg.schema)
+          );
           return;
         }
         if (isInstanceGenerateSchemaStaleMessage(msg)) {
@@ -472,12 +515,13 @@ export const CodegenProvider = withInstrumentation(
               orchestrator.markResolved(targetId);
               clearHydrationRetriesRemaining(targetId);
             } else {
-              const namespacesToHydrate = new Set<string>();
-              for (const name of unresolvedNames) {
-                for (const namespace of findNamespacesForExport(deferredExports, name)) {
-                  namespacesToHydrate.add(namespace);
-                }
-              }
+              const namespacesToHydrate = new Set(
+                findUnhydratedNamespacesForUnresolved(
+                  deferredExports,
+                  unresolvedNames,
+                  useEditorStore.getState().hydratedNamespaces
+                )
+              );
               if (namespacesToHydrate.size === 0) {
                 // No unresolved name maps to a known deferred (curated, not-yet-
                 // hydrated) export -- every one is genuinely unresolved (a typo, a

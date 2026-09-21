@@ -4,6 +4,7 @@
 import JSZip from 'jszip';
 import type { ExportSelection, GeneratorDiagnostic, Target } from '@rune-langium/codegen/export';
 import { withInstrumentation } from './instrumentation/core.js';
+import { throwCodegenDownloadError } from './workspace.js';
 
 export interface ExportArtifactFile {
   path: string;
@@ -78,7 +79,7 @@ function isManifest(value: unknown): value is ExportArtifactManifest {
 /** Decode an envelope response without regenerating or eagerly reading source files. */
 export const decodeExportArtifact = withInstrumentation(
   async function decodeExportArtifact(response: Response): Promise<ExportArtifact> {
-    if (!response.ok) throw new Error(`Cannot decode failed export response (${response.status}).`);
+    if (!response.ok) return throwCodegenDownloadError(response);
     const blob = await response.blob();
     // JSZip rejects ArrayBuffers created by a different runtime realm (for
     // example, a Node Response in a browser-like test environment). Normalize

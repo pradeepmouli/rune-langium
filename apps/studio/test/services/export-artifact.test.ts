@@ -78,3 +78,21 @@ it('decodes ZIP bytes returned from a different runtime realm', async () => {
     manifest: { version: 1, files: [] }
   });
 });
+
+it('preserves structured diagnostics from a failed export response', async () => {
+  const response = new Response(
+    JSON.stringify({
+      ok: false,
+      error: 'Unknown selection',
+      diagnostics: [{ severity: 'error', code: 'unknown-export-selection', message: 'Party is unavailable' }]
+    }),
+    { status: 400, headers: { 'Content-Type': 'application/json' } }
+  );
+
+  await expect(decodeExportArtifact(response)).rejects.toMatchObject({
+    name: 'CodegenDownloadError',
+    message: 'Unknown selection',
+    status: 400,
+    diagnostics: [{ severity: 'error', code: 'unknown-export-selection', message: 'Party is unavailable' }]
+  });
+});

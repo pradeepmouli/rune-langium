@@ -54,4 +54,32 @@ describe('createInstanceReadiness', () => {
     );
     await expect(readiness.ensure('cdm.base.staticdata.party.Address', new AbortController().signal)).resolves.toBe(9);
   });
+
+  it('hydrates deferred dependencies reported by an otherwise user-authored schema', async () => {
+    const calls: string[] = [];
+    const readiness = createInstanceReadiness({
+      findNamespaces: () => [],
+      findNamespacesForUnresolved: (names) => (names.includes('Party') ? ['cdm.party'] : []),
+      hydrate: async (namespace) => calls.push(`hydrate:${namespace}`),
+      waitForWorkerFiles: async () => {
+        calls.push('worker-ready');
+        return 4;
+      }
+    });
+
+    await expect(
+      readiness.hydrateSchemaDependencies(
+        {
+          schemaVersion: 1,
+          targetId: 'acme.Trade',
+          title: 'Trade',
+          status: 'ready',
+          fields: [],
+          unsupportedFeatures: ['unresolved-reference:Party']
+        },
+        new AbortController().signal
+      )
+    ).resolves.toBe(true);
+    expect(calls).toEqual(['hydrate:cdm.party', 'worker-ready']);
+  });
 });

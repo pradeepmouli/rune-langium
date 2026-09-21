@@ -109,6 +109,7 @@ interface InstanceStoreState {
   receiveValidateResult(requestId: string, diagnostics: ValidationDiagnostic[]): void;
   dispatchGenerateSchema(typeFqn: string): void;
   receiveSchemaResult(requestId: string, schema: FormPreviewSchema): boolean;
+  discardSchemaResult(requestId: string): string | undefined;
   receiveSchemaStale(requestId: string, reason: PreviewStaleReason, message: string): boolean;
   setOpfsContext(fs: OpfsFs, workspaceRoot: string): void;
   loadInstancesFromOpfs(): Promise<void>;
@@ -426,6 +427,13 @@ export const useInstanceStore = create<InstanceStoreState>((set, get) => ({
       return { schemas, schemaErrors };
     });
     return true;
+  },
+
+  discardSchemaResult(requestId) {
+    const pending = pendingSchemaRequests.get(requestId);
+    if (!pending || pending.epoch !== get().workspaceEpoch) return undefined;
+    pendingSchemaRequests.delete(requestId);
+    return latestSchemaRequestForType.get(pending.typeFqn) === requestId ? pending.typeFqn : undefined;
   },
 
   receiveSchemaStale(requestId, reason, message) {
