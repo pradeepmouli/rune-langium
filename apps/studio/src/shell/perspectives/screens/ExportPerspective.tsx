@@ -69,6 +69,8 @@ export const ExportPerspective = withInstrumentation(
     const [downloadModalTarget, setDownloadModalTarget] = useState<Target | undefined>(undefined);
     const [downloadingTarget, setDownloadingTarget] = useState<Target | undefined>(undefined);
     const [exportSelection, setExportSelection] = useState<ExportSelection>({ namespaces: [], declarations: [] });
+    const focusedSelection =
+      exportSelection.namespaces.length > 0 || exportSelection.declarations.length > 0 ? exportSelection : undefined;
     const exportRun = useExportWorkbenchStore((state) => state.run);
     const generateArtifact = useExportWorkbenchStore((state) => state.generate);
     const invalidateArtifact = useExportWorkbenchStore((state) => state.invalidate);
@@ -303,7 +305,7 @@ export const ExportPerspective = withInstrumentation(
             target={downloadModalTarget}
             namespaces={namespaceList}
             dependencyGraph={dependencyGraph}
-            selection={exportSelection}
+            selection={focusedSelection}
             onClose={() => setDownloadModalTarget(undefined)}
             onGenerate={handleModalGenerate}
             optionsForm={downloadModalTarget === 'excel' ? ExcelOptionsFormAdapter : undefined}

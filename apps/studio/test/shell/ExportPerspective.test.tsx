@@ -65,12 +65,14 @@ vi.mock('../../src/components/CodegenTargetsTable.js', () => ({
 let capturedModalTarget: Target | undefined;
 let capturedOnGenerate: ((config: Record<string, unknown>) => void) | undefined;
 let capturedOnClose: (() => void) | undefined;
+let capturedSelection: unknown;
 
 vi.mock('../../src/components/DownloadConfigDialog.js', () => ({
   DownloadConfigDialog: vi.fn((props: Record<string, unknown>) => {
     capturedModalTarget = props['target'] as Target;
     capturedOnGenerate = props['onGenerate'] as typeof capturedOnGenerate;
     capturedOnClose = props['onClose'] as typeof capturedOnClose;
+    capturedSelection = props['selection'];
     return <div data-testid="mock-download-modal" data-target={String(props['target'] ?? '')} />;
   })
 }));
@@ -132,6 +134,7 @@ describe('ExportPerspective', () => {
     capturedModalTarget = undefined;
     capturedOnGenerate = undefined;
     capturedOnClose = undefined;
+    capturedSelection = undefined;
     mockDownloadTargetViaRouter.mockClear();
     mockGenerateArtifact.mockClear();
     mockInvalidateArtifact.mockClear();
@@ -248,6 +251,7 @@ describe('ExportPerspective', () => {
       });
       expect(screen.getByTestId('mock-download-modal')).toBeTruthy();
       expect(capturedModalTarget).toBe('typescript');
+      expect(capturedSelection).toBeUndefined();
     });
 
     it('calls downloadTargetViaRouter when modal fires onGenerate', async () => {
