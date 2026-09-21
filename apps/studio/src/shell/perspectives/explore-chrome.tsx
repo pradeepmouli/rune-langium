@@ -241,7 +241,7 @@ export const ExploreActions = withInstrumentation(
         <Button
           variant="ghost"
           size="icon-sm"
-          aria-label={selectedNode ? 'Export selected declaration' : 'Open Export'}
+          aria-label="Export code"
           title={selectedNode ? 'Export selected declaration' : 'Open Export'}
           onClick={exportSelected}
         >
