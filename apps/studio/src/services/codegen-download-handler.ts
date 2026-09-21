@@ -623,7 +623,8 @@ async function artifactEnvelopeResponse(
   target: Target,
   outputs: readonly GeneratorOutput[],
   filename: string,
-  selection: ExportSelection | undefined
+  selection: ExportSelection | undefined,
+  resolvedSelection?: ExportArtifactManifest['resolvedSelection']
 ): Promise<Response> {
   const zip = new JSZip();
   const files: ExportArtifactManifest['files'] = [];
@@ -646,6 +647,7 @@ async function artifactEnvelopeResponse(
     version: 1,
     target,
     ...(selection ? { selection } : {}),
+    ...(resolvedSelection ? { resolvedSelection } : {}),
     files,
     diagnostics: outputs.flatMap((output) => output.diagnostics)
   };
@@ -940,9 +942,21 @@ export const handleCodegenDownload = withInstrumentation(
         // target (019 Phase 0.5.5) — the studio's Download flow delegates
         // its layout choice to the server, so `body.options.<target>.layout`
         // is only set when a caller wants to override the server's choice.
-        const { generate } = await import('@rune-langium/codegen/export');
+        const { generate, resolveExportSelection } = await import('@rune-langium/codegen/export');
         const generatorOptions = applyPagesFunctionDefaults(body);
         if (resolvedNamespaces && body.namespaces) generatorOptions.namespaces = resolvedNamespaces;
+        const selectionReceipt = body.selection ? resolveExportSelection(documents, body.selection) : undefined;
+        if (selectionReceipt?.unknown.length) {
+          return jsonError(
+            400,
+            'One or more selected declarations do not exist in the workspace',
+            selectionReceipt.unknown.map((item) => ({
+              severity: 'error' as const,
+              code: 'unknown-export-selection',
+              message: `Unknown ${item.kind} declaration '${item.namespace}.${item.name}'.`
+            }))
+          );
+        }
         const outputs = await generate(documents, generatorOptions);
 
         const errors = fatalDiagnostics(outputs);
@@ -955,7 +969,13 @@ export const handleCodegenDownload = withInstrumentation(
 
         const filename = downloadFilename(body.target, outputs);
         if (body.artifactEnvelope === 1) {
-          return artifactEnvelopeResponse(body.target, outputs, filename, body.selection);
+          return artifactEnvelopeResponse(
+            body.target,
+            outputs,
+            filename,
+            body.selection,
+            selectionReceipt ? { explicit: selectionReceipt.explicit, included: selectionReceipt.included } : undefined
+          );
         }
         if (outputs.length === 1) {
           return singleArtifactResponse(body.target, outputs[0]!, filename);

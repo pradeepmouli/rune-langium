@@ -31,6 +31,13 @@ it('decodes the exact generated artifact envelope for a selected declaration', a
   expect(response.status).toBe(200);
   const artifact = await decodeExportArtifact(response);
   expect(artifact.manifest.files).toHaveLength(1);
+  expect(artifact.manifest.resolvedSelection?.explicit).toEqual([{ namespace: 'test', name: 'Party', kind: 'Data' }]);
+  expect(artifact.manifest.resolvedSelection?.included).toEqual(
+    expect.arrayContaining([
+      { namespace: 'test', name: 'Party', kind: 'Data' },
+      { namespace: 'test', name: 'Address', kind: 'Data' }
+    ])
+  );
   expect(artifact.manifest.files[0]?.path).not.toBe('.rune/export.json');
   const file = artifact.manifest.files[0]!;
   const text = await artifact.readText(file.path);

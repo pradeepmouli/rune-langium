@@ -16,6 +16,10 @@ export interface ExportArtifactManifest {
   version: 1;
   target: Target;
   selection?: ExportSelection;
+  resolvedSelection?: {
+    explicit: ExportSelection['declarations'];
+    included: ExportSelection['declarations'];
+  };
   files: ExportArtifactFile[];
   diagnostics: GeneratorDiagnostic[];
 }

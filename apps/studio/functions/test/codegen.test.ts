@@ -248,6 +248,23 @@ type Unrelated:
     expect(res.status).toBe(400);
   });
 
+  it('rejects an unknown declaration selection with an actionable diagnostic', async () => {
+    const res = await onRequestPost({
+      request: makeRequest({
+        files: [{ path: 'x.rune', content: ONE_NAMESPACE }],
+        target: 'typescript',
+        selection: { namespaces: [], declarations: [{ namespace: 'x', name: 'Missing', kind: 'Data' }] }
+      })
+    } as never);
+    expect(res.status).toBe(400);
+    const body = await asJson(res);
+    expect(body.diagnostics).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ code: 'unknown-export-selection', message: expect.stringContaining('x.Missing') })
+      ])
+    );
+  });
+
   it("JSON Schema default ('single-file') returns one bundled model.schema.json", async () => {
     const res = await onRequestPost({
       request: makeRequest({
