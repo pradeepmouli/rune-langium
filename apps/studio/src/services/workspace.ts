@@ -8,6 +8,7 @@
  */
 
 import { parse, parseWorkspace, createRuneDslServices, type RosettaModel } from '@rune-langium/core';
+import type { ExportSelection } from '@rune-langium/codegen/export';
 import { requestCodegenDownload } from './codegen-download-client.js';
 import { EmptyFileSystem } from 'langium';
 import type { CuratedSerializedDocument } from '@rune-langium/curated-schema';
@@ -1155,7 +1156,8 @@ export const downloadTargetViaRouter = withInstrumentation(
     options: Record<string, unknown> = {},
     curatedBundles: ReadonlyArray<{ id: string; version: string }> = [],
     namespaces: ReadonlyArray<string> = [],
-    curatedDocs: ReadonlyArray<{ uri: string; serializedModel: string }> = []
+    curatedDocs: ReadonlyArray<{ uri: string; serializedModel: string }> = [],
+    selection?: ExportSelection
   ): Promise<void> {
     const body: Record<string, unknown> = { files, target, options };
     // Send BOTH when available — NOT mutually exclusive. The server prefers
@@ -1179,9 +1181,13 @@ export const downloadTargetViaRouter = withInstrumentation(
     }
     // §5.3 — forward the modal's dependency-closed namespace subset. Empty =
     // no filter (emit everything), matching the server's interpretation.
+    if (selection && namespaces.length > 0) {
+      throw new TypeError('Declaration selection cannot be combined with a legacy namespace allowlist.');
+    }
     if (namespaces.length > 0) {
       body.namespaces = namespaces;
     }
+    if (selection) body.selection = selection;
     const response = await requestCodegenDownload(body);
 
     if (!response.ok) {

@@ -8,6 +8,7 @@ import JSZip from 'jszip';
 import {
   IMPLEMENTED_TARGETS,
   TARGET_DESCRIPTORS,
+  type ExportSelection,
   type GeneratorDiagnostic,
   type GeneratorOutput,
   type Target
@@ -68,6 +69,8 @@ interface CodegenRequestBody {
    * Absent for legacy/direct callers → all namespaces emitted.
    */
   namespaces?: string[];
+  /** Optional declaration roots emitted in addition to selected namespaces. */
+  selection?: ExportSelection;
 }
 
 /**
@@ -268,6 +271,24 @@ export const __documentCacheIsBusyForTests = withInstrumentation(
   }
 );
 
+function isExportSelection(value: unknown): value is ExportSelection {
+  if (!value || typeof value !== 'object') return false;
+  const selection = value as { namespaces?: unknown; declarations?: unknown };
+  return (
+    Array.isArray(selection.namespaces) &&
+    selection.namespaces.every((namespace) => typeof namespace === 'string') &&
+    Array.isArray(selection.declarations) &&
+    selection.declarations.every(
+      (declaration) =>
+        declaration &&
+        typeof declaration === 'object' &&
+        typeof (declaration as { namespace?: unknown }).namespace === 'string' &&
+        typeof (declaration as { name?: unknown }).name === 'string' &&
+        typeof (declaration as { kind?: unknown }).kind === 'string'
+    )
+  );
+}
+
 function isValidRequest(body: unknown): body is CodegenRequestBody {
   if (!body || typeof body !== 'object') return false;
   const b = body as { files?: unknown; target?: unknown; curatedBundles?: unknown; curatedDocs?: unknown };
@@ -326,7 +347,16 @@ function isValidRequest(body: unknown): body is CodegenRequestBody {
       return false;
     }
   }
+  const selection = (body as { selection?: unknown }).selection;
+  if (selection !== undefined && !isExportSelection(selection)) return false;
+  if (selection !== undefined && ns !== undefined) return false;
   return true;
+}
+
+/** Namespace seeds for curated hydration; selection controls final emission. */
+function requestedNamespaces(body: CodegenRequestBody): readonly string[] {
+  if (!body.selection) return body.namespaces ?? [];
+  return [...new Set([...body.selection.namespaces, ...body.selection.declarations.map((item) => item.namespace)])];
 }
 
 /**
@@ -593,6 +623,7 @@ function applyPagesFunctionDefaults(body: CodegenRequestBody): Record<string, un
   if (Array.isArray(body.namespaces) && body.namespaces.length > 0) {
     result.namespaces = body.namespaces;
   }
+  if (body.selection) result.selection = body.selection;
   const target = body.target;
   const serverDefault = PAGES_FUNCTION_DEFAULT_LAYOUT[target];
   if (!serverDefault) return result;
@@ -655,7 +686,7 @@ export const handleCodegenDownload = withInstrumentation(
 
       const cacheKey =
         body.files.length === 0 && curatedBundles.length > 0
-          ? documentCacheKey(curatedBundles, body.namespaces ?? [])
+          ? documentCacheKey(curatedBundles, requestedNamespaces(body))
           : undefined;
 
       let documents: import('langium').LangiumDocument[];
@@ -708,7 +739,7 @@ export const handleCodegenDownload = withInstrumentation(
             const promise = (
               stalePending.length > 0 ? Promise.allSettled(stalePending) : Promise.resolve(undefined)
             ).then(() =>
-              loadAllDocuments(body.files, curatedBundles, curatedFetcher, body.namespaces ?? [], curatedDocs)
+              loadAllDocuments(body.files, curatedBundles, curatedFetcher, requestedNamespaces(body), curatedDocs)
             );
             const newEntry = { promise, cachedAt: now, pending: true, activeConsumers: [] };
             entry = newEntry;
@@ -835,7 +866,7 @@ export const handleCodegenDownload = withInstrumentation(
             body.files,
             curatedBundles,
             curatedFetcher,
-            body.namespaces ?? [],
+            requestedNamespaces(body),
             curatedDocs
           );
           if (result.curatedError) return result.curatedError;

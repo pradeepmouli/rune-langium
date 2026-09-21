@@ -32,4 +32,27 @@ type Unrelated:
     expect(content).toMatch(/(?:class|interface|type|enum)\s+Dep\b/);
     expect(content).not.toMatch(/(?:class|interface|type|enum)\s+Unrelated\b/);
   });
+
+  it('treats a selected namespace as roots for all of its declarations', async () => {
+    const { RuneDsl } = createRuneDslServices();
+    await RuneDsl.shared.workspace.WorkspaceManager.initializeWorkspace([]);
+    const doc = RuneDsl.shared.workspace.LangiumDocumentFactory.fromString(
+      `namespace test
+type Included:
+  value string (1..1)
+type AlsoIncluded:
+  value string (1..1)`,
+      URI.parse('inmemory:///selection-namespace.rosetta')
+    );
+    await RuneDsl.shared.workspace.DocumentBuilder.build([doc]);
+    expect(doc.diagnostics ?? []).toEqual([]);
+
+    const outputs = await generate(doc, {
+      target: 'typescript',
+      selection: { namespaces: ['test'], declarations: [] }
+    });
+    const content = outputs.map((output) => output.content).join('\n');
+    expect(content).toMatch(/(?:class|interface|type|enum)\s+Included\b/);
+    expect(content).toMatch(/(?:class|interface|type|enum)\s+AlsoIncluded\b/);
+  });
 });

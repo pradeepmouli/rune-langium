@@ -20,6 +20,7 @@ function rootOf(node: AstNode): TopLevel | undefined {
 /** Return shallow document views whose models expose only selected closure roots. */
 export function selectDeclarationDocuments(docs: LangiumDocument[], selection: ExportSelection): LangiumDocument[] {
   const wanted = new Set(selection.declarations.map((item) => `${item.namespace}\0${item.kind}\0${item.name}`));
+  const selectedNamespaces = new Set(selection.namespaces);
   const roots = new Set<TopLevel>();
   const allRoots = new Map<TopLevel, string>();
   for (const doc of docs) {
@@ -28,7 +29,9 @@ export function selectDeclarationDocuments(docs: LangiumDocument[], selection: E
     if (!namespace || !model || !isRosettaModel(model)) continue;
     for (const element of model.elements as TopLevel[]) {
       allRoots.set(element, namespace);
-      if (wanted.has(`${namespace}\0${element.$type}\0${element.name}`)) roots.add(element);
+      if (selectedNamespaces.has(namespace) || wanted.has(`${namespace}\0${element.$type}\0${element.name}`)) {
+        roots.add(element);
+      }
     }
   }
   const queue = [...roots];

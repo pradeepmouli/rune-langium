@@ -160,7 +160,9 @@ export interface ExportDeclarationSelection {
 
 /** Namespace and declaration roots requested for an export. */
 export interface ExportSelection {
+  /** Namespaces whose declarations are all export roots. */
   namespaces: readonly string[];
+  /** Individual declaration roots, combined with whole selected namespaces. */
   declarations: readonly ExportDeclarationSelection[];
 }
 
