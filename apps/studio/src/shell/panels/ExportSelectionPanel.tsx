@@ -15,12 +15,13 @@ import { withInstrumentation } from '../../services/instrumentation/core.js';
 
 export interface ExportSelectionPanelProps {
   selection: ExportSelection;
+  requiredBy?: ReadonlyMap<string, readonly string[]>;
   onChange(selection: ExportSelection): void;
 }
 
 /** Reuses the shared type explorer to collect semantic export roots. */
 export const ExportSelectionPanel = withInstrumentation(
-  function ExportSelectionPanel({ selection, onChange }: ExportSelectionPanelProps): ReactElement {
+  function ExportSelectionPanel({ selection, requiredBy, onChange }: ExportSelectionPanelProps): ReactElement {
     const nodesById = useEditorStore((state) => state.nodesById);
     const repository = selectNodeRepository(nodesById);
     const namespaces = useMemo(() => repository.namespaces(), [repository]);
@@ -56,7 +57,7 @@ export const ExportSelectionPanel = withInstrumentation(
             onCollapseAll={() => setExpandedNamespaces(new Set())}
             selection={{
               explicit,
-              requiredBy: new Map(),
+              requiredBy: requiredBy ?? new Map(),
               getSelectionId: exportSelectionIdForNode,
               onChange: handleChange
             }}

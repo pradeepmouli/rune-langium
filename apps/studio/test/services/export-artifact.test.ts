@@ -38,6 +38,9 @@ it('decodes the exact generated artifact envelope for a selected declaration', a
       { namespace: 'test', name: 'Address', kind: 'Data' }
     ])
   );
+  expect(artifact.manifest.resolvedSelection?.requiredBy).toEqual({
+    '["test","Data","Address"]': ['["test","Data","Party"]']
+  });
   expect(artifact.manifest.files[0]?.path).not.toBe('.rune/export.json');
   const file = artifact.manifest.files[0]!;
   const text = await artifact.readText(file.path);

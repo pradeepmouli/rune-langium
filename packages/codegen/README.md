@@ -23,8 +23,9 @@ download API.
 
 Use `generateSelected()` when the caller also needs a receipt. It returns the
 generated files and the exact explicit and dependency-included declarations
-used for emission, without resolving the workspace a second time. Studio stores
-that receipt in its downloadable artifact envelope.
+used for emission, plus a kind-aware `requiredBy` map from each dependency to
+its explicit roots, without resolving the workspace a second time. Studio
+stores that receipt in its downloadable artifact envelope.
 
 ## TypeScript functions
 

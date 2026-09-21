@@ -19,6 +19,7 @@ export interface ExportArtifactManifest {
   resolvedSelection?: {
     explicit: ExportSelection['declarations'];
     included: ExportSelection['declarations'];
+    requiredBy: Record<string, readonly string[]>;
   };
   files: ExportArtifactFile[];
   diagnostics: GeneratorDiagnostic[];

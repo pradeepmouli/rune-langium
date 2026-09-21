@@ -1,17 +1,13 @@
 // SPDX-License-Identifier: FSL-1.1-ALv2
 // Copyright (c) 2026 Pradeep Mouli
 
+import { declarationKey } from '@rune-langium/codegen/export';
 import type { ExportDeclarationSelection, ExportSelection } from '@rune-langium/codegen/export';
 import type { ExplorerSelectionAction, NodeRepository, TypeGraphNode } from '@rune-langium/visual-editor';
 import { withInstrumentation } from './instrumentation/core.js';
 
 /** Stable identifier shared by the Explorer's controlled selection and codegen roots. */
-export const exportSelectionId = withInstrumentation(
-  function exportSelectionId(selection: ExportDeclarationSelection): string {
-    return `${selection.namespace}\0${selection.kind}\0${selection.name}`;
-  },
-  { op: 'exportSelectionId' }
-);
+const exportSelectionId = declarationKey;
 
 /** Converts a graph node into codegen's public declaration-root representation. */
 export const exportDeclarationFromNode = withInstrumentation(

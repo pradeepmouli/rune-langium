@@ -33,6 +33,13 @@ export const ExportPerspective = withInstrumentation(
     const invalidate = useExportWorkbenchStore((state) => state.invalidate);
     const setActiveFile = useExportWorkbenchStore((state) => state.setActiveFile);
     const [sourceRevision, setSourceRevision] = useState(0);
+    const requiredBy = useMemo(
+      () =>
+        new Map(
+          Object.entries(run.status === 'ready' ? (run.artifact.manifest.resolvedSelection?.requiredBy ?? {}) : {})
+        ),
+      [run]
+    );
     const sourceFingerprint = useMemo(
       () =>
         JSON.stringify([workspaceId, (files ?? []).map((file) => [file.path, file.content, file.serializedModelJson])]),
@@ -76,7 +83,11 @@ export const ExportPerspective = withInstrumentation(
       <section data-testid="export-perspective" className="flex h-full min-h-0 flex-col overflow-hidden">
         <div className="grid shrink-0 border-b border-border lg:grid-cols-[minmax(0,1fr)_minmax(22rem,0.8fr)]">
           <div data-testid="export-selection" className="min-w-0">
-            <ExportSelectionPanel selection={config.selection} onChange={handleSelectionChange} />
+            <ExportSelectionPanel
+              selection={config.selection}
+              requiredBy={requiredBy}
+              onChange={handleSelectionChange}
+            />
           </div>
           <div data-testid="export-settings" className="min-w-0 border-t border-border lg:border-l lg:border-t-0">
             <ExportSettingsPanel

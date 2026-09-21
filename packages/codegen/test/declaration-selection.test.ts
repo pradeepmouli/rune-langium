@@ -4,7 +4,7 @@
 import { describe, expect, it } from 'vitest';
 import { createRuneDslServices } from '@rune-langium/core';
 import { URI } from 'langium';
-import { generate, generateSelected, resolveExportSelection } from '../src/export.js';
+import { declarationKey, generate, generateSelected, resolveExportSelection } from '../src/export.js';
 
 describe('declaration selection', () => {
   it('includes a selected declaration dependency and excludes an unrelated sibling', async () => {
@@ -111,6 +111,14 @@ type Party:
       expect.arrayContaining([
         { namespace: 'test', name: 'Party', kind: 'Data' },
         { namespace: 'test', name: 'Dep', kind: 'Data' }
+      ])
+    );
+    expect(result.selection.requiredBy).toEqual(
+      new Map([
+        [
+          declarationKey({ namespace: 'test', name: 'Dep', kind: 'Data' }),
+          [declarationKey({ namespace: 'test', name: 'Party', kind: 'Data' })]
+        ]
       ])
     );
     expect(result.outputs.flatMap((output) => output.diagnostics)).toEqual([]);

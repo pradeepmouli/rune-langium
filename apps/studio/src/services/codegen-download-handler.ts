@@ -977,7 +977,13 @@ export const handleCodegenDownload = withInstrumentation(
             outputs,
             filename,
             body.selection,
-            selectionReceipt ? { explicit: selectionReceipt.explicit, included: selectionReceipt.included } : undefined
+            selectionReceipt
+              ? {
+                  explicit: selectionReceipt.explicit,
+                  included: selectionReceipt.included,
+                  requiredBy: Object.fromEntries(selectionReceipt.requiredBy)
+                }
+              : undefined
           );
         }
         if (outputs.length === 1) {

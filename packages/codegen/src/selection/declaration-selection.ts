@@ -12,6 +12,13 @@ export interface ResolvedExportSelection {
   explicit: ExportSelection['declarations'];
   included: ExportSelection['declarations'];
   unknown: ExportSelection['declarations'];
+  /** Each dependency key maps to the explicit roots that require it. */
+  requiredBy: ReadonlyMap<string, readonly string[]>;
+}
+
+/** Stable, kind-aware identity for a selected top-level declaration. */
+export function declarationKey(declaration: ExportSelection['declarations'][number]): string {
+  return JSON.stringify([declaration.namespace, declaration.kind, declaration.name]);
 }
 
 function namespaceOf(doc: LangiumDocument): string | undefined {
@@ -30,36 +37,45 @@ function declaration(namespace: string, root: TopLevel): ExportSelection['declar
 
 /** Resolve selected roots and return shallow document views without mutating the linked workspace. */
 export function resolveExportSelection(docs: LangiumDocument[], selection: ExportSelection): ResolvedExportSelection {
-  const wanted = new Set(selection.declarations.map((item) => `${item.namespace}\0${item.kind}\0${item.name}`));
+  const wanted = new Set(selection.declarations.map(declarationKey));
   const selectedNamespaces = new Set(selection.namespaces);
   const roots = new Set<TopLevel>();
   const allRoots = new Map<TopLevel, string>();
   const explicitRoots = new Set<TopLevel>();
   const found = new Set<string>();
+  const requiredByRoot = new Map<TopLevel, Set<TopLevel>>();
   for (const doc of docs) {
     const namespace = namespaceOf(doc);
     const model = doc.parseResult.value;
     if (!namespace || !model || !isRosettaModel(model)) continue;
     for (const element of model.elements as TopLevel[]) {
       allRoots.set(element, namespace);
-      if (selectedNamespaces.has(namespace) || wanted.has(`${namespace}\0${element.$type}\0${element.name}`)) {
+      if (selectedNamespaces.has(namespace) || wanted.has(declarationKey(declaration(namespace, element)))) {
         roots.add(element);
         explicitRoots.add(element);
-        found.add(`${namespace}\0${element.$type}\0${element.name}`);
+        found.add(declarationKey(declaration(namespace, element)));
+        requiredByRoot.set(element, new Set([element]));
       }
     }
   }
   const queue = [...roots];
   while (queue.length) {
     const root = queue.pop()!;
+    const rootsRequiringCurrent = requiredByRoot.get(root) ?? new Set<TopLevel>();
     for (const node of [root, ...AstUtils.streamAllContents(root)]) {
       for (const { reference } of AstUtils.streamReferences(node)) {
         const candidate = reference as unknown as { ref?: AstNode; refs?: readonly AstNode[] };
         for (const target of candidate.ref ? [candidate.ref] : (candidate.refs ?? [])) {
           const targetRoot = rootOf(target);
-          if (targetRoot && allRoots.has(targetRoot) && !roots.has(targetRoot)) {
+          if (targetRoot && allRoots.has(targetRoot)) {
             roots.add(targetRoot);
-            queue.push(targetRoot);
+            const rootsRequiringTarget = requiredByRoot.get(targetRoot) ?? new Set<TopLevel>();
+            const before = rootsRequiringTarget.size;
+            for (const requiringRoot of rootsRequiringCurrent) rootsRequiringTarget.add(requiringRoot);
+            if (rootsRequiringTarget.size !== before) {
+              requiredByRoot.set(targetRoot, rootsRequiringTarget);
+              queue.push(targetRoot);
+            }
           }
         }
       }
@@ -76,6 +92,20 @@ export function resolveExportSelection(docs: LangiumDocument[], selection: Expor
     const namespace = allRoots.get(root);
     return namespace ? declaration(namespace, root) : undefined;
   };
+  const requiredBy = new Map<string, readonly string[]>();
+  for (const root of roots) {
+    if (explicitRoots.has(root)) continue;
+    const dependency = key(root);
+    const requiringRoots = requiredByRoot.get(root);
+    if (!dependency || !requiringRoots?.size) continue;
+    requiredBy.set(
+      declarationKey(dependency),
+      [...requiringRoots].flatMap((requiringRoot) => {
+        const requiring = key(requiringRoot);
+        return requiring ? [declarationKey(requiring)] : [];
+      })
+    );
+  }
   return {
     documents,
     explicit: [...explicitRoots].flatMap((root) => {
@@ -86,7 +116,8 @@ export function resolveExportSelection(docs: LangiumDocument[], selection: Expor
       const value = key(root);
       return value ? [value] : [];
     }),
-    unknown: selection.declarations.filter((item) => !found.has(`${item.namespace}\0${item.kind}\0${item.name}`))
+    unknown: selection.declarations.filter((item) => !found.has(declarationKey(item))),
+    requiredBy
   };
 }
 
