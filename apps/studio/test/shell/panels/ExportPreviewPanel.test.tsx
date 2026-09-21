@@ -32,6 +32,20 @@ it('does not offer a stale artifact for download', () => {
   expect(screen.getByRole('button', { name: 'Download export' })).toBeDisabled();
 });
 
+it('renders generator diagnostics when an export fails', () => {
+  render(
+    <ExportPreviewPanel
+      run={{
+        status: 'failed',
+        message: 'Generation failed',
+        diagnostics: [{ severity: 'error', code: 'unknown-export-selection', message: 'test.Party is unavailable' }]
+      }}
+      onDownload={vi.fn()}
+    />
+  );
+  expect(screen.getByTestId('export-artifact-status')).toHaveTextContent('test.Party is unavailable');
+});
+
 it('shows declarations included by the resolved dependency closure', () => {
   render(
     <ExportPreviewPanel
