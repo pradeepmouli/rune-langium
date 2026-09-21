@@ -31,3 +31,29 @@ it('does not offer a stale artifact for download', () => {
   render(<ExportPreviewPanel run={{ status: 'stale', inputKey: 'input', artifact }} onDownload={vi.fn()} />);
   expect(screen.getByRole('button', { name: 'Download export' })).toBeDisabled();
 });
+
+it('switches between text files in one captured artifact', async () => {
+  const multiFileArtifact = {
+    ...artifact,
+    manifest: {
+      ...artifact.manifest,
+      files: [
+        { path: 'first.ts', kind: 'text' as const, bytes: 1 },
+        { path: 'second.ts', kind: 'text' as const, bytes: 1 }
+      ]
+    },
+    readText: vi.fn().mockImplementation(async (path: string) => path)
+  };
+  render(
+    <ExportPreviewPanel
+      run={{ status: 'ready', inputKey: 'input', artifact: multiFileArtifact }}
+      onDownload={vi.fn()}
+    />
+  );
+
+  const picker = await screen.findByRole('combobox', { name: 'Generated export file' });
+  await import('@testing-library/user-event').then(async ({ default: userEvent }) => {
+    await userEvent.selectOptions(picker, 'second.ts');
+  });
+  expect(await screen.findByLabelText('Generated export code')).toHaveTextContent('second.ts');
+});

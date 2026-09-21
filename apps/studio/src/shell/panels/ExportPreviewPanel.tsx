@@ -15,8 +15,14 @@ export interface ExportPreviewPanelProps {
 export const ExportPreviewPanel = withInstrumentation(
   function ExportPreviewPanel({ run, onDownload }: ExportPreviewPanelProps): ReactElement {
     const [text, setText] = useState<string | undefined>();
+    const [selectedPath, setSelectedPath] = useState<string | undefined>();
     const artifact = run.status === 'ready' || run.status === 'stale' ? run.artifact : undefined;
-    const textFile = artifact?.manifest.files.find((file) => file.kind === 'text');
+    const textFiles = artifact?.manifest.files.filter((file) => file.kind === 'text') ?? [];
+    const textFile = textFiles.find((file) => file.path === selectedPath) ?? textFiles[0];
+
+    useEffect(() => {
+      if (!textFiles.some((file) => file.path === selectedPath)) setSelectedPath(textFiles[0]?.path);
+    }, [selectedPath, textFiles]);
 
     useEffect(() => {
       let active = true;
@@ -65,6 +71,20 @@ export const ExportPreviewPanel = withInstrumentation(
       <section data-testid="export-artifact-preview" className="flex h-full min-h-0 flex-col">
         <div className="flex shrink-0 items-center gap-3 border-b border-border px-3 py-1.5">
           <span className="truncate text-sm font-medium">{textFile.path}</span>
+          {textFiles.length > 1 && (
+            <select
+              aria-label="Generated export file"
+              className="h-7 max-w-52 rounded border border-input bg-background px-2 text-xs"
+              value={textFile.path}
+              onChange={(event) => setSelectedPath(event.target.value)}
+            >
+              {textFiles.map((file) => (
+                <option key={file.path} value={file.path}>
+                  {file.path}
+                </option>
+              ))}
+            </select>
+          )}
           <span className="ml-auto text-xs text-muted-foreground">{run.status === 'stale' ? 'Outdated' : 'Ready'}</span>
           <Button type="button" size="sm" disabled={run.status === 'stale'} onClick={onDownload}>
             Download export
