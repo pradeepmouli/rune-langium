@@ -33,6 +33,7 @@ export const ExportPerspective = withInstrumentation(
     const invalidate = useExportWorkbenchStore((state) => state.invalidate);
     const setActiveFile = useExportWorkbenchStore((state) => state.setActiveFile);
     const [sourceRevision, setSourceRevision] = useState(0);
+    const [compactPane, setCompactPane] = useState<'selection' | 'settings'>('selection');
     const sourceRevisionRef = useRef(sourceRevision);
     const requiredBy = useMemo(
       () =>
@@ -81,8 +82,29 @@ export const ExportPerspective = withInstrumentation(
 
     return (
       <section data-testid="export-perspective" className="flex h-full min-h-0 flex-col overflow-hidden">
+        <nav aria-label="Export panes" className="flex shrink-0 border-b border-border lg:hidden">
+          <button
+            type="button"
+            aria-pressed={compactPane === 'selection'}
+            className="flex-1 px-3 py-2 text-sm aria-pressed:bg-accent"
+            onClick={() => setCompactPane('selection')}
+          >
+            Selection
+          </button>
+          <button
+            type="button"
+            aria-pressed={compactPane === 'settings'}
+            className="flex-1 px-3 py-2 text-sm aria-pressed:bg-accent"
+            onClick={() => setCompactPane('settings')}
+          >
+            Settings
+          </button>
+        </nav>
         <div className="grid shrink-0 border-b border-border lg:grid-cols-[minmax(0,1fr)_minmax(22rem,0.8fr)]">
-          <div data-testid="export-selection" className="min-w-0">
+          <div
+            data-testid="export-selection"
+            className={`min-w-0 lg:block ${compactPane === 'selection' ? 'block' : 'hidden'}`}
+          >
             <ExportSelectionPanel
               selection={config.selection}
               requiredBy={requiredBy}
@@ -93,7 +115,12 @@ export const ExportPerspective = withInstrumentation(
               onChange={handleSelectionChange}
             />
           </div>
-          <div data-testid="export-settings" className="min-w-0 border-t border-border lg:border-l lg:border-t-0">
+          <div
+            data-testid="export-settings"
+            className={`min-w-0 border-t border-border lg:block lg:border-l lg:border-t-0 ${
+              compactPane === 'settings' ? 'block' : 'hidden'
+            }`}
+          >
             <ExportSettingsPanel
               config={config}
               onChange={configure}

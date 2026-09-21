@@ -57,3 +57,29 @@ test('selects and previews a captured declaration export', async ({ page }) => {
   await expect(page.getByLabel('Generated export code')).toContainText('export interface Party');
   await expect(page.getByTestId('export-selection-summary')).toContainText('2 declarations included');
 });
+
+test('keeps export selection and settings reachable at a constrained width', async ({ page }) => {
+  await page.setViewportSize({ width: 700, height: 900 });
+  await page.goto('./');
+  await page.locator('input[type="file"][accept=".rosetta"]').setInputFiles({
+    name: 'demo.rosetta',
+    buffer: Buffer.from(source),
+    mimeType: 'text/plain'
+  });
+  await expect(page.getByTestId('explore-workbench')).toBeVisible({ timeout: 15_000 });
+  await page.getByTestId('rail-export').click();
+
+  const perspective = page.getByTestId('export-perspective');
+  const panes = perspective.getByRole('navigation', { name: 'Export panes' });
+  const selection = perspective.getByTestId('export-selection').first();
+  const settings = perspective.getByTestId('export-settings').first();
+  await expect(panes).toBeVisible();
+  await expect(selection).toBeVisible();
+  await expect(settings).not.toBeVisible();
+
+  await panes.getByRole('button', { name: 'Settings' }).click();
+  await expect(settings).toBeVisible();
+  await expect(selection).not.toBeVisible();
+  await panes.getByRole('button', { name: 'Selection' }).click();
+  await expect(selection).toBeVisible();
+});

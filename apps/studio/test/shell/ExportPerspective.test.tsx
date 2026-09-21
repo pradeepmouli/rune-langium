@@ -74,6 +74,7 @@ it('composes stable selection, settings, and preview workbench panels', () => {
   render(<ExportPerspective workspaceId="workspace-a" />);
   expect(screen.getByTestId('export-selection')).toContainElement(screen.getByTestId('mock-export-selection-panel'));
   expect(screen.getByTestId('export-settings')).toContainElement(screen.getByTestId('mock-export-settings-panel'));
+  expect(screen.getByRole('navigation', { name: 'Export panes' })).toBeInTheDocument();
   expect(screen.getByTestId('export-preview')).toContainElement(screen.getByTestId('mock-export-preview-panel'));
   expect(mockActivate).toHaveBeenCalledWith('workspace-a');
 });
