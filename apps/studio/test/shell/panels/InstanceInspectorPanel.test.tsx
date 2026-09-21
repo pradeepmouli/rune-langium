@@ -18,7 +18,14 @@ describe('InstanceInspectorPanel', () => {
       recordRevisions: {}
     });
     usePrototypeViewStore.setState({
-      state: { selectedId: null, query: '', typeFqn: null, inspectorTab: 'functions', graphVisible: false }
+      state: {
+        selectedId: null,
+        query: '',
+        typeFqn: null,
+        inspectorTab: 'functions',
+        graphVisible: false,
+        compactPane: 'inspector'
+      }
     });
     useExploreNavigationStore.setState({ navigateToType: undefined });
   });

@@ -12,6 +12,7 @@ export interface PrototypeViewState {
   typeFqn: string | null;
   inspectorTab: 'form' | 'functions';
   graphVisible: boolean;
+  compactPane: 'inspector' | 'grid' | 'graph';
 }
 
 export const DEFAULT_PROTOTYPE_VIEW: PrototypeViewState = {
@@ -19,7 +20,8 @@ export const DEFAULT_PROTOTYPE_VIEW: PrototypeViewState = {
   query: '',
   typeFqn: null,
   inspectorTab: 'form',
-  graphVisible: false
+  graphVisible: false,
+  compactPane: 'inspector'
 };
 
 export const filterInstances = withInstrumentation(

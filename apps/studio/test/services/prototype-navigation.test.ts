@@ -16,7 +16,14 @@ describe('prototype navigation', () => {
     useInstanceStore.setState({ instances: {}, saveStates: {}, recordRevisions: {} });
     usePrototypeViewStore.setState({
       workspaceId: 'one',
-      state: { selectedId: null, query: '', typeFqn: null, inspectorTab: 'form', graphVisible: false }
+      state: {
+        selectedId: null,
+        query: '',
+        typeFqn: null,
+        inspectorTab: 'form',
+        graphVisible: false,
+        compactPane: 'inspector'
+      }
     });
     usePrototypeNavigationStore.setState({ pending: null });
   });

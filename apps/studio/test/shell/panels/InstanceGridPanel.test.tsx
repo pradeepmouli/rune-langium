@@ -17,7 +17,14 @@ describe('InstanceGridPanel', () => {
       recordRevisions: {}
     });
     usePrototypeViewStore.setState({
-      state: { selectedId: null, query: '', typeFqn: null, inspectorTab: 'form', graphVisible: false }
+      state: {
+        selectedId: null,
+        query: '',
+        typeFqn: null,
+        inspectorTab: 'form',
+        graphVisible: false,
+        compactPane: 'inspector'
+      }
     });
   });
 

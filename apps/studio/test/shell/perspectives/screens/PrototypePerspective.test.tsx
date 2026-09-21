@@ -27,7 +27,14 @@ describe('PrototypePerspective', () => {
     });
     usePrototypeViewStore.setState({
       workspaceId: 'workspace-a',
-      state: { selectedId: null, query: '', typeFqn: null, inspectorTab: 'form', graphVisible: false }
+      state: {
+        selectedId: null,
+        query: '',
+        typeFqn: null,
+        inspectorTab: 'form',
+        graphVisible: false,
+        compactPane: 'inspector'
+      }
     });
     usePrototypeNavigationStore.setState({ pending: null });
   });
@@ -65,6 +72,23 @@ describe('PrototypePerspective', () => {
     expect(usePrototypeViewStore.getState().state.selectedId).toBe(id);
     expect(screen.getByRole('tab', { name: 'Form' })).toBeInTheDocument();
     expect(screen.getByText(/generating preview for the selected type/i)).toBeInTheDocument();
+    expect(usePrototypeViewStore.getState().state.compactPane).toBe('inspector');
+  });
+
+  it('keeps one compact pane active and returns payload selections to the Inspector', () => {
+    const id = useInstanceStore.getState().createInstance('test.Party', 'Acme', {
+      data: { address: { city: 'London' } }
+    });
+    usePrototypeViewStore.setState((store) => ({
+      state: { ...store.state, selectedId: id, graphVisible: true, compactPane: 'graph' }
+    }));
+    renderPerspective();
+
+    expect(screen.getByRole('navigation', { name: 'Prototype panes' })).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: 'Inspector' }));
+    expect(usePrototypeViewStore.getState().state.compactPane).toBe('inspector');
+    fireEvent.click(screen.getByRole('button', { name: 'Instances' }));
+    expect(usePrototypeViewStore.getState().state.compactPane).toBe('grid');
   });
 
   it('keeps Inspector details with the selected Form', () => {

@@ -31,6 +31,12 @@ export const PrototypePerspective = withInstrumentation(
     const selectedRecord = useInstanceStore((state) =>
       view.selectedId ? state.instances[view.selectedId] : undefined
     );
+    const graphAvailable = view.graphVisible && selectedRecord !== undefined;
+    const compactPane = !selectedRecord
+      ? 'grid'
+      : view.compactPane === 'graph' && !graphAvailable
+        ? 'inspector'
+        : view.compactPane;
 
     useEffect(() => {
       if (workspace?.workspaceId) void activate(workspace.workspaceId);
@@ -61,7 +67,7 @@ export const PrototypePerspective = withInstrumentation(
 
     return (
       <section data-testid="prototype-perspective" className="flex h-full min-h-0 flex-col">
-        <div className="flex items-center justify-between border-b border-border px-3 py-2">
+        <div className="flex flex-wrap items-center justify-between gap-2 border-b border-border px-3 py-2">
           <p className="text-sm text-muted-foreground">Persistent instances</p>
           <input
             ref={importInputRef}
@@ -74,7 +80,16 @@ export const PrototypePerspective = withInstrumentation(
           <Button type="button" variant="ghost" size="sm" onClick={() => importInputRef.current?.click()}>
             Import JSON
           </Button>
-          <Button type="button" variant="ghost" size="sm" onClick={() => patch({ graphVisible: !view.graphVisible })}>
+          <Button
+            type="button"
+            variant="ghost"
+            size="sm"
+            aria-label="Toggle payload graph"
+            onClick={() => {
+              const graphVisible = !view.graphVisible;
+              patch({ graphVisible, ...(graphVisible ? { compactPane: 'graph' } : {}) });
+            }}
+          >
             Payload graph
           </Button>
           <Button
@@ -88,16 +103,67 @@ export const PrototypePerspective = withInstrumentation(
             New instance
           </Button>
         </div>
-        <div className="min-h-0 flex-[2] border-b border-border">
-          {view.selectedId ? (
-            <InstanceInspectorPanel instanceId={view.selectedId} focusedPayloadPointer={focusedPayloadPointer} />
-          ) : (
-            <div className="flex h-full items-center justify-center text-sm text-muted-foreground">
-              Select or create an instance to inspect it.
+        <nav aria-label="Prototype panes" className="flex border-b border-border lg:hidden">
+          <Button
+            type="button"
+            variant={compactPane === 'inspector' ? 'secondary' : 'ghost'}
+            size="sm"
+            className="flex-1 rounded-none"
+            disabled={!selectedRecord}
+            onClick={() => patch({ compactPane: 'inspector' })}
+          >
+            Inspector
+          </Button>
+          <Button
+            type="button"
+            variant={compactPane === 'grid' ? 'secondary' : 'ghost'}
+            size="sm"
+            className="flex-1 rounded-none"
+            onClick={() => patch({ compactPane: 'grid' })}
+          >
+            Instances
+          </Button>
+          {graphAvailable ? (
+            <Button
+              type="button"
+              variant={compactPane === 'graph' ? 'secondary' : 'ghost'}
+              size="sm"
+              className="flex-1 rounded-none"
+              onClick={() => patch({ compactPane: 'graph' })}
+            >
+              Payload graph
+            </Button>
+          ) : null}
+        </nav>
+        <div
+          className={`min-h-0 flex-[2] border-b border-border lg:flex ${compactPane === 'grid' ? 'hidden' : 'flex'}`}
+        >
+          <div className={`min-h-0 min-w-0 flex-1 ${compactPane === 'graph' ? 'hidden lg:block' : 'block'}`}>
+            {view.selectedId ? (
+              <InstanceInspectorPanel instanceId={view.selectedId} focusedPayloadPointer={focusedPayloadPointer} />
+            ) : (
+              <div className="flex h-full items-center justify-center text-sm text-muted-foreground">
+                Select or create an instance to inspect it.
+              </div>
+            )}
+          </div>
+          {graphAvailable ? (
+            <div
+              className={`min-h-0 min-w-0 flex-1 border-border lg:border-l ${
+                compactPane === 'graph' ? 'block' : 'hidden lg:block'
+              }`}
+            >
+              <InstanceGraphPanel
+                record={selectedRecord}
+                onSelectPointer={(pointer) => {
+                  setFocusedPayloadPointer(pointer);
+                  patch({ compactPane: 'inspector' });
+                }}
+              />
             </div>
-          )}
+          ) : null}
         </div>
-        <div className="min-h-0 flex-1">
+        <div className={`min-h-0 flex-1 lg:flex ${compactPane === 'grid' ? 'flex' : 'hidden'}`}>
           <InstanceGridPanel />
         </div>
         {importError ? (
@@ -105,14 +171,11 @@ export const PrototypePerspective = withInstrumentation(
             {importError}
           </p>
         ) : null}
-        {view.graphVisible && selectedRecord ? (
-          <InstanceGraphPanel record={selectedRecord} onSelectPointer={setFocusedPayloadPointer} />
-        ) : null}
         <InstanceCreateDialog
           seed={seed}
           open={creating}
           onClose={() => setCreating(false)}
-          onCreated={(id) => patch({ selectedId: id, inspectorTab: 'form' })}
+          onCreated={(id) => patch({ selectedId: id, inspectorTab: 'form', compactPane: 'inspector' })}
         />
       </section>
     );
