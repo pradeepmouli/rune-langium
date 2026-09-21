@@ -15,6 +15,7 @@ import {
 } from '@rune-langium/codegen/export';
 import { loadCuratedWorkspace, curatedWorkspaceErrorResponse } from './curated-workspace.js';
 import { withInstrumentation, Capture } from './instrumentation/core.js';
+import type { ExportArtifactManifest } from './export-artifact.js';
 
 interface CodegenRequestBody {
   files: Array<{ path: string; content: string }>;
@@ -71,6 +72,8 @@ interface CodegenRequestBody {
   namespaces?: string[];
   /** Optional declaration roots emitted in addition to selected namespaces. */
   selection?: ExportSelection;
+  /** Return a ZIP artifact envelope with an inspectable manifest. */
+  artifactEnvelope?: 1;
 }
 
 /**
@@ -350,6 +353,12 @@ function isValidRequest(body: unknown): body is CodegenRequestBody {
   const selection = (body as { selection?: unknown }).selection;
   if (selection !== undefined && !isExportSelection(selection)) return false;
   if (selection !== undefined && ns !== undefined) return false;
+  if (
+    (body as { artifactEnvelope?: unknown }).artifactEnvelope !== undefined &&
+    (body as { artifactEnvelope?: unknown }).artifactEnvelope !== 1
+  ) {
+    return false;
+  }
   return true;
 }
 
@@ -602,6 +611,51 @@ async function zipResponse(outputs: readonly GeneratorOutput[], filename: string
     headers: {
       'Content-Type': 'application/zip',
       'Content-Disposition': `attachment; filename="${filename}"`
+    }
+  });
+}
+
+function isSafeArtifactPath(path: string): boolean {
+  return path.length > 0 && !path.startsWith('/') && !path.split('/').includes('..') && path !== '.rune/export.json';
+}
+
+async function artifactEnvelopeResponse(
+  target: Target,
+  outputs: readonly GeneratorOutput[],
+  filename: string,
+  selection: ExportSelection | undefined
+): Promise<Response> {
+  const zip = new JSZip();
+  const files: ExportArtifactManifest['files'] = [];
+  const paths = new Set<string>();
+  for (const output of outputs) {
+    if (!isSafeArtifactPath(output.relativePath) || paths.has(output.relativePath)) {
+      throw new Error(`Unsafe or duplicate generated artifact path '${output.relativePath}'.`);
+    }
+    paths.add(output.relativePath);
+    const payload = output.binary ?? output.content;
+    zip.file(output.relativePath, payload);
+    files.push({
+      path: output.relativePath,
+      kind: output.binary ? 'binary' : 'text',
+      ...(output.mimeType ? { mimeType: output.mimeType } : {}),
+      bytes: typeof payload === 'string' ? new TextEncoder().encode(payload).byteLength : payload.byteLength
+    });
+  }
+  const manifest: ExportArtifactManifest = {
+    version: 1,
+    target,
+    ...(selection ? { selection } : {}),
+    files,
+    diagnostics: outputs.flatMap((output) => output.diagnostics)
+  };
+  zip.file('.rune/export.json', JSON.stringify(manifest));
+  return new Response(await zip.generateAsync({ type: 'arraybuffer' }), {
+    status: 200,
+    headers: {
+      'Content-Type': 'application/zip',
+      'Content-Disposition': `attachment; filename="${filename}"`,
+      'X-Rune-Export-Filename': filename
     }
   });
 }
@@ -900,6 +954,9 @@ export const handleCodegenDownload = withInstrumentation(
         }
 
         const filename = downloadFilename(body.target, outputs);
+        if (body.artifactEnvelope === 1) {
+          return artifactEnvelopeResponse(body.target, outputs, filename, body.selection);
+        }
         if (outputs.length === 1) {
           return singleArtifactResponse(body.target, outputs[0]!, filename);
         }
