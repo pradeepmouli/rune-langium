@@ -5,6 +5,7 @@ import { useEffect, useRef, useSyncExternalStore, type ReactElement } from 'reac
 import { Button } from '@rune-langium/design-system/ui/button';
 import { WorkspaceTypePicker } from '../../components/WorkspaceTypePicker.js';
 import { FormPreviewPanel } from '../../components/FormPreviewPanel.js';
+import { useInstanceStore } from '../../store/instance-store.js';
 import { usePreviewSessionFactory } from '../providers/preview-session-context.js';
 import {
   createFunctionSession,
@@ -22,8 +23,9 @@ const NO_SESSION_STATE: FunctionSessionState = {
 };
 
 export const InstanceFunctionPanel = withInstrumentation(
-  function InstanceFunctionPanel(): ReactElement {
+  function InstanceFunctionPanel({ instanceId }: { instanceId: string }): ReactElement {
     const factory = usePreviewSessionFactory();
+    const instance = useInstanceStore((state) => state.instances[instanceId]);
     const sessionRef = useRef<FunctionSession | undefined>(undefined);
     if (!sessionRef.current && factory) sessionRef.current = createFunctionSession(factory());
     const session = sessionRef.current;
@@ -55,6 +57,23 @@ export const InstanceFunctionPanel = withInstrumentation(
         ) : null}
         {state.schema ? (
           <>
+            {instance ? (
+              <div className="flex flex-wrap gap-1.5">
+                {state.schema.fields
+                  .filter((field) => field.kind === 'object' || field.kind === 'array')
+                  .map((field) => (
+                    <Button
+                      key={field.path}
+                      type="button"
+                      variant="ghost"
+                      size="xs"
+                      onClick={() => session.bindInstance(field.path, instance)}
+                    >
+                      Use {instance.name} for {field.label}
+                    </Button>
+                  ))}
+              </div>
+            ) : null}
             <FormPreviewPanel
               schema={state.schema}
               status={{ state: 'ready', targetId: state.schema.targetId }}

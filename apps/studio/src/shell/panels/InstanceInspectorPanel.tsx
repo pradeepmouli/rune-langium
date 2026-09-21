@@ -79,7 +79,7 @@ export const InstanceInspectorPanel = withInstrumentation(
             <InstanceFormPanel key={record.id} instanceId={record.id} />
           </TabsContent>
           <TabsContent value="functions" className="min-h-0 flex-1">
-            <InstanceFunctionPanel />
+            <InstanceFunctionPanel instanceId={record.id} />
           </TabsContent>
         </Tabs>
         <InstancePayloadPanel
