@@ -33,6 +33,19 @@ export const ExportPreviewPanel = withInstrumentation(
           artifact.manifest.resolvedSelection.included.length - artifact.manifest.resolvedSelection.explicit.length
         )
       : 0;
+    const dependencyNames = artifact?.manifest.resolvedSelection
+      ? artifact.manifest.resolvedSelection.included
+          .filter(
+            (included) =>
+              !artifact.manifest.resolvedSelection!.explicit.some(
+                (explicit) =>
+                  explicit.namespace === included.namespace &&
+                  explicit.kind === included.kind &&
+                  explicit.name === included.name
+              )
+          )
+          .map((declaration) => `${declaration.namespace}.${declaration.name}`)
+      : [];
 
     useEffect(() => {
       if (!textFiles.some((file) => file.path === selectedPath)) {
@@ -124,6 +137,11 @@ export const ExportPreviewPanel = withInstrumentation(
             Download export
           </Button>
         </div>
+        {dependencyNames.length > 0 && (
+          <p className="shrink-0 border-b border-border px-3 py-1 text-xs text-muted-foreground">
+            Included: {dependencyNames.join(', ')}
+          </p>
+        )}
         <pre
           className="studio-scroll min-h-0 flex-1 overflow-auto p-3 text-xs whitespace-pre"
           aria-label="Generated export code"

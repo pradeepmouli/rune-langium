@@ -56,6 +56,7 @@ it('shows declarations included by the resolved dependency closure', () => {
     />
   );
   expect(screen.getByText('Includes 1 dependency declaration')).toBeTruthy();
+  expect(screen.getByText('Included: test.Address')).toBeTruthy();
 });
 
 it('switches between text files in one captured artifact', async () => {
