@@ -17,7 +17,7 @@ import { useInstanceStore } from '../store/instance-store.js';
 import { withInstrumentation } from '../services/instrumentation/core.js';
 
 export interface InstanceSeed {
-  typeFqn: string;
+  typeFqn?: string;
   data: unknown;
   provenance?: InstanceProvenance;
 }

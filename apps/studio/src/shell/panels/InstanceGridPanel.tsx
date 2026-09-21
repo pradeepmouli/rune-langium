@@ -1,9 +1,16 @@
 // SPDX-License-Identifier: FSL-1.1-ALv2
 // Copyright (c) 2026 Pradeep Mouli
 
-import type { ReactElement } from 'react';
+import { useState, type ReactElement } from 'react';
 import { Input } from '@rune-langium/design-system/ui/input';
 import { Button } from '@rune-langium/design-system/ui/button';
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle
+} from '@rune-langium/design-system/ui/dialog';
 import { WorkspaceTypePicker } from '../../components/WorkspaceTypePicker.js';
 import { useInstanceStore } from '../../store/instance-store.js';
 import { filterInstances, usePrototypeViewStore } from '../../store/prototype-view-store.js';
@@ -15,11 +22,46 @@ export const InstanceGridPanel = withInstrumentation(
     const validationStatus = useInstanceStore((state) => state.validationStatus);
     const saveStates = useInstanceStore((state) => state.saveStates);
     const duplicateInstance = useInstanceStore((state) => state.duplicateInstance);
+    const renameInstance = useInstanceStore((state) => state.renameInstance);
     const removeInstance = useInstanceStore((state) => state.removeInstance);
     const view = usePrototypeViewStore((state) => state.state);
     const patch = usePrototypeViewStore((state) => state.patch);
     const rows = filterInstances(Object.values(instances), view.query, view.typeFqn);
     const selectedOutsideFilter = view.selectedId && !rows.some((record) => record.id === view.selectedId);
+    const [renamingId, setRenamingId] = useState<string | null>(null);
+    const [renamedName, setRenamedName] = useState('');
+    const [deletingId, setDeletingId] = useState<string | null>(null);
+    const [actionError, setActionError] = useState<string | null>(null);
+    const renaming = renamingId ? instances[renamingId] : undefined;
+    const deleting = deletingId ? instances[deletingId] : undefined;
+
+    const closeRename = () => {
+      setRenamingId(null);
+      setRenamedName('');
+    };
+
+    const confirmRename = () => {
+      if (!renaming || !renamedName.trim()) return;
+      try {
+        renameInstance(renaming.id, renamedName);
+        closeRename();
+      } catch (error) {
+        setActionError(error instanceof Error ? error.message : String(error));
+      }
+    };
+
+    const confirmDelete = async () => {
+      if (!deleting) return;
+      const id = deleting.id;
+      setActionError(null);
+      try {
+        await removeInstance(id);
+        if (usePrototypeViewStore.getState().state.selectedId === id) patch({ selectedId: null });
+        setDeletingId(null);
+      } catch (error) {
+        setActionError(error instanceof Error ? error.message : String(error));
+      }
+    };
 
     return (
       <section data-testid="prototype-grid" className="flex h-full min-h-0 flex-col" aria-label="Instances">
@@ -96,14 +138,21 @@ export const InstanceGridPanel = withInstrumentation(
                         size="xs"
                         onClick={(event) => {
                           event.stopPropagation();
-                          void removeInstance(record.id).then(() => {
-                            if (
-                              useInstanceStore.getState().instances[record.id] === undefined &&
-                              view.selectedId === record.id
-                            ) {
-                              patch({ selectedId: null });
-                            }
-                          });
+                          setActionError(null);
+                          setRenamingId(record.id);
+                          setRenamedName(record.name);
+                        }}
+                      >
+                        Rename
+                      </Button>
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="xs"
+                        onClick={(event) => {
+                          event.stopPropagation();
+                          setActionError(null);
+                          setDeletingId(record.id);
                         }}
                       >
                         Delete
@@ -115,6 +164,50 @@ export const InstanceGridPanel = withInstrumentation(
             </tbody>
           </table>
         </div>
+        {actionError ? (
+          <p role="alert" className="border-t border-border p-2 text-sm text-destructive">
+            {actionError}
+          </p>
+        ) : null}
+        <Dialog open={Boolean(renaming)} onOpenChange={(open) => !open && closeRename()}>
+          <DialogContent className="max-w-md">
+            <DialogHeader>
+              <DialogTitle>Rename instance</DialogTitle>
+              <DialogDescription>Choose a name for {renaming?.name}.</DialogDescription>
+            </DialogHeader>
+            <Input
+              aria-label="Instance name"
+              value={renamedName}
+              onChange={(event) => setRenamedName(event.target.value)}
+            />
+            <div className="flex justify-end gap-2">
+              <Button type="button" variant="outline" onClick={closeRename}>
+                Cancel
+              </Button>
+              <Button type="button" disabled={!renamedName.trim()} onClick={confirmRename}>
+                Rename
+              </Button>
+            </div>
+          </DialogContent>
+        </Dialog>
+        <Dialog open={Boolean(deleting)} onOpenChange={(open) => !open && setDeletingId(null)}>
+          <DialogContent className="max-w-md">
+            <DialogHeader>
+              <DialogTitle>Delete instance?</DialogTitle>
+              <DialogDescription>
+                Delete {deleting?.name}? Its saved instance data will be removed from this workspace.
+              </DialogDescription>
+            </DialogHeader>
+            <div className="flex justify-end gap-2">
+              <Button type="button" variant="outline" onClick={() => setDeletingId(null)}>
+                Cancel
+              </Button>
+              <Button type="button" variant="destructive" onClick={() => void confirmDelete()}>
+                Delete instance
+              </Button>
+            </div>
+          </DialogContent>
+        </Dialog>
       </section>
     );
   },

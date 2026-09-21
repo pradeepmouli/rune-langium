@@ -49,6 +49,26 @@ describe('PrototypePerspective', () => {
     expect(screen.getByLabelText('Instance payload')).toBeInTheDocument();
   });
 
+  it('opens the shared creation dialog with imported JSON values', async () => {
+    render(<PrototypePerspective />);
+    const file = new File(['{"name":"Acme"}'], 'party.json', { type: 'application/json' });
+
+    fireEvent.change(screen.getByLabelText('Import JSON'), { target: { files: [file] } });
+
+    expect(await screen.findByRole('heading', { name: 'New instance' })).toBeVisible();
+    expect(screen.getByRole('button', { name: 'Instance type' })).toBeVisible();
+  });
+
+  it('keeps malformed JSON out of the creation flow', async () => {
+    render(<PrototypePerspective />);
+    const file = new File(['{'], 'broken.json', { type: 'application/json' });
+
+    fireEvent.change(screen.getByLabelText('Import JSON'), { target: { files: [file] } });
+
+    expect(await screen.findByRole('alert')).toHaveTextContent(/JSON/i);
+    expect(screen.queryByRole('heading', { name: 'New instance' })).not.toBeInTheDocument();
+  });
+
   it('does not carry over stale field-level validation errors when switching between instances of the same type (finding #8)', () => {
     const partySchema = {
       schemaVersion: 1 as const,

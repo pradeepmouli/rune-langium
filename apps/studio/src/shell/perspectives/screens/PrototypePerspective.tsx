@@ -2,8 +2,9 @@
 // SPDX-License-Identifier: FSL-1.1-ALv2
 // Copyright (c) 2026 Pradeep Mouli
 
-import { useEffect, useState, type ReactElement } from 'react';
+import { useEffect, useRef, useState, type ChangeEvent, type ReactElement } from 'react';
 import { Button } from '@rune-langium/design-system/ui/button';
+import { jsonCodec } from '@rune-langium/codegen/instances';
 import { InstanceCreateDialog } from '../../../components/InstanceCreateDialog.js';
 import { usePrototypeViewStore } from '../../../store/prototype-view-store.js';
 import { useWorkspaceOptional } from '../../providers/workspace-context.js';
@@ -22,6 +23,8 @@ export const PrototypePerspective = withInstrumentation(
     const patch = usePrototypeViewStore((state) => state.patch);
     const [creating, setCreating] = useState(false);
     const [seed, setSeed] = useState<Parameters<typeof InstanceCreateDialog>[0]['seed']>();
+    const [importError, setImportError] = useState<string | null>(null);
+    const importInputRef = useRef<HTMLInputElement>(null);
     const selectedRecord = useInstanceStore((state) =>
       view.selectedId ? state.instances[view.selectedId] : undefined
     );
@@ -38,10 +41,35 @@ export const PrototypePerspective = withInstrumentation(
       }
     }, [workspace?.workspaceId]);
 
+    const importJson = async (event: ChangeEvent<HTMLInputElement>) => {
+      const file = event.target.files?.[0];
+      event.target.value = '';
+      if (!file) return;
+      const result = jsonCodec.import(await file.text(), view.typeFqn ?? '');
+      if (result.diagnostics.length > 0 || result.data === undefined) {
+        setImportError(result.diagnostics.map((diagnostic) => diagnostic.message).join(' '));
+        return;
+      }
+      setImportError(null);
+      setSeed({ data: result.data, ...(view.typeFqn ? { typeFqn: view.typeFqn } : {}) });
+      setCreating(true);
+    };
+
     return (
       <section data-testid="prototype-perspective" className="flex h-full min-h-0 flex-col">
         <div className="flex items-center justify-between border-b border-border px-3 py-2">
           <p className="text-sm text-muted-foreground">Persistent instances</p>
+          <input
+            ref={importInputRef}
+            type="file"
+            accept="application/json,.json"
+            aria-label="Import JSON"
+            className="sr-only"
+            onChange={importJson}
+          />
+          <Button type="button" variant="ghost" size="sm" onClick={() => importInputRef.current?.click()}>
+            Import JSON
+          </Button>
           <Button type="button" variant="ghost" size="sm" onClick={() => patch({ graphVisible: !view.graphVisible })}>
             Payload graph
           </Button>
@@ -68,6 +96,11 @@ export const PrototypePerspective = withInstrumentation(
         <div className="min-h-0 flex-1">
           <InstanceGridPanel />
         </div>
+        {importError ? (
+          <p role="alert" className="border-t border-border p-2 text-sm text-destructive">
+            {importError}
+          </p>
+        ) : null}
         {view.graphVisible && selectedRecord ? <InstanceGraphPanel record={selectedRecord} /> : null}
         <InstanceCreateDialog
           seed={seed}
