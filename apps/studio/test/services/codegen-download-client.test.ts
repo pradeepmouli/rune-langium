@@ -56,3 +56,15 @@ it.each(['error', 'messageerror', 'reply', 'timeout'])('settles and releases on 
   expect(worker.terminate).toHaveBeenCalledOnce();
   expect(vi.getTimerCount()).toBe(0);
 });
+
+it('cancels a curated request and releases its worker', async () => {
+  const controller = new AbortController();
+  const result = requestCodegenDownload(body, controller.signal);
+  const worker = DownloadWorker.current;
+
+  controller.abort();
+
+  await expect(result).rejects.toMatchObject({ name: 'AbortError' });
+  expect(worker.terminate).toHaveBeenCalledOnce();
+  expect(vi.getTimerCount()).toBe(0);
+});

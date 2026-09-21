@@ -1157,7 +1157,8 @@ export const downloadTargetViaRouter = withInstrumentation(
     curatedBundles: ReadonlyArray<{ id: string; version: string }> = [],
     namespaces: ReadonlyArray<string> = [],
     curatedDocs: ReadonlyArray<{ uri: string; serializedModel: string }> = [],
-    selection?: ExportSelection
+    selection?: ExportSelection,
+    signal?: AbortSignal
   ): Promise<void> {
     const body: Record<string, unknown> = { files, target, options };
     // Send BOTH when available — NOT mutually exclusive. The server prefers
@@ -1188,7 +1189,7 @@ export const downloadTargetViaRouter = withInstrumentation(
       body.namespaces = namespaces;
     }
     if (selection) body.selection = selection;
-    const response = await requestCodegenDownload(body);
+    const response = await requestCodegenDownload(body, signal);
 
     if (!response.ok) {
       let envelope: { ok?: boolean; error?: string; diagnostics?: unknown } = {};
