@@ -10,6 +10,7 @@ import { useWorkspaceOptional } from '../../providers/workspace-context.js';
 import { InstanceInspectorPanel } from '../../panels/InstanceInspectorPanel.js';
 import { InstanceGridPanel } from '../../panels/InstanceGridPanel.js';
 import { withInstrumentation } from '../../../services/instrumentation/core.js';
+import { usePrototypeNavigationStore } from '../../../services/prototype-navigation.js';
 
 export const PrototypePerspective = withInstrumentation(
   function PrototypePerspective(): ReactElement {
@@ -18,16 +19,32 @@ export const PrototypePerspective = withInstrumentation(
     const activate = usePrototypeViewStore((state) => state.activate);
     const patch = usePrototypeViewStore((state) => state.patch);
     const [creating, setCreating] = useState(false);
+    const [seed, setSeed] = useState<Parameters<typeof InstanceCreateDialog>[0]['seed']>();
 
     useEffect(() => {
       if (workspace?.workspaceId) void activate(workspace.workspaceId);
     }, [activate, workspace?.workspaceId]);
+    useEffect(() => {
+      if (!workspace?.workspaceId) return;
+      const intent = usePrototypeNavigationStore.getState().consume(workspace.workspaceId);
+      if (intent?.kind === 'create') {
+        setSeed(intent.seed);
+        setCreating(true);
+      }
+    }, [workspace?.workspaceId]);
 
     return (
       <section data-testid="prototype-perspective" className="flex h-full min-h-0 flex-col">
         <div className="flex items-center justify-between border-b border-border px-3 py-2">
           <p className="text-sm text-muted-foreground">Persistent instances</p>
-          <Button type="button" size="sm" onClick={() => setCreating(true)}>
+          <Button
+            type="button"
+            size="sm"
+            onClick={() => {
+              setSeed(undefined);
+              setCreating(true);
+            }}
+          >
             New instance
           </Button>
         </div>
@@ -44,6 +61,7 @@ export const PrototypePerspective = withInstrumentation(
           <InstanceGridPanel />
         </div>
         <InstanceCreateDialog
+          seed={seed}
           open={creating}
           onClose={() => setCreating(false)}
           onCreated={(id) => patch({ selectedId: id, inspectorTab: 'form' })}
