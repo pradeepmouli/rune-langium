@@ -38,6 +38,11 @@ const { mockGenerateArtifact, mockInvalidateArtifact } = vi.hoisted(() => ({
   mockGenerateArtifact: vi.fn().mockResolvedValue(undefined),
   mockInvalidateArtifact: vi.fn()
 }));
+const { mockActivateExportWorkbench, mockConfigureExport, mockSetActiveExportFile } = vi.hoisted(() => ({
+  mockActivateExportWorkbench: vi.fn().mockResolvedValue(undefined),
+  mockConfigureExport: vi.fn(),
+  mockSetActiveExportFile: vi.fn()
+}));
 
 // ---------------------------------------------------------------------------
 // Mock heavy child components
@@ -89,7 +94,12 @@ vi.mock('../../src/services/workspace.js', async (importOriginal) => {
 
 vi.mock('../../src/store/export-workbench-store.js', () => {
   const state = {
+    config: { target: 'typescript' as const, selection: { namespaces: [], declarations: [] }, options: {} },
+    activeFile: undefined,
     run: { status: 'idle' as const },
+    activate: mockActivateExportWorkbench,
+    configure: mockConfigureExport,
+    setActiveFile: mockSetActiveExportFile,
     generate: mockGenerateArtifact,
     invalidate: mockInvalidateArtifact
   };
@@ -138,6 +148,9 @@ describe('ExportPerspective', () => {
     mockDownloadTargetViaRouter.mockClear();
     mockGenerateArtifact.mockClear();
     mockInvalidateArtifact.mockClear();
+    mockActivateExportWorkbench.mockClear();
+    mockConfigureExport.mockClear();
+    mockSetActiveExportFile.mockClear();
   });
 
   it('always renders data-testid="export-perspective"', () => {

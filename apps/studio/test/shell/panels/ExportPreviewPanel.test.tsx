@@ -83,3 +83,32 @@ it('switches between text files in one captured artifact', async () => {
   });
   expect(await screen.findByLabelText('Generated export code')).toHaveTextContent('second.ts');
 });
+
+it('reports the selected preview file to the workspace workbench', async () => {
+  const onActiveFileChange = vi.fn();
+  const multiFileArtifact = {
+    ...artifact,
+    manifest: {
+      ...artifact.manifest,
+      files: [
+        { path: 'first.ts', kind: 'text' as const, bytes: 1 },
+        { path: 'second.ts', kind: 'text' as const, bytes: 1 }
+      ]
+    },
+    readText: vi.fn().mockResolvedValue('export {}')
+  };
+  render(
+    <ExportPreviewPanel
+      run={{ status: 'ready', inputKey: 'input', artifact: multiFileArtifact }}
+      activeFile="second.ts"
+      onActiveFileChange={onActiveFileChange}
+      onDownload={vi.fn()}
+    />
+  );
+
+  const picker = await screen.findByRole('combobox', { name: 'Generated export file' });
+  await import('@testing-library/user-event').then(async ({ default: userEvent }) => {
+    await userEvent.selectOptions(picker, 'first.ts');
+  });
+  expect(onActiveFileChange).toHaveBeenLastCalledWith('first.ts');
+});

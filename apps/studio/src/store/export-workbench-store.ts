@@ -6,6 +6,7 @@ import type { GeneratorDiagnostic, Target } from '@rune-langium/codegen/export';
 import { exportInputKey, generateExport, type ExportConfig, type ExportInput } from '../services/export-request.js';
 import type { ExportArtifact } from '../services/export-artifact.js';
 import { withInstrumentation } from '../services/instrumentation/core.js';
+import { readWorkbenchSettings, writeWorkbenchSettings } from '../shell/workbench-settings.js';
 
 export type ExportRunState =
   | { status: 'idle' }
@@ -15,10 +16,20 @@ export type ExportRunState =
 
 type GenerateExport = (input: ExportInput, signal: AbortSignal) => Promise<ExportArtifact>;
 
-export interface ExportWorkbenchState {
+/** Durable preferences. Generated artifacts and source stay in memory only. */
+export interface ExportWorkbenchPreferences {
   config: ExportConfig;
+  activeFile: string | undefined;
+}
+
+export interface ExportWorkbenchState {
+  workspaceId: string | undefined;
+  config: ExportConfig;
+  activeFile: string | undefined;
   run: ExportRunState;
+  activate(workspaceId: string): Promise<void>;
   configure(config: ExportConfig): void;
+  setActiveFile(path: string | undefined): void;
   invalidate(sourceRevision: number): void;
   generate(input: ExportInput): Promise<void>;
   cancel(): void;
@@ -30,6 +41,15 @@ const DEFAULT_CONFIG: ExportConfig = {
   options: {}
 };
 
+const DEFAULT_PREFERENCES: ExportWorkbenchPreferences = {
+  config: DEFAULT_CONFIG,
+  activeFile: undefined
+};
+
+function cloneConfig(config: ExportConfig): ExportConfig {
+  return structuredClone(config);
+}
+
 function isAbort(error: unknown): boolean {
   return error instanceof DOMException && error.name === 'AbortError';
 }
@@ -39,16 +59,50 @@ export const createExportWorkbench = withInstrumentation(
   function createExportWorkbench(generateExportArtifact: GenerateExport = generateExport) {
     let active: { requestId: string; controller: AbortController } | undefined;
     let sequence = 0;
+    let activation = 0;
     const cancelActive = () => {
       active?.controller.abort();
       active = undefined;
     };
+    const persist = (state: Pick<ExportWorkbenchState, 'workspaceId' | 'config' | 'activeFile'>) => {
+      if (!state.workspaceId) return;
+      void writeWorkbenchSettings(state.workspaceId, 'export-workbench', {
+        config: state.config,
+        activeFile: state.activeFile
+      });
+    };
     return create<ExportWorkbenchState>((set, get) => ({
+      workspaceId: undefined,
       config: DEFAULT_CONFIG,
+      activeFile: undefined,
       run: { status: 'idle' },
+      async activate(workspaceId) {
+        const generation = ++activation;
+        cancelActive();
+        set({
+          workspaceId,
+          config: cloneConfig(DEFAULT_CONFIG),
+          activeFile: undefined,
+          run: { status: 'idle' }
+        });
+        const restored = await readWorkbenchSettings(workspaceId, 'export-workbench', DEFAULT_PREFERENCES);
+        if (activation === generation && get().workspaceId === workspaceId) {
+          set({
+            config: cloneConfig(restored.config ?? DEFAULT_CONFIG),
+            activeFile: restored.activeFile,
+            run: { status: 'idle' }
+          });
+        }
+      },
       configure(config) {
         cancelActive();
-        set({ config, run: { status: 'idle' } });
+        const nextConfig = cloneConfig(config);
+        set({ config: nextConfig, run: { status: 'idle' } });
+        persist({ ...get(), config: nextConfig });
+      },
+      setActiveFile(activeFile) {
+        set({ activeFile });
+        persist({ ...get(), activeFile });
       },
       invalidate(sourceRevision) {
         cancelActive();
@@ -63,11 +117,14 @@ export const createExportWorkbench = withInstrumentation(
         cancelActive();
         const controller = new AbortController();
         const requestId = `export:${++sequence}`;
-        const inputKey = exportInputKey(input);
+        const config = cloneConfig(input.config);
+        const ownedInput = { ...input, config };
+        const inputKey = exportInputKey(ownedInput);
         active = { requestId, controller };
-        set({ config: input.config, run: { status: 'generating', requestId } });
+        set({ config, run: { status: 'generating', requestId } });
+        persist({ ...get(), config });
         try {
-          const artifact = await generateExportArtifact(input, controller.signal);
+          const artifact = await generateExportArtifact(ownedInput, controller.signal);
           if (active?.requestId !== requestId) return;
           set({ run: { status: 'ready', inputKey, artifact } });
         } catch (error) {

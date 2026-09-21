@@ -1,7 +1,18 @@
 // SPDX-License-Identifier: FSL-1.1-ALv2
 // Copyright (c) 2026 Pradeep Mouli
 
-import { expect, it, vi } from 'vitest';
+import { afterEach, expect, it, vi } from 'vitest';
+
+const { mockReadWorkbenchSettings, mockWriteWorkbenchSettings } = vi.hoisted(() => ({
+  mockReadWorkbenchSettings: vi.fn(),
+  mockWriteWorkbenchSettings: vi.fn()
+}));
+
+vi.mock('../../src/shell/workbench-settings.js', () => ({
+  readWorkbenchSettings: mockReadWorkbenchSettings,
+  writeWorkbenchSettings: mockWriteWorkbenchSettings
+}));
+
 import { createExportWorkbench } from '../../src/store/export-workbench-store.js';
 import { exportInputKey, type ExportInput } from '../../src/services/export-request.js';
 import type { ExportArtifact } from '../../src/services/export-artifact.js';
@@ -23,6 +34,11 @@ const artifact: ExportArtifact = {
   manifest: { version: 1, target: 'typescript', files: [], diagnostics: [] },
   readText: async () => ''
 };
+
+afterEach(() => {
+  mockReadWorkbenchSettings.mockReset();
+  mockWriteWorkbenchSettings.mockReset();
+});
 
 it('rejects a completed result after its inputs change', async () => {
   let finish!: (result: ExportArtifact) => void;
@@ -58,4 +74,26 @@ it('uses the same key for option objects with different insertion order', () => 
     }
   };
   expect(exportInputKey(reordered)).toBe(exportInputKey(original));
+});
+
+it('restores and persists preferences by workspace without retaining the artifact', async () => {
+  mockReadWorkbenchSettings.mockResolvedValue({
+    config: { ...input.config, target: 'zod' },
+    activeFile: 'test/index.ts'
+  });
+  const store = createExportWorkbench(vi.fn());
+
+  await store.getState().activate('workspace-a');
+
+  expect(store.getState()).toMatchObject({
+    workspaceId: 'workspace-a',
+    config: { target: 'zod', selection: input.config.selection },
+    activeFile: 'test/index.ts',
+    run: { status: 'idle' }
+  });
+  store.getState().setActiveFile('test/model.ts');
+  expect(mockWriteWorkbenchSettings).toHaveBeenCalledWith('workspace-a', 'export-workbench', {
+    config: expect.objectContaining({ target: 'zod' }),
+    activeFile: 'test/model.ts'
+  });
 });

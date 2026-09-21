@@ -68,7 +68,12 @@ export const ExportPerspective = withInstrumentation(
     // Download modal state (mirrors CodePreviewPanel's download flow).
     const [downloadModalTarget, setDownloadModalTarget] = useState<Target | undefined>(undefined);
     const [downloadingTarget, setDownloadingTarget] = useState<Target | undefined>(undefined);
-    const [exportSelection, setExportSelection] = useState<ExportSelection>({ namespaces: [], declarations: [] });
+    const exportConfig = useExportWorkbenchStore((state) => state.config);
+    const activateExportWorkbench = useExportWorkbenchStore((state) => state.activate);
+    const configureExport = useExportWorkbenchStore((state) => state.configure);
+    const activeExportFile = useExportWorkbenchStore((state) => state.activeFile);
+    const setActiveExportFile = useExportWorkbenchStore((state) => state.setActiveFile);
+    const exportSelection = exportConfig.selection;
     const focusedSelection =
       exportSelection.namespaces.length > 0 || exportSelection.declarations.length > 0 ? exportSelection : undefined;
     const exportRun = useExportWorkbenchStore((state) => state.run);
@@ -82,6 +87,10 @@ export const ExportPerspective = withInstrumentation(
     const [sourceRevision, setSourceRevision] = useState(0);
 
     useEffect(() => {
+      if (workspaceId) void activateExportWorkbench(workspaceId);
+    }, [activateExportWorkbench, workspaceId]);
+
+    useEffect(() => {
       setSourceRevision((previous) => {
         const revision = previous + 1;
         invalidateArtifact(revision);
@@ -89,9 +98,10 @@ export const ExportPerspective = withInstrumentation(
       });
     }, [invalidateArtifact, sourceFingerprint]);
 
-    useEffect(() => {
-      setExportSelection({ namespaces: [], declarations: [] });
-    }, [workspaceId]);
+    const handleSelectionChange = useCallback(
+      (selection: ExportSelection) => configureExport({ ...exportConfig, selection }),
+      [configureExport, exportConfig]
+    );
 
     const handleView = useCallback(
       (target: Target) => {
@@ -119,9 +129,10 @@ export const ExportPerspective = withInstrumentation(
           );
           return;
         }
+        configureExport({ ...exportConfig, target });
         setDownloadModalTarget(target);
       },
-      [files]
+      [configureExport, exportConfig, files]
     );
 
     const handleModalGenerate = useCallback(
@@ -203,7 +214,7 @@ export const ExportPerspective = withInstrumentation(
       <section data-testid="export-perspective" className="h-full overflow-hidden flex flex-col">
         <div className="flex flex-col flex-1 min-h-0">
           <div className="grid shrink-0 border-b border-border lg:grid-cols-[minmax(0,1fr)_minmax(22rem,0.8fr)]">
-            <ExportSelectionPanel selection={exportSelection} onChange={setExportSelection} />
+            <ExportSelectionPanel selection={exportSelection} onChange={handleSelectionChange} />
             {/* Target settings remain visible while the selection changes. */}
             <div
               data-testid="export-targets-section"
@@ -223,6 +234,8 @@ export const ExportPerspective = withInstrumentation(
             <div className="min-h-0 flex-1">
               <ExportPreviewPanel
                 run={exportRun}
+                activeFile={activeExportFile}
+                onActiveFileChange={setActiveExportFile}
                 onDownload={() => {
                   if (exportRun.status === 'ready') downloadExportArtifact(exportRun.artifact);
                 }}

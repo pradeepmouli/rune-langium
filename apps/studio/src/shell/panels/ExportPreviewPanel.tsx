@@ -8,14 +8,22 @@ import { withInstrumentation } from '../../services/instrumentation/core.js';
 
 export interface ExportPreviewPanelProps {
   run: ExportRunState;
+  activeFile?: string;
+  onActiveFileChange?(path: string | undefined): void;
   onDownload(): void;
 }
 
 /** Read-only display of the current captured export artifact. */
 export const ExportPreviewPanel = withInstrumentation(
-  function ExportPreviewPanel({ run, onDownload }: ExportPreviewPanelProps): ReactElement {
+  function ExportPreviewPanel({
+    run,
+    activeFile,
+    onActiveFileChange,
+    onDownload
+  }: ExportPreviewPanelProps): ReactElement {
     const [text, setText] = useState<string | undefined>();
-    const [selectedPath, setSelectedPath] = useState<string | undefined>();
+    const [uncontrolledPath, setUncontrolledPath] = useState<string | undefined>();
+    const selectedPath = activeFile ?? uncontrolledPath;
     const artifact = run.status === 'ready' || run.status === 'stale' ? run.artifact : undefined;
     const textFiles = artifact?.manifest.files.filter((file) => file.kind === 'text') ?? [];
     const textFile = textFiles.find((file) => file.path === selectedPath) ?? textFiles[0];
@@ -27,8 +35,12 @@ export const ExportPreviewPanel = withInstrumentation(
       : 0;
 
     useEffect(() => {
-      if (!textFiles.some((file) => file.path === selectedPath)) setSelectedPath(textFiles[0]?.path);
-    }, [selectedPath, textFiles]);
+      if (!textFiles.some((file) => file.path === selectedPath)) {
+        const nextPath = textFiles[0]?.path;
+        setUncontrolledPath(nextPath);
+        onActiveFileChange?.(nextPath);
+      }
+    }, [onActiveFileChange, selectedPath, textFiles]);
 
     useEffect(() => {
       let active = true;
@@ -90,7 +102,10 @@ export const ExportPreviewPanel = withInstrumentation(
               aria-label="Generated export file"
               className="h-7 max-w-52 rounded border border-input bg-background px-2 text-xs"
               value={textFile.path}
-              onChange={(event) => setSelectedPath(event.target.value)}
+              onChange={(event) => {
+                setUncontrolledPath(event.target.value);
+                onActiveFileChange?.(event.target.value);
+              }}
             >
               {textFiles.map((file) => (
                 <option key={file.path} value={file.path}>
