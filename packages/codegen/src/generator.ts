@@ -26,7 +26,7 @@ import { typescriptProfile } from './emit/typescript-profile.js';
 import { jsonSchemaProfile } from './emit/json-schema-profile.js';
 import { sqlProfile } from './emit/sql-profile.js';
 import { ExcelWholeModelEmitter } from './emit/excel-emitter.js';
-import { selectDeclarationDocuments } from './selection/declaration-selection.js';
+import { resolveExportSelection } from './selection/declaration-selection.js';
 
 // 019 spec §3.2 — two-registry dispatch.
 //
@@ -231,57 +231,78 @@ export async function runGenerate(docs: LangiumDocument[], options: GeneratorOpt
       }
     ];
   } else {
-    // Group by namespace
-    const emissionDocs = options.selection ? selectDeclarationDocuments(docs, options.selection) : docs;
-    const allByNamespace = groupByNamespace(emissionDocs);
-    if (allByNamespace.size === 0) {
-      return [];
-    }
-
-    // 019 §5.1/§5.3 — apply the optional namespace allowlist. Filtering
-    // here (before registry-build + walk) means the registry only knows
-    // about the kept namespaces, so import resolution stays scoped to the
-    // emitted set. The caller passes a dependency-closed allowlist (the
-    // modal's §5.2 cascade guarantees this), so no kept namespace imports
-    // a dropped one. An unknown name in the allowlist is simply ignored.
-    const allowlist = options.namespaces ? new Set(options.namespaces) : undefined;
-    const byNamespace = allowlist
-      ? new Map(Array.from(allByNamespace).filter(([ns]) => allowlist.has(ns)))
-      : allByNamespace;
-    if (byNamespace.size === 0) {
-      return [];
-    }
-
-    // Build cross-namespace registry before per-namespace emission
-    const registry: NamespaceRegistry = buildNamespaceRegistry(byNamespace);
-
-    // Walk every namespace once. The walks are reused across both contract
-    // types — WholeModelEmitter consumes the whole map, NamespaceEmitter
-    // loops over individual entries.
-    const walks = new Map<string, NamespaceWalkResult>();
-    for (const [namespace, namespaceDocs] of byNamespace) {
-      walks.set(namespace, walkNamespace(namespaceDocs, namespace));
-    }
-
-    // 019 §3.2 — registry membership disambiguates the contract; we
-    // don't need a runtime discriminator here. The synthesized
-    // GenericModelEmitter wrapper for (NamespaceEmitter + Profile) is
-    // also a WholeModelEmitter so it lands in the same branch.
-    const isWholeModelCtor =
-      target in WHOLE_MODEL_EMITTERS ||
-      (target in NAMESPACE_EMITTERS && target in PROFILES && resolveLayout(target, options) !== 'per-namespace');
-
-    if (isWholeModelCtor) {
-      outputs = await new (emitterClass as WholeModelEmitterConstructor)().emit(walks, registry, options);
+    const selectionResolution = options.selection ? resolveExportSelection(docs, options.selection) : undefined;
+    if (selectionResolution?.unknown.length) {
+      outputs = [
+        {
+          relativePath: `${target}.selection-error`,
+          content: '',
+          sourceMap: [],
+          diagnostics: selectionResolution.unknown.map((item) =>
+            createDiagnostic(
+              'error',
+              'unknown-export-selection',
+              `Unknown ${item.kind} declaration '${item.namespace}.${item.name}'.`
+            )
+          ),
+          funcs: []
+        }
+      ];
     } else {
-      outputs = [];
-      for (const [, walked] of walks) {
-        outputs.push(emitNamespaceWithContract(walked, options, registry, emitterClass as NamespaceEmitterConstructor));
+      // Group by namespace
+      const emissionDocs = selectionResolution ? selectionResolution.documents : docs;
+      const allByNamespace = groupByNamespace(emissionDocs);
+      if (allByNamespace.size === 0) {
+        return [];
       }
-    }
 
-    // Sort by relativePath for deterministic output (SC-007)
-    outputs.sort((a, b) => a.relativePath.localeCompare(b.relativePath));
+      // 019 §5.1/§5.3 — apply the optional namespace allowlist. Filtering
+      // here (before registry-build + walk) means the registry only knows
+      // about the kept namespaces, so import resolution stays scoped to the
+      // emitted set. The caller passes a dependency-closed allowlist (the
+      // modal's §5.2 cascade guarantees this), so no kept namespace imports
+      // a dropped one. An unknown name in the allowlist is simply ignored.
+      const allowlist = options.namespaces ? new Set(options.namespaces) : undefined;
+      const byNamespace = allowlist
+        ? new Map(Array.from(allByNamespace).filter(([ns]) => allowlist.has(ns)))
+        : allByNamespace;
+      if (byNamespace.size === 0) {
+        return [];
+      }
+
+      // Build cross-namespace registry before per-namespace emission
+      const registry: NamespaceRegistry = buildNamespaceRegistry(byNamespace);
+
+      // Walk every namespace once. The walks are reused across both contract
+      // types — WholeModelEmitter consumes the whole map, NamespaceEmitter
+      // loops over individual entries.
+      const walks = new Map<string, NamespaceWalkResult>();
+      for (const [namespace, namespaceDocs] of byNamespace) {
+        walks.set(namespace, walkNamespace(namespaceDocs, namespace));
+      }
+
+      // 019 §3.2 — registry membership disambiguates the contract; we
+      // don't need a runtime discriminator here. The synthesized
+      // GenericModelEmitter wrapper for (NamespaceEmitter + Profile) is
+      // also a WholeModelEmitter so it lands in the same branch.
+      const isWholeModelCtor =
+        target in WHOLE_MODEL_EMITTERS ||
+        (target in NAMESPACE_EMITTERS && target in PROFILES && resolveLayout(target, options) !== 'per-namespace');
+
+      if (isWholeModelCtor) {
+        outputs = await new (emitterClass as WholeModelEmitterConstructor)().emit(walks, registry, options);
+      } else {
+        outputs = [];
+        for (const [, walked] of walks) {
+          outputs.push(
+            emitNamespaceWithContract(walked, options, registry, emitterClass as NamespaceEmitterConstructor)
+          );
+        }
+      }
+
+      // Sort by relativePath for deterministic output (SC-007)
+      outputs.sort((a, b) => a.relativePath.localeCompare(b.relativePath));
+    }
   }
 
   // Strict mode: throw if any fatal diagnostics. Applies uniformly to

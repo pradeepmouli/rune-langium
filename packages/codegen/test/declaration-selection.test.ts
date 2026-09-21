@@ -77,5 +77,13 @@ type Party:
     expect(result.unknown).toEqual([{ namespace: 'test', name: 'Missing', kind: 'Data' }]);
     expect(result.documents).toEqual([]);
     expect(model.elements).toBe(elements);
+
+    const outputs = await generate(doc, {
+      target: 'typescript',
+      selection: { namespaces: [], declarations: [{ namespace: 'test', name: 'Missing', kind: 'Data' }] }
+    });
+    expect(outputs[0]?.diagnostics).toEqual(
+      expect.arrayContaining([expect.objectContaining({ code: 'unknown-export-selection' })])
+    );
   });
 });
