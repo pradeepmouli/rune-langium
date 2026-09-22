@@ -33,8 +33,8 @@ importers:
         specifier: ^3.1.8
         version: 3.1.8(ws@8.21.3)
       '@lspeasy/core':
-        specifier: ^2.7.1
-        version: 2.7.1(ws@8.21.3)
+        specifier: ^3.0.0
+        version: 3.0.0(ws@8.21.3)
       camelcase:
         specifier: ^9.0.0
         version: 9.0.0
@@ -210,8 +210,8 @@ importers:
   apps/lsp-worker:
     dependencies:
       '@lspeasy/core':
-        specifier: ^2.7.1
-        version: 2.7.1(ws@8.21.3)
+        specifier: ^3.0.0
+        version: 3.0.0(ws@8.21.3)
       '@rune-langium/curated-schema':
         specifier: workspace:*
         version: link:../../packages/curated-schema
@@ -277,8 +277,8 @@ importers:
         specifier: ^1.2.3
         version: 1.2.3
       '@lspeasy/core':
-        specifier: ^2.7.1
-        version: 2.7.1(ws@8.21.3)
+        specifier: ^3.0.0
+        version: 3.0.0(ws@8.21.3)
       '@marsidev/react-turnstile':
         specifier: ^1.6.1
         version: 1.6.1(react-dom@19.2.8(react@19.2.8))(react@19.2.8)
@@ -692,8 +692,8 @@ importers:
   packages/lsp-server:
     dependencies:
       '@lspeasy/core':
-        specifier: ^2.7.1
-        version: 2.7.1(ws@8.21.3)
+        specifier: ^3.0.0
+        version: 3.0.0(ws@8.21.3)
       '@lspeasy/server':
         specifier: ^4.2.2
         version: 4.2.2(ws@8.21.3)
@@ -827,8 +827,8 @@ importers:
   scratch/lsp-spike:
     dependencies:
       '@lspeasy/core':
-        specifier: ^2.7.1
-        version: 2.7.1(ws@8.21.3)
+        specifier: ^3.0.0
+        version: 3.0.0(ws@8.21.3)
       '@rune-langium/lsp-server':
         specifier: workspace:*
         version: link:../../packages/lsp-server
@@ -2106,6 +2106,15 @@ packages:
 
   '@lspeasy/core@2.7.1':
     resolution: {integrity: sha512-0igK8yaRC58ZxoTtNS/G/VuzB2raFYGp2UrG9ondSd0FOgN/C5yYkbOvfvQ4uSu/VjYrxuzUDSYImSrq/2Uyxw==}
+    engines: {node: '>=20.0.0'}
+    peerDependencies:
+      ws: '>=8.21.0'
+    peerDependenciesMeta:
+      ws:
+        optional: true
+
+  '@lspeasy/core@3.0.0':
+    resolution: {integrity: sha512-7Lp+F/X5cp7b11nUohPeVQRR2XmpKuxv/IqOgi5vbCy+VWEq0IWzd0xokYzpHrYbxrIgffaymmK047BOc5Zdig==}
     engines: {node: '>=20.0.0'}
     peerDependencies:
       ws: '>=8.21.0'
@@ -8244,6 +8253,11 @@ snapshots:
       - ws
 
   '@lspeasy/core@2.7.1(ws@8.21.3)':
+    optionalDependencies:
+      ws: 8.21.3
+      zod: 4.5.4
+
+  '@lspeasy/core@3.0.0(ws@8.21.3)':
     optionalDependencies:
       ws: 8.21.3
       zod: 4.5.4

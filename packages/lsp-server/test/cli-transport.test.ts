@@ -12,7 +12,7 @@
 
 import { describe, it, expect, beforeAll, afterAll } from 'vitest';
 import { WebSocketServer, WebSocket } from 'ws';
-import { WebSocketTransport } from '@lspeasy/core';
+import { WebSocketTransport } from '@lspeasy/core/transport/websocket';
 import { createRuneLspServer } from '../src/rune-dsl-server.js';
 import type { RuneLspServer } from '../src/rune-dsl-server.js';
 

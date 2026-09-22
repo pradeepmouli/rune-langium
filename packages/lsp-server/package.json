@@ -30,7 +30,7 @@
     "type-check": "tsc --noEmit"
   },
   "dependencies": {
-    "@lspeasy/core": "^2.7.1",
+    "@lspeasy/core": "^3.0.0",
     "@lspeasy/server": "^4.2.2",
     "@rune-langium/core": "workspace:*",
     "langium": "^4.3.1",
