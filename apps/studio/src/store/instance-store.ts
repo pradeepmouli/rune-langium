@@ -385,7 +385,15 @@ export const useInstanceStore = create<InstanceStoreState>((set, get) => ({
 
   dispatchValidate(id) {
     const record = get().instances[id];
-    if (!record || !workerRef) return;
+    if (!record) return;
+    if (!workerRef) {
+      const message = 'Instance validation is unavailable because the preview worker is not ready.';
+      set((state) => ({
+        validationStatus: { ...state.validationStatus, [id]: 'unavailable' },
+        schemaErrors: new Map(state.schemaErrors).set(record.typeFqn, { reason: 'generation-error', message })
+      }));
+      return;
+    }
     requestCounter++;
     const requestId = `validate:${id}:${requestCounter}`;
     pendingRequests.set(requestId, { instanceId: id, epoch: get().workspaceEpoch });

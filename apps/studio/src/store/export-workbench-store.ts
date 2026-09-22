@@ -114,7 +114,7 @@ export const createExportWorkbench = withInstrumentation(
         set((state) => ({
           config: nextConfig,
           run:
-            state.run.status === 'ready'
+            state.run.status === 'ready' || state.run.status === 'stale'
               ? { status: 'stale', inputKey: state.run.inputKey, artifact: state.run.artifact }
               : { status: 'idle' }
         }));
@@ -133,7 +133,7 @@ export const createExportWorkbench = withInstrumentation(
       invalidate(sourceRevision) {
         cancelActive();
         set((state) => {
-          if (state.run.status !== 'ready') return { run: { status: 'idle' } };
+          if (state.run.status !== 'ready' && state.run.status !== 'stale') return { run: { status: 'idle' } };
           return {
             run: { status: 'stale', inputKey: `${state.run.inputKey}:${sourceRevision}`, artifact: state.run.artifact }
           };

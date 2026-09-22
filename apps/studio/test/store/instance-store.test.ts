@@ -74,6 +74,13 @@ describe('instance-store', () => {
     expect(record?.data).toEqual({});
   });
 
+  it('marks a new instance unavailable when no preview worker can validate it', () => {
+    const id = useInstanceStore.getState().createInstance('test.Party', 'My Party');
+
+    expect(useInstanceStore.getState().validationStatus[id]).toBe('unavailable');
+    expect(useInstanceStore.getState().schemaErrors.get('test.Party')?.message).toMatch(/worker is not ready/i);
+  });
+
   it('copies incoming preview data and assigns a truthful saved state after flushing OPFS', async () => {
     const fs = new OpfsFs(createOpfsRoot() as never);
     useInstanceStore.getState().setOpfsContext(fs, '/ws-snapshot');

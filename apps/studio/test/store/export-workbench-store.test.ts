@@ -71,6 +71,17 @@ it('retains a completed artifact as stale when configuration changes', async () 
   });
 });
 
+it('keeps an existing stale artifact through later configuration and source changes', async () => {
+  const store = createExportWorkbench(async () => artifact);
+
+  await store.getState().generate(input);
+  store.getState().configure({ ...input.config, target: 'zod' });
+  store.getState().configure({ ...input.config, target: 'json-schema' });
+  store.getState().invalidate(input.sourceRevision + 1);
+
+  expect(store.getState().run).toMatchObject({ status: 'stale', artifact });
+});
+
 it('uses the same key for option objects with different insertion order', () => {
   const reordered: ExportInput = {
     ...input,
