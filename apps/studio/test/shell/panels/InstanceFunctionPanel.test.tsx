@@ -126,6 +126,18 @@ describe('InstanceFunctionPanel', () => {
     expect(client.dispose).toHaveBeenCalledTimes(1);
   });
 
+  it('shows a recoverable preparing state until function execution is ready', () => {
+    render(
+      <WorkspaceStateContext.Provider value={workspace}>
+        <PreviewSessionContext.Provider value={null}>
+          <InstanceFunctionPanel instanceId="missing-instance" />
+        </PreviewSessionContext.Provider>
+      </WorkspaceStateContext.Provider>
+    );
+
+    expect(screen.getByText('Function execution is preparing…')).toBeVisible();
+  });
+
   it('offers instance binding only to inputs that accept the selected instance type', async () => {
     const instanceId = useInstanceStore.getState().createInstance('test.Party', 'Acme', { name: 'Acme' });
     const client: PreviewSessionClient = {

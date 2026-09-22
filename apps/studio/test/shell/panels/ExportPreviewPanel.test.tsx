@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: FSL-1.1-ALv2
 // Copyright (c) 2026 Pradeep Mouli
 
-import { render, screen } from '@testing-library/react';
+import { fireEvent, render, screen } from '@testing-library/react';
 import { expect, it, vi } from 'vitest';
 import { ExportPreviewPanel } from '../../../src/shell/panels/ExportPreviewPanel.js';
 
@@ -25,6 +25,17 @@ it('renders text from the captured export artifact and downloads it on demand', 
   screen.getByRole('button', { name: 'Download export' }).click();
   expect(onDownload).toHaveBeenCalledOnce();
   expect(artifact.readText).toHaveBeenCalledWith('test.ts');
+});
+
+it('copies the loaded active text file', async () => {
+  const writeText = vi.fn().mockResolvedValue(undefined);
+  Object.defineProperty(navigator, 'clipboard', { configurable: true, value: { writeText } });
+  render(<ExportPreviewPanel run={{ status: 'ready', inputKey: 'input', artifact }} onDownload={vi.fn()} />);
+
+  fireEvent.click(await screen.findByRole('button', { name: 'Copy file' }));
+
+  await expect.poll(() => writeText.mock.calls).toEqual([['export interface Party {}']]);
+  expect(await screen.findByRole('button', { name: 'Copied' })).toBeVisible();
 });
 
 it('does not offer a stale artifact for download', () => {

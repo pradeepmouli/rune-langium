@@ -26,7 +26,7 @@ export const InstanceGraphPanel = withInstrumentation(
     return (
       <section
         aria-label="Payload graph"
-        className="relative h-64 border-t border-border"
+        className="relative h-full min-h-0 border-t border-border"
         data-testid="prototype-payload-graph"
       >
         {graph.truncated ? (

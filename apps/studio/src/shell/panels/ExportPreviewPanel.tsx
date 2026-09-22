@@ -40,6 +40,7 @@ export const ExportPreviewPanel = withInstrumentation(
   }: ExportPreviewPanelProps): ReactElement {
     const [text, setText] = useState<string | undefined>();
     const [uncontrolledPath, setUncontrolledPath] = useState<string | undefined>();
+    const [copyStatus, setCopyStatus] = useState<string | undefined>();
     const selectedPath = activeFile ?? uncontrolledPath;
     const artifact = run.status === 'ready' || run.status === 'stale' ? run.artifact : undefined;
     const textFiles = artifact?.manifest.files.filter((file) => file.kind === 'text') ?? [];
@@ -75,6 +76,7 @@ export const ExportPreviewPanel = withInstrumentation(
     useEffect(() => {
       let active = true;
       setText(undefined);
+      setCopyStatus(undefined);
       if (!artifact || !textFile) return;
       void artifact.readText(textFile.path).then((content) => {
         if (active) setText(content);
@@ -83,6 +85,16 @@ export const ExportPreviewPanel = withInstrumentation(
         active = false;
       };
     }, [artifact, textFile?.path]);
+
+    async function copyActiveFile(): Promise<void> {
+      if (text === undefined) return;
+      try {
+        await navigator.clipboard.writeText(text);
+        setCopyStatus('Copied');
+      } catch {
+        setCopyStatus('Copy failed');
+      }
+    }
 
     if (run.status === 'generating') {
       return (
@@ -157,6 +169,9 @@ export const ExportPreviewPanel = withInstrumentation(
             </select>
           )}
           <span className="ml-auto text-xs text-muted-foreground">{run.status === 'stale' ? 'Outdated' : 'Ready'}</span>
+          <Button type="button" size="sm" disabled={text === undefined} onClick={() => void copyActiveFile()}>
+            {copyStatus ?? 'Copy file'}
+          </Button>
           <Button type="button" size="sm" disabled={run.status === 'stale'} onClick={onDownload}>
             Download export
           </Button>

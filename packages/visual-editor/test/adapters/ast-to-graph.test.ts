@@ -64,6 +64,31 @@ describe('astToModel', () => {
       expect(tradeExtendsEdge).toBeDefined();
     });
 
+    it('creates extends edges from Data types to Choice parents', async () => {
+      const result = await parse(`
+        namespace "test.choice-parent"
+        version "1"
+
+        choice AssetChoice:
+          equity Equity (1..1)
+
+        type Equity:
+          ticker string (1..1)
+
+        type Basket extends AssetChoice:
+          name string (1..1)
+      `);
+      const { edges } = astToModel(result.value);
+
+      expect(edges).toContainEqual(
+        expect.objectContaining({
+          source: 'test.choice-parent.Basket#Data',
+          target: 'test.choice-parent.AssetChoice#Choice',
+          data: { kind: 'extends' }
+        })
+      );
+    });
+
     it('strips runtime-only AST fields from graph node data', async () => {
       const result = await parse(SIMPLE_INHERITANCE_SOURCE);
       const { nodes } = astToModel(result.value);

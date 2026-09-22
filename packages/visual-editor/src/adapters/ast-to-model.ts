@@ -219,7 +219,6 @@ export function astToModel(models: unknown, options?: AstToModelOptions): AstToM
     }
   }
   const resolveTypeReference = (name: string) => resolveNodeId(nodeIdsByName, name, TYPE_DECLARATION_KINDS);
-  const resolveDataReference = (name: string) => resolveNodeId(nodeIdsByName, name, ['Data']);
   const resolveEnumReference = (name: string) => resolveNodeId(nodeIdsByName, name, ['RosettaEnumeration']);
   const resolveFunctionReference = (name: string) => resolveNodeId(nodeIdsByName, name, ['RosettaFunction']);
 
@@ -233,7 +232,7 @@ export function astToModel(models: unknown, options?: AstToModelOptions): AstToM
       // `$type` is the union discriminant — `d` narrows to Dehydrated<Data>.
       const parentName = getRefText(d.superType);
       if (parentName) {
-        const parentNodeId = resolveDataReference(parentName);
+        const parentNodeId = resolveTypeReference(parentName);
         if (parentNodeId) {
           edges.push({
             id: makeEdgeId('extends', { source: node.id, target: parentNodeId }),

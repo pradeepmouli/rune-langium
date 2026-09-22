@@ -25,7 +25,7 @@ import {
 import { createInstanceReadiness } from '../../services/instance-readiness.js';
 import { createPreviewSessionClient, isPrototypeSessionRequest } from '../../services/preview-session-client.js';
 import type { InstanceReadiness } from '../../services/instance-readiness.js';
-import { PreviewSessionContext } from './preview-session-context.js';
+import { PreviewSessionContext, type PreviewSessionFactory } from './preview-session-context.js';
 import { pathToUri } from '../../utils/uri.js';
 import { getRuneStudioTestApi } from '../../test-api.js';
 import { BUNDLE_MARKER_SUFFIX } from '../../services/workspace.js';
@@ -109,6 +109,7 @@ export const CodegenProvider = withInstrumentation(
   function CodegenProvider({ children }: { children: React.ReactNode }): React.ReactElement {
     const { files, deferredExports, workspaceId } = useWorkspace();
     const [codegenWorker, setCodegenWorker] = useState<Worker | null>(null);
+    const [previewSessionFactory, setPreviewSessionFactory] = useState<PreviewSessionFactory | null>(null);
 
     const previewRequestSequenceRef = useRef(0);
     const codegenRequestSequenceRef = useRef(0);
@@ -419,6 +420,7 @@ export const CodegenProvider = withInstrumentation(
         waitForWorkerFiles: (signal) => syncWorkerFiles(codegenWorker, signal)
       });
       readinessRef.current = readiness;
+      setPreviewSessionFactory(() => () => createPreviewSessionClient(codegenWorker, readiness));
       useInstanceStore.getState().setWorker(codegenWorker);
       useInstanceStore.getState().setReadiness(readiness);
       function handleMessage(e: MessageEvent<unknown>) {
@@ -616,6 +618,7 @@ export const CodegenProvider = withInstrumentation(
         setWorkerRef(null);
         readiness.dispose();
         readinessRef.current = null;
+        setPreviewSessionFactory(null);
         useInstanceStore.getState().setReadiness(undefined);
         useInstanceStore.getState().setWorker(undefined);
         for (const waiter of workerFileWaitersRef.current.values()) {
@@ -736,17 +739,7 @@ export const CodegenProvider = withInstrumentation(
       }
     }, [codegenWorker, codegenActiveTarget, codegenPreviewTarget, showToast]);
 
-    return (
-      <PreviewSessionContext.Provider
-        value={() => {
-          const readiness = readinessRef.current;
-          if (!codegenWorker || !readiness) throw new Error('Function execution is not ready yet.');
-          return createPreviewSessionClient(codegenWorker, readiness);
-        }}
-      >
-        {children}
-      </PreviewSessionContext.Provider>
-    );
+    return <PreviewSessionContext.Provider value={previewSessionFactory}>{children}</PreviewSessionContext.Provider>;
   },
   { op: 'CodegenProvider' }
 );
