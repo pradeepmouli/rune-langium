@@ -94,6 +94,8 @@ interface FieldContext {
    * (Codex PR #459 review, round 2).
    */
   cyclicTypes: ReadonlySet<string>;
+  /** Worker-derived assignability for function inputs and hydrated bundles. */
+  assignableTypes?: ReadonlyMap<string, readonly string[]>;
 }
 
 const BUILTIN_KIND_MAP: Record<string, Extract<PreviewFieldKind, 'string' | 'number' | 'boolean'>> = {
@@ -115,6 +117,7 @@ export function generatePreviewSchemas(
 ): FormPreviewSchema[] {
   const docs = Array.isArray(documents) ? documents : [documents];
   const namespaces = buildNamespaceIndexes(docs);
+  const assignableTypes = buildAssignableTypes(namespaces);
   const schemas: FormPreviewSchema[] = [];
 
   // Whole-graph cycle detection (issue: Form Preview's own local, walk-
@@ -180,7 +183,7 @@ export function generatePreviewSchemas(
       const func = namespace.funcByName.get(name)!;
       const targetId = `${namespace.namespace}.${name}`;
       if (options.targetId && options.targetId !== targetId) continue;
-      schemas.push(buildFunctionSchema(func.node, namespace, targetId, cyclicTypes));
+      schemas.push(buildFunctionSchema(func.node, namespace, targetId, cyclicTypes, assignableTypes));
     }
   }
 
@@ -243,6 +246,31 @@ export function buildNamespaceIndexes(docs: LangiumDocument[]): NamespaceIndex[]
   }
 
   return Array.from(byNamespace.values()).sort((a, b) => a.namespace.localeCompare(b.namespace));
+}
+
+/** Maps each referenceable type to every concrete Data/Choice type assignable to it. */
+function buildAssignableTypes(namespaces: readonly NamespaceIndex[]): ReadonlyMap<string, readonly string[]> {
+  const types = namespaces.flatMap((namespace) => [
+    ...Array.from(namespace.dataByName.values(), ({ node }) => node),
+    ...Array.from(namespace.choiceByName.values(), ({ node }) => node)
+  ]);
+  const assignable = new Map<string, Set<string>>();
+  for (const candidate of types) {
+    const candidateId = qualifiedTypeId(candidate);
+    const visited = new Set<string>();
+    let current: Data | Choice | undefined = candidate;
+    while (current) {
+      const currentId = qualifiedTypeId(current);
+      if (visited.has(currentId)) break;
+      visited.add(currentId);
+      let values = assignable.get(currentId);
+      if (!values) assignable.set(currentId, (values = new Set()));
+      values.add(candidateId);
+      const parent: unknown = isData(current) ? current.superType?.ref : undefined;
+      current = parent && (isData(parent) || isChoice(parent)) ? parent : undefined;
+    }
+  }
+  return new Map(Array.from(assignable, ([typeFqn, values]) => [typeFqn, Array.from(values).sort()]));
 }
 
 function normalizeNamespace(name: unknown): string {
@@ -980,7 +1008,8 @@ function buildFunctionSchema(
   func: RosettaFunction,
   namespace: NamespaceIndex,
   targetId: string,
-  cyclicTypes: ReadonlySet<string>
+  cyclicTypes: ReadonlySet<string>,
+  assignableTypes: ReadonlyMap<string, readonly string[]>
 ): FormPreviewSchema {
   const unsupportedFeatures = new Set<string>();
   const sourceMap: PreviewSourceMapEntry[] = [];
@@ -996,7 +1025,8 @@ function buildFunctionSchema(
       path: attr.name,
       label: humanizeLabel(attr.name),
       seenTypes: new Set(),
-      cyclicTypes
+      cyclicTypes,
+      assignableTypes
     })
   );
   const output = functionOutput(func);
@@ -1212,6 +1242,7 @@ function objectField(ctx: FieldContext, data: Data, sourceUri: string): PreviewF
     label: ctx.label,
     kind: 'object',
     referencedTypeFqn: dataId,
+    ...(ctx.assignableTypes?.get(dataId) ? { assignableTypeFqns: [...ctx.assignableTypes.get(dataId)!] } : {}),
     required: true,
     children: [...choiceFields, ...attributeChildren],
     // choiceArmPaths (round-10 finding B): mirrors buildDataSchema's/
@@ -1293,6 +1324,7 @@ function choiceField(ctx: FieldContext, choice: Choice, sourceUri: string): Prev
     label: ctx.label,
     kind: 'object',
     referencedTypeFqn: choiceId,
+    ...(ctx.assignableTypes?.get(choiceId) ? { assignableTypeFqns: [...ctx.assignableTypes.get(choiceId)!] } : {}),
     required: true,
     children,
     choiceArmPaths: children.map((field) => field.path)

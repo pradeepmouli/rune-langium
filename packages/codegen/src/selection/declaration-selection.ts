@@ -53,6 +53,18 @@ function declaration(namespace: string, root: TopLevel): ExportSelection['declar
   return { namespace, name: root.name ?? '', kind: root.$type };
 }
 
+function uniqueDeclarations(
+  roots: Iterable<TopLevel>,
+  key: (root: TopLevel) => ExportSelection['declarations'][number] | undefined
+): ExportSelection['declarations'] {
+  const declarations = new Map<string, ExportSelection['declarations'][number]>();
+  for (const root of roots) {
+    const value = key(root);
+    if (value) declarations.set(declarationKey(value), value);
+  }
+  return [...declarations.values()];
+}
+
 /** Resolve selected roots and return shallow document views without mutating the linked workspace. */
 export function resolveExportSelection(docs: LangiumDocument[], selection: ExportSelection): ResolvedExportSelection {
   const wanted = new Set(selection.declarations.map(declarationKey));
@@ -128,14 +140,8 @@ export function resolveExportSelection(docs: LangiumDocument[], selection: Expor
   }
   return {
     documents,
-    explicit: [...explicitRoots].flatMap((root) => {
-      const value = key(root);
-      return value ? [value] : [];
-    }),
-    included: [...roots].flatMap((root) => {
-      const value = key(root);
-      return value ? [value] : [];
-    }),
+    explicit: uniqueDeclarations(explicitRoots, key),
+    included: uniqueDeclarations(roots, key),
     unknown: selection.declarations.filter((item) => !found.has(declarationKey(item))),
     unknownNamespaces: selection.namespaces.filter((namespace) => !foundNamespaces.has(namespace)),
     requiredBy

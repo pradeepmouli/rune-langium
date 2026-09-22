@@ -150,4 +150,39 @@ type Party:
     );
     expect(result.outputs.flatMap((output) => output.diagnostics)).toEqual([]);
   });
+
+  it('records one receipt root for a selected dispatch function and all of its overloads', async () => {
+    const { RuneDsl } = createRuneDslServices();
+    await RuneDsl.shared.workspace.WorkspaceManager.initializeWorkspace([]);
+    const doc = RuneDsl.shared.workspace.LangiumDocumentFactory.fromString(
+      `namespace test
+enum Kind:
+ Cash
+ Credit
+type CashResult:
+ amount number (1..1)
+type CreditResult:
+ amount number (1..1)
+func Compute:
+ inputs:
+  kind Kind (1..1)
+ output:
+  result CashResult (1..1)
+func Compute(kind: Kind -> Cash):
+func Compute(kind: Kind -> Credit):`,
+      URI.parse('inmemory:///selection-dispatch.rosetta')
+    );
+    await RuneDsl.shared.workspace.DocumentBuilder.build([doc]);
+    expect(doc.diagnostics ?? []).toEqual([]);
+
+    const selection = resolveExportSelection([doc], {
+      namespaces: [],
+      declarations: [{ namespace: 'test', name: 'Compute', kind: 'RosettaFunction' }]
+    });
+
+    expect(selection.explicit).toEqual([{ namespace: 'test', name: 'Compute', kind: 'RosettaFunction' }]);
+    expect(selection.included.filter((item) => item.name === 'Compute')).toEqual([
+      { namespace: 'test', name: 'Compute', kind: 'RosettaFunction' }
+    ]);
+  });
 });

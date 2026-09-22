@@ -409,7 +409,13 @@ function isPreviewField(value: unknown): boolean {
     case 'enum':
       return Array.isArray(candidate.enumValues) && candidate.enumValues.every(isEnumValue);
     case 'object':
-      return Array.isArray(candidate.children) && candidate.children.every(isPreviewField);
+      return (
+        Array.isArray(candidate.children) &&
+        candidate.children.every(isPreviewField) &&
+        (candidate.assignableTypeFqns === undefined ||
+          (Array.isArray(candidate.assignableTypeFqns) &&
+            candidate.assignableTypeFqns.every((typeFqn) => typeof typeFqn === 'string')))
+      );
     case 'array':
       return (
         Array.isArray(candidate.children) && candidate.children.length === 1 && candidate.children.every(isPreviewField)

@@ -686,6 +686,9 @@ func Derived extends Base:
       type Party:
         name string (1..1)
 
+      type CorporateParty extends Party:
+        lei string (1..1)
+
       func Build:
         inputs:
           party Party (1..1)
@@ -697,11 +700,23 @@ func Derived extends Base:
     const schema = generatePreviewSchemas([doc]).find((candidate) => candidate.targetId === 'test.funcidentity.Build');
 
     expect(schema?.fields).toMatchObject([
-      { path: 'party', kind: 'object', referencedTypeFqn: 'test.funcidentity.Party' },
+      {
+        path: 'party',
+        kind: 'object',
+        referencedTypeFqn: 'test.funcidentity.Party',
+        assignableTypeFqns: ['test.funcidentity.CorporateParty', 'test.funcidentity.Party']
+      },
       {
         path: 'parties',
         kind: 'array',
-        children: [{ path: 'parties[]', kind: 'object', referencedTypeFqn: 'test.funcidentity.Party' }]
+        children: [
+          {
+            path: 'parties[]',
+            kind: 'object',
+            referencedTypeFqn: 'test.funcidentity.Party',
+            assignableTypeFqns: ['test.funcidentity.CorporateParty', 'test.funcidentity.Party']
+          }
+        ]
       }
     ]);
     expect(schema?.functionOutput).toEqual({

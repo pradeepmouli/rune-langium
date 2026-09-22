@@ -421,6 +421,17 @@ describe('instance-store — OPFS persistence (finding #1)', () => {
     expect(Object.keys(useInstanceStore.getState().instances)).toHaveLength(0);
   });
 
+  it('keeps live instances when refreshed metadata reapplies the same OPFS context', async () => {
+    const fs = new OpfsFs(createOpfsRoot() as never);
+    useInstanceStore.getState().setOpfsContext(fs, '/ws-same');
+    await flush();
+    const id = useInstanceStore.getState().createInstance('test.Party', 'Unsaved Party');
+
+    useInstanceStore.getState().setOpfsContext(fs, '/ws-same');
+
+    expect(useInstanceStore.getState().instances[id]?.name).toBe('Unsaved Party');
+  });
+
   it('gracefully no-ops (does not throw) when no OpfsFs context has been set yet', () => {
     expect(() => useInstanceStore.getState().createInstance('test.Party', 'My Party')).not.toThrow();
   });

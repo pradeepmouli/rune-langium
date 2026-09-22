@@ -285,6 +285,8 @@ export interface PreviewObjectField extends PreviewFieldBase {
   kind: 'object';
   /** Fully-qualified Rune type resolved for this object input. */
   referencedTypeFqn?: string;
+  /** Fully-qualified concrete types assignable to this reference. */
+  assignableTypeFqns?: string[];
   children: PreviewField[];
   /**
    * `children[].path` values that are Choice-ancestor-derived arms requiring

@@ -523,6 +523,11 @@ export const useInstanceStore = create<InstanceStoreState>((set, get) => ({
   // with any instance id in the new workspace — there's no reused key for
   // it to corrupt.
   setOpfsContext(fs, workspaceRoot) {
+    // App.tsx can receive refreshed metadata for the current workspace. Its
+    // persistence effect then re-applies this exact OPFS identity; that is not
+    // a workspace transition and must not discard live edits while the async
+    // restore is still catching up.
+    if (opfsFs === fs && opfsWorkspaceRoot === workspaceRoot) return;
     opfsFs = fs;
     opfsWorkspaceRoot = workspaceRoot;
     for (const controller of preparationControllers.values()) controller.abort();

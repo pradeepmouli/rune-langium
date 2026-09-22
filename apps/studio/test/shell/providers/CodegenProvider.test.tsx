@@ -264,6 +264,12 @@ describe('CodegenProvider', () => {
     expect(useInstanceStore.getState().schemaErrors.get('user.missing.Type')?.message).toContain(
       'Preview worker crashed'
     );
+    const postedBeforeRetry = worker.posted.length;
+    useInstanceStore.getState().retryInstance(id);
+    await act(async () => {
+      await Promise.resolve();
+    });
+    expect(worker.posted).toHaveLength(postedBeforeRetry);
   });
 
   it('does not synchronize a hydrated instance until the hydrated workspace files commit', async () => {

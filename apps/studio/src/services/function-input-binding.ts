@@ -11,6 +11,11 @@ function referenceTypeFqn(field: PreviewField): string | undefined {
   return valueField.kind === 'object' ? valueField.referencedTypeFqn : undefined;
 }
 
+function assignableTypeFqns(field: PreviewField): readonly string[] | undefined {
+  const valueField = field.kind === 'array' ? field.children[0] : field;
+  return valueField.kind === 'object' ? valueField.assignableTypeFqns : undefined;
+}
+
 function typeFqn(node: { $container: { name: string }; name: string }): string {
   return `${node.$container.name}.${node.name}`;
 }
@@ -24,6 +29,8 @@ export const isInstanceBindableToField = withInstrumentation(
   ): boolean {
     const expectedType = referenceTypeFqn(field);
     if (!expectedType) return false;
+    const hydratedAssignableTypes = assignableTypeFqns(field);
+    if (hydratedAssignableTypes) return hydratedAssignableTypes.includes(instance.typeFqn);
     if (instance.typeFqn === expectedType) return true;
     const candidates = new Map(
       models
