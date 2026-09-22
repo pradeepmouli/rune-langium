@@ -559,7 +559,8 @@ function fatalDiagnostics(outputs: readonly GeneratorOutput[]): GeneratorDiagnos
   return outputs.flatMap((o) => o.diagnostics.filter((d) => d.severity === 'error'));
 }
 
-function downloadFilename(target: Target, outputs: readonly GeneratorOutput[]): string {
+function downloadFilename(target: Target, outputs: readonly GeneratorOutput[], artifactEnvelope = false): string {
+  if (artifactEnvelope) return `${target}-output.zip`;
   const descriptor = TARGET_DESCRIPTORS[target];
   // Multi-file results are always returned as a zip via `zipResponse`,
   // regardless of contract. Codex review on PR #165 caught that a
@@ -986,7 +987,7 @@ export const handleCodegenDownload = withInstrumentation(
           return jsonError(400, 'No output was generated (workspace had no namespaces)');
         }
 
-        const filename = downloadFilename(body.target, outputs);
+        const filename = downloadFilename(body.target, outputs, body.artifactEnvelope === 1);
         if (body.artifactEnvelope === 1) {
           return artifactEnvelopeResponse(
             body.target,

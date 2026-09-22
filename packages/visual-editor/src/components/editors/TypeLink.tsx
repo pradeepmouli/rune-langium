@@ -11,7 +11,7 @@
  */
 
 import type { NavigateToNodeCallback } from '../../types.js';
-import { nameFromNodeId, qualifiedNameFromNodeId } from '../../store/node-projection.js';
+import { isTypeNodeId, nameFromNodeId, qualifiedNameFromNodeId } from '../../store/node-projection.js';
 
 export interface TypeLinkProps {
   /** The type name to display (e.g., "Quantity", "CompareOp"). */
@@ -30,11 +30,12 @@ export interface TypeLinkProps {
  * namespace-segment collisions (e.g. "a.Foo.Bar" must NOT match typeName="Foo").
  */
 export function resolveNodeId(typeName: string, allNodeIds: string[]): string | undefined {
+  const typeNodeIds = allNodeIds.filter(isTypeNodeId);
   // Exact Rune-qualified-name match first (already fully qualified)
-  const qualified = allNodeIds.find((id) => qualifiedNameFromNodeId(id) === typeName);
+  const qualified = typeNodeIds.find((id) => qualifiedNameFromNodeId(id) === typeName);
   if (qualified) return qualified;
   // Exact last-segment match — avoids false positives from namespace segments
-  return allNodeIds.find((id) => nameFromNodeId(id) === typeName);
+  return typeNodeIds.find((id) => nameFromNodeId(id) === typeName);
 }
 
 export function TypeLink({ typeName, onNavigateToNode, allNodeIds, className }: TypeLinkProps) {

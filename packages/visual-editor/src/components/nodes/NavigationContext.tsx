@@ -13,7 +13,7 @@ import { createContext, useContext } from 'react';
 import { Position, useStore } from '@xyflow/react';
 import type { NavigateToNodeCallback, TypeGraphNode, ValidationError } from '../../types.js';
 import type { LayoutOptions } from '../../types.js';
-import { nameFromNodeId, qualifiedNameFromNodeId } from '../../store/node-projection.js';
+import { isTypeNodeId, nameFromNodeId, qualifiedNameFromNodeId } from '../../store/node-projection.js';
 
 export type GraphLayoutDirection = NonNullable<LayoutOptions['direction']>;
 
@@ -100,11 +100,11 @@ export function getHandlePositions(direction: GraphLayoutDirection): {
 export function resolveTypeNodeId(typeName: string, allNodeIds: Set<string>): string | undefined {
   // Exact match first (already fully qualified, e.g., "cdm.base.math.Quantity")
   for (const id of allNodeIds) {
-    if (qualifiedNameFromNodeId(id) === typeName) return id;
+    if (isTypeNodeId(id) && qualifiedNameFromNodeId(id) === typeName) return id;
   }
   // Exact last-segment match — avoids false positives from namespace segments
   for (const id of allNodeIds) {
-    if (nameFromNodeId(id) === typeName) return id;
+    if (isTypeNodeId(id) && nameFromNodeId(id) === typeName) return id;
   }
   return undefined;
 }

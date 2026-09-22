@@ -116,5 +116,19 @@ describe('TypeLink', () => {
       fireEvent.click(screen.getByRole('button'));
       expect(onNavigate).toHaveBeenCalledWith('a.b.Foo');
     });
+
+    it('skips a same-named function in favor of the type declaration', () => {
+      const onNavigate = vi.fn();
+      render(
+        <TypeLink
+          typeName="test.Party"
+          onNavigateToNode={onNavigate}
+          allNodeIds={['test.Party#RosettaFunction', 'test.Party#Data']}
+        />
+      );
+
+      fireEvent.click(screen.getByRole('button'));
+      expect(onNavigate).toHaveBeenCalledWith('test.Party#Data');
+    });
   });
 });

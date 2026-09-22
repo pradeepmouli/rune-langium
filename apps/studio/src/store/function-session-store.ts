@@ -40,6 +40,7 @@ export const createFunctionSession = withInstrumentation(
     let state = INITIAL_STATE;
     let disposed = false;
     let selectionVersion = 0;
+    let executionVersion = 0;
     let activeController: AbortController | undefined;
     const listeners = new Set<() => void>();
     const notify = () => listeners.forEach((listener) => listener());
@@ -56,6 +57,7 @@ export const createFunctionSession = withInstrumentation(
       },
       async selectFunction(fqn, schemaTargetId = fqn) {
         const version = ++selectionVersion;
+        ++executionVersion;
         activeController?.abort();
         const controller = new AbortController();
         activeController = controller;
@@ -78,19 +80,37 @@ export const createFunctionSession = withInstrumentation(
         }
       },
       setInput(name, value) {
-        patch({ inputs: { ...state.inputs, [name]: structuredClone(value) } });
+        ++executionVersion;
+        activeController?.abort();
+        patch({
+          inputs: { ...state.inputs, [name]: structuredClone(value) },
+          result: undefined,
+          status: 'idle',
+          error: undefined
+        });
       },
       setInputs(inputs) {
-        patch({ inputs: structuredClone(inputs) });
+        ++executionVersion;
+        activeController?.abort();
+        patch({ inputs: structuredClone(inputs), result: undefined, status: 'idle', error: undefined });
       },
       bindInstance(parameter, record) {
         const field = state.schema?.fields.find((candidate) => candidate.path === parameter);
         const value = field?.kind === 'array' ? [record.data] : record.data;
-        patch({ boundParameter: parameter, inputs: { ...state.inputs, [parameter]: structuredClone(value) } });
+        ++executionVersion;
+        activeController?.abort();
+        patch({
+          boundParameter: parameter,
+          inputs: { ...state.inputs, [parameter]: structuredClone(value) },
+          result: undefined,
+          status: 'idle',
+          error: undefined
+        });
       },
       async run() {
         if (!state.functionFqn || state.status === 'running') return;
         const version = selectionVersion;
+        const execution = ++executionVersion;
         activeController?.abort();
         const controller = new AbortController();
         activeController = controller;
@@ -98,10 +118,11 @@ export const createFunctionSession = withInstrumentation(
         patch({ status: 'running', result: undefined, error: undefined });
         try {
           const result = await client.execute(state.functionFqn, inputs, controller.signal);
-          if (disposed || version !== selectionVersion) return;
+          if (disposed || version !== selectionVersion || execution !== executionVersion) return;
           patch({ result, status: 'succeeded' });
         } catch (error) {
-          if (disposed || version !== selectionVersion || controller.signal.aborted) return;
+          if (disposed || version !== selectionVersion || execution !== executionVersion || controller.signal.aborted)
+            return;
           patch({ status: 'failed', error: error instanceof Error ? error.message : String(error) });
         }
       },

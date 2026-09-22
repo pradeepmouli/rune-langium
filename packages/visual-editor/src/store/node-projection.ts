@@ -25,6 +25,18 @@ export type { EdgeKind };
 
 const NODE_KIND_SEPARATOR = '#';
 
+/** Rune declarations that may appear in a type reference. */
+export const TYPE_DECLARATION_KINDS = [
+  'Data',
+  'Choice',
+  'RosettaEnumeration',
+  'RosettaRecordType',
+  'RosettaTypeAlias',
+  'RosettaBasicType'
+] as const satisfies readonly TypeGraphNode['data']['$type'][];
+
+const TYPE_DECLARATION_KIND_SET: ReadonlySet<string> = new Set(TYPE_DECLARATION_KINDS);
+
 /** Build a kind-aware graph-node id from a Rune qualified name and AST kind. */
 export function makeNodeId(namespace: string, name: string, kind?: string): string {
   const qualifiedName = qualifiedExportPath(namespace, name);
@@ -35,6 +47,19 @@ export function makeNodeId(namespace: string, name: string, kind?: string): stri
 export function qualifiedNameFromNodeId(nodeId: string): string {
   const separator = nodeId.lastIndexOf(NODE_KIND_SEPARATOR);
   return separator < 0 ? nodeId : nodeId.slice(0, separator);
+}
+
+/** Recover the optional AST declaration kind retained in a graph-node id. */
+export function kindFromNodeId(nodeId: string): string | undefined {
+  const separator = nodeId.lastIndexOf(NODE_KIND_SEPARATOR);
+  return separator < 0 ? undefined : nodeId.slice(separator + NODE_KIND_SEPARATOR.length) || undefined;
+}
+
+/** Whether a graph-node id names a declaration valid in a Rune type reference. */
+export function isTypeNodeId(nodeId: string): boolean {
+  const kind = kindFromNodeId(nodeId);
+  // Keep older, kindless ids navigable while rejecting known non-type kinds.
+  return kind === undefined || TYPE_DECLARATION_KIND_SET.has(kind);
 }
 
 /** The trailing simple name of a node id (everything after the last dot). */

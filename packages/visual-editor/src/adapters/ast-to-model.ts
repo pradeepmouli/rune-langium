@@ -26,7 +26,7 @@ import {
 import type { RosettaModel, RosettaRootElement } from '@rune-langium/core';
 import type { TypeGraphNode, TypeGraphEdge, GraphNodeMeta, GraphFilters, TypeKind } from '../types.js';
 import { getTypeRefText, getRefText, formatCardinality, resolveNodeKind } from './model-helpers.js';
-import { makeNodeId, makeEdgeId, qualifiedNameFromNodeId } from '../store/node-projection.js';
+import { makeNodeId, makeEdgeId, qualifiedNameFromNodeId, TYPE_DECLARATION_KINDS } from '../store/node-projection.js';
 
 // ---------------------------------------------------------------------------
 // Options / Result
@@ -123,15 +123,6 @@ interface MemberLikeRef {
 type AstKind = TypeGraphNode['data']['$type'];
 type NodeIdLookup = ReadonlyMap<string, ReadonlyMap<AstKind, string>>;
 
-const TYPE_REFERENCE_KINDS: readonly AstKind[] = [
-  'Data',
-  'Choice',
-  'RosettaEnumeration',
-  'RosettaRecordType',
-  'RosettaTypeAlias',
-  'RosettaBasicType'
-];
-
 function resolveNodeId(lookup: NodeIdLookup, name: string, kinds: readonly AstKind[]): string | undefined {
   const candidates = lookup.get(name);
   if (!candidates) return undefined;
@@ -227,7 +218,7 @@ export function astToModel(models: unknown, options?: AstToModelOptions): AstToM
       nodeIdsByName.set(name, byKind);
     }
   }
-  const resolveTypeReference = (name: string) => resolveNodeId(nodeIdsByName, name, TYPE_REFERENCE_KINDS);
+  const resolveTypeReference = (name: string) => resolveNodeId(nodeIdsByName, name, TYPE_DECLARATION_KINDS);
   const resolveDataReference = (name: string) => resolveNodeId(nodeIdsByName, name, ['Data']);
   const resolveEnumReference = (name: string) => resolveNodeId(nodeIdsByName, name, ['RosettaEnumeration']);
   const resolveFunctionReference = (name: string) => resolveNodeId(nodeIdsByName, name, ['RosettaFunction']);

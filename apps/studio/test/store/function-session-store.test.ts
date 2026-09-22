@@ -60,4 +60,35 @@ describe('createFunctionSession', () => {
 
     expect(session.getState().inputs).toEqual({ parties: [{ name: 'Acme' }] });
   });
+
+  it('invalidates a completed result after changing inputs or binding an instance', async () => {
+    const client: PreviewSessionClient = {
+      schema: vi.fn().mockResolvedValue({
+        schemaVersion: 1,
+        targetId: 'test.BuildTrade',
+        title: 'Build trade',
+        status: 'ready',
+        kind: 'function',
+        fields: [{ path: 'party', label: 'Party', kind: 'object', fields: [] }]
+      }),
+      execute: vi.fn().mockResolvedValue({ result: 'old' }),
+      dispose: vi.fn()
+    };
+    const session = createFunctionSession(client);
+    await session.selectFunction('test.BuildTrade');
+    await session.run();
+    session.setInputs({ party: { name: 'New' } });
+
+    expect(session.getState()).toMatchObject({ result: undefined, status: 'idle' });
+
+    await session.run();
+    session.bindInstance('party', {
+      id: 'party-1',
+      name: 'Acme',
+      typeFqn: 'test.Party',
+      data: { name: 'Acme' }
+    } as InstanceRecord);
+
+    expect(session.getState()).toMatchObject({ result: undefined, status: 'idle' });
+  });
 });
