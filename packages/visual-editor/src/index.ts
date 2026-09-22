@@ -145,7 +145,13 @@ export { buildNamespaceTree, filterNamespaceTree } from './utils/namespace-tree.
 export { buildTypeOptions } from './utils/type-options.js';
 
 // Node-id utilities
-export { makeNodeId, nameFromNodeId, qualifiedNameFromNodeId, splitNodeId } from './store/node-projection.js';
+export {
+  isTypeNodeId,
+  makeNodeId,
+  nameFromNodeId,
+  qualifiedNameFromNodeId,
+  splitNodeId
+} from './store/node-projection.js';
 
 // Store (for advanced consumers)
 export { createEditorStore, useEditorStore } from './store/editor-store.js';

@@ -44,6 +44,7 @@ import {
   useLatestRef,
   makeNodeId,
   nameFromNodeId,
+  isTypeNodeId,
   qualifiedNameFromNodeId,
   splitNodeId,
   selectNodeRepository
@@ -1303,7 +1304,7 @@ export const ExplorePerspective = withInstrumentation(
       (nodeId: string) => {
         const targetNode =
           nodeRepository.byId(nodeId) ??
-          nodeRepository.all().find((node) => qualifiedNameFromNodeId(node.id) === nodeId);
+          nodeRepository.all().find((node) => isTypeNodeId(node.id) && qualifiedNameFromNodeId(node.id) === nodeId);
         const resolvedNodeId = targetNode?.id ?? nodeId;
         const exists = Boolean(targetNode);
         if (!exists) {

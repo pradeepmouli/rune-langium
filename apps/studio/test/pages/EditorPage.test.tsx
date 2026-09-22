@@ -304,6 +304,7 @@ vi.mock('@rune-langium/visual-editor', async () => ({
   },
   // Node-id utilities — exact mirrors of node-projection.ts.
   // so ExplorePerspective can call them inside the mock module boundary.
+  isTypeNodeId: (nodeId: string) => !nodeId.endsWith('#RosettaFunction'),
   qualifiedNameFromNodeId: (nodeId: string) => nodeId.split('#', 1)[0]!,
   nameFromNodeId: (nodeId: string) => {
     const qualifiedName = nodeId.split('#', 1)[0]!;

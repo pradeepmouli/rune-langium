@@ -4,6 +4,7 @@
 
 import { useCallback, useEffect, useId, useMemo, useRef, useState, type ChangeEvent, type ReactElement } from 'react';
 import type { FormPreviewSchema, PreviewField, PreviewSourceMapEntry } from '@rune-langium/codegen/export';
+import { qualifiedNameFromNodeId } from '@rune-langium/visual-editor';
 import { Button } from '@rune-langium/design-system/ui/button';
 import { Checkbox } from '@rune-langium/design-system/ui/checkbox';
 import { Input } from '@rune-langium/design-system/ui/input';
@@ -457,7 +458,10 @@ export const FormPreviewPanel = withInstrumentation(
                   variant="ghost"
                   size="xs"
                   onClick={() =>
-                    onCreateInstance({ typeFqn: schema.targetId, data: structuredClone(activeSample?.values ?? {}) })
+                    onCreateInstance({
+                      typeFqn: qualifiedNameFromNodeId(schema.targetId),
+                      data: structuredClone(activeSample?.values ?? {})
+                    })
                   }
                 >
                   Create instance…

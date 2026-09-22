@@ -68,7 +68,7 @@ export const exportSelectionFromExplorer = withInstrumentation(
     });
     const namespaces = previous.namespaces.filter((namespace) => {
       const declarationsInNamespace = repository.byNamespace(namespace).map(exportSelectionIdForNode);
-      return declarationsInNamespace.every((id) => next.has(id));
+      return declarationsInNamespace.length > 0 && declarationsInNamespace.every((id) => next.has(id));
     });
     const coveredNamespaces = new Set(namespaces);
     const knownDeclarationIds = new Set(repository.all().map(exportSelectionIdForNode));
