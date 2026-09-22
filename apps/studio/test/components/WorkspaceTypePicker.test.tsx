@@ -60,7 +60,7 @@ describe('WorkspaceTypePicker', () => {
     await user.type(await screen.findByRole('combobox', { name: 'Search instance type' }), 'Party');
     await user.click(screen.getByRole('option', { name: /Party.*test\.two/ }));
 
-    expect(onSelect).toHaveBeenCalledWith('test.two.Party#Data');
+    expect(onSelect).toHaveBeenCalledWith('test.two.Party');
     expect(useEditorStore.getState().selectedNodeId).toBeNull();
   });
 
@@ -72,7 +72,7 @@ describe('WorkspaceTypePicker', () => {
 
     render(
       <WorkspaceTypePicker
-        value="test.one.Party#Data"
+        value="test.one.Party"
         onSelect={onSelect}
         filterKinds={['data', 'choice']}
         allowClear
@@ -90,7 +90,7 @@ describe('WorkspaceTypePicker', () => {
 
     await user.click(screen.getByRole('button', { name: 'Instance type' }));
     await user.keyboard('{ArrowDown}{Enter}');
-    expect(onSelect).toHaveBeenCalledWith('test.one.Party#Data');
+    expect(onSelect).toHaveBeenCalledWith('test.one.Party');
 
     await user.click(screen.getByRole('button', { name: 'Instance type' }));
     await user.click(await screen.findByRole('option', { name: 'Clear selection' }));

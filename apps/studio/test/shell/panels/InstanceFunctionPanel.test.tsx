@@ -94,4 +94,28 @@ describe('InstanceFunctionPanel', () => {
       intent: { kind: 'create', seed: { typeFqn: 'test.Party', data: { name: 'Acme' } } }
     });
   });
+
+  it('disposes the function session and clears its selection when the inspected instance changes', async () => {
+    const client: PreviewSessionClient = {
+      schema: vi.fn().mockResolvedValue({ schemaVersion: 1, targetId: 'test.BuildParty', status: 'ready', fields: [] }),
+      execute: vi.fn().mockResolvedValue({ name: 'Acme' }),
+      dispose: vi.fn()
+    };
+    const renderPanel = (instanceId: string) => (
+      <WorkspaceStateContext.Provider value={workspace}>
+        <PreviewSessionContext.Provider value={() => client}>
+          <InstanceFunctionPanel instanceId={instanceId} />
+        </PreviewSessionContext.Provider>
+      </WorkspaceStateContext.Provider>
+    );
+    const { rerender } = render(renderPanel('instance-a'));
+
+    fireEvent.click(screen.getByRole('button', { name: 'Choose test.BuildParty' }));
+    expect(await screen.findByText('embedded run unavailable')).toBeVisible();
+
+    rerender(renderPanel('instance-b'));
+
+    expect(screen.getByText('Choose a function to run.')).toBeVisible();
+    expect(client.dispose).toHaveBeenCalledTimes(1);
+  });
 });

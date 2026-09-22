@@ -238,20 +238,32 @@ describe('astToModel', () => {
       namespace test
       type Shared:
         value string (1..1)
+      type UsesShared:
+        shared Shared (1..1)
       func Shared:
         inputs:
           value string (1..1)
-        output string (1..1)
+        output: result Shared (1..1)
     `);
 
-    const { nodes } = astToModel(result.value);
+    const graph = astToModel(result.value);
 
-    expect(nodes).toEqual(
+    expect(graph.nodes).toEqual(
       expect.arrayContaining([
         expect.objectContaining({ id: 'test.Shared#Data', data: expect.objectContaining({ $type: 'Data' }) }),
         expect.objectContaining({
           id: 'test.Shared#RosettaFunction',
           data: expect.objectContaining({ $type: 'RosettaFunction' })
+        })
+      ])
+    );
+    expect(graph.edges).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ source: 'test.UsesShared#Data', target: 'test.Shared#Data' }),
+        expect.objectContaining({
+          source: 'test.Shared#RosettaFunction',
+          target: 'test.Shared#Data',
+          data: expect.objectContaining({ label: 'output' })
         })
       ])
     );

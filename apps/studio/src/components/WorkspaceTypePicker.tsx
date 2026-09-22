@@ -7,6 +7,7 @@ import {
   TypeSelector,
   buildTypeOptions,
   getKindDotClass,
+  qualifiedNameFromNodeId,
   selectNodeRepository,
   useEditorStore
 } from '@rune-langium/visual-editor';
@@ -51,6 +52,13 @@ export const WorkspaceTypePicker = withInstrumentation(
     const nodesById = useEditorStore((state) => state.nodesById);
     const repository = selectNodeRepository(nodesById);
     const options = useMemo(() => buildTypeOptions(repository, false), [repository]);
+    const selectedValue = useMemo(() => {
+      if (!value) return value;
+      return (
+        options.find((option) => option.value === value || qualifiedNameFromNodeId(option.value) === value)?.value ??
+        value
+      );
+    }, [options, value]);
     const [popoverKey, setPopoverKey] = useState(0);
     const searchLabel = `Search ${label.toLocaleLowerCase()}`;
 
@@ -61,12 +69,12 @@ export const WorkspaceTypePicker = withInstrumentation(
     return (
       <Popover key={popoverKey} onOpenChange={(open) => !open && resetPopover()}>
         <TypeSelector
-          value={value}
+          value={selectedValue}
           options={options}
           placeholder={label}
           onSelect={(nextValue) => {
             resetPopover();
-            onSelect(nextValue);
+            onSelect(nextValue && qualifiedNameFromNodeId(nextValue));
             onSelectOption?.(options.find((option) => option.value === nextValue) ?? null);
           }}
           allowClear={allowClear}
