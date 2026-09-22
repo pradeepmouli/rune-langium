@@ -17,6 +17,8 @@ version "1.0.0"
 
 type Party:
   name string (1..1)
+func Party:
+  output: result string (1..1)
 `
   },
   {
@@ -95,5 +97,29 @@ describe('WorkspaceTypePicker', () => {
     await user.click(screen.getByRole('button', { name: 'Instance type' }));
     await user.click(await screen.findByRole('option', { name: 'Clear selection' }));
     expect(onSelect).toHaveBeenLastCalledWith(null);
+  });
+
+  it('uses the allowed declaration kind when a type and function share an FQN', async () => {
+    const parsed = await parseWorkspace(WORKSPACE_SOURCES);
+    useEditorStore.getState().loadModels(parsed.map((result) => result.value));
+    const onSelectOption = vi.fn();
+    const user = userEvent.setup();
+
+    render(
+      <WorkspaceTypePicker
+        value="test.one.Party"
+        onSelect={vi.fn()}
+        onSelectOption={onSelectOption}
+        filterKinds={['func']}
+        label="Function"
+      />
+    );
+
+    await user.click(screen.getByRole('button', { name: 'Function' }));
+    await user.keyboard('{ArrowDown}{Enter}');
+
+    expect(onSelectOption).toHaveBeenCalledWith(
+      expect.objectContaining({ value: 'test.one.Party#RosettaFunction', kind: 'func' })
+    );
   });
 });

@@ -54,11 +54,15 @@ export const WorkspaceTypePicker = withInstrumentation(
     const options = useMemo(() => buildTypeOptions(repository, false), [repository]);
     const selectedValue = useMemo(() => {
       if (!value) return value;
+      const allowedKinds = filterKinds.length ? new Set(filterKinds) : undefined;
       return (
-        options.find((option) => option.value === value || qualifiedNameFromNodeId(option.value) === value)?.value ??
-        value
+        options.find(
+          (option) =>
+            (!allowedKinds || (option.kind !== 'builtin' && allowedKinds.has(option.kind))) &&
+            (option.value === value || qualifiedNameFromNodeId(option.value) === value)
+        )?.value ?? value
       );
-    }, [options, value]);
+    }, [filterKinds, options, value]);
     const [popoverKey, setPopoverKey] = useState(0);
     const searchLabel = `Search ${label.toLocaleLowerCase()}`;
 
