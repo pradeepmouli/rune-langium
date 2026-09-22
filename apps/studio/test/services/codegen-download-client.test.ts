@@ -44,6 +44,19 @@ it('returns the transferred artifact and releases the worker', async () => {
   expect(vi.getTimerCount()).toBe(0);
 });
 
+it('uses the Pages endpoint when curated source arrays are empty', async () => {
+  const fetchMock = vi.fn().mockResolvedValue(new Response('generated'));
+  vi.stubGlobal('fetch', fetchMock);
+  const userOnlyBody = { ...body, curatedBundles: [], curatedDocs: [] };
+
+  await expect(requestCodegenDownload(userOnlyBody)).resolves.toBeInstanceOf(Response);
+
+  expect(fetchMock).toHaveBeenCalledWith(
+    '/api/codegen',
+    expect.objectContaining({ method: 'POST', body: JSON.stringify(userOnlyBody) })
+  );
+});
+
 it.each(['error', 'messageerror', 'reply', 'timeout'])('settles and releases on %s', async (kind) => {
   const result = requestCodegenDownload(body);
   const rejected = expect(result).rejects.toThrow();

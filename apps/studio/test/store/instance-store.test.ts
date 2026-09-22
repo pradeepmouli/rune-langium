@@ -207,6 +207,23 @@ describe('instance-store', () => {
     expect(useInstanceStore.getState().validationErrors[id]).toEqual([{ path: 'name', message: 'fresh' }]);
   });
 
+  it('drops a prior validation response while a changed instance waits for readiness', () => {
+    const postMessage = vi.fn();
+    useInstanceStore.getState().setWorker({ postMessage } as unknown as Worker);
+    const id = useInstanceStore.getState().createInstance('test.Party', 'My Party');
+    const priorRequestId = postMessage.mock.calls[0]![0].requestId as string;
+    useInstanceStore.getState().setReadiness({
+      ensure: vi.fn(() => new Promise<number>(() => undefined)),
+      dispose: vi.fn()
+    });
+
+    useInstanceStore.getState().updateInstanceData(id, { name: 'Changed' });
+    useInstanceStore.getState().receiveValidateResult(priorRequestId, [{ path: 'name', message: 'stale' }]);
+
+    expect(useInstanceStore.getState().validationStatus[id]).toBe('pending');
+    expect(useInstanceStore.getState().validationErrors[id]).toBeUndefined();
+  });
+
   it('dispatchGenerateSchema posts an instance:generateSchema message on its own channel (not preview:generate — finding #6/#7)', () => {
     const postMessage = vi.fn();
     useInstanceStore.getState().setWorker({ postMessage } as unknown as Worker);

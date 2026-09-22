@@ -504,6 +504,16 @@ async function buildDocuments(): Promise<VersionedEntry<LangiumDocument[]>> {
   );
 }
 
+function generatedPreviewSchemaForTarget(
+  schemas: Awaited<ReturnType<typeof generatePreviewSchemas>>,
+  targetId: string
+) {
+  const [, targetKind] = targetId.split('#', 2);
+  return targetKind === 'RosettaFunction'
+    ? schemas.find((candidate) => candidate.kind === 'function')
+    : schemas.find((candidate) => candidate.kind !== 'function');
+}
+
 async function runPreview(targetId: string, requestId: string): Promise<void> {
   const scope = self as unknown as DedicatedWorkerGlobalScope;
 
@@ -519,6 +529,7 @@ async function runPreview(targetId: string, requestId: string): Promise<void> {
   }
 
   try {
+    const [generatorTargetId] = targetId.split('#', 2);
     const { version: documentsVersion, value: documents } = await buildDocuments();
     if (documents.length === 0) {
       scope.postMessage({
@@ -536,11 +547,10 @@ async function runPreview(targetId: string, requestId: string): Promise<void> {
     // call suspended across a `preview:setFiles` returns documents that
     // predate the live counter; caching under the live counter would mark
     // that stale-derived schema as valid for the new version.
-    const {
-      value: [schema]
-    } = getOrCompute(previewSchemaCache, targetId, documentsVersion, () =>
-      generatePreviewSchemas(documents, { targetId })
+    const { value: schemas } = getOrCompute(previewSchemaCache, targetId, documentsVersion, () =>
+      generatePreviewSchemas(documents, { targetId: generatorTargetId })
     );
+    const schema = generatedPreviewSchemaForTarget(schemas, targetId);
     if (!schema) {
       scope.postMessage({
         type: 'preview:stale',
@@ -552,7 +562,7 @@ async function runPreview(targetId: string, requestId: string): Promise<void> {
       return;
     }
 
-    scope.postMessage({ type: 'preview:result', targetId, requestId, schema });
+    scope.postMessage({ type: 'preview:result', targetId, requestId, schema: { ...schema, targetId } });
   } catch (err) {
     console.error('[codegen-worker] Preview generation error:', err);
     scope.postMessage({
@@ -587,7 +597,7 @@ async function runInstanceSchema(typeFqn: string, requestId: string): Promise<vo
   }
 
   try {
-    const [targetId, targetKind] = typeFqn.split('#', 2);
+    const [targetId] = typeFqn.split('#', 2);
     const { version: documentsVersion, value: documents } = await buildDocuments();
     if (documents.length === 0) {
       scope.postMessage({
@@ -604,8 +614,7 @@ async function runInstanceSchema(typeFqn: string, requestId: string): Promise<vo
     const { value: schemas } = getOrCompute(previewSchemaCache, typeFqn, documentsVersion, () =>
       generatePreviewSchemas(documents, { targetId })
     );
-    const schema =
-      targetKind === 'RosettaFunction' ? schemas.find((candidate) => candidate.kind === 'function') : schemas[0];
+    const schema = generatedPreviewSchemaForTarget(schemas, typeFqn);
     if (!schema) {
       scope.postMessage({
         type: 'instance:generateSchemaStale',

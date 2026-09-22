@@ -722,7 +722,7 @@ export const ExplorePerspective = withInstrumentation(
               };
             }
           ).$cstNode?.range;
-          sourceByTargetId.set(`${namespace}.${name}`, {
+          sourceByTargetId.set(makeNodeId(namespace, name, element.$type), {
             sourceUri,
             sourceIndex,
             sourceRange:
@@ -754,11 +754,11 @@ export const ExplorePerspective = withInstrumentation(
           const namespace = node.meta?.namespace;
           if (!namespace || !data.name) return undefined;
           return {
-            id: `${namespace}.${data.name}`,
+            id: node.id,
             namespace,
             name: data.name,
             kind: data.$type ?? 'unknown',
-            ...sourceByTargetId.get(`${namespace}.${data.name}`)
+            ...sourceByTargetId.get(node.id)
           };
         })
         .filter((target): target is FormPreviewTarget => target !== undefined);
@@ -785,13 +785,8 @@ export const ExplorePerspective = withInstrumentation(
       if (!selectedNodeId) {
         return;
       }
-      const name = (selectedNodeData as unknown as { name?: string } | null)?.name;
-      const namespace = selectedNodeMeta?.namespace;
-      if (!namespace || !name) {
-        return;
-      }
-      selectPreviewTarget(`${namespace}.${name}`);
-    }, [selectedNodeData, selectedNodeMeta, selectedNodeId, selectPreviewTarget]);
+      selectPreviewTarget(selectedNodeId);
+    }, [selectedNodeId, selectPreviewTarget]);
 
     useEffect(() => {
       if (!selectedNodeId) {

@@ -7,10 +7,17 @@ export type CodegenDownloadReply =
   | { body: ArrayBuffer; status: number; headers: Array<[string, string]> }
   | { error: string };
 
+function hasCuratedSources(body: Record<string, unknown>): boolean {
+  return ['curatedBundles', 'curatedDocs'].some((key) => {
+    const source = body[key];
+    return Array.isArray(source) ? source.length > 0 : Boolean(source);
+  });
+}
+
 /** Curated downloads need more memory than the Pages runtime permits. */
 export const requestCodegenDownload = withInstrumentation(
   function requestCodegenDownload(body: Record<string, unknown>, signal?: AbortSignal): Promise<Response> {
-    if (!body.curatedBundles && !body.curatedDocs) {
+    if (!hasCuratedSources(body)) {
       return fetch('/api/codegen', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },

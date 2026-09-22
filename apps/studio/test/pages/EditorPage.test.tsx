@@ -591,20 +591,20 @@ describe('EditorPage preview target identity', () => {
     cleanup();
   });
 
-  it('posts preview:generate using the selected node fully-qualified id when display names collide', async () => {
+  it('posts preview:generate using the selected node kind-aware id when display names collide', async () => {
     editorStoreState.nodes = [
       {
-        id: 'alpha-trade',
-        data: { namespace: 'alpha', name: 'Trade', $type: 'data' },
+        id: 'alpha.Trade#Data',
+        data: { namespace: 'alpha', name: 'Trade', $type: 'Data' },
         meta: { namespace: 'alpha', errors: [], hasExternalRefs: false }
       },
       {
-        id: 'beta-trade',
-        data: { namespace: 'beta', name: 'Trade', $type: 'data' },
+        id: 'beta.Trade#Data',
+        data: { namespace: 'beta', name: 'Trade', $type: 'Data' },
         meta: { namespace: 'beta', errors: [], hasExternalRefs: false }
       }
     ];
-    editorStoreState.selectedNodeId = 'beta-trade';
+    editorStoreState.selectedNodeId = 'beta.Trade#Data';
 
     const _view = renderEditorPage({
       models: [],
@@ -616,13 +616,13 @@ describe('EditorPage preview target identity', () => {
       expect(MockWorker.instances[0]?.postMessage).toHaveBeenCalledWith(
         expect.objectContaining({
           type: 'preview:generate',
-          targetId: 'beta.Trade',
+          targetId: 'beta.Trade#Data',
           requestId: expect.any(String)
         })
       );
     });
 
-    expect(usePreviewStore.getState().selectedTargetId).toBe('beta.Trade');
+    expect(usePreviewStore.getState().selectedTargetId).toBe('beta.Trade#Data');
   });
 
   it('re-generates preview for a renamed target after the previous selection is transiently cleared', async () => {

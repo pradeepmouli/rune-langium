@@ -272,6 +272,80 @@ describe('codegen-worker preview messages', () => {
     });
   });
 
+  it('selects the function schema and retains its canonical target id', async () => {
+    generatePreviewSchemasMock.mockReturnValue([
+      { schemaVersion: 1, targetId: 'beta.Party', title: 'Party', status: 'ready', kind: 'data', fields: [] },
+      { schemaVersion: 1, targetId: 'beta.Party', title: 'Party', status: 'ready', kind: 'function', fields: [] }
+    ]);
+    const { scope, dispatch } = await loadWorkerModule();
+
+    dispatch({
+      type: 'preview:setFiles',
+      filesRevision: 1,
+      files: [{ uri: 'file:///party.rosetta', content: 'namespace "beta"' }],
+      requestId: 'function:files'
+    });
+    await flushWorker();
+    dispatch({
+      type: 'preview:generate',
+      targetId: 'beta.Party#RosettaFunction',
+      requestId: 'function:preview'
+    });
+    await flushWorker();
+
+    expect(generatePreviewSchemasMock).toHaveBeenLastCalledWith(expect.any(Array), { targetId: 'beta.Party' });
+    expect(scope.postMessage).toHaveBeenLastCalledWith({
+      type: 'preview:result',
+      targetId: 'beta.Party#RosettaFunction',
+      requestId: 'function:preview',
+      schema: {
+        schemaVersion: 1,
+        targetId: 'beta.Party#RosettaFunction',
+        title: 'Party',
+        status: 'ready',
+        kind: 'function',
+        fields: []
+      }
+    });
+  });
+
+  it('selects the function schema and retains its canonical target id', async () => {
+    generatePreviewSchemasMock.mockReturnValue([
+      { schemaVersion: 1, targetId: 'beta.Party', title: 'Party', status: 'ready', kind: 'data', fields: [] },
+      { schemaVersion: 1, targetId: 'beta.Party', title: 'Party', status: 'ready', kind: 'function', fields: [] }
+    ]);
+    const { scope, dispatch } = await loadWorkerModule();
+
+    dispatch({
+      type: 'preview:setFiles',
+      filesRevision: 1,
+      files: [{ uri: 'file:///party.rosetta', content: 'namespace "beta"' }],
+      requestId: 'function:files'
+    });
+    await flushWorker();
+    dispatch({
+      type: 'preview:generate',
+      targetId: 'beta.Party#RosettaFunction',
+      requestId: 'function:preview'
+    });
+    await flushWorker();
+
+    expect(generatePreviewSchemasMock).toHaveBeenLastCalledWith(expect.any(Array), { targetId: 'beta.Party' });
+    expect(scope.postMessage).toHaveBeenLastCalledWith({
+      type: 'preview:result',
+      targetId: 'beta.Party#RosettaFunction',
+      requestId: 'function:preview',
+      schema: {
+        schemaVersion: 1,
+        targetId: 'beta.Party#RosettaFunction',
+        title: 'Party',
+        status: 'ready',
+        kind: 'function',
+        fields: []
+      }
+    });
+  });
+
   it('caches buildDocuments() results across calls when files have not changed', async () => {
     generatePreviewSchemasMock.mockImplementation((_documents: unknown, options: { targetId: string }) => [
       { schemaVersion: 1, targetId: options.targetId, title: options.targetId, status: 'ready', fields: [] }

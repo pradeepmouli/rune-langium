@@ -35,6 +35,13 @@ const pendingRequests = new Map<string, { instanceId: string; epoch: number }>()
 // diagnostics with stale ones (finding #9).
 const latestValidateRequestForInstance = new Map<string, string>(); // instanceId -> requestId
 
+function invalidateValidationRequests(instanceId: string): void {
+  latestValidateRequestForInstance.delete(instanceId);
+  for (const [requestId, pending] of pendingRequests) {
+    if (pending.instanceId === instanceId) pendingRequests.delete(requestId);
+  }
+}
+
 // Separate module-level map for instance-editing's schema fetches — must
 // never collide with dispatchValidate's pendingRequests above. These now
 // dispatch on their own `instance:generateSchema`/`instance:generateSchemaResult`
@@ -317,6 +324,9 @@ export const useInstanceStore = create<InstanceStoreState>((set, get) => ({
     preparationControllers.get(id)?.abort();
     const controller = new AbortController();
     preparationControllers.set(id, controller);
+    // The previous validation describes an older record revision. Fence its
+    // reply before readiness synchronizes files for this revision.
+    invalidateValidationRequests(id);
     const epoch = get().workspaceEpoch;
     const revision = record.modifiedAt;
     set((state) => ({
