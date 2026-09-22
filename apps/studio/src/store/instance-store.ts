@@ -111,6 +111,7 @@ interface InstanceStoreState {
   receiveSchemaResult(requestId: string, schema: FormPreviewSchema): boolean;
   discardSchemaResult(requestId: string): string | undefined;
   receiveSchemaStale(requestId: string, reason: PreviewStaleReason, message: string): boolean;
+  handleWorkerFailure(message: string): void;
   setOpfsContext(fs: OpfsFs, workspaceRoot: string): void;
   loadInstancesFromOpfs(): Promise<void>;
 }
@@ -396,7 +397,11 @@ export const useInstanceStore = create<InstanceStoreState>((set, get) => ({
     if (latestValidateRequestForInstance.get(id) !== requestId) return;
     set((state) => ({
       validationErrors: { ...state.validationErrors, [id]: diagnostics },
-      validationStatus: { ...state.validationStatus, [id]: diagnostics.length === 0 ? 'valid' : 'invalid' }
+      validationStatus: {
+        ...state.validationStatus,
+        [id]:
+          state.validationStatus[id] === 'unavailable' ? 'unavailable' : diagnostics.length === 0 ? 'valid' : 'invalid'
+      }
     }));
   },
 
@@ -459,6 +464,22 @@ export const useInstanceStore = create<InstanceStoreState>((set, get) => ({
       return { schemas, schemaErrors, validationStatus };
     });
     return true;
+  },
+
+  handleWorkerFailure(message) {
+    pendingRequests.clear();
+    pendingSchemaRequests.clear();
+    latestValidateRequestForInstance.clear();
+    latestSchemaRequestForType.clear();
+    set((state) => {
+      const validationStatus = { ...state.validationStatus };
+      const schemaErrors = new Map(state.schemaErrors);
+      for (const [id, record] of Object.entries(state.instances)) {
+        validationStatus[id] = 'unavailable';
+        schemaErrors.set(record.typeFqn, { reason: 'generation-error', message });
+      }
+      return { validationStatus, schemaErrors };
+    });
   },
 
   // Wires the shared `OpfsFs` + active workspace root (finding #1) — set

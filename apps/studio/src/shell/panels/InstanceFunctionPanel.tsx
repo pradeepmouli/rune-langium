@@ -16,6 +16,7 @@ import { withInstrumentation } from '../../services/instrumentation/core.js';
 import { resolveFunctionOutputTarget } from '../../services/function-output-target.js';
 import { requestPrototype } from '../../services/prototype-navigation.js';
 import { useWorkspaceOptional } from '../providers/workspace-context.js';
+import { qualifiedNameFromNodeId } from '@rune-langium/visual-editor';
 
 const NO_SESSION_STATE: FunctionSessionState = {
   functionFqn: null,
@@ -55,7 +56,10 @@ function InstanceFunctionSession({ instanceId }: { instanceId: string }): ReactE
       <WorkspaceTypePicker
         label="Choose a function"
         value={state.functionFqn}
-        onSelect={(fqn) => fqn && void session.selectFunction(fqn)}
+        onSelect={() => undefined}
+        onSelectOption={(option) =>
+          option && void session.selectFunction(qualifiedNameFromNodeId(option.value), option.value)
+        }
         filterKinds={['func']}
       />
       {!state.functionFqn ? <p className="text-sm text-muted-foreground">Choose a function to run.</p> : null}

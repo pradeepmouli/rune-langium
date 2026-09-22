@@ -587,6 +587,7 @@ async function runInstanceSchema(typeFqn: string, requestId: string): Promise<vo
   }
 
   try {
+    const [targetId, targetKind] = typeFqn.split('#', 2);
     const { version: documentsVersion, value: documents } = await buildDocuments();
     if (documents.length === 0) {
       scope.postMessage({
@@ -600,11 +601,11 @@ async function runInstanceSchema(typeFqn: string, requestId: string): Promise<vo
 
     // See runPreview's identical comment — tagged with documentsVersion,
     // not the live previewFilesVersion.
-    const {
-      value: [schema]
-    } = getOrCompute(previewSchemaCache, typeFqn, documentsVersion, () =>
-      generatePreviewSchemas(documents, { targetId: typeFqn })
+    const { value: schemas } = getOrCompute(previewSchemaCache, typeFqn, documentsVersion, () =>
+      generatePreviewSchemas(documents, { targetId })
     );
+    const schema =
+      targetKind === 'RosettaFunction' ? schemas.find((candidate) => candidate.kind === 'function') : schemas[0];
     if (!schema) {
       scope.postMessage({
         type: 'instance:generateSchemaStale',

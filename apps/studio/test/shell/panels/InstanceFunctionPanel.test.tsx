@@ -12,8 +12,8 @@ import { usePrototypeNavigationStore } from '../../../src/services/prototype-nav
 import { usePrototypeViewStore } from '../../../src/store/prototype-view-store.js';
 
 vi.mock('../../../src/components/WorkspaceTypePicker.js', () => ({
-  WorkspaceTypePicker: ({ onSelect }: { onSelect(typeFqn: string | null): void }) => (
-    <button type="button" onClick={() => onSelect('test.BuildParty')}>
+  WorkspaceTypePicker: ({ onSelectOption }: { onSelectOption(option: { value: string } | null): void }) => (
+    <button type="button" onClick={() => onSelectOption({ value: 'test.BuildParty#RosettaFunction' })}>
       Choose test.BuildParty
     </button>
   )

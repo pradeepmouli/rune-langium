@@ -102,7 +102,7 @@ export const createPreviewSessionClient = withInstrumentation(
 
     return {
       async schema(typeFqn, signal) {
-        await readiness.ensure(typeFqn, signal);
+        await readiness.ensure(typeFqn.split('#', 1)[0]!, signal);
         const schema = await request<FormPreviewSchema>(
           { ...createInstanceGenerateSchemaMessage(typeFqn, ''), requestId: undefined },
           signal,

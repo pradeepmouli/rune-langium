@@ -19,7 +19,7 @@ export interface FunctionSessionState {
 export interface FunctionSession {
   getState(): FunctionSessionState;
   subscribe(listener: () => void): () => void;
-  selectFunction(fqn: string): Promise<void>;
+  selectFunction(fqn: string, schemaTargetId?: string): Promise<void>;
   setInput(name: string, value: unknown): void;
   setInputs(inputs: Record<string, unknown>): void;
   bindInstance(parameter: string, record: InstanceRecord): void;
@@ -54,7 +54,7 @@ export const createFunctionSession = withInstrumentation(
         listeners.add(listener);
         return () => listeners.delete(listener);
       },
-      async selectFunction(fqn) {
+      async selectFunction(fqn, schemaTargetId = fqn) {
         const version = ++selectionVersion;
         activeController?.abort();
         const controller = new AbortController();
@@ -69,7 +69,7 @@ export const createFunctionSession = withInstrumentation(
           schema: undefined
         });
         try {
-          const schema = await client.schema(fqn, controller.signal);
+          const schema = await client.schema(schemaTargetId, controller.signal);
           if (disposed || version !== selectionVersion) return;
           patch({ schema, status: 'idle' });
         } catch (error) {
