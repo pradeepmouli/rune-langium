@@ -113,3 +113,23 @@ it('restores and persists preferences by workspace without retaining the artifac
     activeFile: 'test/model.ts'
   });
 });
+
+it('keeps local export preferences when they change during activation', async () => {
+  let restore!: (value: { config: ExportInput['config']; activeFile: string }) => void;
+  mockReadWorkbenchSettings.mockImplementation(
+    () => new Promise<{ config: ExportInput['config']; activeFile: string }>((resolve) => (restore = resolve))
+  );
+  const store = createExportWorkbench(vi.fn());
+  const localConfig: ExportInput['config'] = {
+    ...input.config,
+    selection: { namespaces: ['local'], declarations: [] }
+  };
+
+  const activating = store.getState().activate('workspace-a');
+  store.getState().configure(localConfig);
+  store.getState().setActiveFile('local.ts');
+  restore({ config: { ...input.config, target: 'zod' }, activeFile: 'restored.ts' });
+  await activating;
+
+  expect(store.getState()).toMatchObject({ config: localConfig, activeFile: 'local.ts' });
+});

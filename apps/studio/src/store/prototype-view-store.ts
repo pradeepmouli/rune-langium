@@ -5,6 +5,7 @@ import { create } from 'zustand';
 import type { InstanceRecord } from '@rune-langium/codegen/instances';
 import { readWorkbenchSettings, writeWorkbenchSettings } from '../shell/workbench-settings.js';
 import { withInstrumentation } from '../services/instrumentation/core.js';
+import { createActivationGuard } from './activation-guard.js';
 
 export interface PrototypeViewState {
   selectedId: string | null;
@@ -47,20 +48,21 @@ interface PrototypeViewStore {
   patch(patch: Partial<PrototypeViewState>): void;
 }
 
-let activation = 0;
+const activation = createActivationGuard();
 
 export const usePrototypeViewStore = create<PrototypeViewStore>((set, get) => ({
   workspaceId: null,
   state: DEFAULT_PROTOTYPE_VIEW,
   async activate(workspaceId) {
-    const generation = ++activation;
+    const generation = activation.begin();
     set({ workspaceId, state: DEFAULT_PROTOTYPE_VIEW });
     const restored = await readWorkbenchSettings(workspaceId, 'prototype-view', DEFAULT_PROTOTYPE_VIEW);
-    if (activation === generation && get().workspaceId === workspaceId) {
+    if (activation.isCurrent(generation) && get().workspaceId === workspaceId) {
       set({ state: { ...DEFAULT_PROTOTYPE_VIEW, ...restored } });
     }
   },
   patch(patch) {
+    activation.invalidate();
     const workspaceId = get().workspaceId;
     const state = { ...get().state, ...patch };
     set({ state });

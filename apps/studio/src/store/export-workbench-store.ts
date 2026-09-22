@@ -7,6 +7,7 @@ import { exportInputKey, generateExport, type ExportConfig, type ExportInput } f
 import type { ExportArtifact } from '../services/export-artifact.js';
 import { withInstrumentation } from '../services/instrumentation/core.js';
 import { readWorkbenchSettings, writeWorkbenchSettings } from '../shell/workbench-settings.js';
+import { createActivationGuard } from './activation-guard.js';
 
 export type ExportRunState =
   | { status: 'idle' }
@@ -65,7 +66,7 @@ export const createExportWorkbench = withInstrumentation(
   function createExportWorkbench(generateExportArtifact: GenerateExport = generateExport) {
     let active: { requestId: string; controller: AbortController } | undefined;
     let sequence = 0;
-    let activation = 0;
+    const activation = createActivationGuard();
     const cancelActive = () => {
       active?.controller.abort();
       active = undefined;
@@ -83,7 +84,7 @@ export const createExportWorkbench = withInstrumentation(
       activeFile: undefined,
       run: { status: 'idle' },
       async activate(workspaceId) {
-        const generation = ++activation;
+        const generation = activation.begin();
         cancelActive();
         set({
           workspaceId,
@@ -92,7 +93,7 @@ export const createExportWorkbench = withInstrumentation(
           run: { status: 'idle' }
         });
         const restored = await readWorkbenchSettings(workspaceId, 'export-workbench', DEFAULT_PREFERENCES);
-        if (activation === generation && get().workspaceId === workspaceId) {
+        if (activation.isCurrent(generation) && get().workspaceId === workspaceId) {
           set({
             config: cloneConfig(restored.config ?? DEFAULT_CONFIG),
             activeFile: restored.activeFile,
@@ -101,12 +102,14 @@ export const createExportWorkbench = withInstrumentation(
         }
       },
       configure(config) {
+        activation.invalidate();
         cancelActive();
         const nextConfig = cloneConfig(config);
         set({ config: nextConfig, run: { status: 'idle' } });
         persist({ ...get(), config: nextConfig });
       },
       setActiveFile(activeFile) {
+        activation.invalidate();
         set({ activeFile });
         persist({ ...get(), activeFile });
       },
@@ -120,6 +123,7 @@ export const createExportWorkbench = withInstrumentation(
         });
       },
       async generate(input) {
+        activation.invalidate();
         cancelActive();
         const controller = new AbortController();
         const requestId = `export:${++sequence}`;

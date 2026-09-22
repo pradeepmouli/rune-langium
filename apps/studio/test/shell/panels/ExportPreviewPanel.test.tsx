@@ -46,6 +46,26 @@ it('renders generator diagnostics when an export fails', () => {
   expect(screen.getByTestId('export-artifact-status')).toHaveTextContent('test.Party is unavailable');
 });
 
+it('renders manifest diagnostics when an export succeeds', () => {
+  render(
+    <ExportPreviewPanel
+      run={{
+        status: 'ready',
+        inputKey: 'input',
+        artifact: {
+          ...artifact,
+          manifest: {
+            ...artifact.manifest,
+            diagnostics: [{ severity: 'warning', code: 'column-renamed', message: 'Renamed duplicate column.' }]
+          }
+        }
+      }}
+      onDownload={vi.fn()}
+    />
+  );
+  expect(screen.getByTestId('export-artifact-diagnostics')).toHaveTextContent('Renamed duplicate column.');
+});
+
 it('shows declarations included by the resolved dependency closure', () => {
   render(
     <ExportPreviewPanel

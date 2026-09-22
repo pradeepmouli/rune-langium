@@ -3,8 +3,25 @@
 
 import { useEffect, useState, type ReactElement } from 'react';
 import { Button } from '@rune-langium/design-system/ui/button';
+import type { GeneratorDiagnostic } from '@rune-langium/codegen/export';
 import type { ExportRunState } from '../../store/export-workbench-store.js';
 import { withInstrumentation } from '../../services/instrumentation/core.js';
+
+function ArtifactDiagnostics({ diagnostics }: { diagnostics: readonly GeneratorDiagnostic[] }): ReactElement | null {
+  if (diagnostics.length === 0) return null;
+  return (
+    <div data-testid="export-artifact-diagnostics" role="status" className="border-b border-border px-3 py-2 text-xs">
+      <p className="font-medium">Generation diagnostics</p>
+      <ul className="mt-1 space-y-1 text-muted-foreground">
+        {diagnostics.map((diagnostic) => (
+          <li key={`${diagnostic.severity}:${diagnostic.code}:${diagnostic.message}`}>
+            {diagnostic.severity}: {diagnostic.message}
+          </li>
+        ))}
+      </ul>
+    </div>
+  );
+}
 
 export interface ExportPreviewPanelProps {
   run: ExportRunState;
@@ -99,11 +116,14 @@ export const ExportPreviewPanel = withInstrumentation(
     }
     if (!textFile) {
       return (
-        <div data-testid="export-artifact-binary" className="flex items-center justify-between gap-3 p-4">
-          <p className="text-sm text-muted-foreground">This export contains binary files only.</p>
-          <Button type="button" size="sm" disabled={run.status === 'stale'} onClick={onDownload}>
-            Download export
-          </Button>
+        <div data-testid="export-artifact-binary" className="space-y-3 p-4">
+          <div className="flex items-center justify-between gap-3">
+            <p className="text-sm text-muted-foreground">This export contains binary files only.</p>
+            <Button type="button" size="sm" disabled={run.status === 'stale'} onClick={onDownload}>
+              Download export
+            </Button>
+          </div>
+          <ArtifactDiagnostics diagnostics={artifact.manifest.diagnostics} />
         </div>
       );
     }
@@ -141,6 +161,7 @@ export const ExportPreviewPanel = withInstrumentation(
             Download export
           </Button>
         </div>
+        <ArtifactDiagnostics diagnostics={artifact.manifest.diagnostics} />
         {dependencyNames.length > 0 && (
           <p className="shrink-0 border-b border-border px-3 py-1 text-xs text-muted-foreground">
             Included: {dependencyNames.join(', ')}
