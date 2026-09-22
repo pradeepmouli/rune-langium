@@ -15,7 +15,7 @@
 
 /// <reference types="@cloudflare/workers-types" />
 
-import { WebSocketTransport } from '@lspeasy/core';
+import { WebSocketTransport } from '@lspeasy/core/transport/websocket';
 import { createRuneLspServer } from '@rune-langium/lsp-server';
 
 // ─── eager-load probe ────────────────────────────────────────────────────────
