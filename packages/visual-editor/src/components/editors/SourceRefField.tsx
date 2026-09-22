@@ -7,12 +7,20 @@
  * Mirrors TypeReferenceField's chip+popover idiom but is NOT type-coupled: it
  * picks a `RosettaSynonymSource` from a flat option list (no type kinds, drop
  * target, namespace tree, or node navigation). Built on the shared design-system
- * Popover + cmdk Command primitives.
+ * Popover + Base UI Command primitives.
  */
 
 import { useCallback, useMemo, useState } from 'react';
 import { Popover, PopoverContent, PopoverTrigger } from '@rune-langium/design-system/ui/popover';
-import { Command, CommandEmpty, CommandInput, CommandItem, CommandList } from '@rune-langium/design-system/ui/command';
+import {
+  Command,
+  CommandCollection,
+  CommandEmpty,
+  CommandInput,
+  CommandItem,
+  CommandList,
+  type CommandEntry
+} from '@rune-langium/design-system/ui/command';
 import type { SourceRefOption } from '../../types.js';
 
 export interface SourceRefFieldProps {
@@ -36,9 +44,19 @@ export function SourceRefField({
   const selected = useMemo(() => options.find((o) => o.value === value) ?? null, [options, value]);
   const label = selected?.label ?? '';
 
+  const items = useMemo<readonly CommandEntry<SourceRefOption>[]>(
+    () =>
+      options.map((option) => ({
+        value: option,
+        label: option.label,
+        searchText: [option.label, option.namespace].filter(Boolean).join(' ')
+      })),
+    [options]
+  );
+
   const handleSelect = useCallback(
-    (v: string) => {
-      onSelect(v);
+    (option: SourceRefOption) => {
+      onSelect(option.value);
       setOpen(false);
     },
     [onSelect]
@@ -70,16 +88,20 @@ export function SourceRefField({
         }
       />
       <PopoverContent align="start" sideOffset={4} className="w-auto p-0">
-        <Command className="nodrag nopan">
-          <CommandInput placeholder="Search sources…" />
+        <Command className="nodrag nopan" items={items} onItemSelect={handleSelect}>
+          <CommandInput aria-label="Search sources" placeholder="Search sources…" />
           <CommandList>
             <CommandEmpty>No synonym sources.</CommandEmpty>
-            {options.map((o) => (
-              <CommandItem key={o.value} value={o.label} onSelect={() => handleSelect(o.value)}>
-                {o.label}
-                {o.namespace ? <span className="ml-2 text-muted-foreground">{o.namespace}</span> : null}
-              </CommandItem>
-            ))}
+            <CommandCollection<SourceRefOption>>
+              {(item) => (
+                <CommandItem key={item.value.value} value={item}>
+                  {item.value.label}
+                  {item.value.namespace ? (
+                    <span className="ml-2 text-muted-foreground">{item.value.namespace}</span>
+                  ) : null}
+                </CommandItem>
+              )}
+            </CommandCollection>
           </CommandList>
         </Command>
       </PopoverContent>

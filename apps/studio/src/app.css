@@ -590,7 +590,7 @@ html {
     flex-shrink: 0;
   }
 
-  .studio-app .studio-topbar__cmdk {
+  .studio-app .studio-topbar__search {
     appearance: none;
     border: var(--hairline) solid color-mix(in srgb, var(--border) 82%, transparent);
     background:
@@ -612,7 +612,7 @@ html {
     transition: background 0.15s ease, border-color 0.15s ease, color 0.15s ease;
   }
 
-  .studio-app .studio-topbar__cmdk:hover {
+  .studio-app .studio-topbar__search:hover {
     border-color: var(--ring);
     color: var(--foreground);
     background: color-mix(in srgb, var(--card) 80%, var(--accent));
@@ -620,16 +620,16 @@ html {
 
   /* :focus-visible ring covered by the global baseline; this rule
    * only still exists to flip text color on keyboard focus. */
-  .studio-app .studio-topbar__cmdk:focus-visible {
+  .studio-app .studio-topbar__search:focus-visible {
     color: var(--foreground);
   }
 
-  .studio-app .studio-topbar__cmdk span {
+  .studio-app .studio-topbar__search span {
     flex: 1;
     text-align: left;
   }
 
-  .studio-app .studio-topbar__cmdk kbd {
+  .studio-app .studio-topbar__search kbd {
     font-family: var(--font-mono);
     font-size: var(--text-2xs);
     background: var(--glass-kbd-bg);

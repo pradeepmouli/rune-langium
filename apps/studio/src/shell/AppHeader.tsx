@@ -185,7 +185,7 @@ export const AppHeader = withInstrumentation(
         {Center ? <Center /> : <div className="studio-topbar__title" aria-hidden="true" />}
         <div className="studio-topbar__right">
           {Actions ? <Actions /> : null}
-          <button type="button" className="studio-topbar__cmdk" aria-label="Search">
+          <button type="button" className="studio-topbar__search" aria-label="Search">
             <Search className="size-3.5" />
             <span>Search types, files, commands…</span>
             <Kbd>⌘K</Kbd>

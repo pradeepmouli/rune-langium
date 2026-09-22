@@ -3,7 +3,7 @@
 
 import '@testing-library/jest-dom/vitest';
 
-// jsdom does not implement scrollIntoView — required by cmdk (Command)
+// jsdom does not implement scrollIntoView — used by keyboard-focused listbox tests.
 if (typeof Element.prototype.scrollIntoView === 'undefined') {
   Element.prototype.scrollIntoView = () => {};
 }

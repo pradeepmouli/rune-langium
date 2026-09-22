@@ -4,8 +4,8 @@
 /**
  * Tests for ReferencePicker — scope-aware variable picker.
  *
- * NOTE: ReferencePicker now uses DS Popover (renders via Portal into
- * document.body) + Command (cmdk). Queries target document.body.
+ * NOTE: ReferencePicker uses the DS Base UI Select, which renders through
+ * a portal into document.body. Queries target document.body.
  *
  * @module
  */
@@ -27,7 +27,7 @@ const testScope: FunctionScope = {
 describe('ReferencePicker', () => {
   it('does not render when closed', () => {
     render(<ReferencePicker open={false} scope={testScope} onSelect={vi.fn()} onClose={vi.fn()} />);
-    // Popover portal content should not be in DOM when closed
+    // Select portal content should not be in the DOM when closed
     expect(document.body.querySelector('[data-testid="reference-picker"]')).toBeNull();
   });
 
