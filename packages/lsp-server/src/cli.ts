@@ -12,7 +12,7 @@
  */
 
 import { WebSocketServer } from 'ws';
-import { WebSocketTransport } from '@lspeasy/core';
+import { WebSocketTransport } from '@lspeasy/core/transport/websocket';
 import { createRuneLspServer } from './rune-dsl-server.js';
 
 const DEFAULT_PORT = 3001;

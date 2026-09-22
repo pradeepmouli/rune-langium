@@ -36,7 +36,7 @@ Serialise an expansion key for use as a Map / Record key.
 
 **Format:**
 - No `instancePath` (or empty): `${namespaceUri}::${typeId}::${attrName}`
-- With `instancePath`: `${namespaceUri}::${typeId}::${attrName}::${path.join('>')}`
+- With `instancePath`: `${namespaceUri}::${typeId}::${attrName}::${path.join('&gt;')}`
 
 This is the single deterministic per-instance key shape. Root-level rows
 (empty `instancePath`) serialize without a suffix; nested rows append the

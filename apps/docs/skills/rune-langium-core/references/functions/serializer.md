@@ -27,7 +27,7 @@ serializeRuneModel(serializer: JsonSerializer, model: AstNode): string
 **Returns:** `string`
 
 ### `preserveCstText`
-Copy `$cstNode.text -> $cstText` for condition/expression-bearing AST parts
+Copy `$cstNode.text -&gt; $cstText` for condition/expression-bearing AST parts
 BEFORE `JsonSerializer.serialize`, because `$cstNode` is non-serializable
 (circular) and the serializer drops it — yet the visual-editor's expression
 cells need the original source text after the JSON round-trip.
@@ -75,10 +75,19 @@ hydrateModelDocument(services: HydrateServices, uri: string | URI, json: string,
 **Returns:** `{ model: RosettaModel; document: LangiumDocument }`
 
 ### `hydrateModelDocuments`
+Hydrate and link one shared object graph, regardless of reference depth or input order.
 ```ts
-hydrateModelDocuments(services: HydrateServices, entries: readonly { uri: string | URI; json: string }[]): { model: RosettaModel; document: LangiumDocument }[]
+hydrateModelDocuments(services: HydrateServices & { RuneDsl: { serializer: { JsonSerializer: Pick<RuneJsonSerializer, "deserializeModels"> } }; shared: { workspace: { LangiumDocuments: { deleteDocument: any } } } }, entries: readonly { uri: string | URI; json: string }[]): { model: RosettaModel; document: LangiumDocument }[]
 ```
 **Parameters:**
-- `services: HydrateServices`
+- `services: HydrateServices & { RuneDsl: { serializer: { JsonSerializer: Pick<RuneJsonSerializer, "deserializeModels"> } }; shared: { workspace: { LangiumDocuments: { deleteDocument: any } } } }`
 - `entries: readonly { uri: string | URI; json: string }[]`
 **Returns:** `{ model: RosettaModel; document: LangiumDocument }[]`
+
+### `assertValidDocuments`
+Publication requires syntax-correct documents with every reference linked.
+```ts
+assertValidDocuments(documents: readonly LangiumDocument<AstNode>[]): void
+```
+**Parameters:**
+- `documents: readonly LangiumDocument<AstNode>[]`

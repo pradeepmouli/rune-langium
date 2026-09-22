@@ -4,8 +4,8 @@
 
 ### `removeAnnotationAt`
 ```ts
-removeAnnotationAt(node: Dehydrated<RosettaFunction>, index: number): void
+removeAnnotationAt(node: Dehydrated<Schema>, index: number): void
 ```
 **Parameters:**
-- `node: Dehydrated<RosettaFunction>`
+- `node: Dehydrated<Schema>`
 - `index: number`

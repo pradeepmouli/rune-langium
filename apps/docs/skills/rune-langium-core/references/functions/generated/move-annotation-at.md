@@ -4,9 +4,9 @@
 
 ### `moveAnnotationAt`
 ```ts
-moveAnnotationAt(node: Dehydrated<RosettaFunction>, from: number, to: number): void
+moveAnnotationAt(node: Dehydrated<Schema>, from: number, to: number): void
 ```
 **Parameters:**
-- `node: Dehydrated<RosettaFunction>`
+- `node: Dehydrated<Schema>`
 - `from: number`
 - `to: number`

@@ -357,12 +357,37 @@ const RuneDslGeneratedModule: Module<LangiumCoreServices, LangiumGeneratedCoreSe
 const RuneDslGeneratedSharedModule: Module<LangiumSharedCoreServices, LangiumGeneratedSharedCoreServices>
 ```
 
+## stdlib
+
+### `BASE_TYPE_FILES`
+System file descriptors for base types.
+```ts
+const BASE_TYPE_FILES: readonly [{ name: "basictypes.rosetta"; path: "system://com.rosetta.model/basictypes.rosetta"; content: "namespace com.rosetta.model\nversion \"${project.version}\"\n\nbasicType boolean <\"A boolean can either be True or False.\">\n\nbasicType number(\n    digits int           <\"The maximum number of digits that the number may have. If absent, this number may have an arbitrary number of digits.\">\n  , fractionalDigits int <\"The maximum number of digits after the decimal point that the number may have. If absent, this number may have any number of its digits after the decimal point.\">\n  , min number           <\"The minimum bound on this number. If absent, this number is unbounded from below.\">\n  , max number           <\"The maximum bound on this number. If absent, this number is unbounded from above.\">\n) <\"A signed decimal number.\">\n\nbasicType string(\n    minLength int  <\"The minimum number of characters that the string must have. If absent, defaults to zero.\">\n  , maxLength int  <\"The maximum number of characters that the string may have. If absent, there is no limit.\">\n  , pattern string <\"The regular expression that this string must match. If absent, this string may contain arbitrary characters.\">\n) <\"A string of characters.\">\n\nbasicType time <\"The time of the day - hour-minute-second.\">\n\nbasicType pattern <\"A regular expression.\">\n\ntypeAlias int(digits int, min int, max int): <\"A signed decimal integer.\">\n\tnumber(digits: digits, fractionalDigits: 0, min: min, max: max)\n\nlibrary function DateRanges() date\nlibrary function Min(x number, y number) number\nlibrary function Max(x number, y number) number\nlibrary function Adjust() date\nlibrary function Within() boolean\nlibrary function IsLeapYear(year number) boolean\n\nrecordType date\n{\n\tday   int\n\tmonth int\n\tyear  int\n}\n\nrecordType dateTime\n{\n\tdate date\n\ttime time\n}\n\nrecordType zonedDateTime\n{\n\tdate date\n\ttime time\n\ttimezone string\n}\n\ntypeAlias productType:\n\tstring\n\ntypeAlias eventType:\n\tstring\n\ntypeAlias calculation:\n\tstring\n"; dirty: false; readOnly: true }, { name: "annotations.rosetta"; path: "system://com.rosetta.model/annotations.rosetta"; content: string; dirty: false; readOnly: true }]
+```
+
+### `BASICTYPES_ROSETTA`
+Built-in Rune DSL base type definitions.
+
+These files are always loaded as read-only system files so that
+types like `number`, `string`, `date`, and annotations like
+`metadata`, `rootType`, etc. are available for cross-reference resolution.
+
+Content sourced from rune-runtime model resources.
+```ts
+const BASICTYPES_ROSETTA: "namespace com.rosetta.model\nversion \"${project.version}\"\n\nbasicType boolean <\"A boolean can either be True or False.\">\n\nbasicType number(\n    digits int           <\"The maximum number of digits that the number may have. If absent, this number may have an arbitrary number of digits.\">\n  , fractionalDigits int <\"The maximum number of digits after the decimal point that the number may have. If absent, this number may have any number of its digits after the decimal point.\">\n  , min number           <\"The minimum bound on this number. If absent, this number is unbounded from below.\">\n  , max number           <\"The maximum bound on this number. If absent, this number is unbounded from above.\">\n) <\"A signed decimal number.\">\n\nbasicType string(\n    minLength int  <\"The minimum number of characters that the string must have. If absent, defaults to zero.\">\n  , maxLength int  <\"The maximum number of characters that the string may have. If absent, there is no limit.\">\n  , pattern string <\"The regular expression that this string must match. If absent, this string may contain arbitrary characters.\">\n) <\"A string of characters.\">\n\nbasicType time <\"The time of the day - hour-minute-second.\">\n\nbasicType pattern <\"A regular expression.\">\n\ntypeAlias int(digits int, min int, max int): <\"A signed decimal integer.\">\n\tnumber(digits: digits, fractionalDigits: 0, min: min, max: max)\n\nlibrary function DateRanges() date\nlibrary function Min(x number, y number) number\nlibrary function Max(x number, y number) number\nlibrary function Adjust() date\nlibrary function Within() boolean\nlibrary function IsLeapYear(year number) boolean\n\nrecordType date\n{\n\tday   int\n\tmonth int\n\tyear  int\n}\n\nrecordType dateTime\n{\n\tdate date\n\ttime time\n}\n\nrecordType zonedDateTime\n{\n\tdate date\n\ttime time\n\ttimezone string\n}\n\ntypeAlias productType:\n\tstring\n\ntypeAlias eventType:\n\tstring\n\ntypeAlias calculation:\n\tstring\n"
+```
+
+### `ANNOTATIONS_ROSETTA`
+```ts
+const ANNOTATIONS_ROSETTA: string
+```
+
 ## Core
 
 ### `RuneDslModule`
 Dependency-injection module for the Rune DSL language.
 ```ts
-const RuneDslModule: Module<LangiumCoreServices, PartialLangiumCoreServices>
+const RuneDslModule: { serializer: { JsonSerializer: (services: RuneDslServices) => RuneJsonSerializer }; parser: { LangiumParser: (services: RuneDslServices) => RuneDslParser }; references: { ScopeComputation: (services: RuneDslServices) => RuneDslScopeComputation; ScopeProvider: (services: RuneDslServices) => RuneDslScopeProvider } }
 ```
 
 ### `RuneDslSharedModule`

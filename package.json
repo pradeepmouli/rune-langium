@@ -82,11 +82,10 @@
   "devDependencies": {
     "@changesets/changelog-github": "^1.0.0",
     "@changesets/cli": "^3.0.1",
-    "@to-skills/cli": "^0.3.14",
-    "@to-skills/vitepress": "^0.2.26",
-    "@types/node": "^26.4.1",
-    "@vitest/coverage-v8": "^4.1.11",
-    "@vitest/ui": "^4.1.11",
+    "@skillit/cli": "^1.1.2",
+    "@types/node": "^26.6.1",
+    "@vitest/coverage-v8": "^5.0.1",
+    "@vitest/ui": "^5.0.1",
     "concurrently": "^10.0.5",
     "lint-staged": "^17.4.1",
     "oxfmt": "^0.66.0",
@@ -95,7 +94,7 @@
     "react-doctor": "^0.9.12",
     "simple-git-hooks": "^2.14.0",
     "typescript": "^7.0.2",
-    "vitest": "^4.1.11"
+    "vitest": "^5.0.1"
   },
   "engines": {
     "node": ">=22.13.0",
@@ -104,7 +103,7 @@
   "packageManager": "pnpm@11.5.0",
   "dependencies": {
     "@lspeasy/client": "^3.1.8",
-    "@lspeasy/core": "^2.7.1",
+    "@lspeasy/core": "^3.0.0",
     "camelcase": "^9.0.0"
   },
   "lint-staged": {

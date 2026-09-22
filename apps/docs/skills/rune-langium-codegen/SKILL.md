@@ -1,11 +1,12 @@
 ---
-description: Documentation site and generated agent skills for rune-langium APIs
+description: "The main barrel (`@rune-langium/codegen`, i.e. this file, resolved via\npackage.json's `\".\"` export) is intentionally empty."
 name: rune-langium-codegen
 ---
 
 # @rune-langium/codegen
 
-Documentation site and generated agent skills for rune-langium APIs
+The main barrel (`@rune-langium/codegen`, i.e. this file, resolved via
+package.json's `"."` export) is intentionally empty.
 
 Spec 021 Phase 2's subpath restructure ("CLEAN FLIP") splits this
 package's public API by direction — nothing in it is genuinely shared

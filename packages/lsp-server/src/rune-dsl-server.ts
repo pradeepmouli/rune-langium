@@ -112,7 +112,7 @@ export interface RuneLspServer {
  * @example
  * ```ts
  * import { createRuneLspServer } from '@rune-langium/lsp-server';
- * import { WebSocketTransport } from '@lspeasy/core';
+ * import { WebSocketTransport } from '@lspeasy/core/transport/websocket';
  *
  * const lsp = createRuneLspServer();
  * const transport = new WebSocketTransport(webSocket);

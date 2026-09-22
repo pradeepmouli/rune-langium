@@ -21,7 +21,7 @@ isSingular(card: RosettaCardinality): boolean
 **Returns:** `boolean`
 
 ### `isPlural`
-Whether the cardinality allows more than one instance (sup > 1 or unbounded).
+Whether the cardinality allows more than one instance (sup &gt; 1 or unbounded).
 ```ts
 isPlural(card: RosettaCardinality): boolean
 ```
@@ -30,7 +30,7 @@ isPlural(card: RosettaCardinality): boolean
 **Returns:** `boolean`
 
 ### `isRequired`
-Whether the cardinality is required (inf >= 1).
+Whether the cardinality is required (inf &gt;= 1).
 ```ts
 isRequired(card: RosettaCardinality): boolean
 ```
@@ -67,6 +67,24 @@ getEffectiveConditions(choice: Choice): Condition[]
 - `choice: Choice`
 **Returns:** `Condition[]`
 
+### `getChoiceOptionPaths`
+Declared option paths, including nested choices; data fields are not choice arms.
+```ts
+getChoiceOptionPaths(choice: Choice, seen: Set<Choice>): ChoiceOption[][]
+```
+**Parameters:**
+- `choice: Choice`
+- `seen: Set<Choice>` — default: `...`
+**Returns:** `ChoiceOption[][]`
+
+### `choiceOptionFieldName`
+```ts
+choiceOptionFieldName(optionTypeName: string): string
+```
+**Parameters:**
+- `optionTypeName: string`
+**Returns:** `string`
+
 ### `hasGeneratedInput`
 Check if an expression node has a generated (synthetic) input marker.
 This is used during code generation to track inputs that were
@@ -88,6 +106,47 @@ setGeneratedInputIfAbsent(node: RosettaExpression): boolean
 - `node: RosettaExpression`
 **Returns:** `boolean`
 
+### `getFunctionSignature`
+Resolve a dispatch overload to its namespace's base declaration.
+```ts
+getFunctionSignature(func: RosettaFunction, declarations?: Iterable<RosettaFunction, any, any>): RosettaFunction
+```
+**Parameters:**
+- `func: RosettaFunction`
+- `declarations: Iterable<RosettaFunction, any, any>` (optional)
+**Returns:** `RosettaFunction`
+
+### `getOperationArgument`
+Resolve an explicit operation input or the input of its enclosing pipeline.
+```ts
+getOperationArgument(expr: RosettaExpression): RosettaExpression | undefined
+```
+**Parameters:**
+- `expr: RosettaExpression`
+**Returns:** `RosettaExpression | undefined`
+
+### `resolveOperationType`
+Shared operator result-type propagation; symbol lookup belongs to the caller.
+```ts
+resolveOperationType<T>(expr: RosettaExpression, resolve: (expression: RosettaExpression) => T | undefined, resolveType?: (type: RosettaType) => T | undefined, resolveIntrinsic?: (name: IntrinsicTypeName) => T | undefined): T | undefined
+```
+**Parameters:**
+- `expr: RosettaExpression`
+- `resolve: (expression: RosettaExpression) => T | undefined`
+- `resolveType: (type: RosettaType) => T | undefined` (optional)
+- `resolveIntrinsic: (name: IntrinsicTypeName) => T | undefined` (optional)
+**Returns:** `T | undefined`
+
+### `resolveTypeAliases`
+Resolve a declared type without looping through recursive aliases.
+```ts
+resolveTypeAliases(type: RosettaType | undefined, seen: Set<RosettaType>): RosettaType | undefined
+```
+**Parameters:**
+- `type: RosettaType | undefined`
+- `seen: Set<RosettaType>` — default: `...`
+**Returns:** `RosettaType | undefined`
+
 ### `getFunctionInputs`
 Get all input attributes from a RosettaFunction.
 ```ts
@@ -105,3 +164,12 @@ getFunctionOutput(func: RosettaFunction): Attribute | undefined
 **Parameters:**
 - `func: RosettaFunction`
 **Returns:** `Attribute | undefined`
+
+### `getEnumValues`
+Effective enum members, with child declarations overriding inherited names.
+```ts
+getEnumValues(enumeration: RosettaEnumeration): RosettaEnumValue[]
+```
+**Parameters:**
+- `enumeration: RosettaEnumeration`
+**Returns:** `RosettaEnumValue[]`

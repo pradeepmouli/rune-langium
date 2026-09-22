@@ -4,8 +4,8 @@
 
 ### `getAnnotations`
 ```ts
-getAnnotations(node: Dehydrated<RosettaFunction>): Dehydrated<AnnotationRef>[]
+getAnnotations(node: Dehydrated<Schema>): Dehydrated<AnnotationRef>[]
 ```
 **Parameters:**
-- `node: Dehydrated<RosettaFunction>`
+- `node: Dehydrated<Schema>`
 **Returns:** `Dehydrated<AnnotationRef>[]`

@@ -22,7 +22,7 @@ getElementNamespace(element: { $container?: unknown }): string | undefined
 
 ### `collectNamespaceDependencies`
 Walk every parsed document and return a per-namespace dependency map:
-`Map<sourceNamespace, Set<targetNamespace>>`. A key `S` lists every
+`Map&lt;sourceNamespace, Set&lt;targetNamespace&gt;&gt;`. A key `S` lists every
 namespace `T ≠ S` that some type in `S` directly references.
 
 The auto-select cascade in the Download modal computes the transitive
