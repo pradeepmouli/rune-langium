@@ -82,6 +82,42 @@ it('keeps an existing stale artifact through later configuration and source chan
   expect(store.getState().run).toMatchObject({ status: 'stale', artifact });
 });
 
+it('restores the previous export when regeneration is canceled', async () => {
+  let finish!: (result: ExportArtifact) => void;
+  const generate = vi
+    .fn()
+    .mockResolvedValueOnce(artifact)
+    .mockImplementationOnce(() => new Promise<ExportArtifact>((resolve) => (finish = resolve)));
+  const store = createExportWorkbench(generate);
+
+  await store.getState().generate(input);
+  const pending = store.getState().generate({ ...input, sourceRevision: 2 });
+  expect(store.getState().run).toMatchObject({ status: 'generating', previous: { artifact } });
+
+  store.getState().cancel();
+  expect(store.getState().run).toEqual({ status: 'stale', inputKey: exportInputKey(input), artifact });
+  finish({ ...artifact, filename: 'new.zip' });
+  await pending;
+  expect(store.getState().run).toMatchObject({ status: 'stale', artifact });
+});
+
+it('retains the previous export and diagnostics when regeneration fails', async () => {
+  const generate = vi.fn().mockResolvedValueOnce(artifact).mockRejectedValueOnce(new Error('Worker failed'));
+  const store = createExportWorkbench(generate);
+
+  await store.getState().generate(input);
+  await store.getState().generate({ ...input, sourceRevision: 2 });
+
+  expect(store.getState().run).toEqual({
+    status: 'failed',
+    message: 'Worker failed',
+    diagnostics: [],
+    previous: { inputKey: exportInputKey(input), artifact }
+  });
+  store.getState().configure({ ...input.config, target: 'zod' });
+  expect(store.getState().run).toMatchObject({ status: 'stale', artifact });
+});
+
 it('uses the same key for option objects with different insertion order', () => {
   const reordered: ExportInput = {
     ...input,

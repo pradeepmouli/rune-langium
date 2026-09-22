@@ -57,6 +57,25 @@ it('renders generator diagnostics when an export fails', () => {
   expect(screen.getByTestId('export-artifact-status')).toHaveTextContent('test.Party is unavailable');
 });
 
+it('keeps a failed regeneration visible with its previous output', async () => {
+  render(
+    <ExportPreviewPanel
+      run={{
+        status: 'failed',
+        message: 'Generation failed',
+        diagnostics: [],
+        previous: { inputKey: 'input', artifact }
+      }}
+      onDownload={vi.fn()}
+    />
+  );
+
+  expect(screen.getByTestId('export-artifact-status')).toHaveTextContent('Generation failed');
+  expect(await screen.findByText('export interface Party {}')).toBeVisible();
+  expect(screen.getByText('Outdated')).toBeVisible();
+  expect(screen.getByRole('button', { name: 'Download export' })).toBeDisabled();
+});
+
 it('renders manifest diagnostics when an export succeeds', () => {
   render(
     <ExportPreviewPanel

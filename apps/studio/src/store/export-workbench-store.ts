@@ -9,11 +9,13 @@ import { withInstrumentation } from '../services/instrumentation/core.js';
 import { readWorkbenchSettings, writeWorkbenchSettings } from '../shell/workbench-settings.js';
 import { createActivationGuard } from './activation-guard.js';
 
+type CapturedExport = { inputKey: string; artifact: ExportArtifact };
+
 export type ExportRunState =
   | { status: 'idle' }
-  | { status: 'generating'; requestId: string }
-  | { status: 'ready' | 'stale'; inputKey: string; artifact: ExportArtifact }
-  | { status: 'failed'; message: string; diagnostics: GeneratorDiagnostic[] };
+  | { status: 'generating'; requestId: string; previous?: CapturedExport }
+  | ({ status: 'ready' | 'stale' } & CapturedExport)
+  | { status: 'failed'; message: string; diagnostics: GeneratorDiagnostic[]; previous?: CapturedExport };
 
 type GenerateExport = (input: ExportInput, signal: AbortSignal) => Promise<ExportArtifact>;
 
@@ -64,6 +66,12 @@ function errorDiagnostics(error: unknown): GeneratorDiagnostic[] {
   return Array.isArray(diagnostics) ? (diagnostics as GeneratorDiagnostic[]) : [];
 }
 
+function capturedExport(run: ExportRunState): CapturedExport | undefined {
+  if (run.status === 'ready' || run.status === 'stale') return { inputKey: run.inputKey, artifact: run.artifact };
+  if (run.status === 'generating' || run.status === 'failed') return run.previous;
+  return undefined;
+}
+
 /** Create export state with an injected generator so races are independently testable. */
 export const createExportWorkbench = withInstrumentation(
   function createExportWorkbench(generateExportArtifact: GenerateExport = generateExport) {
@@ -111,13 +119,13 @@ export const createExportWorkbench = withInstrumentation(
         activation.invalidate();
         cancelActive();
         const nextConfig = cloneConfig(config);
-        set((state) => ({
-          config: nextConfig,
-          run:
-            state.run.status === 'ready' || state.run.status === 'stale'
-              ? { status: 'stale', inputKey: state.run.inputKey, artifact: state.run.artifact }
-              : { status: 'idle' }
-        }));
+        set((state) => {
+          const previous = capturedExport(state.run);
+          return {
+            config: nextConfig,
+            run: previous ? { status: 'stale', ...previous } : { status: 'idle' }
+          };
+        });
         persist({ ...get(), config: nextConfig });
       },
       setActiveFile(activeFile) {
@@ -133,14 +141,16 @@ export const createExportWorkbench = withInstrumentation(
       invalidate(sourceRevision) {
         cancelActive();
         set((state) => {
-          if (state.run.status !== 'ready' && state.run.status !== 'stale') return { run: { status: 'idle' } };
+          const previous = capturedExport(state.run);
+          if (!previous) return { run: { status: 'idle' } };
           return {
-            run: { status: 'stale', inputKey: `${state.run.inputKey}:${sourceRevision}`, artifact: state.run.artifact }
+            run: { status: 'stale', inputKey: `${previous.inputKey}:${sourceRevision}`, artifact: previous.artifact }
           };
         });
       },
       async generate(input) {
         activation.invalidate();
+        const previous = capturedExport(get().run);
         cancelActive();
         const controller = new AbortController();
         const requestId = `export:${++sequence}`;
@@ -148,7 +158,7 @@ export const createExportWorkbench = withInstrumentation(
         const ownedInput = { ...input, config };
         const inputKey = exportInputKey(ownedInput);
         active = { requestId, controller };
-        set({ config, run: { status: 'generating', requestId } });
+        set({ config, run: { status: 'generating', requestId, ...(previous ? { previous } : {}) } });
         persist({ ...get(), config });
         try {
           const artifact = await generateExportArtifact(ownedInput, controller.signal);
@@ -160,7 +170,8 @@ export const createExportWorkbench = withInstrumentation(
             run: {
               status: 'failed',
               message: error instanceof Error ? error.message : String(error),
-              diagnostics: errorDiagnostics(error)
+              diagnostics: errorDiagnostics(error),
+              ...(previous ? { previous } : {})
             }
           });
         } finally {
@@ -169,7 +180,10 @@ export const createExportWorkbench = withInstrumentation(
       },
       cancel() {
         cancelActive();
-        if (get().run.status === 'generating') set({ run: { status: 'idle' } });
+        const run = get().run;
+        if (run.status === 'generating') {
+          set({ run: run.previous ? { status: 'stale', ...run.previous } : { status: 'idle' } });
+        }
       }
     }));
   },

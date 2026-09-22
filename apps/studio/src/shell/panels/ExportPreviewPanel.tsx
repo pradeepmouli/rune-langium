@@ -42,7 +42,12 @@ export const ExportPreviewPanel = withInstrumentation(
     const [uncontrolledPath, setUncontrolledPath] = useState<string | undefined>();
     const [copyStatus, setCopyStatus] = useState<string | undefined>();
     const selectedPath = activeFile ?? uncontrolledPath;
-    const artifact = run.status === 'ready' || run.status === 'stale' ? run.artifact : undefined;
+    const artifact =
+      run.status === 'ready' || run.status === 'stale'
+        ? run.artifact
+        : run.status === 'generating' || run.status === 'failed'
+          ? run.previous?.artifact
+          : undefined;
     const textFiles = artifact?.manifest.files.filter((file) => file.kind === 'text') ?? [];
     const textFile = textFiles.find((file) => file.path === selectedPath) ?? textFiles[0];
     const dependencyCount = artifact?.manifest.resolvedSelection
@@ -96,15 +101,12 @@ export const ExportPreviewPanel = withInstrumentation(
       }
     }
 
-    if (run.status === 'generating') {
-      return (
+    const statusNotice =
+      run.status === 'generating' ? (
         <p id="export-run-status" data-testid="export-artifact-status" className="p-4 text-sm text-muted-foreground">
-          Generating export…
+          Generating export… {artifact ? 'Previous output is shown below.' : null}
         </p>
-      );
-    }
-    if (run.status === 'failed') {
-      return (
+      ) : run.status === 'failed' ? (
         <div
           id="export-run-status"
           data-testid="export-artifact-status"
@@ -116,9 +118,11 @@ export const ExportPreviewPanel = withInstrumentation(
               {diagnostic.message}
             </p>
           ))}
+          {artifact ? <p className="text-xs">Previous output is shown below.</p> : null}
         </div>
-      );
-    }
+      ) : null;
+
+    if (!artifact && statusNotice) return statusNotice;
     if (!artifact) {
       return (
         <p id="export-run-status" data-testid="export-artifact-status" className="p-4 text-sm text-muted-foreground">
@@ -129,9 +133,10 @@ export const ExportPreviewPanel = withInstrumentation(
     if (!textFile) {
       return (
         <div data-testid="export-artifact-binary" className="space-y-3 p-4">
+          {statusNotice}
           <div className="flex items-center justify-between gap-3">
             <p className="text-sm text-muted-foreground">This export contains binary files only.</p>
-            <Button type="button" size="sm" disabled={run.status === 'stale'} onClick={onDownload}>
+            <Button type="button" size="sm" disabled={run.status !== 'ready'} onClick={onDownload}>
               Download export
             </Button>
           </div>
@@ -141,6 +146,7 @@ export const ExportPreviewPanel = withInstrumentation(
     }
     return (
       <section data-testid="export-artifact-preview" className="flex h-full min-h-0 flex-col">
+        {statusNotice}
         <div className="flex shrink-0 items-center gap-3 border-b border-border px-3 py-1.5">
           <span className="truncate text-sm font-medium">{textFile.path}</span>
           {dependencyCount > 0 && (
@@ -168,11 +174,11 @@ export const ExportPreviewPanel = withInstrumentation(
               ))}
             </select>
           )}
-          <span className="ml-auto text-xs text-muted-foreground">{run.status === 'stale' ? 'Outdated' : 'Ready'}</span>
+          <span className="ml-auto text-xs text-muted-foreground">{run.status === 'ready' ? 'Ready' : 'Outdated'}</span>
           <Button type="button" size="sm" disabled={text === undefined} onClick={() => void copyActiveFile()}>
             {copyStatus ?? 'Copy file'}
           </Button>
-          <Button type="button" size="sm" disabled={run.status === 'stale'} onClick={onDownload}>
+          <Button type="button" size="sm" disabled={run.status !== 'ready'} onClick={onDownload}>
             Download export
           </Button>
         </div>

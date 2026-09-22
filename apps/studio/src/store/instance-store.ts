@@ -205,6 +205,7 @@ export const useInstanceStore = create<InstanceStoreState>((set, get) => ({
     const renamed = { ...record, name: uniqueName(trimmed, get().instances, id), modifiedAt: Date.now() };
     set((state) => ({ instances: { ...state.instances, [id]: renamed } }));
     get().saveRecord(renamed);
+    if (readinessRef && preparationControllers.has(id)) void get().prepareInstance(id);
   },
 
   duplicateInstance(id) {

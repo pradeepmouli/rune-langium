@@ -114,6 +114,34 @@ describe('instance-store', () => {
     expect(() => useInstanceStore.getState().renameInstance(id, '   ')).toThrow('cannot be empty');
   });
 
+  it('restarts pending preparation after renaming an instance', async () => {
+    const postMessage = vi.fn();
+    let finishFirst!: (value: number) => void;
+    let finishSecond!: (value: number) => void;
+    const ensure = vi
+      .fn()
+      .mockImplementationOnce(() => new Promise<number>((resolve) => (finishFirst = resolve)))
+      .mockImplementationOnce(() => new Promise<number>((resolve) => (finishSecond = resolve)));
+    useInstanceStore.getState().setWorker({ postMessage } as unknown as Worker);
+    const id = useInstanceStore.getState().createInstance('test.Party', 'Party');
+    postMessage.mockClear();
+    useInstanceStore.getState().setReadiness({ ensure, dispose: vi.fn() });
+
+    useInstanceStore.getState().renameInstance(id, 'Renamed Party');
+    expect(ensure).toHaveBeenCalledTimes(2);
+    finishFirst(1);
+    finishSecond(2);
+
+    await vi.waitFor(() =>
+      expect(postMessage).toHaveBeenCalledWith(expect.objectContaining({ type: 'instance:validate' }))
+    );
+    expect(postMessage.mock.calls.map(([message]) => message.type)).toEqual([
+      'instance:generateSchema',
+      'instance:validate'
+    ]);
+    expect(useInstanceStore.getState().instances[id]?.name).toBe('Renamed Party');
+  });
+
   it('keeps a failed record visible and retries its current revision', async () => {
     const fs = new OpfsFs(createOpfsRoot() as never);
     const originalWrite = fs.writeFile.bind(fs);
