@@ -2,6 +2,7 @@
 // Copyright (c) 2026 Pradeep Mouli
 
 import { getFunctionOutput, isChoice, isData, isRosettaFunction, type RosettaModel } from '@rune-langium/core';
+import type { FormPreviewSchema } from '@rune-langium/codegen/export';
 import { withInstrumentation } from './instrumentation/core.js';
 
 export interface FunctionOutputTarget {
@@ -13,6 +14,10 @@ function isSingular(card: { inf?: number; sup?: number; unbounded?: boolean } | 
   return card?.inf === 1 && card.sup === 1 && card.unbounded !== true;
 }
 
+function isSingularPreviewOutput(card: { min: number; max: number | 'unbounded' }): boolean {
+  return card.min === 1 && card.max === 1;
+}
+
 /**
  * Resolves the saved-instance target from the function declaration itself.
  * A result value is never used to infer its type.
@@ -20,9 +25,15 @@ function isSingular(card: { inf?: number; sup?: number; unbounded?: boolean } | 
 export const resolveFunctionOutputTarget = withInstrumentation(
   function resolveFunctionOutputTarget(
     models: ReadonlyArray<RosettaModel>,
-    functionFqn: string | null
+    functionFqn: string | null,
+    schema?: FormPreviewSchema
   ): FunctionOutputTarget | undefined {
     if (!functionFqn) return undefined;
+    const schemaOutput =
+      schema?.kind === 'function' && schema.targetId === functionFqn ? schema.functionOutput : undefined;
+    if (schemaOutput && isSingularPreviewOutput(schemaOutput.cardinality)) {
+      return { typeFqn: schemaOutput.typeFqn, kind: schemaOutput.kind };
+    }
     const functionNode = models
       .flatMap((model) => model.elements)
       .find((element) => isRosettaFunction(element) && `${element.$container.name}.${element.name}` === functionFqn);

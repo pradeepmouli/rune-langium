@@ -324,6 +324,13 @@ export interface PreviewSourceMapEntry {
 
 export type FormPreviewKind = 'data' | 'typeAlias' | 'choice' | 'function';
 
+/** The declared result identity for a function preview schema. */
+export interface FunctionPreviewOutput {
+  typeFqn: string;
+  kind: 'data' | 'choice';
+  cardinality: { min: number; max: number | 'unbounded' };
+}
+
 export interface FormPreviewSchema {
   schemaVersion: 1;
   targetId: string;
@@ -331,6 +338,12 @@ export interface FormPreviewSchema {
   kind?: FormPreviewKind;
   status: 'ready' | 'unsupported';
   fields: PreviewField[];
+  /**
+   * The resolved result type for a function. This remains available when the
+   * function belongs to a lazily hydrated curated bundle instead of the local
+   * workspace model list.
+   */
+  functionOutput?: FunctionPreviewOutput;
   unsupportedFeatures?: string[];
   sourceMap?: PreviewSourceMapEntry[];
   /**

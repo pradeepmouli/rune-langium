@@ -362,6 +362,7 @@ function isFormPreviewSchema(value: unknown): value is FormPreviewSchema {
   ) {
     return false;
   }
+  if (candidate.functionOutput !== undefined && !isFunctionPreviewOutput(candidate.functionOutput)) return false;
   if (
     candidate.sourceMap !== undefined &&
     (!Array.isArray(candidate.sourceMap) || !candidate.sourceMap.every(isPreviewSourceMapEntry))
@@ -369,6 +370,22 @@ function isFormPreviewSchema(value: unknown): value is FormPreviewSchema {
     return false;
   }
   return true;
+}
+
+function isFunctionPreviewOutput(value: unknown): boolean {
+  if (!isRecord(value)) return false;
+  return (
+    typeof value.typeFqn === 'string' &&
+    (value.kind === 'data' || value.kind === 'choice') &&
+    isRecord(value.cardinality) &&
+    typeof value.cardinality.min === 'number' &&
+    Number.isSafeInteger(value.cardinality.min) &&
+    value.cardinality.min >= 0 &&
+    (value.cardinality.max === 'unbounded' ||
+      (typeof value.cardinality.max === 'number' &&
+        Number.isSafeInteger(value.cardinality.max) &&
+        value.cardinality.max >= value.cardinality.min))
+  );
 }
 
 function isPreviewField(value: unknown): boolean {

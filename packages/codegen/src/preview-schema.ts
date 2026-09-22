@@ -21,6 +21,7 @@ import {
 } from '@rune-langium/core';
 import type {
   FormPreviewSchema,
+  FunctionPreviewOutput,
   GeneratePreviewSchemaOptions,
   PreviewField,
   PreviewFieldKind,
@@ -29,7 +30,7 @@ import type {
 import { choiceOptionFieldName, decodeCardinality } from './emit/base-namespace-emitter.js';
 import { buildTypeReferenceGraph, findCyclicTypes } from './cycle-detector.js';
 import { resolveTypeCallTarget } from './emit/type-ref-resolver.js';
-import { functionInputs, functionSignature } from './types/func.js';
+import { functionInputs, functionOutput, functionSignature } from './types/func.js';
 import { fieldMetadataKind, type FieldMetadataKind } from './expr/metadata-runtime.js';
 
 function humanizeLabel(name: string): string {
@@ -998,6 +999,29 @@ function buildFunctionSchema(
       cyclicTypes
     })
   );
+  const output = functionOutput(func);
+  const functionOutputDescriptor = output
+    ? resolveTypeCallTarget<FunctionPreviewOutput | undefined>(
+        output.typeCall,
+        namespace,
+        {
+          onPrimitive: () => undefined,
+          onEnum: () => undefined,
+          onData: (node) => ({
+            typeFqn: qualifiedTypeId(node),
+            kind: 'data',
+            cardinality: toPreviewCardinality(decodeCardinality(output.card))
+          }),
+          onChoice: (node) => ({
+            typeFqn: qualifiedTypeId(node),
+            kind: 'choice',
+            cardinality: toPreviewCardinality(decodeCardinality(output.card))
+          }),
+          onUnresolved: () => undefined
+        },
+        AstUtils.getDocument(output).uri.toString()
+      )
+    : undefined;
 
   return {
     schemaVersion: SCHEMA_VERSION,
@@ -1006,6 +1030,7 @@ function buildFunctionSchema(
     kind: 'function',
     status: hasReportableUnsupportedFeature(unsupportedFeatures) ? 'unsupported' : 'ready',
     fields: inputFields,
+    ...(functionOutputDescriptor ? { functionOutput: functionOutputDescriptor } : {}),
     ...(sourceMap.length > 0 ? { sourceMap } : {}),
     ...(unsupportedFeatures.size > 0 ? { unsupportedFeatures: Array.from(unsupportedFeatures).sort() } : {})
   };
@@ -1371,6 +1396,10 @@ function getCardinality(decoded: { lower: number; upper: number | null }): Previ
     min: lower,
     max: upper === null ? 'unbounded' : upper
   };
+}
+
+function toPreviewCardinality(decoded: { lower: number; upper: number | null }): FunctionPreviewOutput['cardinality'] {
+  return { min: decoded.lower, max: decoded.upper === null ? 'unbounded' : decoded.upper };
 }
 
 function addSourceMapEntry(

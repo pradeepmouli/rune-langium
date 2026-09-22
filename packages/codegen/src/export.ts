@@ -46,6 +46,7 @@ export type { ResolvedExportSelection } from './selection/declaration-selection.
 
 export type {
   FormPreviewKind,
+  FunctionPreviewOutput,
   FormPreviewSchema,
   GeneratePreviewSchemaOptions,
   GeneratorOptions,

@@ -257,7 +257,12 @@ describe('preview worker message helpers', () => {
           targetId: 'test.preview.Trade',
           title: 'Trade',
           status: 'ready',
-          fields: []
+          fields: [],
+          functionOutput: {
+            typeFqn: 'test.preview.Trade',
+            kind: 'data',
+            cardinality: { min: 1, max: 1 }
+          }
         }
       })
     ).toBe(true);
@@ -281,6 +286,25 @@ describe('preview worker message helpers', () => {
           title: 'Trade',
           status: 'ready',
           fields: []
+        }
+      })
+    ).toBe(false);
+    expect(
+      isPreviewWorkerMessage({
+        type: 'preview:result',
+        targetId: 'test.preview.Trade',
+        requestId: 'preview:test.preview.Trade:2',
+        schema: {
+          schemaVersion: 1,
+          targetId: 'test.preview.Trade',
+          title: 'Trade',
+          status: 'ready',
+          fields: [],
+          functionOutput: {
+            typeFqn: 'test.preview.Trade',
+            kind: 'data',
+            cardinality: { min: 2, max: 1 }
+          }
         }
       })
     ).toBe(false);

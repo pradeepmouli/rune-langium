@@ -704,6 +704,11 @@ func Derived extends Base:
         children: [{ path: 'parties[]', kind: 'object', referencedTypeFqn: 'test.funcidentity.Party' }]
       }
     ]);
+    expect(schema?.functionOutput).toEqual({
+      typeFqn: 'test.funcidentity.Party',
+      kind: 'data',
+      cardinality: { min: 1, max: 1 }
+    });
   });
 
   skipIfNodeLt22('generates a choice schema with one field per option', async () => {

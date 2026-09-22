@@ -24,6 +24,7 @@ export const isInstanceBindableToField = withInstrumentation(
   ): boolean {
     const expectedType = referenceTypeFqn(field);
     if (!expectedType) return false;
+    if (instance.typeFqn === expectedType) return true;
     const candidates = new Map(
       models
         .flatMap((model) => model.elements)

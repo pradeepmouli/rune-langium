@@ -3,6 +3,7 @@
 
 import { describe, expect, it } from 'vitest';
 import type { RosettaModel } from '@rune-langium/core';
+import type { FormPreviewSchema } from '@rune-langium/codegen/export';
 import { resolveFunctionOutputTarget } from '../../src/services/function-output-target.js';
 
 function model(name: string, elements: object[]): RosettaModel {
@@ -10,6 +11,27 @@ function model(name: string, elements: object[]): RosettaModel {
 }
 
 describe('resolveFunctionOutputTarget', () => {
+  it('uses the hydrated function schema when the declaration is curated', () => {
+    const schema: FormPreviewSchema = {
+      schemaVersion: 1,
+      targetId: 'curated.functions.BuildParty',
+      title: 'BuildParty',
+      kind: 'function',
+      status: 'ready',
+      fields: [],
+      functionOutput: {
+        typeFqn: 'curated.types.Party',
+        kind: 'data',
+        cardinality: { min: 1, max: 1 }
+      }
+    };
+
+    expect(resolveFunctionOutputTarget([], 'curated.functions.BuildParty', schema)).toEqual({
+      typeFqn: 'curated.types.Party',
+      kind: 'data'
+    });
+  });
+
   it('resolves a linked singular imported Data output', () => {
     const models = model('models', []);
     const funcs = model('funcs', []);

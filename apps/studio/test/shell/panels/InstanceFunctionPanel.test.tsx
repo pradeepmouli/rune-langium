@@ -139,6 +139,7 @@ describe('InstanceFunctionPanel', () => {
   });
 
   it('offers instance binding only to inputs that accept the selected instance type', async () => {
+    workspace.models = [];
     const instanceId = useInstanceStore.getState().createInstance('test.Party', 'Acme', { name: 'Acme' });
     const client: PreviewSessionClient = {
       schema: vi.fn().mockResolvedValue({
@@ -146,6 +147,11 @@ describe('InstanceFunctionPanel', () => {
         targetId: 'test.BuildParty',
         status: 'ready',
         kind: 'function',
+        functionOutput: {
+          typeFqn: 'test.Party',
+          kind: 'data',
+          cardinality: { min: 1, max: 1 }
+        },
         fields: [
           {
             path: 'names',

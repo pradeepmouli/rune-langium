@@ -41,8 +41,8 @@ function InstanceFunctionSession({ instanceId }: { instanceId: string }): ReactE
     () => session?.getState() ?? NO_SESSION_STATE
   );
   const outputTarget = useMemo(
-    () => resolveFunctionOutputTarget(workspace?.models ?? [], state.functionFqn),
-    [state.functionFqn, workspace?.models]
+    () => resolveFunctionOutputTarget(workspace?.models ?? [], state.functionFqn, state.schema),
+    [state.functionFqn, state.schema, workspace?.models]
   );
   const canSaveResult =
     state.status === 'succeeded' &&
