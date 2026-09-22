@@ -93,9 +93,11 @@ export const WorkbenchHost = withInstrumentation(
         } else {
           currentDefinition.buildDefault(event.api, viewportWidth());
         }
+        currentDefinition.reconcile?.(event.api, viewportWidth());
       } catch {
         event.api.clear();
         currentDefinition.buildDefault(event.api, viewportWidth());
+        currentDefinition.reconcile?.(event.api, viewportWidth());
         onRestoreFallbackRef.current?.();
       }
 

@@ -1,7 +1,9 @@
 // @instrumentation-codemod-applied
 // SPDX-License-Identifier: FSL-1.1-ALv2
 // Copyright (c) 2026 Pradeep Mouli
-import { useEffect } from 'react';
+import { useEffect, useState } from 'react';
+import type { PayloadView } from '../../components/FormPreviewPanel.js';
+import type { FunctionSessionState } from '../../store/function-session-store.js';
 import { useInstanceStore } from '../../store/instance-store.js';
 import { usePrototypeViewStore } from '../../store/prototype-view-store.js';
 import { InstancePayloadPanel } from '../../components/InstancePayloadPanel.js';
@@ -37,6 +39,7 @@ export const InstanceInspectorPanel = withInstrumentation(
     const flushInstance = useInstanceStore((s) => s.flushInstance);
     const view = usePrototypeViewStore((s) => s.state);
     const patchView = usePrototypeViewStore((s) => s.patch);
+    const [functionState, setFunctionState] = useState<FunctionSessionState>();
 
     useEffect(() => {
       const fieldPath = focusedPayloadPointer && payloadPointerToFieldPath(focusedPayloadPointer);
@@ -54,6 +57,13 @@ export const InstanceInspectorPanel = withInstrumentation(
     }, [focusedPayloadPointer, patchView]);
 
     if (!record) return null;
+    const functionPayload: PayloadView | undefined =
+      view.inspectorTab === 'functions' && functionState?.functionFqn
+        ? functionState.status === 'succeeded'
+          ? { kind: 'result', value: functionState.result }
+          : { kind: 'inputs', value: functionState.inputs }
+        : undefined;
+    const payload = functionPayload ?? { kind: 'instance' as const, value: record.data };
 
     return (
       <div className="flex h-full min-h-0 flex-col text-sm">
@@ -118,16 +128,19 @@ export const InstanceInspectorPanel = withInstrumentation(
             <InstanceFormPanel key={record.id} instanceId={record.id} />
           </TabsContent>
           <TabsContent value="functions" className="min-h-0 flex-1">
-            <InstanceFunctionPanel instanceId={record.id} />
+            <InstanceFunctionPanel instanceId={record.id} onStateChange={setFunctionState} />
           </TabsContent>
         </Tabs>
         <InstancePayloadPanel
-          payload={{ kind: 'instance', value: record.data }}
+          payload={payload}
           onExport={async () => {
-            await flushInstance(record.id);
+            if (payload.kind === 'instance') await flushInstance(record.id);
             downloadFile(
-              JSON.stringify(record.data, null, 2),
-              sanitizeDownloadFilename(`${record.name}.json`, 'instance.json'),
+              JSON.stringify(payload.value, null, 2),
+              sanitizeDownloadFilename(
+                `${record.name}${payload.kind === 'instance' ? '' : `-${payload.kind}`}.json`,
+                'payload.json'
+              ),
               'application/json'
             );
           }}

@@ -27,7 +27,13 @@ const NO_SESSION_STATE: FunctionSessionState = {
   status: 'idle'
 };
 
-function InstanceFunctionSession({ instanceId }: { instanceId: string }): ReactElement {
+function InstanceFunctionSession({
+  instanceId,
+  onStateChange
+}: {
+  instanceId: string;
+  onStateChange?(state: FunctionSessionState | undefined): void;
+}): ReactElement {
   const workspace = useWorkspaceOptional();
   const workspaceId = workspace?.workspaceId;
   const factory = usePreviewSessionFactory();
@@ -40,6 +46,10 @@ function InstanceFunctionSession({ instanceId }: { instanceId: string }): ReactE
     (listener) => session?.subscribe(listener) ?? (() => undefined),
     () => session?.getState() ?? NO_SESSION_STATE
   );
+  useEffect(() => {
+    onStateChange?.(state);
+  }, [onStateChange, state]);
+  useEffect(() => () => onStateChange?.(undefined), [onStateChange]);
   const outputTarget = useMemo(
     () => resolveFunctionOutputTarget(workspace?.models ?? [], state.functionFqn, state.schema),
     [state.functionFqn, state.schema, workspace?.models]
@@ -107,7 +117,6 @@ function InstanceFunctionSession({ instanceId }: { instanceId: string }): ReactE
       ) : null}
       {state.status === 'succeeded' ? (
         <>
-          <pre aria-label="Function result">{JSON.stringify(state.result, null, 2)}</pre>
           {canSaveResult && workspaceId ? (
             <Button
               type="button"
@@ -129,8 +138,14 @@ function InstanceFunctionSession({ instanceId }: { instanceId: string }): ReactE
 }
 
 export const InstanceFunctionPanel = withInstrumentation(
-  function InstanceFunctionPanel({ instanceId }: { instanceId: string }): ReactElement {
-    return <InstanceFunctionSession key={instanceId} instanceId={instanceId} />;
+  function InstanceFunctionPanel({
+    instanceId,
+    onStateChange
+  }: {
+    instanceId: string;
+    onStateChange?(state: FunctionSessionState | undefined): void;
+  }): ReactElement {
+    return <InstanceFunctionSession key={instanceId} instanceId={instanceId} onStateChange={onStateChange} />;
   },
   { op: 'InstanceFunctionPanel' }
 );

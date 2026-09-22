@@ -20,7 +20,7 @@ import { javascript } from '@codemirror/lang-javascript';
 import { json } from '@codemirror/lang-json';
 import type { Target } from '@rune-langium/codegen/export';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@rune-langium/design-system/ui/select';
-import { useLatestRef } from '@rune-langium/visual-editor';
+import { nameFromNodeId, useLatestRef } from '@rune-langium/visual-editor';
 import { studioEditorExtensions } from '../lang/editor-theme.js';
 import {
   downloadTargetViaRouter,
@@ -293,7 +293,7 @@ export const CodePreviewPanel = withInstrumentation(
     useEffect(() => {
       const view = editorViewRef.current;
       if (!view || !selectedTargetId || !activeFile) return;
-      const typeName = selectedTargetId.split('.').pop();
+      const typeName = nameFromNodeId(selectedTargetId);
       if (!typeName) return;
       const lines = activeFile.content.split('\n');
       for (let i = 0; i < lines.length; i++) {

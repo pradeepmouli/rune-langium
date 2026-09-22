@@ -16,6 +16,8 @@ export const InstancePayloadPanel = withInstrumentation(
     const [copyFeedback, setCopyFeedback] = useState<string | null>(null);
     const [exportFeedback, setExportFeedback] = useState<string | null>(null);
     const serialized = JSON.stringify(payload.value, null, 2);
+    const title =
+      payload.kind === 'inputs' ? 'Function inputs' : payload.kind === 'result' ? 'Function result' : 'Payload';
 
     async function copyPayload(): Promise<void> {
       if (!navigator.clipboard?.writeText) {
@@ -42,7 +44,7 @@ export const InstancePayloadPanel = withInstrumentation(
     return (
       <section aria-label="Instance payload" className="border-t border-border p-3">
         <header className="flex items-center justify-between gap-3">
-          <h3 className="text-sm font-semibold">Payload</h3>
+          <h3 className="text-sm font-semibold">{title}</h3>
           <div className="flex gap-1.5">
             <Button type="button" variant="ghost" size="xs" onClick={() => void copyPayload()}>
               Copy

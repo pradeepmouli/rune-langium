@@ -94,17 +94,21 @@ describe('PrototypePerspective', () => {
   });
 
   it('registers Inspector, Instances, and Payload graph panels with the shared host', async () => {
-    const id = useInstanceStore.getState().createInstance('test.Party', 'Acme', {
+    useInstanceStore.getState().createInstance('test.Party', 'Acme', {
       data: { address: { city: 'London' } }
     });
-    usePrototypeViewStore.setState((store) => ({
-      state: { ...store.state, selectedId: id, graphVisible: true }
-    }));
     await renderPerspective();
+    fireEvent.click(screen.getByRole('button', { name: 'Payload graph' }));
 
     expect(screen.getByTestId('prototype-workbench-panel-prototype.inspector')).toBeInTheDocument();
     expect(screen.getByTestId('prototype-workbench-panel-prototype.grid')).toBeInTheDocument();
     expect(screen.getByTestId('prototype-workbench-panel-prototype.payloadGraph')).toBeInTheDocument();
+  });
+
+  it('omits the Payload graph panel until it is enabled', async () => {
+    await renderPerspective();
+
+    expect(screen.queryByTestId('prototype-workbench-panel-prototype.payloadGraph')).not.toBeInTheDocument();
   });
 
   it('keeps Inspector details with the selected Form', async () => {

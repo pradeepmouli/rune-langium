@@ -3,6 +3,7 @@
 // Copyright (c) 2026 Pradeep Mouli
 
 import { useEffect, useMemo, useRef, useState, type ChangeEvent, type ReactElement } from 'react';
+import type { DockviewApi } from 'dockview-react';
 import type { WorkbenchDefinition } from '../../workbench-types.js';
 import { WorkbenchHost } from '../../WorkbenchHost.js';
 import { Button } from '@rune-langium/design-system/ui/button';
@@ -16,6 +17,22 @@ import { InstanceGraphPanel } from '../../panels/InstanceGraphPanel.js';
 import { useInstanceStore } from '../../../store/instance-store.js';
 import { withInstrumentation } from '../../../services/instrumentation/core.js';
 import { usePrototypeNavigationStore } from '../../../services/prototype-navigation.js';
+
+function addPayloadGraph(api: DockviewApi, width: number): void {
+  if (api.getPanel('prototype.payloadGraph')) return;
+  const inspector = api.getPanel('prototype.inspector');
+  if (!inspector) return;
+  const graph = api.addPanel({
+    id: 'prototype.payloadGraph',
+    component: 'prototype.payloadGraph',
+    title: 'Payload graph',
+    position:
+      width < 768
+        ? { referenceGroup: inspector.group, direction: 'within' }
+        : { referencePanel: inspector.id, direction: 'right' }
+  });
+  if (width >= 768) graph.group.api.setConstraints({ minimumWidth: 280 });
+}
 
 export const PrototypePerspective = withInstrumentation(
   function PrototypePerspective(): ReactElement {
@@ -76,26 +93,26 @@ export const PrototypePerspective = withInstrumentation(
               </div>
             ),
           'prototype.grid': () => <InstanceGridPanel />,
-          'prototype.payloadGraph': () =>
-            !view.graphVisible ? (
-              <div className="flex h-full items-center justify-center p-3 text-sm text-muted-foreground">
-                Enable Payload graph to inspect the selected instance.
-              </div>
-            ) : selectedRecord ? (
-              <InstanceGraphPanel
-                record={selectedRecord}
-                onSelectPointer={(pointer) => setFocusedPayloadPointer(pointer)}
-              />
-            ) : (
-              <div className="flex h-full items-center justify-center p-3 text-sm text-muted-foreground">
-                Select an instance to inspect its payload graph.
-              </div>
-            )
+          ...(view.graphVisible
+            ? {
+                'prototype.payloadGraph': () =>
+                  selectedRecord ? (
+                    <InstanceGraphPanel
+                      record={selectedRecord}
+                      onSelectPointer={(pointer) => setFocusedPayloadPointer(pointer)}
+                    />
+                  ) : (
+                    <div className="flex h-full items-center justify-center p-3 text-sm text-muted-foreground">
+                      Select an instance to inspect its payload graph.
+                    </div>
+                  )
+              }
+            : {})
         },
         titles: {
           'prototype.inspector': 'Inspector',
           'prototype.grid': 'Instances',
-          'prototype.payloadGraph': 'Payload graph'
+          ...(view.graphVisible ? { 'prototype.payloadGraph': 'Payload graph' } : {})
         },
         buildDefault(api, width) {
           const inspector = api.addPanel({
@@ -103,15 +120,7 @@ export const PrototypePerspective = withInstrumentation(
             component: 'prototype.inspector',
             title: 'Inspector'
           });
-          const graph = api.addPanel({
-            id: 'prototype.payloadGraph',
-            component: 'prototype.payloadGraph',
-            title: 'Payload graph',
-            position:
-              width < 768
-                ? { referenceGroup: inspector.group, direction: 'within' }
-                : { referencePanel: inspector.id, direction: 'right' }
-          });
+          if (view.graphVisible) addPayloadGraph(api, width);
           api.addPanel({
             id: 'prototype.grid',
             component: 'prototype.grid',
@@ -121,7 +130,9 @@ export const PrototypePerspective = withInstrumentation(
                 ? { referenceGroup: inspector.group, direction: 'within' }
                 : { referencePanel: inspector.id, direction: 'below' }
           });
-          if (width >= 768) graph.group.api.setConstraints({ minimumWidth: 280 });
+        },
+        reconcile(api, width) {
+          if (view.graphVisible) addPayloadGraph(api, width);
         }
       }),
       [focusedPayloadPointer, selectedRecord, view.graphVisible, view.selectedId]
@@ -181,6 +192,7 @@ export const PrototypePerspective = withInstrumentation(
         <div className="min-h-0 flex-1">
           {activationReady ? (
             <WorkbenchHost
+              key={view.graphVisible ? 'with-payload-graph' : 'without-payload-graph'}
               definition={definition}
               initialNativeLayout={view.nativeLayout}
               onNativeLayoutChange={(nativeLayout) => patch({ nativeLayout })}

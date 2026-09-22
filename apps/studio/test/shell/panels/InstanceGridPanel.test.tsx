@@ -49,4 +49,32 @@ describe('InstanceGridPanel', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Cancel' }));
     expect(useInstanceStore.getState().instances[id]).toBeDefined();
   });
+
+  it('shows preview-schema fields for a selected type', () => {
+    const id = useInstanceStore.getState().createInstance('test.Party', 'Acme', { name: 'Acme' });
+    useInstanceStore.setState({
+      schemas: new Map([
+        [
+          'test.Party',
+          {
+            schemaVersion: 1,
+            targetId: 'test.Party',
+            title: 'Party',
+            status: 'ready',
+            fields: [{ path: 'name', label: 'Legal name', kind: 'string', required: true }]
+          }
+        ]
+      ]),
+      instances: {
+        ...useInstanceStore.getState().instances,
+        [id]: { ...useInstanceStore.getState().instances[id]!, data: { name: 'Acme' } }
+      }
+    });
+    usePrototypeViewStore.setState((store) => ({ state: { ...store.state, typeFqn: 'test.Party' } }));
+
+    render(<InstanceGridPanel />);
+
+    expect(screen.getByRole('columnheader', { name: 'Legal name' })).toBeVisible();
+    expect(screen.getByRole('row', { name: /Acme test\.Party Acme/ })).toBeVisible();
+  });
 });

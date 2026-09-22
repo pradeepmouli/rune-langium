@@ -58,6 +58,19 @@ it('rejects a completed result after its inputs change', async () => {
   expect(store.getState().run.status).not.toBe('ready');
 });
 
+it('retains a completed artifact as stale when configuration changes', async () => {
+  const store = createExportWorkbench(async () => artifact);
+
+  await store.getState().generate(input);
+  store.getState().configure({ ...input.config, target: 'zod' });
+
+  expect(store.getState().run).toEqual({
+    status: 'stale',
+    inputKey: exportInputKey(input),
+    artifact
+  });
+});
+
 it('uses the same key for option objects with different insertion order', () => {
   const reordered: ExportInput = {
     ...input,

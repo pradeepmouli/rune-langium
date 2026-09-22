@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: FSL-1.1-ALv2
 // Copyright (c) 2026 Pradeep Mouli
 
-import { useState, type ReactElement } from 'react';
+import { useEffect, useMemo, useState, type ReactElement } from 'react';
 import { Input } from '@rune-langium/design-system/ui/input';
 import { Button } from '@rune-langium/design-system/ui/button';
 import {
@@ -16,16 +16,30 @@ import { useInstanceStore } from '../../store/instance-store.js';
 import { filterInstances, usePrototypeViewStore } from '../../store/prototype-view-store.js';
 import { withInstrumentation } from '../../services/instrumentation/core.js';
 
+function fieldValue(data: unknown, path: string): unknown {
+  return path.split('.').reduce<unknown>((value, segment) => {
+    if (!value || typeof value !== 'object' || Array.isArray(value)) return undefined;
+    return (value as Record<string, unknown>)[segment];
+  }, data);
+}
+
+function displayFieldValue(value: unknown): string {
+  if (value === undefined || value === null) return '—';
+  return typeof value === 'object' ? JSON.stringify(value) : String(value);
+}
+
 export const InstanceGridPanel = withInstrumentation(
   function InstanceGridPanel(): ReactElement {
     const instances = useInstanceStore((state) => state.instances);
     const validationStatus = useInstanceStore((state) => state.validationStatus);
     const saveStates = useInstanceStore((state) => state.saveStates);
+    const dispatchGenerateSchema = useInstanceStore((state) => state.dispatchGenerateSchema);
     const duplicateInstance = useInstanceStore((state) => state.duplicateInstance);
     const renameInstance = useInstanceStore((state) => state.renameInstance);
     const removeInstance = useInstanceStore((state) => state.removeInstance);
     const view = usePrototypeViewStore((state) => state.state);
     const patch = usePrototypeViewStore((state) => state.patch);
+    const schema = useInstanceStore((state) => (view.typeFqn ? state.schemas.get(view.typeFqn) : undefined));
     const rows = filterInstances(Object.values(instances), view.query, view.typeFqn);
     const selectedOutsideFilter = view.selectedId && !rows.some((record) => record.id === view.selectedId);
     const [renamingId, setRenamingId] = useState<string | null>(null);
@@ -34,6 +48,11 @@ export const InstanceGridPanel = withInstrumentation(
     const [actionError, setActionError] = useState<string | null>(null);
     const renaming = renamingId ? instances[renamingId] : undefined;
     const deleting = deletingId ? instances[deletingId] : undefined;
+    const fields = useMemo(() => (schema?.targetId === view.typeFqn ? schema.fields : []), [schema, view.typeFqn]);
+
+    useEffect(() => {
+      if (view.typeFqn) dispatchGenerateSchema(view.typeFqn);
+    }, [dispatchGenerateSchema, view.typeFqn]);
 
     const closeRename = () => {
       setRenamingId(null);
@@ -94,6 +113,11 @@ export const InstanceGridPanel = withInstrumentation(
               <tr>
                 <th className="p-2">Name</th>
                 <th className="p-2">Type</th>
+                {fields.map((field) => (
+                  <th key={field.path} className="p-2">
+                    {field.label}
+                  </th>
+                ))}
                 <th className="p-2">Validation</th>
                 <th className="p-2">Save</th>
                 <th className="p-2">Actions</th>
@@ -117,6 +141,15 @@ export const InstanceGridPanel = withInstrumentation(
                 >
                   <td className="p-2 font-medium">{record.name}</td>
                   <td className="p-2 text-muted-foreground">{record.typeFqn}</td>
+                  {fields.map((field) => (
+                    <td
+                      key={field.path}
+                      className="max-w-48 truncate p-2"
+                      title={displayFieldValue(fieldValue(record.data, field.path))}
+                    >
+                      {displayFieldValue(fieldValue(record.data, field.path))}
+                    </td>
+                  ))}
                   <td className="p-2 capitalize">{validationStatus[record.id] ?? 'pending'}</td>
                   <td className="p-2 capitalize">{saveStates[record.id]?.state ?? 'unsaved'}</td>
                   <td className="p-2">

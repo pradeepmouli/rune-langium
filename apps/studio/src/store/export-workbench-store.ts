@@ -111,7 +111,13 @@ export const createExportWorkbench = withInstrumentation(
         activation.invalidate();
         cancelActive();
         const nextConfig = cloneConfig(config);
-        set({ config: nextConfig, run: { status: 'idle' } });
+        set((state) => ({
+          config: nextConfig,
+          run:
+            state.run.status === 'ready'
+              ? { status: 'stale', inputKey: state.run.inputKey, artifact: state.run.artifact }
+              : { status: 'idle' }
+        }));
         persist({ ...get(), config: nextConfig });
       },
       setActiveFile(activeFile) {
