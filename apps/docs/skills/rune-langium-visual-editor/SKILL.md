@@ -1,11 +1,12 @@
 ---
-description: "Documentation site and generated agent skills for rune-langium APIs Use when: Rendering two or more `RuneTypeGraph` components simultaneously (different...."
+description: "ReactFlow-based graph and form components for exploring and editing Rune DSL\nmodels in the browser. Use when: Rendering two or more `RuneTypeGraph` components simultaneously (different...."
 name: rune-langium-visual-editor
 ---
 
 # @rune-langium/visual-editor
 
-Documentation site and generated agent skills for rune-langium APIs
+ReactFlow-based graph and form components for exploring and editing Rune DSL
+models in the browser.
 
 Use `RuneTypeGraph` for an interactive type graph, the exported panel and
 editor components for custom shells, and the store/layout helpers when you

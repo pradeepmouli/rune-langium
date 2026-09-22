@@ -1,11 +1,12 @@
 ---
-description: Documentation site and generated agent skills for rune-langium APIs
+description: "Command-line entry points for parsing, validating, and generating code from\nRune DSL workspaces."
 name: rune-langium-cli
 ---
 
 # @rune-langium/cli
 
-Documentation site and generated agent skills for rune-langium APIs
+Command-line entry points for parsing, validating, and generating code from
+Rune DSL workspaces.
 
 Use the CLI when you need batch validation in CI, ad-hoc parsing from a
 terminal, or code generation without embedding the libraries directly in a

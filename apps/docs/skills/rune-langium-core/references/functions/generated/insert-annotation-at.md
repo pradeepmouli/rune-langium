@@ -4,9 +4,9 @@
 
 ### `insertAnnotationAt`
 ```ts
-insertAnnotationAt(node: Dehydrated<RosettaFunction>, index: number, annotation: Dehydrated<AnnotationRef>): void
+insertAnnotationAt(node: Dehydrated<Schema>, index: number, annotation: Dehydrated<AnnotationRef>): void
 ```
 **Parameters:**
-- `node: Dehydrated<RosettaFunction>`
+- `node: Dehydrated<Schema>`
 - `index: number`
 - `annotation: Dehydrated<AnnotationRef>`

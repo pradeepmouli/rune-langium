@@ -63,7 +63,7 @@ getRefText(ref: ReferenceShape | undefined): string | undefined
 **Returns:** `string | undefined`
 
 ### `annotationsToDisplay`
-Convert Dehydrated<AnnotationRef>[] to display-friendly objects.
+Convert Dehydrated&lt;AnnotationRef&gt;[] to display-friendly objects.
 ```ts
 annotationsToDisplay(annotations: AnnotationRefShape[] | undefined): AnnotationDisplayInfo[]
 ```
