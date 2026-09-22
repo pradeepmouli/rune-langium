@@ -20,7 +20,7 @@ constructor(): RuneDslValidator
 - `registerChecks(services: LangiumCoreServices): void` — Register validation checks with the Langium validation registry.
 - `checkDataNoDuplicateAttributes(node: Data, accept: ValidationAcceptor): void` — S-01: No duplicate attribute names within a Data type.
 - `checkDataExtendsCycle(node: Data, accept: ValidationAcceptor): void` — S-02: Detect circular inheritance in Data extends chain.
-- `checkAttributeCardinality(node: Attribute, accept: ValidationAcceptor): void` — S-04: Attribute cardinality must have lower <= upper.
+- `checkAttributeCardinality(node: Attribute, accept: ValidationAcceptor): void` — S-04: Attribute cardinality must have lower &lt;= upper.
 - `checkFunctionNoDuplicateInputs(node: RosettaFunction, accept: ValidationAcceptor): void` — S-06: No duplicate function input names.
 - `checkFunctionOutputRequired(node: RosettaFunction, accept: ValidationAcceptor): void` — S-07: Functions should have an output.
 Dispatch functions (with dispatchAttribute) are exempt — they inherit output from the parent.

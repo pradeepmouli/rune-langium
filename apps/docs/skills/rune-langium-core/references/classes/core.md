@@ -18,7 +18,7 @@ constructor(services: LangiumCoreServices): RuneDslParser
 - `mainRule: RuleResult`
 **Methods:**
 - `parse<T>(input: string, options?: ParserOptions): ParseResult<T>`
-- `rule(rule: InfixRule | ParserRule, impl: RuleImpl): RuleResult`
+- `rule(rule: ParserRule | InfixRule, impl: RuleImpl): RuleResult`
 - `consume(idx: number, tokenType: TokenType, feature: AbstractElement): void`
 - `subrule(idx: number, rule: RuleResult, fragment: boolean, feature: AbstractElement, args: Args): void`
 - `action($type: string, action: Action): void`

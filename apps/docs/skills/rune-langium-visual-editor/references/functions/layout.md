@@ -23,11 +23,11 @@ For incremental visibility changes (toggling a single namespace),
 nodes with cached positions reuse them. Only nodes without cached
 positions trigger a full dagre run.
 
-When the ratio of uncached nodes is small (<30%), we place cached
+When the ratio of uncached nodes is small (&lt;30%), we place cached
 nodes at their old positions and only run dagre for the new ones,
 offsetting them near related cached nodes.
 
-When the ratio is large (>=30%), we run a full dagre layout and
+When the ratio is large (&gt;=30%), we run a full dagre layout and
 update the cache.
 ```ts
 computeLayoutIncremental(nodes: TypeGraphNode[], edges: TypeGraphEdge[], options?: LayoutOptions): TypeGraphNode[]
@@ -106,7 +106,7 @@ see one entry per shared type description.
 Two-pass layout: size every node first (bottom-up, cycle-guarded), then
 place top-down so expansion children align with their source row.
 
-Cycle protection at placement uses a `Set<instanceId>` of ancestors; well-
+Cycle protection at placement uses a `Set&lt;instanceId&gt;` of ancestors; well-
 formed adapter output never re-enters the same instance id (the adapter
 silently drops cyclic edges in per-instance materialization), but malformed
 inputs still terminate safely via the guard.

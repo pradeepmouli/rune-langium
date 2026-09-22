@@ -1,11 +1,12 @@
 ---
-description: "Documentation site and generated agent skills for rune-langium APIs Use when: Validating a single `.rosetta` file or snippet in memory."
+description: "Parse `.rosetta` source into typed ASTs, build cross-file workspaces, and\nserialize models back to source text. Use when: Validating a single `.rosetta` file or snippet in memory."
 name: rune-langium-core
 ---
 
 # @rune-langium/core
 
-Documentation site and generated agent skills for rune-langium APIs
+Parse `.rosetta` source into typed ASTs, build cross-file workspaces, and
+serialize models back to source text.
 
 Use `parse()` for a single self-contained document, `parseWorkspace()` when
 files reference each other, and `createRuneDslServices()` when you need raw
@@ -39,7 +40,7 @@ preserve original formatting.
 - When you need to share a service instance across multiple requests in a long-running server — the returned instance is not thread-safe for concurrent `DocumentBuilder.build()` calls; serialize builds with a queue. (`createRuneDslServices`)
 - Subclassing for grammar experiments — prefer creating a separate grammar variant and a new services container instead. (`RuneDslParser`)
 
-API surface: 696 functions, 8 classes, 166 types, 76 constants
+API surface: 715 functions, 8 classes, 169 types, 79 constants
 
 ## Configuration
 
@@ -53,7 +54,7 @@ that follow `extract`, `filter`, or `reduce` operators)
 implicit `[` and `]` brackets around bare expressions after `extract`,
 `filter`, and `reduce` operators)
 
-*946 exports total — see references/ for full API.*
+*971 exports total — see references/ for full API.*
 
 ## References
 

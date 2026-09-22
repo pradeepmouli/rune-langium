@@ -8,12 +8,12 @@ Hydrator variant for the Rune store substrate.
 Differences from DefaultHydrator:
  - CST nodes are dropped entirely — the store has no use for parse-tree data.
    (`$cstNode`, `$containerIndex`, and `$containerProperty` are deleted from
-   the output so the runtime object matches the `Dehydrated<T>` type, which
+   the output so the runtime object matches the `Dehydrated&lt;T&gt;` type, which
    excludes all Langium runtime fields.)
  - `$cstText` (a custom field stamped by `preserveCstText` BEFORE dehydration)
    is preserved — the visual editor's expression cells read it after the
    round-trip, and DefaultHydrator would otherwise drop it as a `$`-field.
- - References are stored as `{ $refText: string }` only — the editable `Dehydrated<T>` wire format.
+ - References are stored as `{ $refText: string }` only — the editable `Dehydrated&lt;T&gt;` wire format.
  - Re-hydration rebuilds a proper `Reference` via `this.linker.buildReference`, passing
    `undefined` for the CST node (consistent with the drop above).
  - $namespace is stamped from the enclosing RosettaModel before $container is stripped.
@@ -28,7 +28,7 @@ constructor(services: LangiumCoreServices): RuneStoreHydrator
 - `grammarElementIdMap: BiMap<AbstractElement, number>`
 - `tokenTypeIdMap: BiMap<number, TokenType>`
 **Methods:**
-- `dehydrateNode<T>(node: T): Dehydrated<T>` — Dehydrate a single AST node to its Dehydrated<T> wire form.
+- `dehydrateNode<T>(node: T): Dehydrated<T>` — Dehydrate a single AST node to its Dehydrated&lt;T&gt; wire form.
 - `createDehyrationContext(node: AstNode): DehydrateContext` — CST nodes never survive dehydration here (see class doc), so skip the
 base class's full CST-tree walk when building the context — on large
 corpora that walk dominates dehydration cost for zero benefit.

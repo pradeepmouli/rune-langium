@@ -4,8 +4,8 @@
 
 ### `addAnnotation`
 ```ts
-addAnnotation(node: Dehydrated<RosettaFunction>, annotation: Dehydrated<AnnotationRef>): void
+addAnnotation(node: Dehydrated<Schema>, annotation: Dehydrated<AnnotationRef>): void
 ```
 **Parameters:**
-- `node: Dehydrated<RosettaFunction>`
+- `node: Dehydrated<Schema>`
 - `annotation: Dehydrated<AnnotationRef>`

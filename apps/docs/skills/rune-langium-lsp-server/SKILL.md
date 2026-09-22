@@ -1,11 +1,12 @@
 ---
-description: "Documentation site and generated agent skills for rune-langium APIs Use when: Embedding a Rune DSL language server in a web application via WebSocket."
+description: "Embed a Rune DSL language server behind a WebSocket or custom connection\nadapter. Use when: Embedding a Rune DSL language server in a web application via WebSocket."
 name: rune-langium-lsp-server
 ---
 
 # @rune-langium/lsp-server
 
-Documentation site and generated agent skills for rune-langium APIs
+Embed a Rune DSL language server behind a WebSocket or custom connection
+adapter.
 
 Use `createRuneLspServer()` when you need diagnostics, hover, completion, and
 go-to-definition for `.rosetta` files in an editor or web app. Reach for

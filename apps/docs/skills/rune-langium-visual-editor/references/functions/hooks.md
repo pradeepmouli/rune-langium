@@ -49,11 +49,11 @@ Returns the highest-severity `RangeDiagnostic` whose range overlaps the
 given `astRange`, or `undefined` when no overlap exists.
 
 Overlap semantics: two ranges `[a.start, a.end)` and `[b.start, b.end)`
-overlap iff `a.start < b.end && b.start < a.end`. This matches the
+overlap iff `a.start &lt; b.end && b.start &lt; a.end`. This matches the
 standard half-open-interval definition used by CodeMirror and LSP.
 Zero-length ranges (start === end) never overlap.
 
-Severity ordering: 1 (error) > 2 (warn) > 3 (info) > 4 (hint) — lower
+Severity ordering: 1 (error) &gt; 2 (warn) &gt; 3 (info) &gt; 4 (hint) — lower
 numeric value wins.
 ```ts
 useDiagnosticsForRange(astRange: { start: number; end: number } | undefined, diagnostics: readonly RangeDiagnostic[]): RangeDiagnostic | undefined
@@ -76,7 +76,7 @@ useModelSourceSync(nodes: TypeGraphNode[], edges: TypeGraphEdge[], onModelChange
 **Parameters:**
 - `nodes: TypeGraphNode[]` — Current nodes from the editor store.
 - `edges: TypeGraphEdge[]` — Current edges from the editor store.
-- `onModelChanged: (serialized: Map<string, string>) => void | Promise<void>` (optional) — Callback invoked with a `Map<namespace, serializedText>`
+- `onModelChanged: (serialized: Map<string, string>) => void | Promise<void>` (optional) — Callback invoked with a `Map&lt;namespace, serializedText&gt;`
   on each content change after the initial mount.
 - `parseEpoch: number` — default: `0` — The editor store's `parseEpoch` — bumped ONLY when the graph is (re)built
 from a parse result. Used to gate serialization: a `nodes`/`edges` change

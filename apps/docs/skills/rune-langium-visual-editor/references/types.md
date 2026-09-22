@@ -39,7 +39,7 @@ depth produce different `instancePath`s because their parent instance ids
 differ (e.g. `Trade::buyer::Party` vs `Trade::seller::Party`), so chevrons
 inside them stay independent.
 
-The separator inside the path uses `>` (not `:`) because `:` is already the
+The separator inside the path uses `&gt;` (not `:`) because `:` is already the
 field separator and we need to round-trip the path through a single string.
 **Properties:**
 - `namespaceUri: string`
@@ -237,7 +237,7 @@ measured graph still lays out correctly.
 
 ### `DomainNodeData`
 Domain payload of an editor graph node — the discriminated union (on
-`$type`) of `Dehydrated<T>` over every top-level element kind the editor
+`$type`) of `Dehydrated&lt;T&gt;` over every top-level element kind the editor
 renders. This is the PURE domain object: lossless, strict `{ $refText }`
 refs, `$type` required, and NO UI metadata (which lives on `node.meta`).
 
@@ -288,7 +288,7 @@ Short kind strings used for UI dispatch, badge rendering, and form actions.
 Data payload for graph edges.
 
 The index signature is required for compatibility with ReactFlow's
-`Edge<T extends Record<string, unknown>>` constraint.
+`Edge&lt;T extends Record&lt;string, unknown&gt;&gt;` constraint.
 **Properties:**
 - `kind: EdgeKind`
 - `label: string` (optional)
@@ -329,6 +329,5 @@ A type option for searchable type selectors.
 Option for the synonym-source reference picker.
 **Properties:**
 - `value: string` — Canonical id of the source declaration (e.g. `ns.FpML`).
-- `label: string` — Display name (bare source name).
 
 <!-- truncated -->
