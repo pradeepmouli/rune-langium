@@ -157,12 +157,13 @@ getFunctionInputs(func: RosettaFunction): Attribute[]
 **Returns:** `Attribute[]`
 
 ### `getFunctionOutput`
-Get the output attribute from a RosettaFunction.
+Get the effective output attribute, including dispatch signatures and inheritance.
 ```ts
-getFunctionOutput(func: RosettaFunction): Attribute | undefined
+getFunctionOutput(func: RosettaFunction, seen: Set<RosettaFunction>): Attribute | undefined
 ```
 **Parameters:**
 - `func: RosettaFunction`
+- `seen: Set<RosettaFunction>` — default: `...`
 **Returns:** `Attribute | undefined`
 
 ### `getEnumValues`

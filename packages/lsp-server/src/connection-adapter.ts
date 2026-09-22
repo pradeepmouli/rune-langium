@@ -168,6 +168,10 @@ function createWorkspaceProxy(server: LSPServer<ServerCapabilities>): any {
     onWillDeleteFiles: (handler: any) =>
       server.onRequest('workspace/willDeleteFiles' as any, async (p: any, t: any) => handler(p, t)),
 
+    textDocumentContent: {
+      on: createRequestRegistrar(server, 'workspace/textDocumentContent')
+    },
+
     onDidChangeWorkspaceFolders: (handler: any) =>
       server.onNotification('workspace/didChangeWorkspaceFolders' as any, (p: any) => handler(p))
   };
