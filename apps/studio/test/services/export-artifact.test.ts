@@ -51,6 +51,32 @@ it('decodes the exact generated artifact envelope for a selected declaration', a
   expect(text).not.toMatch(/(?:class|interface|type|enum)\s+Unrelated\b/);
 });
 
+it('rejects a stale namespace selection instead of returning an empty artifact', async () => {
+  const response = await handleCodegenDownload({
+    request: new Request('http://localhost/api/codegen', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        files: [{ path: 'party.rune', content: source }],
+        target: 'typescript',
+        artifactEnvelope: 1,
+        selection: { namespaces: ['deleted.namespace'], declarations: [] }
+      })
+    })
+  });
+
+  expect(response.status).toBe(400);
+  await expect(response.json()).resolves.toMatchObject({
+    diagnostics: [
+      {
+        severity: 'error',
+        code: 'unknown-export-selection',
+        message: "Unknown namespace 'deleted.namespace'."
+      }
+    ]
+  });
+});
+
 it('rejects manifest paths that are not listed as text files', async () => {
   const response = new Response(
     await new Blob([

@@ -2319,10 +2319,10 @@ type Alpha:
     expect(newPatches[0]!.path[1]).toBe(newId);
   });
 
-  it('returns the expected nodeId (namespace.Name)', () => {
+  it('returns a kind-aware nodeId', () => {
     const store = createEditorStore();
     const id = store.getState().createType('data', 'Trade', 'cdm.base');
-    expect(id).toBe('cdm.base.Trade');
+    expect(id).toBe('cdm.base.Trade#Data');
   });
 
   it('builds the correct kind-specific member arrays for each TypeKind', () => {
@@ -2524,7 +2524,7 @@ describe('EditorStore — renameType (Wave G)', () => {
     const id = store.getState().createType('data', 'Trade', 'cdm.trade');
     store.getState().renameType(id, 'Transaction');
 
-    const newId = 'cdm.trade.Transaction';
+    const newId = 'cdm.trade.Transaction#Data';
     expect(store.getState().nodes.find((n) => n.id === id)).toBeUndefined();
     expect(store.getState().nodes.find((n) => n.id === newId)).toBeDefined();
     expect(store.getState().nodes.find((n) => n.id === newId)!.data.name).toBe('Transaction');
@@ -2539,7 +2539,7 @@ describe('EditorStore — renameType (Wave G)', () => {
 
     store.getState().renameType(tradeId, 'Transaction');
 
-    const newTradeId = 'cdm.trade.Transaction';
+    const newTradeId = 'cdm.trade.Transaction#Data';
     const edges = store.getState().edges;
 
     // No edge should reference the old tradeId
@@ -2561,7 +2561,7 @@ describe('EditorStore — renameType (Wave G)', () => {
     // Source changes so the edge must be re-keyed
     store.getState().renameType(tradeId, 'Transaction');
 
-    const newTradeId = 'cdm.trade.Transaction';
+    const newTradeId = 'cdm.trade.Transaction#Data';
     const edge = store
       .getState()
       .edges.find((e) => e.source === newTradeId && e.data?.kind === 'attribute-ref' && e.data?.label === 'party');
@@ -2643,7 +2643,7 @@ type Alpha:
     store.getState().loadModels(modelsB);
 
     // (a) The renamed node survives under newNodeId via id-keyed replay.
-    const newAlphaId = 'cdm.order.AlphaRenamed';
+    const newAlphaId = 'cdm.order.AlphaRenamed#Data';
     const survived = store.getState().nodes.find((n) => n.id === newAlphaId);
     expect(survived).toBeDefined();
     expect(survived!.data.name).toBe('AlphaRenamed');
@@ -2668,7 +2668,7 @@ type Alpha:
     const id = store.getState().createType('data', 'Trade', 'cdm.trade');
     store.setState({ selectedNodeId: id });
     store.getState().renameType(id, 'Transaction');
-    expect(store.getState().selectedNodeId).toBe('cdm.trade.Transaction');
+    expect(store.getState().selectedNodeId).toBe('cdm.trade.Transaction#Data');
   });
 
   it('selectedNodeId is unchanged when a different node was selected', () => {

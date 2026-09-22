@@ -144,8 +144,8 @@ export type { GroupInfo } from './layout/grouped-layout.js';
 export { buildNamespaceTree, filterNamespaceTree } from './utils/namespace-tree.js';
 export { buildTypeOptions } from './utils/type-options.js';
 
-// Node-id utilities (dot-form helpers for 3A′ consumers)
-export { makeNodeId, nameFromNodeId, splitNodeId } from './store/node-projection.js';
+// Node-id utilities
+export { makeNodeId, nameFromNodeId, qualifiedNameFromNodeId, splitNodeId } from './store/node-projection.js';
 
 // Store (for advanced consumers)
 export { createEditorStore, useEditorStore } from './store/editor-store.js';

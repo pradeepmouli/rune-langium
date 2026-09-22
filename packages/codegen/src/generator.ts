@@ -26,7 +26,11 @@ import { typescriptProfile } from './emit/typescript-profile.js';
 import { jsonSchemaProfile } from './emit/json-schema-profile.js';
 import { sqlProfile } from './emit/sql-profile.js';
 import { ExcelWholeModelEmitter } from './emit/excel-emitter.js';
-import { resolveExportSelection, type ResolvedExportSelection } from './selection/declaration-selection.js';
+import {
+  resolveExportSelection,
+  unknownExportSelectionDiagnostics,
+  type ResolvedExportSelection
+} from './selection/declaration-selection.js';
 
 // 019 spec §3.2 — two-registry dispatch.
 //
@@ -237,18 +241,17 @@ export async function runGenerate(
   } else {
     const selectionResolution =
       resolvedSelection ?? (options.selection ? resolveExportSelection(docs, options.selection) : undefined);
-    if (selectionResolution?.unknown.length) {
+    const unknownSelectionDiagnostics = selectionResolution
+      ? unknownExportSelectionDiagnostics(selectionResolution)
+      : [];
+    if (unknownSelectionDiagnostics.length) {
       outputs = [
         {
           relativePath: `${target}.selection-error`,
           content: '',
           sourceMap: [],
-          diagnostics: selectionResolution.unknown.map((item) =>
-            createDiagnostic(
-              'error',
-              'unknown-export-selection',
-              `Unknown ${item.kind} declaration '${item.namespace}.${item.name}'.`
-            )
+          diagnostics: unknownSelectionDiagnostics.map((diagnostic) =>
+            createDiagnostic('error', diagnostic.code, diagnostic.message)
           ),
           funcs: []
         }

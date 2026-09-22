@@ -956,21 +956,23 @@ export const handleCodegenDownload = withInstrumentation(
         // target (019 Phase 0.5.5) — the studio's Download flow delegates
         // its layout choice to the server, so `body.options.<target>.layout`
         // is only set when a caller wants to override the server's choice.
-        const { generate, generateSelected } = await import('@rune-langium/codegen/export');
+        const { generate, generateSelected, unknownExportSelectionDiagnostics } =
+          await import('@rune-langium/codegen/export');
         const generatorOptions = applyPagesFunctionDefaults(body);
         if (resolvedNamespaces && body.namespaces) generatorOptions.namespaces = resolvedNamespaces;
         const selectedGeneration = body.selection
           ? await generateSelected(documents, body.selection, generatorOptions)
           : undefined;
         const selectionReceipt = selectedGeneration?.selection;
-        if (selectionReceipt?.unknown.length) {
+        const unknownSelectionDiagnostics = selectionReceipt ? unknownExportSelectionDiagnostics(selectionReceipt) : [];
+        if (unknownSelectionDiagnostics.length) {
           return jsonError(
             400,
-            'One or more selected declarations do not exist in the workspace',
-            selectionReceipt.unknown.map((item) => ({
+            'One or more selected export roots do not exist in the workspace',
+            unknownSelectionDiagnostics.map((diagnostic) => ({
               severity: 'error' as const,
-              code: 'unknown-export-selection',
-              message: `Unknown ${item.kind} declaration '${item.namespace}.${item.name}'.`
+              code: diagnostic.code,
+              message: diagnostic.message
             }))
           );
         }

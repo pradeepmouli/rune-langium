@@ -37,7 +37,11 @@ import { resolveExportSelection, type ResolvedExportSelection } from './selectio
 
 export { IMPLEMENTED_TARGETS };
 export { normalizePreviewInputs } from './preview-schema.js';
-export { declarationKey, resolveExportSelection } from './selection/declaration-selection.js';
+export {
+  declarationKey,
+  resolveExportSelection,
+  unknownExportSelectionDiagnostics
+} from './selection/declaration-selection.js';
 export type { ResolvedExportSelection } from './selection/declaration-selection.js';
 
 export type {

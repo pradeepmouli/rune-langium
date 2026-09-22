@@ -75,6 +75,7 @@ type Party:
     });
 
     expect(result.unknown).toEqual([{ namespace: 'test', name: 'Missing', kind: 'Data' }]);
+    expect(result.unknownNamespaces).toEqual([]);
     expect(result.documents).toEqual([]);
     expect(model.elements).toBe(elements);
 
@@ -84,6 +85,32 @@ type Party:
     });
     expect(outputs[0]?.diagnostics).toEqual(
       expect.arrayContaining([expect.objectContaining({ code: 'unknown-export-selection' })])
+    );
+  });
+
+  it('rejects a selected namespace that no longer exists', async () => {
+    const { RuneDsl } = createRuneDslServices();
+    await RuneDsl.shared.workspace.WorkspaceManager.initializeWorkspace([]);
+    const doc = RuneDsl.shared.workspace.LangiumDocumentFactory.fromString(
+      `namespace test
+type Party:
+  name string (1..1)`,
+      URI.parse('inmemory:///selection-unknown-namespace.rosetta')
+    );
+    await RuneDsl.shared.workspace.DocumentBuilder.build([doc]);
+
+    const result = resolveExportSelection([doc], { namespaces: ['missing'], declarations: [] });
+    expect(result.unknown).toEqual([]);
+    expect(result.unknownNamespaces).toEqual(['missing']);
+
+    const outputs = await generate(doc, {
+      target: 'typescript',
+      selection: { namespaces: ['missing'], declarations: [] }
+    });
+    expect(outputs[0]?.diagnostics).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ code: 'unknown-export-selection', message: "Unknown namespace 'missing'." })
+      ])
     );
   });
 

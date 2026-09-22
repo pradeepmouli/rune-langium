@@ -237,6 +237,35 @@ describe('CodegenProvider', () => {
     expect(useInstanceStore.getState().schemaErrors.get('user.missing.Type')?.message).toContain('expected');
   });
 
+  it('rejects pending instance file-sync waiters when the worker crashes', async () => {
+    render(
+      <WorkspaceStateContext.Provider value={wsState('ws-worker-crash')}>
+        <CodegenProvider>
+          <div />
+        </CodegenProvider>
+      </WorkspaceStateContext.Provider>
+    );
+
+    const worker = FakeWorker.instances[0]!;
+    const id = useInstanceStore.getState().createInstance('user.missing.Type', 'Missing type');
+    await act(async () => {
+      await Promise.resolve();
+    });
+    expect(worker.posted.some((message) => message.type === 'preview:setFiles')).toBe(true);
+
+    await act(async () => {
+      for (const listener of worker.listeners.error ?? []) {
+        listener({ type: 'error', message: 'worker crashed' });
+      }
+      await Promise.resolve();
+    });
+
+    await vi.waitFor(() => expect(useInstanceStore.getState().validationStatus[id]).toBe('unavailable'));
+    expect(useInstanceStore.getState().schemaErrors.get('user.missing.Type')?.message).toContain(
+      'Preview worker crashed'
+    );
+  });
+
   it('does not synchronize a hydrated instance until the hydrated workspace files commit', async () => {
     let commitHydratedFiles: (() => void) | undefined;
     function Host() {

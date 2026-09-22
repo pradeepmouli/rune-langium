@@ -42,7 +42,9 @@ import {
   useEditorStore,
   useModelSourceSync,
   useLatestRef,
+  makeNodeId,
   nameFromNodeId,
+  qualifiedNameFromNodeId,
   splitNodeId,
   selectNodeRepository
 } from '@rune-langium/visual-editor';
@@ -63,7 +65,7 @@ import type {
 } from '@rune-langium/visual-editor';
 import { useStructureViewStore } from '../store/structure-view-store.js';
 import type { RosettaModel } from '@rune-langium/core';
-import { qualifiedExportPath, namespaceFromModelName } from '@rune-langium/core';
+import { namespaceFromModelName } from '@rune-langium/core';
 import { SourceEditor } from '../components/SourceEditor.js';
 import type { SourceEditorRef } from '../components/SourceEditor.js';
 import { ConnectionStatus } from '../components/ConnectionStatus.js';
@@ -1007,12 +1009,12 @@ export const ExplorePerspective = withInstrumentation(
       for (const entry of resolvedModelFiles) {
         const model = entry.model as {
           name?: unknown;
-          elements?: Array<{ name?: string }>;
+          elements?: Array<{ name?: string; $type?: string }>;
         };
         const ns = namespaceFromModelName(model.name) ?? 'unknown';
         for (const element of model.elements ?? []) {
           const name = element.name ?? 'unknown';
-          const nodeId = qualifiedExportPath(ns, name);
+          const nodeId = makeNodeId(ns, name, element.$type);
           if (!map.has(nodeId)) map.set(nodeId, entry.filePath);
         }
       }
@@ -1020,7 +1022,7 @@ export const ExplorePerspective = withInstrumentation(
       for (const entry of deferredExports) {
         for (const exp of entry.exports) {
           if (!(exp.type in AST_TYPE_TO_NODE_TYPE)) continue;
-          const nodeId = qualifiedExportPath(entry.namespace, exp.name);
+          const nodeId = makeNodeId(entry.namespace, exp.name, exp.type);
           if (!map.has(nodeId)) map.set(nodeId, entry.filePath);
         }
       }
@@ -1041,7 +1043,7 @@ export const ExplorePerspective = withInstrumentation(
           }
         }
         if (!meta?.namespace) return undefined;
-        const nodeId = qualifiedExportPath(meta.namespace, d.name);
+        const nodeId = makeNodeId(meta.namespace, d.name, typeof d.$type === 'string' ? d.$type : undefined);
         return nodeIdToFilePath.get(nodeId);
       },
       [files, nodeIdToFilePath]
@@ -1304,7 +1306,10 @@ export const ExplorePerspective = withInstrumentation(
 
     const navigateToNode = useCallback(
       (nodeId: string) => {
-        const targetNode = nodeRepository.byId(nodeId);
+        const targetNode =
+          nodeRepository.byId(nodeId) ??
+          nodeRepository.all().find((node) => qualifiedNameFromNodeId(node.id) === nodeId);
+        const resolvedNodeId = targetNode?.id ?? nodeId;
         const exists = Boolean(targetNode);
         if (!exists) {
           const shortName = nameFromNodeId(nodeId);
@@ -1317,22 +1322,22 @@ export const ExplorePerspective = withInstrumentation(
         }
         // History tracking (back-stack push + forward-stack invalidation) is
         // handled generically by the selectedNodeId subscription above.
-        storeSelectNode(nodeId, { reapplyFocusMode: true });
+        storeSelectNode(resolvedNodeId, { reapplyFocusMode: true });
         const targetMeta = targetNode?.meta;
         if (targetMeta?.deferred && targetMeta.namespace) {
           orchestratorRef.current?.requestHydration(targetMeta.namespace, {
             retryFor: {
-              targetId: nodeId,
+              targetId: resolvedNodeId,
               onRetry: () => {
                 // See handleExplorerSelectNode above for why no macrotask defer
                 // is needed here (unlike Task 3's CodegenProvider case).
-                storeSelectNode(nodeId, { reapplyFocusMode: false });
+                storeSelectNode(resolvedNodeId, { reapplyFocusMode: false });
               }
             }
           });
         }
-        if (!focusMode && shouldCenterNavigationTarget(nodeId)) {
-          graphRef.current?.focusNode(nodeId);
+        if (!focusMode && shouldCenterNavigationTarget(resolvedNodeId)) {
+          graphRef.current?.focusNode(resolvedNodeId);
         }
       },
       [focusMode, showToast, shouldCenterNavigationTarget, nodeRepository, storeSelectNode]

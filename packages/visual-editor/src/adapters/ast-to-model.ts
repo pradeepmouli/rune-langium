@@ -179,7 +179,7 @@ export function astToModel(models: unknown, options?: AstToModelOptions): AstToM
       const kind = resolveNodeKind(element) as TypeKind;
 
       if (!passesFilter(kind, namespace, name, filters)) continue;
-      const nodeId = makeNodeId(namespace, name);
+      const nodeId = makeNodeId(namespace, name, element.$type);
       if (nodeIdSet.has(nodeId)) continue;
 
       if (

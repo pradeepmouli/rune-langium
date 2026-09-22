@@ -12,6 +12,8 @@ export interface ResolvedExportSelection {
   explicit: ExportSelection['declarations'];
   included: ExportSelection['declarations'];
   unknown: ExportSelection['declarations'];
+  /** Namespace roots that were requested but have no workspace document. */
+  unknownNamespaces: readonly string[];
   /** Each dependency key maps to the explicit roots that require it. */
   requiredBy: ReadonlyMap<string, readonly string[]>;
 }
@@ -19,6 +21,22 @@ export interface ResolvedExportSelection {
 /** Stable, kind-aware identity for a selected top-level declaration. */
 export function declarationKey(declaration: ExportSelection['declarations'][number]): string {
   return JSON.stringify([declaration.namespace, declaration.kind, declaration.name]);
+}
+
+/** Shared diagnostic details for stale declaration or namespace export roots. */
+export function unknownExportSelectionDiagnostics(
+  selection: Pick<ResolvedExportSelection, 'unknown' | 'unknownNamespaces'>
+) {
+  return [
+    ...selection.unknown.map((item) => ({
+      code: 'unknown-export-selection' as const,
+      message: `Unknown ${item.kind} declaration '${item.namespace}.${item.name}'.`
+    })),
+    ...selection.unknownNamespaces.map((namespace) => ({
+      code: 'unknown-export-selection' as const,
+      message: `Unknown namespace '${namespace}'.`
+    }))
+  ];
 }
 
 function namespaceOf(doc: LangiumDocument): string | undefined {
@@ -43,11 +61,13 @@ export function resolveExportSelection(docs: LangiumDocument[], selection: Expor
   const allRoots = new Map<TopLevel, string>();
   const explicitRoots = new Set<TopLevel>();
   const found = new Set<string>();
+  const foundNamespaces = new Set<string>();
   const requiredByRoot = new Map<TopLevel, Set<TopLevel>>();
   for (const doc of docs) {
     const namespace = namespaceOf(doc);
     const model = doc.parseResult.value;
     if (!namespace || !model || !isRosettaModel(model)) continue;
+    foundNamespaces.add(namespace);
     for (const element of model.elements as TopLevel[]) {
       allRoots.set(element, namespace);
       if (selectedNamespaces.has(namespace) || wanted.has(declarationKey(declaration(namespace, element)))) {
@@ -117,6 +137,7 @@ export function resolveExportSelection(docs: LangiumDocument[], selection: Expor
       return value ? [value] : [];
     }),
     unknown: selection.declarations.filter((item) => !found.has(declarationKey(item))),
+    unknownNamespaces: selection.namespaces.filter((namespace) => !foundNamespaces.has(namespace)),
     requiredBy
   };
 }

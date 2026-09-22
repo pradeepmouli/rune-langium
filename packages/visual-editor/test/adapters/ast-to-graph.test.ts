@@ -233,6 +233,30 @@ describe('astToModel', () => {
     });
   });
 
+  it('retains declarations that share a Rune name but have different kinds', async () => {
+    const result = await parse(`
+      namespace test
+      type Shared:
+        value string (1..1)
+      func Shared:
+        inputs:
+          value string (1..1)
+        output string (1..1)
+    `);
+
+    const { nodes } = astToModel(result.value);
+
+    expect(nodes).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ id: 'test.Shared#Data', data: expect.objectContaining({ $type: 'Data' }) }),
+        expect.objectContaining({
+          id: 'test.Shared#RosettaFunction',
+          data: expect.objectContaining({ $type: 'RosettaFunction' })
+        })
+      ])
+    );
+  });
+
   describe('TypeAlias types', () => {
     it('creates a typeAlias node and a type-alias-ref edge to the target type', async () => {
       const source = `

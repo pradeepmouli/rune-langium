@@ -237,9 +237,9 @@ describe('EditorStore', () => {
       // produces the placeholder nodes from stored deferredExports.
       store.getState().loadModels([]);
       const nodeIds = new Set(store.getState().nodes.map((n) => n.id));
-      expect(nodeIds.has('cdm.base.math.Quantity')).toBe(true);
-      expect(nodeIds.has('cdm.base.math.NonNegativeQuantity')).toBe(true);
-      expect(nodeIds.has('cdm.product.asset.AssetClass')).toBe(true);
+      expect(nodeIds.has('cdm.base.math.Quantity#Data')).toBe(true);
+      expect(nodeIds.has('cdm.base.math.NonNegativeQuantity#Data')).toBe(true);
+      expect(nodeIds.has('cdm.product.asset.AssetClass#RosettaEnumeration')).toBe(true);
     });
 
     it('preserves placeholders when loadModels runs afterwards', async () => {
@@ -247,8 +247,8 @@ describe('EditorStore', () => {
       const result = await parse(SIMPLE_INHERITANCE_SOURCE);
       store.getState().loadModels(result.value);
       const ids = new Set(store.getState().nodes.map((n) => n.id));
-      expect(ids.has('cdm.base.math.Quantity'), 'curated placeholder survives loadModels').toBe(true);
-      expect(ids.has('cdm.product.asset.AssetClass'), 'all curated namespaces survive').toBe(true);
+      expect(ids.has('cdm.base.math.Quantity#Data'), 'curated placeholder survives loadModels').toBe(true);
+      expect(ids.has('cdm.product.asset.AssetClass#RosettaEnumeration'), 'all curated namespaces survive').toBe(true);
     });
 
     it('does not duplicate ids when loadModels runs', () => {
@@ -260,7 +260,7 @@ describe('EditorStore', () => {
       store.getState().loadDeferredExports([entry]);
       store.getState().loadModels([]);
       const ids = store.getState().nodes.map((n) => n.id);
-      const dupCount = ids.filter((id) => id === 'cdm.base.math.Dup').length;
+      const dupCount = ids.filter((id) => id === 'cdm.base.math.Dup#Data').length;
       expect(dupCount).toBeLessThanOrEqual(1);
     });
 
@@ -299,7 +299,7 @@ describe('EditorStore', () => {
       expect(store.getState().deferredExports).toEqual([]);
       store.getState().loadModels([]);
       const ids = new Set(store.getState().nodes.map((n) => n.id));
-      expect(ids.has('cdm.base.math.Quantity'), 'old placeholder should be gone').toBe(false);
+      expect(ids.has('cdm.base.math.Quantity#Data'), 'old placeholder should be gone').toBe(false);
     });
   });
 });
@@ -490,7 +490,7 @@ describe('editor-store on-demand curated hydration', () => {
     // Use an empty model so the only nodes are placeholders
     const result = await parse(EMPTY_MODEL_SOURCE);
     store.getState().loadModels(result.value);
-    const node = store.getState().nodes.find((n) => n.id === 'cdm.base.math.QuantitySchedule');
+    const node = store.getState().nodes.find((n) => n.id === 'cdm.base.math.QuantitySchedule#Data');
     expect(node).toBeDefined();
     expect(node!.meta.deferred).toBe(true);
   });
@@ -521,12 +521,12 @@ describe('editor-store on-demand curated hydration', () => {
     store.getState().loadModels(result.value);
 
     // The placeholder for the un-hydrated namespace survives the merge
-    const placeholder = store.getState().nodes.find((n) => n.id === 'cdm.other.ns.SomeType');
+    const placeholder = store.getState().nodes.find((n) => n.id === 'cdm.other.ns.SomeType#Data');
     expect(placeholder).toBeDefined();
     expect(placeholder!.meta.deferred).toBe(true);
 
     // Materialized nodes from the real model must not carry the flag
-    const materialized = store.getState().nodes.filter((n) => n.id !== 'cdm.other.ns.SomeType');
+    const materialized = store.getState().nodes.filter((n) => n.id !== 'cdm.other.ns.SomeType#Data');
     expect(materialized.length).toBeGreaterThan(0);
     for (const node of materialized) {
       expect(node.meta.deferred).toBeFalsy();

@@ -60,16 +60,16 @@ describe('buildTypeOptions', () => {
     expect(options).toEqual(
       expect.arrayContaining([
         { value: 'builtin::string', label: 'string', kind: 'builtin' },
-        { value: 'test.one.Party', label: 'Party', kind: 'data', namespace: 'test.one' },
-        { value: 'test.two.Party', label: 'Party', kind: 'data', namespace: 'test.two' },
-        { value: 'test.one.PartyRole', label: 'PartyRole', kind: 'choice', namespace: 'test.one' },
-        { value: 'test.two.PartyName', label: 'PartyName', kind: 'func', namespace: 'test.two' },
-        { value: 'test.deferred.DeferredParty', label: 'DeferredParty', kind: 'data', namespace: 'test.deferred' }
+        { value: 'test.one.Party#Data', label: 'Party', kind: 'data', namespace: 'test.one' },
+        { value: 'test.two.Party#Data', label: 'Party', kind: 'data', namespace: 'test.two' },
+        { value: 'test.one.PartyRole#Choice', label: 'PartyRole', kind: 'choice', namespace: 'test.one' },
+        { value: 'test.two.PartyName#RosettaFunction', label: 'PartyName', kind: 'func', namespace: 'test.two' },
+        { value: 'test.deferred.DeferredParty#Data', label: 'DeferredParty', kind: 'data', namespace: 'test.deferred' }
       ])
     );
     expect(options.filter((option) => option.label === 'Party').map((option) => option.value)).toEqual([
-      'test.one.Party',
-      'test.two.Party'
+      'test.one.Party#Data',
+      'test.two.Party#Data'
     ]);
     expect(buildTypeOptions(repository, false).some((option) => option.kind === 'builtin')).toBe(false);
   });

@@ -585,6 +585,15 @@ export const CodegenProvider = withInstrumentation(
       function handleWorkerFailure(event: ErrorEvent | MessageEvent<unknown>) {
         const baseMessage =
           event.type === 'messageerror' ? 'Preview worker rejected a message.' : 'Preview worker crashed.';
+        // `syncWorkerFiles` waits for an explicit files-ready receipt. A worker
+        // failure means that receipt can no longer arrive, so reject every
+        // pending waiter before reporting the failure; otherwise instance
+        // readiness remains pending forever and its downstream timeout never
+        // starts.
+        for (const waiter of workerFileWaitersRef.current.values()) {
+          waiter.reject(new Error(baseMessage));
+        }
+        workerFileWaitersRef.current.clear();
         // A genuine 'error' event on this shared worker is ALSO handled by
         // handleCodegenWorkerError below (same worker, both listeners fire),
         // which already shows its own crash toast (Codex P2) — suppress this
