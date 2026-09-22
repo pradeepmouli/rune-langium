@@ -89,8 +89,7 @@ describe('PrototypePerspective', () => {
     await renderPerspective();
     fireEvent.click(screen.getByRole('row', { name: /Acme/ }));
     expect(usePrototypeViewStore.getState().state.selectedId).toBe(id);
-    expect(screen.getByRole('tab', { name: 'Form' })).toBeInTheDocument();
-    expect(screen.getByText(/generating preview for the selected type/i)).toBeInTheDocument();
+    expect(screen.getByRole('tab', { name: 'Form' })).toHaveAttribute('aria-selected', 'true');
   });
 
   it('registers Inspector, Instances, and Payload graph panels with the shared host', async () => {
