@@ -47,6 +47,7 @@ import {
 import type { Target, FormPreviewSchema, GeneratorOutput, GeneratorDiagnostic } from '@rune-langium/codegen/export';
 import { findDataNode, getActiveConditionPredicates } from '@rune-langium/codegen/instances';
 import type { ValidationDiagnostic } from '@rune-langium/codegen/instances';
+import { qualifiedNameFromNodeId } from '@rune-langium/visual-editor';
 import type { PreviewWorkerRequest } from '../services/codegen-service.js';
 import { z } from 'zod';
 import { isWorkerGlobalScope } from './runtime-guards.js';
@@ -857,6 +858,7 @@ function createGeneratedModuleLoader(outputs: readonly GeneratorOutput[]): {
 
 async function executeFunction(funcName: string, inputs: Record<string, unknown>, requestId: string): Promise<void> {
   const scope = self as unknown as DedicatedWorkerGlobalScope;
+  const functionFqn = qualifiedNameFromNodeId(funcName);
 
   try {
     const { version: documentsVersion, value: documents } = await buildDocuments();
@@ -886,11 +888,11 @@ async function executeFunction(funcName: string, inputs: Record<string, unknown>
     // for callers (tests, `instance:execute`-style future callers) that don't
     // have a namespace-qualified name to give.
     let selectedModulePath: string | undefined;
-    let selectedTargetId = funcName;
+    let selectedTargetId = functionFqn;
     let selectedExportName: string | undefined;
     for (const result of results) {
       const ns = result.relativePath.replace(/\//g, '.').replace(/\.ts$/, '');
-      const func = result.funcs.find((f) => f.name === funcName || `${ns}.${f.name}` === funcName);
+      const func = result.funcs.find((f) => f.name === functionFqn || `${ns}.${f.name}` === functionFqn);
       if (func) {
         selectedExportName = func.exportName ?? func.name;
         selectedModulePath = result.relativePath;
@@ -904,7 +906,7 @@ async function executeFunction(funcName: string, inputs: Record<string, unknown>
         type: 'preview:execute-error',
         requestId,
         funcName,
-        error: `Function '${funcName}' not found in generated code. Ensure the model has a valid func declaration and no parse errors.`
+        error: `Function '${functionFqn}' not found in generated code. Ensure the model has a valid func declaration and no parse errors.`
       });
       return;
     }

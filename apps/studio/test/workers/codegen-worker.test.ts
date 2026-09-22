@@ -887,14 +887,18 @@ describe('codegen-worker previewGenerateCache (executeFunction)', () => {
 
     dispatch({
       type: 'preview:execute',
-      funcName: 'alpha.CalcTrade',
+      funcName: 'alpha.CalcTrade#RosettaFunction',
       inputs: {},
       requestId: 'qualified:2'
     });
     await flushWorker();
 
     expect(scope.postMessage).toHaveBeenLastCalledWith(
-      expect.objectContaining({ type: 'preview:execute-result', requestId: 'qualified:2', funcName: 'alpha.CalcTrade' })
+      expect.objectContaining({
+        type: 'preview:execute-result',
+        requestId: 'qualified:2',
+        funcName: 'alpha.CalcTrade#RosettaFunction'
+      })
     );
   });
 
