@@ -14,7 +14,7 @@ describe('resolveFunctionOutputTarget', () => {
   it('uses the hydrated function schema when the declaration is curated', () => {
     const schema: FormPreviewSchema = {
       schemaVersion: 1,
-      targetId: 'curated.functions.BuildParty',
+      targetId: 'curated.functions.BuildParty#RosettaFunction',
       title: 'BuildParty',
       kind: 'function',
       status: 'ready',

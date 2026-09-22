@@ -3,6 +3,7 @@
 
 import { getFunctionOutput, isChoice, isData, isRosettaFunction, type RosettaModel } from '@rune-langium/core';
 import type { FormPreviewSchema } from '@rune-langium/codegen/export';
+import { qualifiedNameFromNodeId } from '@rune-langium/visual-editor';
 import { withInstrumentation } from './instrumentation/core.js';
 
 export interface FunctionOutputTarget {
@@ -30,7 +31,9 @@ export const resolveFunctionOutputTarget = withInstrumentation(
   ): FunctionOutputTarget | undefined {
     if (!functionFqn) return undefined;
     const schemaOutput =
-      schema?.kind === 'function' && schema.targetId === functionFqn ? schema.functionOutput : undefined;
+      schema?.kind === 'function' && qualifiedNameFromNodeId(schema.targetId) === qualifiedNameFromNodeId(functionFqn)
+        ? schema.functionOutput
+        : undefined;
     if (schemaOutput && isSingularPreviewOutput(schemaOutput.cardinality)) {
       return { typeFqn: schemaOutput.typeFqn, kind: schemaOutput.kind };
     }
