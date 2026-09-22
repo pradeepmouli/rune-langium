@@ -24,7 +24,7 @@ and CLI/codegen/LSP → core.
 
 ## Studio Runtime
 
-- Studio uses React 19, React Flow 12, Dockview, zustand 5/zundo 2, Tailwind CSS 4, Radix UI, and CodeMirror 6. Manifests currently use TypeScript 7 and Langium 4.3; check manifests before changing versions.
+- Studio uses React 19, React Flow 12, Dockview, zustand 5/zundo 2, Tailwind CSS 4, Base UI, and CodeMirror 6. Manifests currently use TypeScript 7 and Langium 4.3; check manifests before changing versions.
 - OPFS stores workspace files; IndexedDB stores metadata, caches, settings, and layouts.
 - `apps/studio/src/shell/providers/StudioProviders.tsx` composes provider responsibilities; `LspProvider.tsx` owns the LSP client and transport lifecycle.
 - **Studio LSP is network-only.** `apps/studio/src/services/transport-provider.ts` defaults to session-token minting followed by a token-gated WebSocket to the hosted LSP. Only an explicit `wsUri` opts into direct WebSocket, with token-gated fallback after failure. Configured endpoints can differ between local, preview, and production environments.

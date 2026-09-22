@@ -11,7 +11,6 @@
  * @module
  */
 
-import { useCallback } from 'react';
 import { Select, SelectContent, SelectItem, SelectTrigger } from '@rune-langium/design-system/ui/select';
 import type { ExpressionNode } from '../../../schemas/expression-node-schema.js';
 import type { FunctionScope, FunctionScopeEntry } from '../../../store/expression-store.js';
@@ -24,28 +23,26 @@ export interface ReferencePickerProps {
 }
 
 export function ReferencePicker({ open, scope, onSelect, onClose }: ReferencePickerProps) {
-  const handleSelect = useCallback(
-    (entry: FunctionScopeEntry) => {
-      const node = {
-        $type: 'RosettaSymbolReference',
-        id: crypto.randomUUID(),
-        symbol: entry.name
-      } as unknown as ExpressionNode;
-      onSelect(node);
-      onClose();
-    },
-    [onSelect, onClose]
-  );
-
   const allEntries = [
     ...scope.inputs.map((e) => ({ ...e, origin: 'input' as const })),
     ...(scope.output ? [{ ...scope.output, origin: 'output' as const }] : []),
     ...scope.aliases.map((e) => ({ ...e, origin: 'alias' as const }))
   ];
+  const handleValueChange = (value: string) => {
+    const entry: FunctionScopeEntry | undefined = allEntries.find(({ origin, name }) => `${origin}:${name}` === value);
+    if (!entry) return;
+    onSelect({
+      $type: 'RosettaSymbolReference',
+      id: crypto.randomUUID(),
+      symbol: entry.name
+    } as unknown as ExpressionNode);
+  };
+
   return (
     <Select
       open={open}
       value={null}
+      onValueChange={handleValueChange}
       onOpenChange={(isOpen: boolean) => {
         if (!isOpen) onClose();
       }}
@@ -67,7 +64,6 @@ export function ReferencePicker({ open, scope, onSelect, onClose }: ReferencePic
             key={`${entry.origin}-${entry.name}`}
             value={`${entry.origin}:${entry.name}`}
             data-testid={`ref-option-${entry.name}`}
-            onClick={() => handleSelect(entry)}
           >
             <span className="font-mono font-medium">{entry.name}</span>
             {entry.typeName && <span className="text-3xs text-muted-foreground">{entry.typeName}</span>}

@@ -11,7 +11,7 @@
  */
 
 import { describe, it, expect, vi } from 'vitest';
-import { render, fireEvent } from '@testing-library/react';
+import { render, screen, fireEvent } from '@testing-library/react';
 import { ReferencePicker } from '../../src/components/editors/expression-builder/ReferencePicker.js';
 import type { FunctionScope } from '../../src/store/expression-store.js';
 
@@ -55,19 +55,36 @@ describe('ReferencePicker', () => {
     expect(picker.textContent).toContain('alias');
   });
 
-  it('creates RosettaSymbolReference on select', () => {
+  it('creates RosettaSymbolReference on pointer selection', () => {
     const onSelect = vi.fn();
     const onClose = vi.fn();
     render(<ReferencePicker open={true} scope={testScope} onSelect={onSelect} onClose={onClose} />);
 
-    const tradeItem = document.body.querySelector('[data-testid="ref-option-trade"]');
-    expect(tradeItem).toBeTruthy();
-    fireEvent.click(tradeItem!);
+    const tradeItem = screen.getByTestId('ref-option-trade');
+    fireEvent.pointerDown(tradeItem, { pointerType: 'mouse' });
+    fireEvent.click(tradeItem);
 
     expect(onSelect).toHaveBeenCalledTimes(1);
     const node = onSelect.mock.calls[0][0];
     expect((node as Record<string, unknown>)['$type']).toBe('RosettaSymbolReference');
     expect((node as Record<string, unknown>)['symbol']).toBe('trade');
+    expect(onClose).toHaveBeenCalledTimes(1);
+  });
+
+  it.each([
+    ['Enter', 'Enter'],
+    ['Space', ' ']
+  ])('creates RosettaSymbolReference on %s selection', (code, key) => {
+    const onSelect = vi.fn();
+    const onClose = vi.fn();
+    render(<ReferencePicker open={true} scope={testScope} onSelect={onSelect} onClose={onClose} />);
+
+    const tradeItem = screen.getByTestId('ref-option-trade');
+    tradeItem.focus();
+    fireEvent.keyDown(tradeItem, { key, code });
+
+    expect(onSelect).toHaveBeenCalledTimes(1);
+    expect(onSelect.mock.calls[0][0]).toMatchObject({ $type: 'RosettaSymbolReference', symbol: 'trade' });
     expect(onClose).toHaveBeenCalledTimes(1);
   });
 
