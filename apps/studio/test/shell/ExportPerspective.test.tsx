@@ -53,6 +53,15 @@ vi.mock('../../src/shell/panels/ExportSettingsPanel.js', () => ({
 vi.mock('../../src/shell/panels/ExportPreviewPanel.js', () => ({
   ExportPreviewPanel: () => <div data-testid="mock-export-preview-panel" />
 }));
+vi.mock('../../src/shell/WorkbenchHost.js', () => ({
+  WorkbenchHost: ({ definition }: { definition: { panels: Record<string, () => React.ReactElement> } }) => (
+    <div data-testid="mock-export-workbench">
+      {Object.entries(definition.panels).map(([id, Panel]) => (
+        <Panel key={id} />
+      ))}
+    </div>
+  )
+}));
 
 beforeEach(() => {
   state.config = {
@@ -70,11 +79,11 @@ beforeEach(() => {
   mockCancel.mockClear();
 });
 
-it('composes stable selection, settings, and preview workbench panels', () => {
+it('composes stable selection, settings, and preview workbench panels', async () => {
   render(<ExportPerspective workspaceId="workspace-a" />);
+  await screen.findByTestId('mock-export-workbench');
   expect(screen.getByTestId('export-selection')).toContainElement(screen.getByTestId('mock-export-selection-panel'));
   expect(screen.getByTestId('export-settings')).toContainElement(screen.getByTestId('mock-export-settings-panel'));
-  expect(screen.getByRole('navigation', { name: 'Export panes' })).toBeInTheDocument();
   expect(screen.getByTestId('export-preview')).toContainElement(screen.getByTestId('mock-export-preview-panel'));
   expect(mockActivate).toHaveBeenCalledWith('workspace-a');
 });
@@ -100,13 +109,14 @@ it('invalidates the artifact when a curated bundle version changes', () => {
   expect(mockInvalidate).toHaveBeenCalledTimes(2);
 });
 
-it('captures the selected roots and workspace files exactly once when generating', () => {
+it('captures the selected roots and workspace files exactly once when generating', async () => {
   state.config = {
     ...state.config,
     selection: { namespaces: [], declarations: [{ namespace: 'test', name: 'Party', kind: 'Data' }] }
   };
   const files = [{ name: 'test.rune', path: 'test.rune', content: 'namespace test', dirty: false }];
   render(<ExportPerspective workspaceId="workspace-a" files={files} />);
+  await screen.findByTestId('mock-export-workbench');
 
   act(() => capturedGenerate?.());
 

@@ -1186,6 +1186,7 @@ function objectField(ctx: FieldContext, data: Data, sourceUri: string): PreviewF
     path: ctx.path,
     label: ctx.label,
     kind: 'object',
+    referencedTypeFqn: dataId,
     required: true,
     children: [...choiceFields, ...attributeChildren],
     // choiceArmPaths (round-10 finding B): mirrors buildDataSchema's/
@@ -1266,6 +1267,7 @@ function choiceField(ctx: FieldContext, choice: Choice, sourceUri: string): Prev
     path: ctx.path,
     label: ctx.label,
     kind: 'object',
+    referencedTypeFqn: choiceId,
     required: true,
     children,
     choiceArmPaths: children.map((field) => field.path)

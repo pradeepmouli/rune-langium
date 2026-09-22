@@ -23,8 +23,7 @@ describe('InstanceInspectorPanel', () => {
         query: '',
         typeFqn: null,
         inspectorTab: 'functions',
-        graphVisible: false,
-        compactPane: 'inspector'
+        graphVisible: false
       }
     });
     useExploreNavigationStore.setState({ navigateToType: undefined });

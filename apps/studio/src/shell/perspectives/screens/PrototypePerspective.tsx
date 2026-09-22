@@ -2,7 +2,9 @@
 // SPDX-License-Identifier: FSL-1.1-ALv2
 // Copyright (c) 2026 Pradeep Mouli
 
-import { useEffect, useRef, useState, type ChangeEvent, type ReactElement } from 'react';
+import { useEffect, useMemo, useRef, useState, type ChangeEvent, type ReactElement } from 'react';
+import type { WorkbenchDefinition } from '../../workbench-types.js';
+import { WorkbenchHost } from '../../WorkbenchHost.js';
 import { Button } from '@rune-langium/design-system/ui/button';
 import { jsonCodec } from '@rune-langium/codegen/instances';
 import { InstanceCreateDialog } from '../../../components/InstanceCreateDialog.js';
@@ -27,22 +29,21 @@ export const PrototypePerspective = withInstrumentation(
     const [seed, setSeed] = useState<Parameters<typeof InstanceCreateDialog>[0]['seed']>();
     const [importError, setImportError] = useState<string | null>(null);
     const [focusedPayloadPointer, setFocusedPayloadPointer] = useState<string | undefined>();
+    const [activationReady, setActivationReady] = useState(false);
     const importInputRef = useRef<HTMLInputElement>(null);
     const activationRef = useRef<{ workspaceId: string; promise: Promise<void> } | undefined>(undefined);
     const selectedRecord = useInstanceStore((state) =>
       view.selectedId ? state.instances[view.selectedId] : undefined
     );
-    const graphAvailable = view.graphVisible && selectedRecord !== undefined;
-    const compactPane = !selectedRecord
-      ? 'grid'
-      : view.compactPane === 'graph' && !graphAvailable
-        ? 'inspector'
-        : view.compactPane;
 
     useEffect(() => {
       const workspaceId = workspace?.workspaceId;
-      if (!workspaceId) return;
+      if (!workspaceId) {
+        setActivationReady(false);
+        return;
+      }
       if (activationRef.current?.workspaceId !== workspaceId) {
+        setActivationReady(false);
         activationRef.current = { workspaceId, promise: activate(workspaceId) };
       }
       let cancelled = false;
@@ -53,14 +54,78 @@ export const PrototypePerspective = withInstrumentation(
           setSeed(intent.seed);
           setCreating(true);
         }
-        if (intent?.kind === 'open')
-          patch({ selectedId: intent.instanceId, inspectorTab: 'form', compactPane: 'inspector' });
+        if (intent?.kind === 'open') patch({ selectedId: intent.instanceId, inspectorTab: 'form' });
+        setActivationReady(true);
       });
       return () => {
         cancelled = true;
       };
-    }, [consumePrototypeIntent, patch, pendingIntent, workspace?.workspaceId]);
+    }, [activate, consumePrototypeIntent, patch, pendingIntent, workspace?.workspaceId]);
     useEffect(() => setFocusedPayloadPointer(undefined), [selectedRecord?.id]);
+
+    const definition = useMemo<WorkbenchDefinition>(
+      () => ({
+        id: 'prototype',
+        panels: {
+          'prototype.inspector': () =>
+            view.selectedId ? (
+              <InstanceInspectorPanel instanceId={view.selectedId} focusedPayloadPointer={focusedPayloadPointer} />
+            ) : (
+              <div className="flex h-full items-center justify-center p-3 text-sm text-muted-foreground">
+                Select or create an instance to inspect it.
+              </div>
+            ),
+          'prototype.grid': () => <InstanceGridPanel />,
+          'prototype.payloadGraph': () =>
+            !view.graphVisible ? (
+              <div className="flex h-full items-center justify-center p-3 text-sm text-muted-foreground">
+                Enable Payload graph to inspect the selected instance.
+              </div>
+            ) : selectedRecord ? (
+              <InstanceGraphPanel
+                record={selectedRecord}
+                onSelectPointer={(pointer) => setFocusedPayloadPointer(pointer)}
+              />
+            ) : (
+              <div className="flex h-full items-center justify-center p-3 text-sm text-muted-foreground">
+                Select an instance to inspect its payload graph.
+              </div>
+            )
+        },
+        titles: {
+          'prototype.inspector': 'Inspector',
+          'prototype.grid': 'Instances',
+          'prototype.payloadGraph': 'Payload graph'
+        },
+        buildDefault(api, width) {
+          const inspector = api.addPanel({
+            id: 'prototype.inspector',
+            component: 'prototype.inspector',
+            title: 'Inspector'
+          });
+          const graph = api.addPanel({
+            id: 'prototype.payloadGraph',
+            component: 'prototype.payloadGraph',
+            title: 'Payload graph',
+            position:
+              width < 768
+                ? { referenceGroup: inspector.group, direction: 'within' }
+                : { referencePanel: inspector.id, direction: 'right' }
+          });
+          api.addPanel({
+            id: 'prototype.grid',
+            component: 'prototype.grid',
+            title: 'Instances',
+            position:
+              width < 768
+                ? { referenceGroup: inspector.group, direction: 'within' }
+                : { referencePanel: inspector.id, direction: 'below' }
+          });
+          if (width >= 768) graph.group.api.setConstraints({ minimumWidth: 280 });
+        }
+      }),
+      [focusedPayloadPointer, selectedRecord, view.graphVisible, view.selectedId]
+    );
 
     const importJson = async (event: ChangeEvent<HTMLInputElement>) => {
       const file = event.target.files?.[0];
@@ -80,102 +145,52 @@ export const PrototypePerspective = withInstrumentation(
       <section data-testid="prototype-perspective" className="flex h-full min-h-0 flex-col">
         <div className="flex flex-wrap items-center justify-between gap-2 border-b border-border px-3 py-2">
           <p className="text-sm text-muted-foreground">Persistent instances</p>
-          <input
-            ref={importInputRef}
-            type="file"
-            accept="application/json,.json"
-            aria-label="Import JSON"
-            className="sr-only"
-            onChange={importJson}
-          />
-          <Button type="button" variant="ghost" size="sm" onClick={() => importInputRef.current?.click()}>
-            Import JSON
-          </Button>
-          <Button
-            type="button"
-            variant="ghost"
-            size="sm"
-            aria-label="Toggle payload graph"
-            onClick={() => {
-              const graphVisible = !view.graphVisible;
-              patch({ graphVisible, ...(graphVisible ? { compactPane: 'graph' } : {}) });
-            }}
-          >
-            Payload graph
-          </Button>
-          <Button
-            type="button"
-            size="sm"
-            onClick={() => {
-              setSeed(undefined);
-              setCreating(true);
-            }}
-          >
-            New instance
-          </Button>
-        </div>
-        <nav aria-label="Prototype panes" className="flex border-b border-border lg:hidden">
-          <Button
-            type="button"
-            variant={compactPane === 'inspector' ? 'secondary' : 'ghost'}
-            size="sm"
-            className="flex-1 rounded-none"
-            disabled={!selectedRecord}
-            onClick={() => patch({ compactPane: 'inspector' })}
-          >
-            Inspector
-          </Button>
-          <Button
-            type="button"
-            variant={compactPane === 'grid' ? 'secondary' : 'ghost'}
-            size="sm"
-            className="flex-1 rounded-none"
-            onClick={() => patch({ compactPane: 'grid' })}
-          >
-            Instances
-          </Button>
-          {graphAvailable ? (
+          <div className="flex flex-wrap items-center gap-2">
+            <input
+              ref={importInputRef}
+              type="file"
+              accept="application/json,.json"
+              aria-label="Import JSON"
+              className="sr-only"
+              onChange={importJson}
+            />
+            <Button type="button" variant="ghost" size="sm" onClick={() => importInputRef.current?.click()}>
+              Import JSON
+            </Button>
             <Button
               type="button"
-              variant={compactPane === 'graph' ? 'secondary' : 'ghost'}
+              variant="ghost"
               size="sm"
-              className="flex-1 rounded-none"
-              onClick={() => patch({ compactPane: 'graph' })}
+              aria-pressed={view.graphVisible}
+              onClick={() => patch({ graphVisible: !view.graphVisible })}
             >
               Payload graph
             </Button>
-          ) : null}
-        </nav>
-        <div
-          className={`min-h-0 flex-[2] border-b border-border lg:flex ${compactPane === 'grid' ? 'hidden' : 'flex'}`}
-        >
-          <div className={`min-h-0 min-w-0 flex-1 ${compactPane === 'graph' ? 'hidden lg:block' : 'block'}`}>
-            {view.selectedId ? (
-              <InstanceInspectorPanel instanceId={view.selectedId} focusedPayloadPointer={focusedPayloadPointer} />
-            ) : (
-              <div className="flex h-full items-center justify-center text-sm text-muted-foreground">
-                Select or create an instance to inspect it.
-              </div>
-            )}
-          </div>
-          {graphAvailable ? (
-            <div
-              className={`min-h-0 min-w-0 flex-1 border-border lg:border-l ${
-                compactPane === 'graph' ? 'block' : 'hidden lg:block'
-              }`}
+            <Button
+              type="button"
+              size="sm"
+              onClick={() => {
+                setSeed(undefined);
+                setCreating(true);
+              }}
             >
-              <InstanceGraphPanel
-                record={selectedRecord}
-                onSelectPointer={(pointer) => {
-                  setFocusedPayloadPointer(pointer);
-                  patch({ compactPane: 'inspector' });
-                }}
-              />
-            </div>
-          ) : null}
+              New instance
+            </Button>
+          </div>
         </div>
-        <div className={`min-h-0 flex-1 lg:flex ${compactPane === 'grid' ? 'flex' : 'hidden'}`}>
-          <InstanceGridPanel />
+        <div className="min-h-0 flex-1">
+          {activationReady ? (
+            <WorkbenchHost
+              definition={definition}
+              initialNativeLayout={view.nativeLayout}
+              onNativeLayoutChange={(nativeLayout) => patch({ nativeLayout })}
+              className="h-full min-w-0 w-full"
+            />
+          ) : (
+            <p role="status" className="p-3 text-sm text-muted-foreground">
+              Restoring Prototype workspace…
+            </p>
+          )}
         </div>
         {importError ? (
           <p role="alert" className="border-t border-border p-2 text-sm text-destructive">
@@ -186,7 +201,7 @@ export const PrototypePerspective = withInstrumentation(
           seed={seed}
           open={creating}
           onClose={() => setCreating(false)}
-          onCreated={(id) => patch({ selectedId: id, inspectorTab: 'form', compactPane: 'inspector' })}
+          onCreated={(id) => patch({ selectedId: id, inspectorTab: 'form' })}
         />
       </section>
     );

@@ -10,6 +10,17 @@ vi.mock('../../../../src/shell/workbench-settings.js', () => ({
   readWorkbenchSettings: mockReadWorkbenchSettings,
   writeWorkbenchSettings: vi.fn(async () => undefined)
 }));
+vi.mock('../../../../src/shell/WorkbenchHost.js', () => ({
+  WorkbenchHost: ({ definition }: { definition: { panels: Record<string, () => React.ReactElement> } }) => (
+    <div data-testid="mock-prototype-workbench">
+      {Object.entries(definition.panels).map(([id, Panel]) => (
+        <div key={id} data-testid={`prototype-workbench-panel-${id}`}>
+          <Panel />
+        </div>
+      ))}
+    </div>
+  )
+}));
 import { PrototypePerspective } from '../../../../src/shell/perspectives/screens/PrototypePerspective.js';
 import { useInstanceStore } from '../../../../src/store/instance-store.js';
 import { usePrototypeViewStore } from '../../../../src/store/prototype-view-store.js';
@@ -39,8 +50,7 @@ describe('PrototypePerspective', () => {
         query: '',
         typeFqn: null,
         inspectorTab: 'form',
-        graphVisible: false,
-        compactPane: 'inspector'
+        graphVisible: false
       }
     });
     usePrototypeNavigationStore.setState({ pending: null });
@@ -58,49 +68,48 @@ describe('PrototypePerspective', () => {
     parseErrors: new Map()
   };
 
-  function renderPerspective() {
-    return render(
+  async function renderPerspective() {
+    const result = render(
       <WorkspaceStateContext.Provider value={workspace}>
         <PrototypePerspective />
       </WorkspaceStateContext.Provider>
     );
+    await screen.findByTestId('mock-prototype-workbench');
+    return result;
   }
 
-  it('renders the empty state when no instance is selected', () => {
-    renderPerspective();
+  it('renders the empty state when no instance is selected', async () => {
+    await renderPerspective();
     expect(screen.getByTestId('prototype-perspective')).toBeInTheDocument();
     expect(screen.getByText(/select or create an instance to inspect it/i)).toBeInTheDocument();
   });
 
-  it('selecting a grid row opens its Form tab by default', () => {
+  it('selecting a grid row opens its Form tab by default', async () => {
     const id = useInstanceStore.getState().createInstance('test.Party', 'Acme');
-    renderPerspective();
+    await renderPerspective();
     fireEvent.click(screen.getByRole('row', { name: /Acme/ }));
     expect(usePrototypeViewStore.getState().state.selectedId).toBe(id);
     expect(screen.getByRole('tab', { name: 'Form' })).toBeInTheDocument();
     expect(screen.getByText(/generating preview for the selected type/i)).toBeInTheDocument();
-    expect(usePrototypeViewStore.getState().state.compactPane).toBe('inspector');
   });
 
-  it('keeps one compact pane active and returns payload selections to the Inspector', () => {
+  it('registers Inspector, Instances, and Payload graph panels with the shared host', async () => {
     const id = useInstanceStore.getState().createInstance('test.Party', 'Acme', {
       data: { address: { city: 'London' } }
     });
     usePrototypeViewStore.setState((store) => ({
-      state: { ...store.state, selectedId: id, graphVisible: true, compactPane: 'graph' }
+      state: { ...store.state, selectedId: id, graphVisible: true }
     }));
-    renderPerspective();
+    await renderPerspective();
 
-    expect(screen.getByRole('navigation', { name: 'Prototype panes' })).toBeInTheDocument();
-    fireEvent.click(screen.getByRole('button', { name: 'Inspector' }));
-    expect(usePrototypeViewStore.getState().state.compactPane).toBe('inspector');
-    fireEvent.click(screen.getByRole('button', { name: 'Instances' }));
-    expect(usePrototypeViewStore.getState().state.compactPane).toBe('grid');
+    expect(screen.getByTestId('prototype-workbench-panel-prototype.inspector')).toBeInTheDocument();
+    expect(screen.getByTestId('prototype-workbench-panel-prototype.grid')).toBeInTheDocument();
+    expect(screen.getByTestId('prototype-workbench-panel-prototype.payloadGraph')).toBeInTheDocument();
   });
 
-  it('keeps Inspector details with the selected Form', () => {
+  it('keeps Inspector details with the selected Form', async () => {
     useInstanceStore.getState().createInstance('test.Party', 'Acme');
-    renderPerspective();
+    await renderPerspective();
     fireEvent.click(screen.getByRole('row', { name: /Acme/ }));
     expect(screen.getAllByText('Validation')).not.toHaveLength(0);
     expect(screen.getByText('Provenance')).toBeInTheDocument();
@@ -108,7 +117,7 @@ describe('PrototypePerspective', () => {
   });
 
   it('opens the shared creation dialog with imported JSON values', async () => {
-    renderPerspective();
+    await renderPerspective();
     const file = new File(['{"name":"Acme"}'], 'party.json', { type: 'application/json' });
 
     fireEvent.change(screen.getByLabelText('Import JSON'), { target: { files: [file] } });
@@ -118,7 +127,7 @@ describe('PrototypePerspective', () => {
   });
 
   it('keeps malformed JSON out of the creation flow', async () => {
-    renderPerspective();
+    await renderPerspective();
     const file = new File(['{'], 'broken.json', { type: 'application/json' });
 
     fireEvent.change(screen.getByLabelText('Import JSON'), { target: { files: [file] } });
@@ -127,7 +136,7 @@ describe('PrototypePerspective', () => {
     expect(screen.queryByRole('heading', { name: 'New instance' })).not.toBeInTheDocument();
   });
 
-  it('does not carry over stale field-level validation errors when switching between instances of the same type (finding #8)', () => {
+  it('does not carry over stale field-level validation errors when switching between instances of the same type (finding #8)', async () => {
     const partySchema = {
       schemaVersion: 1 as const,
       targetId: 'test.Party',
@@ -151,7 +160,7 @@ describe('PrototypePerspective', () => {
       useInstanceStore.getState().updateInstanceData(idB, { name: 'Bob' });
     });
 
-    renderPerspective();
+    await renderPerspective();
 
     // Select instance A and blur its empty required field to produce a
     // validation error.
@@ -175,7 +184,7 @@ describe('PrototypePerspective', () => {
   });
 
   it('consumes a creation intent that arrives after Prototype is mounted', async () => {
-    renderPerspective();
+    await renderPerspective();
 
     act(() =>
       requestPrototype('workspace-a', { kind: 'create', seed: { typeFqn: 'test.Party', data: { name: 'Acme' } } })
@@ -186,7 +195,7 @@ describe('PrototypePerspective', () => {
 
   it('consumes an instance-opening intent after the workspace is active', async () => {
     const id = useInstanceStore.getState().createInstance('test.Party', 'Acme');
-    renderPerspective();
+    await renderPerspective();
 
     act(() => requestPrototype('workspace-a', { kind: 'open', instanceId: id }));
 
@@ -204,10 +213,15 @@ describe('PrototypePerspective', () => {
     );
     usePrototypeViewStore.setState({ workspaceId: null });
     const id = useInstanceStore.getState().createInstance('test.Party', 'Acme');
-    renderPerspective();
+    render(
+      <WorkspaceStateContext.Provider value={workspace}>
+        <PrototypePerspective />
+      </WorkspaceStateContext.Provider>
+    );
 
     act(() => requestPrototype('workspace-a', { kind: 'open', instanceId: id }));
-    await act(async () => resolveSettings({ selectedId: 'restored', compactPane: 'grid' }));
+    await act(async () => resolveSettings({ selectedId: 'restored' }));
+    await screen.findByTestId('mock-prototype-workbench');
 
     expect(usePrototypeViewStore.getState().state.selectedId).toBe(id);
     expect(usePrototypeViewStore.getState().state.inspectorTab).toBe('form');

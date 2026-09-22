@@ -22,8 +22,7 @@ describe('InstanceGridPanel', () => {
         query: '',
         typeFqn: null,
         inspectorTab: 'form',
-        graphVisible: false,
-        compactPane: 'inspector'
+        graphVisible: false
       }
     });
   });

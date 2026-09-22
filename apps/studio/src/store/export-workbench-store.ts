@@ -21,16 +21,19 @@ type GenerateExport = (input: ExportInput, signal: AbortSignal) => Promise<Expor
 export interface ExportWorkbenchPreferences {
   config: ExportConfig;
   activeFile: string | undefined;
+  nativeLayout?: unknown;
 }
 
 export interface ExportWorkbenchState {
   workspaceId: string | undefined;
   config: ExportConfig;
   activeFile: string | undefined;
+  nativeLayout?: unknown;
   run: ExportRunState;
   activate(workspaceId: string): Promise<void>;
   configure(config: ExportConfig): void;
   setActiveFile(path: string | undefined): void;
+  setNativeLayout(layout: unknown): void;
   invalidate(sourceRevision: number): void;
   generate(input: ExportInput): Promise<void>;
   cancel(): void;
@@ -71,11 +74,12 @@ export const createExportWorkbench = withInstrumentation(
       active?.controller.abort();
       active = undefined;
     };
-    const persist = (state: Pick<ExportWorkbenchState, 'workspaceId' | 'config' | 'activeFile'>) => {
+    const persist = (state: Pick<ExportWorkbenchState, 'workspaceId' | 'config' | 'activeFile' | 'nativeLayout'>) => {
       if (!state.workspaceId) return;
       void writeWorkbenchSettings(state.workspaceId, 'export-workbench', {
         config: state.config,
-        activeFile: state.activeFile
+        activeFile: state.activeFile,
+        nativeLayout: state.nativeLayout
       });
     };
     return create<ExportWorkbenchState>((set, get) => ({
@@ -90,6 +94,7 @@ export const createExportWorkbench = withInstrumentation(
           workspaceId,
           config: cloneConfig(DEFAULT_CONFIG),
           activeFile: undefined,
+          nativeLayout: undefined,
           run: { status: 'idle' }
         });
         const restored = await readWorkbenchSettings(workspaceId, 'export-workbench', DEFAULT_PREFERENCES);
@@ -97,6 +102,7 @@ export const createExportWorkbench = withInstrumentation(
           set({
             config: cloneConfig(restored.config ?? DEFAULT_CONFIG),
             activeFile: restored.activeFile,
+            nativeLayout: restored.nativeLayout,
             run: { status: 'idle' }
           });
         }
@@ -112,6 +118,11 @@ export const createExportWorkbench = withInstrumentation(
         activation.invalidate();
         set({ activeFile });
         persist({ ...get(), activeFile });
+      },
+      setNativeLayout(nativeLayout) {
+        activation.invalidate();
+        set({ nativeLayout });
+        persist({ ...get(), nativeLayout });
       },
       invalidate(sourceRevision) {
         cancelActive();

@@ -15,7 +15,12 @@ export const workbenchSettingsKey = withInstrumentation(
 
 export const readWorkbenchSettings = withInstrumentation(
   async function readWorkbenchSettings<T>(workspaceId: string, perspective: string, fallback: T): Promise<T> {
-    return (await loadSetting<T>(workbenchSettingsKey(workspaceId, perspective))) ?? fallback;
+    const key = workbenchSettingsKey(workspaceId, perspective);
+    // A perspective can reactivate while an earlier preference write is still
+    // queued behind another write for this key. Read only after that tail so
+    // the restored live state represents the newest persisted preference.
+    await writeTails.get(key);
+    return (await loadSetting<T>(key)) ?? fallback;
   },
   { op: 'readWorkbenchSettings' }
 );

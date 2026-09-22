@@ -14,6 +14,7 @@ import {
 } from '../../store/function-session-store.js';
 import { withInstrumentation } from '../../services/instrumentation/core.js';
 import { resolveFunctionOutputTarget } from '../../services/function-output-target.js';
+import { isInstanceBindableToField } from '../../services/function-input-binding.js';
 import { requestPrototype } from '../../services/prototype-navigation.js';
 import { useWorkspaceOptional } from '../providers/workspace-context.js';
 import { qualifiedNameFromNodeId } from '@rune-langium/visual-editor';
@@ -78,7 +79,7 @@ function InstanceFunctionSession({ instanceId }: { instanceId: string }): ReactE
           {instance ? (
             <div className="flex flex-wrap gap-1.5">
               {state.schema.fields
-                .filter((field) => field.kind === 'object' || field.kind === 'array')
+                .filter((field) => isInstanceBindableToField(instance, field, workspace?.models ?? []))
                 .map((field) => (
                   <Button
                     key={field.path}

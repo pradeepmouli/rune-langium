@@ -107,11 +107,11 @@ export const InstanceGridPanel = withInstrumentation(
                   tabIndex={0}
                   aria-selected={record.id === view.selectedId}
                   className="cursor-pointer border-t border-border/60 hover:bg-accent aria-[selected=true]:bg-accent"
-                  onClick={() => patch({ selectedId: record.id, compactPane: 'inspector' })}
+                  onClick={() => patch({ selectedId: record.id })}
                   onKeyDown={(event) => {
                     if (event.key === 'Enter' || event.key === ' ') {
                       event.preventDefault();
-                      patch({ selectedId: record.id, compactPane: 'inspector' });
+                      patch({ selectedId: record.id });
                     }
                   }}
                 >
@@ -129,8 +129,7 @@ export const InstanceGridPanel = withInstrumentation(
                           event.stopPropagation();
                           patch({
                             selectedId: duplicateInstance(record.id),
-                            inspectorTab: 'form',
-                            compactPane: 'inspector'
+                            inspectorTab: 'form'
                           });
                         }}
                       >

@@ -6,6 +6,8 @@
 import type { ReactElement } from 'react';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type { ExportSelection } from '@rune-langium/codegen/export';
+import type { WorkbenchDefinition } from '../../workbench-types.js';
+import { WorkbenchHost } from '../../WorkbenchHost.js';
 import type { WorkspaceFile } from '../../../services/workspace.js';
 import { downloadExportArtifact } from '../../../services/export-artifact.js';
 import { withInstrumentation } from '../../../services/instrumentation/core.js';
@@ -27,15 +29,18 @@ export const ExportPerspective = withInstrumentation(
     const config = useExportWorkbenchStore((state) => state.config);
     const run = useExportWorkbenchStore((state) => state.run);
     const activeFile = useExportWorkbenchStore((state) => state.activeFile);
+    const nativeLayout = useExportWorkbenchStore((state) => state.nativeLayout);
     const activate = useExportWorkbenchStore((state) => state.activate);
     const configure = useExportWorkbenchStore((state) => state.configure);
     const generate = useExportWorkbenchStore((state) => state.generate);
     const cancel = useExportWorkbenchStore((state) => state.cancel);
     const invalidate = useExportWorkbenchStore((state) => state.invalidate);
     const setActiveFile = useExportWorkbenchStore((state) => state.setActiveFile);
+    const setNativeLayout = useExportWorkbenchStore((state) => state.setNativeLayout);
     const [sourceRevision, setSourceRevision] = useState(0);
-    const [compactPane, setCompactPane] = useState<'selection' | 'settings'>('selection');
+    const [activationReady, setActivationReady] = useState(false);
     const sourceRevisionRef = useRef(sourceRevision);
+    const activationRef = useRef<{ workspaceId: string; promise: Promise<void> } | undefined>(undefined);
     const requiredBy = useMemo(
       () =>
         new Map(
@@ -46,12 +51,20 @@ export const ExportPerspective = withInstrumentation(
     const sourceFingerprint = useMemo(() => exportSourceFingerprint(workspaceId, files ?? []), [files, workspaceId]);
 
     useEffect(() => {
-      if (!workspaceId) return;
+      if (!workspaceId) {
+        setActivationReady(false);
+        return;
+      }
+      if (activationRef.current?.workspaceId !== workspaceId) {
+        setActivationReady(false);
+        activationRef.current = { workspaceId, promise: activate(workspaceId) };
+      }
       let cancelled = false;
-      void activate(workspaceId).then(() => {
+      void activationRef.current.promise.then(() => {
         if (cancelled) return;
         const intent = useExportNavigationStore.getState().consume(workspaceId);
         if (intent) configure({ ...useExportWorkbenchStore.getState().config, selection: intent.selection });
+        setActivationReady(true);
       });
       return () => {
         cancelled = true;
@@ -76,66 +89,95 @@ export const ExportPerspective = withInstrumentation(
         files: files ?? []
       });
     }, [config, files, generate, sourceRevision, workspaceId]);
+    const definition = useMemo<WorkbenchDefinition>(
+      () => ({
+        id: 'export',
+        panels: {
+          'export.selection': () => (
+            <div data-testid="export-selection" className="h-full min-h-0">
+              <ExportSelectionPanel
+                selection={config.selection}
+                requiredBy={requiredBy}
+                included={run.status === 'ready' ? run.artifact.manifest.resolvedSelection?.included : undefined}
+                includedCount={
+                  run.status === 'ready' ? run.artifact.manifest.resolvedSelection?.included.length : undefined
+                }
+                onChange={handleSelectionChange}
+              />
+            </div>
+          ),
+          'export.settings': () => (
+            <div data-testid="export-settings" className="h-full min-h-0">
+              <ExportSettingsPanel
+                config={config}
+                onChange={configure}
+                onGenerate={handleGenerate}
+                onCancel={cancel}
+                status={run.status}
+              />
+            </div>
+          ),
+          'export.preview': () => (
+            <div data-testid="export-preview" className="h-full min-h-0">
+              <ExportPreviewPanel
+                run={run}
+                activeFile={activeFile}
+                onActiveFileChange={setActiveFile}
+                onDownload={() => {
+                  if (run.status === 'ready') downloadExportArtifact(run.artifact);
+                }}
+              />
+            </div>
+          )
+        },
+        titles: {
+          'export.selection': 'Selection',
+          'export.settings': 'Settings',
+          'export.preview': 'Generated output'
+        },
+        buildDefault(api, width) {
+          const selection = api.addPanel({
+            id: 'export.selection',
+            component: 'export.selection',
+            title: 'Selection'
+          });
+          const settings = api.addPanel({
+            id: 'export.settings',
+            component: 'export.settings',
+            title: 'Settings',
+            position:
+              width < 768
+                ? { referenceGroup: selection.group, direction: 'within' }
+                : { referencePanel: selection.id, direction: 'right' }
+          });
+          const preview = api.addPanel({
+            id: 'export.preview',
+            component: 'export.preview',
+            title: 'Generated output',
+            position: { referencePanel: selection.id, direction: 'below' }
+          });
+          if (width >= 768) settings.group.api.setConstraints({ minimumWidth: 320 });
+          preview.group.api.setConstraints({ minimumHeight: 220 });
+        }
+      }),
+      [activeFile, cancel, config, configure, handleGenerate, handleSelectionChange, requiredBy, run, setActiveFile]
+    );
 
     return (
       <section data-testid="export-perspective" className="flex h-full min-h-0 flex-col overflow-hidden">
-        <nav aria-label="Export panes" className="flex shrink-0 border-b border-border lg:hidden">
-          <button
-            type="button"
-            aria-pressed={compactPane === 'selection'}
-            className="flex-1 px-3 py-2 text-sm aria-pressed:bg-accent"
-            onClick={() => setCompactPane('selection')}
-          >
-            Selection
-          </button>
-          <button
-            type="button"
-            aria-pressed={compactPane === 'settings'}
-            className="flex-1 px-3 py-2 text-sm aria-pressed:bg-accent"
-            onClick={() => setCompactPane('settings')}
-          >
-            Settings
-          </button>
-        </nav>
-        <div className="grid shrink-0 border-b border-border lg:grid-cols-[minmax(0,1fr)_minmax(22rem,0.8fr)]">
-          <div
-            data-testid="export-selection"
-            className={`min-w-0 lg:block ${compactPane === 'selection' ? 'block' : 'hidden'}`}
-          >
-            <ExportSelectionPanel
-              selection={config.selection}
-              requiredBy={requiredBy}
-              included={run.status === 'ready' ? run.artifact.manifest.resolvedSelection?.included : undefined}
-              includedCount={
-                run.status === 'ready' ? run.artifact.manifest.resolvedSelection?.included.length : undefined
-              }
-              onChange={handleSelectionChange}
+        <div className="min-h-0 flex-1">
+          {activationReady ? (
+            <WorkbenchHost
+              definition={definition}
+              initialNativeLayout={nativeLayout}
+              onNativeLayoutChange={setNativeLayout}
+              className="h-full min-w-0 w-full"
             />
-          </div>
-          <div
-            data-testid="export-settings"
-            className={`min-w-0 border-t border-border lg:block lg:border-l lg:border-t-0 ${
-              compactPane === 'settings' ? 'block' : 'hidden'
-            }`}
-          >
-            <ExportSettingsPanel
-              config={config}
-              onChange={configure}
-              onGenerate={handleGenerate}
-              onCancel={cancel}
-              status={run.status}
-            />
-          </div>
-        </div>
-        <div data-testid="export-preview" className="min-h-0 flex-1">
-          <ExportPreviewPanel
-            run={run}
-            activeFile={activeFile}
-            onActiveFileChange={setActiveFile}
-            onDownload={() => {
-              if (run.status === 'ready') downloadExportArtifact(run.artifact);
-            }}
-          />
+          ) : (
+            <p role="status" className="p-3 text-sm text-muted-foreground">
+              Restoring Export workspace…
+            </p>
+          )}
         </div>
       </section>
     );

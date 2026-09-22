@@ -65,6 +65,27 @@ describe('workbench settings', () => {
     expect(await readWorkbenchSettings('workspace-a', 'prototype', {})).toEqual({ selectedId: 'second' });
   });
 
+  it('waits for queued writes before restoring a setting', async () => {
+    let finish!: () => void;
+    persistence.saveSetting.mockImplementation(
+      (key: string, value: unknown) =>
+        new Promise<void>((resolve) => {
+          finish = () => {
+            persistence.values.set(key, value);
+            resolve();
+          };
+        })
+    );
+
+    void writeWorkbenchSettings('workspace-a', 'prototype', { selectedId: 'latest' });
+    const restored = readWorkbenchSettings('workspace-a', 'prototype', {});
+
+    await Promise.resolve();
+    expect(persistence.loadSetting).not.toHaveBeenCalled();
+    finish();
+    await expect(restored).resolves.toEqual({ selectedId: 'latest' });
+  });
+
   it('allows a later write to retry after the previous write fails', async () => {
     persistence.saveSetting.mockRejectedValueOnce(new Error('disk full'));
 

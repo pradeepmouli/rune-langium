@@ -197,6 +197,7 @@ func Derived extends Base:
         path: 'party',
         label: 'Party',
         kind: 'object',
+        referencedTypeFqn: 'test.preview.Party',
         required: true,
         children: [{ path: 'party.name', label: 'Name', kind: 'string', required: true }]
       }
@@ -675,6 +676,34 @@ func Derived extends Base:
     expect(funcSchema!.fields).toHaveLength(2);
     expect(funcSchema!.fields[0]!.label).toBe('A');
     expect(funcSchema!.fields[1]!.label).toBe('B');
+  });
+
+  skipIfNodeLt22('retains the referenced type identity for function object inputs', async () => {
+    const doc = await parseModel(`
+      namespace "test.funcidentity"
+      version "1"
+
+      type Party:
+        name string (1..1)
+
+      func Build:
+        inputs:
+          party Party (1..1)
+          parties Party (0..*)
+        output:
+          result Party (1..1)
+    `);
+
+    const schema = generatePreviewSchemas([doc]).find((candidate) => candidate.targetId === 'test.funcidentity.Build');
+
+    expect(schema?.fields).toMatchObject([
+      { path: 'party', kind: 'object', referencedTypeFqn: 'test.funcidentity.Party' },
+      {
+        path: 'parties',
+        kind: 'array',
+        children: [{ path: 'parties[]', kind: 'object', referencedTypeFqn: 'test.funcidentity.Party' }]
+      }
+    ]);
   });
 
   skipIfNodeLt22('generates a choice schema with one field per option', async () => {
@@ -1858,6 +1887,7 @@ func Derived extends Base:
           path: 'cycleB',
           label: 'CycleB',
           kind: 'object',
+          referencedTypeFqn: 'test.preview.CycleB',
           required: false,
           children: [
             {

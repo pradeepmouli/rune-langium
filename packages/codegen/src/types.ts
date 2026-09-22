@@ -283,6 +283,8 @@ export interface PreviewEnumField extends PreviewFieldBase {
 
 export interface PreviewObjectField extends PreviewFieldBase {
   kind: 'object';
+  /** Fully-qualified Rune type resolved for this object input. */
+  referencedTypeFqn?: string;
   children: PreviewField[];
   /**
    * `children[].path` values that are Choice-ancestor-derived arms requiring

@@ -11,9 +11,9 @@ export interface PrototypeViewState {
   selectedId: string | null;
   query: string;
   typeFqn: string | null;
+  nativeLayout?: unknown;
   inspectorTab: 'form' | 'functions';
   graphVisible: boolean;
-  compactPane: 'inspector' | 'grid' | 'graph';
 }
 
 export const DEFAULT_PROTOTYPE_VIEW: PrototypeViewState = {
@@ -21,8 +21,7 @@ export const DEFAULT_PROTOTYPE_VIEW: PrototypeViewState = {
   query: '',
   typeFqn: null,
   inspectorTab: 'form',
-  graphVisible: false,
-  compactPane: 'inspector'
+  graphVisible: false
 };
 
 export const filterInstances = withInstrumentation(
