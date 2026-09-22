@@ -6,6 +6,7 @@ import type React from 'react';
 import type { DockviewApi, DockviewReadyEvent, IDockviewPanelProps } from 'dockview-react';
 import { DockLayout } from '@rune-langium/design-system/ui/dock-layout';
 import { restoreNativeLayout } from './dockview-bridge.js';
+import { StudioDockTab } from './StudioDockTab.js';
 import type { WorkbenchDefinition, WorkbenchHostProps } from './workbench-types.js';
 import { withInstrumentation } from '../services/instrumentation/core.js';
 
@@ -121,7 +122,7 @@ export const WorkbenchHost = withInstrumentation(
       <WorkbenchDefinitionContext.Provider value={definition}>
         <DockLayout
           components={components}
-          defaultTabComponent={defaultTabComponent}
+          defaultTabComponent={defaultTabComponent ?? StudioDockTab}
           rightHeaderActionsComponent={rightHeaderActionsComponent}
           onReady={handleReady}
           className={className}

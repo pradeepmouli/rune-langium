@@ -26,7 +26,7 @@
 import { useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react';
 import type React from 'react';
 import type { ComponentType } from 'react';
-import type { DockviewApi, IDockviewHeaderActionsProps, IDockviewPanelHeaderProps } from 'dockview-react';
+import type { DockviewApi, IDockviewHeaderActionsProps } from 'dockview-react';
 import { ArrowLeft, ArrowRight, ChevronDown, ChevronUp } from 'lucide-react';
 import { useLatestRef } from '@rune-langium/visual-editor';
 import { FileTreePanel } from './panels/FileTreePanel.js';
@@ -49,7 +49,6 @@ import { installShellShortcuts, type ShellAction } from './keyboard.js';
 import type { PanelLayoutRecord } from '../workspace/persistence.js';
 import { Button } from '@rune-langium/design-system/ui/button';
 import { Alert, AlertDescription } from '@rune-langium/design-system/ui/alert';
-import { NumberChiclet } from '@rune-langium/design-system/ui/number-chiclet';
 import { IconButtonGroup } from '@rune-langium/design-system/ui/icon-button-group';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@rune-langium/design-system/ui/tooltip';
 import { UtilityTrayContext, type UtilityGroupApi } from './utility-tray-context.js';
@@ -59,6 +58,7 @@ import { CenterPanesContext, type CenterPane } from './center-panes-context.js';
 import { useStudioToast } from '../components/StudioToastProvider.js';
 import { useOutputStore, fmtLine } from '../store/output-store.js';
 import { withInstrumentation } from '../services/instrumentation/core.js';
+import { StudioDockTab, type StudioDockTabParams } from './StudioDockTab.js';
 
 const UTILITY_PANEL_IDS = new Set(['workspace.problems', 'workspace.activity', 'workspace.output']);
 
@@ -119,9 +119,7 @@ const _CENTER_PANE_OPTIONS: Array<{ id: CenterPane; label: string; panel: string
   { id: 'inspector', label: 'Inspector', panel: 'workspace.inspector' }
 ];
 
-interface PanelTabMeta {
-  count?: number;
-}
+type PanelTabMeta = StudioDockTabParams;
 
 type PanelComponentName = (typeof PANEL_COMPONENT_NAMES)[number];
 type PanelOverrides = Partial<Record<PanelComponentName, ComponentType>>;
@@ -187,33 +185,6 @@ function applyPanelTabMeta(
     }
     api.getPanel(panelId)?.api.updateParameters(meta);
   }
-}
-
-function StudioDockTab({ api, params }: IDockviewPanelHeaderProps<PanelTabMeta>): React.ReactElement {
-  const [count, setCount] = useState<number | undefined>(params?.count ?? api.getParameters<PanelTabMeta>()?.count);
-
-  useEffect(() => {
-    setCount(params?.count);
-  }, [params?.count]);
-
-  useEffect(() => {
-    setCount(api.getParameters<PanelTabMeta>()?.count);
-    const disposable = api.onDidParametersChange((next) => {
-      setCount((next as PanelTabMeta | undefined)?.count);
-    });
-    return () => disposable.dispose();
-  }, [api]);
-
-  return (
-    <div className="studio-dock-tab" data-count={count === undefined ? undefined : String(count)}>
-      <span className="studio-dock-tab__label">{api.title ?? ''}</span>
-      {count !== undefined ? (
-        <NumberChiclet className="studio-dock-tab__count" title={`${count} item${count === 1 ? '' : 's'}`}>
-          {count}
-        </NumberChiclet>
-      ) : null}
-    </div>
-  );
 }
 
 export const DockShell = withInstrumentation(
