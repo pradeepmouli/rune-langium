@@ -41,8 +41,10 @@ import {
   parseManifest
 } from '@rune-langium/curated-schema';
 import { withInstrumentation, Capture } from './instrumentation/core.js';
+import { OperationTimeoutError, withAbortTimeout } from './with-abort-timeout.js';
 
 const CURATED_MIRROR_BASE = 'https://www.daikonic.dev/curated';
+export const CURATED_FETCH_TIMEOUT_MS = 12_000;
 
 /**
  * Service-binding fetcher signature — `env.CURATED_MIRROR.fetch(...)` is
@@ -259,15 +261,22 @@ export const fetchCuratedManifest = withInstrumentation(
     const url = `${CURATED_MIRROR_BASE}/${id}/${pinned ? `artifacts/${version}/` : ''}manifest.json`;
 
     let res: Response;
+    let data: unknown;
     try {
-      res = await fetchFn(url, undefined);
+      ({ res, data } = await withAbortTimeout(async (signal) => {
+        const response = await fetchFn(url, { signal });
+        return { res: response, data: response.ok ? await response.json() : undefined };
+      }, CURATED_FETCH_TIMEOUT_MS));
     } catch (err) {
-      console.error('curated-fetch manifest_fetch_failed', {
-        bundleId: id,
-        version,
-        url,
-        err: err instanceof Error ? `${err.name}: ${err.message}` : String(err)
-      });
+      console.error(
+        err instanceof SyntaxError ? 'curated-fetch manifest_json_parse_failed' : 'curated-fetch manifest_fetch_failed',
+        {
+          bundleId: id,
+          version,
+          url,
+          err: err instanceof Error ? `${err.name}: ${err.message}` : String(err)
+        }
+      );
       throw new CuratedBundleUnavailableError(id, version, undefined, err);
     }
     if (!res.ok) {
@@ -281,17 +290,6 @@ export const fetchCuratedManifest = withInstrumentation(
       throw new CuratedBundleUnavailableError(id, version, res.status);
     }
 
-    let data: unknown;
-    try {
-      data = await res.json();
-    } catch (err) {
-      console.error('curated-fetch manifest_json_parse_failed', {
-        bundleId: id,
-        version,
-        err: err instanceof Error ? `${err.name}: ${err.message}` : String(err)
-      });
-      throw new CuratedBundleUnavailableError(id, version, undefined, err);
-    }
     const result = parseManifest(data);
     if (!result.ok) {
       console.error('curated-fetch manifest_schema_mismatch', {
@@ -391,36 +389,39 @@ async function fetchNamespaceArtifact(
     url = `${CURATED_MIRROR_BASE}/${id}/${artifactKey}`;
   }
 
-  let res: Response;
-  try {
-    // Accept-Encoding: identity disables HTTP-level transport compression on
-    // the subrequest. The artifact body is a gzip FILE (Content-Type:
-    // application/gzip) that we inflate ourselves; if CF / the upstream
-    // applied Content-Encoding: gzip on top of it, fetch() would
-    // auto-decompress and our subsequent inflate() would fail on what
-    // looks like JSON bytes. Pinning identity keeps the wire bytes raw.
-    res = await fetchFn(url, { headers: { 'Accept-Encoding': 'identity' } });
-  } catch (err) {
-    console.error('curated-fetch fetch_failed', {
-      bundleId: id,
-      version,
-      url,
-      err: err instanceof Error ? `${err.name}: ${err.message}` : String(err)
-    });
-    throw new CuratedBundleUnavailableError(id, version, undefined, err);
+  let fetched: { res: Response; gzBuffer: Uint8Array } | undefined;
+  for (let attempt = 0; attempt < 2; attempt++) {
+    try {
+      fetched = await withAbortTimeout(async (signal) => {
+        // Artifact bodies are gzip files; avoid a second transport encoding.
+        const res = await fetchFn(url, { headers: { 'Accept-Encoding': 'identity' }, signal });
+        if (!res.ok) {
+          console.error('curated-fetch non_ok_status', {
+            bundleId: id,
+            version,
+            url,
+            status: res.status,
+            contentType: res.headers.get('content-type')
+          });
+          throw new CuratedBundleUnavailableError(id, version, res.status);
+        }
+        return { res, gzBuffer: new Uint8Array(await res.arrayBuffer()) };
+      }, CURATED_FETCH_TIMEOUT_MS);
+      break;
+    } catch (err) {
+      if (err instanceof OperationTimeoutError && attempt === 0) continue;
+      if (err instanceof CuratedBundleUnavailableError) throw err;
+      console.error('curated-fetch fetch_failed', {
+        bundleId: id,
+        version,
+        url,
+        err: err instanceof Error ? `${err.name}: ${err.message}` : String(err)
+      });
+      throw new CuratedBundleUnavailableError(id, version, undefined, err);
+    }
   }
-  if (!res.ok) {
-    console.error('curated-fetch non_ok_status', {
-      bundleId: id,
-      version,
-      url,
-      status: res.status,
-      contentType: res.headers.get('content-type')
-    });
-    throw new CuratedBundleUnavailableError(id, version, res.status);
-  }
-
-  const gzBuffer = new Uint8Array(await res.arrayBuffer());
+  if (!fetched) throw new CuratedBundleUnavailableError(id, version);
+  const { res, gzBuffer } = fetched;
   let jsonText: string;
   try {
     jsonText = new TextDecoder('utf-8').decode(inflate(gzBuffer));

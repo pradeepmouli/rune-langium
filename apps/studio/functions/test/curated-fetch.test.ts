@@ -6,6 +6,7 @@ import { gzip } from 'pako';
 import {
   fetchCuratedManifest,
   fetchCuratedNamespace,
+  CURATED_FETCH_TIMEOUT_MS,
   CuratedBundleUnavailableError,
   type CuratedFetcher
 } from '../../src/services/curated-fetch.js';
@@ -45,7 +46,10 @@ describe('fetchCuratedManifest', () => {
       .mockResolvedValueOnce(new Response(JSON.stringify({ ...VALID_MANIFEST, cohort })))
       .mockResolvedValueOnce(new Response(JSON.stringify(VALID_MANIFEST)));
     expect((await fetchCuratedManifest('cdm', cohort, stub)).cohort).toBe(cohort);
-    expect(stub).toHaveBeenCalledWith(`${MIRROR}/cdm/artifacts/${cohort}/manifest.json`, undefined);
+    expect(stub).toHaveBeenCalledWith(
+      `${MIRROR}/cdm/artifacts/${cohort}/manifest.json`,
+      expect.objectContaining({ signal: expect.any(AbortSignal) })
+    );
     await expect(fetchCuratedManifest('cdm', cohort, stub)).rejects.toThrow(CuratedBundleUnavailableError);
   });
 
@@ -57,10 +61,29 @@ describe('fetchCuratedManifest', () => {
     const manifest = await fetchCuratedManifest('cdm', '2026-05-22', stub);
 
     expect(stub).toHaveBeenCalledOnce();
-    expect(stub).toHaveBeenCalledWith(`${MIRROR}/cdm/manifest.json`, undefined);
+    expect(stub).toHaveBeenCalledWith(
+      `${MIRROR}/cdm/manifest.json`,
+      expect.objectContaining({ signal: expect.any(AbortSignal) })
+    );
     expect(manifest.schemaVersion).toBe(2);
     expect(manifest.modelId).toBe('cdm');
     expect(manifest.namespaces?.['cdm.base']?.artifact).toBe('artifacts/2026-05-22/ns/cdm.base.json.gz');
+  });
+
+  it('bounds a stalled manifest body read', async () => {
+    vi.useFakeTimers();
+    const response = new Response(JSON.stringify(VALID_MANIFEST));
+    vi.spyOn(response, 'json').mockImplementation(() => new Promise<unknown>(() => {}));
+    const stub: CuratedFetcher = vi.fn().mockResolvedValue(response);
+
+    try {
+      const pending = fetchCuratedManifest('cdm', '2026-05-22', stub);
+      const rejected = expect(pending).rejects.toThrow(CuratedBundleUnavailableError);
+      await vi.advanceTimersByTimeAsync(CURATED_FETCH_TIMEOUT_MS);
+      await rejected;
+    } finally {
+      vi.useRealTimers();
+    }
   });
 
   it('non-200 status: rejects with CuratedBundleUnavailableError (status 404)', async () => {
@@ -111,6 +134,32 @@ function makeNsArtifact(
 }
 
 describe('fetchCuratedNamespace', () => {
+  it('bounds stalled artifact fetches and evicts a timed-out cache entry', async () => {
+    vi.useFakeTimers();
+    const gzBytes = makeNsArtifact([{ path: 'recovered.rosetta', modelJson: '{"$type":"RosettaModel"}' }]);
+    const stalledResponse = new Response(gzBytes, { status: 200 });
+    vi.spyOn(stalledResponse, 'arrayBuffer').mockImplementation(() => new Promise<ArrayBuffer>(() => {}));
+    const stub: CuratedFetcher = vi
+      .fn()
+      .mockResolvedValueOnce(stalledResponse)
+      .mockResolvedValueOnce(stalledResponse)
+      .mockResolvedValue(new Response(gzBytes, { status: 200 }));
+    const artifactKey = 'artifacts/2026-05-22/ns/cdm.timeout-eviction.json.gz';
+
+    try {
+      const stalled = fetchCuratedNamespace('cdm', '2026-05-22', artifactKey, stub);
+      const rejected = expect(stalled).rejects.toThrow(CuratedBundleUnavailableError);
+      await vi.advanceTimersByTimeAsync(CURATED_FETCH_TIMEOUT_MS * 2);
+      await rejected;
+
+      const recovered = await fetchCuratedNamespace('cdm', '2026-05-22', artifactKey, stub);
+      expect(recovered[0]?.uri).toBe('cdm/recovered.rosetta');
+      expect(stub).toHaveBeenCalledTimes(3);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
   it('happy path: inflates and maps documents to CuratedDocument[]', async () => {
     const modelJson = '{"$type":"RosettaModel","name":"cdm.base"}';
     const gzBytes = makeNsArtifact([{ path: 'a/b.rosetta', modelJson, exports: [] }]);
