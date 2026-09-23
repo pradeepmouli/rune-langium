@@ -419,6 +419,11 @@ function resolveContext(binding: ChildBinding | undefined): unknown {
 
 function makeWithInstrumentation(binding?: ChildBinding) {
   function bound<F extends (...args: any[]) => any>(fn: F, opts: InstrumentationOptions = {}): F {
+    // In production Vite builds with diagnostics omitted, an untagged call
+    // has no observable instrumentation behavior. Keep the original function
+    // so there is no wrapper allocation or invocation cost at all.
+    if (BUILD_DISABLE_INSTRUMENTATION && !opts.namespace) return fn;
+
     const op = opts.op ?? fn.name ?? 'anonymous';
     const capture = opts.capture ?? 0;
     const context = resolveContext(binding);

@@ -105,8 +105,10 @@ runtime settings, separate from Studio's `VITE_ENABLE_TELEMETRY` build flag and
 per-user telemetry opt-in. The same level, operation-list, and timing-only
 settings are shared by the Studio browser and workers with a `VITE_` prefix;
 production browser builds must also set `VITE_ENABLE_INSTRUMENTATION=true` at
-build time, and browser records still require the Studio user opt-in. With the
-runtime switch off, an untagged wrapped call bypasses timing and capture.
+build time, and browser records still require the Studio user opt-in. When
+diagnostics are omitted from a production Vite build, untagged calls retain
+their original function with no instrumentation wrapper. At runtime, a disabled
+or excluded call bypasses timing and capture.
 Remove temporary diagnostic settings after the run.
 J04b records `curatedNamespaceHydration` from Counterparty selection through
 populated Inspector attributes, even when an assertion fails; compare that
