@@ -389,6 +389,12 @@
 /* Sash (resize handle) — outside @layer so it beats dockview's 4px default.
  * The visual gap is 4px (2px per leaf panel side); the sash covers the full
  * gap plus a small overshoot so the cursor changes anywhere in the gap. */
+.studio-app .rune-dock-theme .dv-split-view-container .dv-sash-container .dv-sash {
+  /* Dockview defaults to 99, above dialogs (50) and their floating menus (60).
+   * Keep resize handles above panels but below the shared overlay stack. */
+  z-index: 40;
+}
+
 .studio-app .rune-dock-theme .dv-split-view-container.dv-horizontal > .dv-sash-container > .dv-sash {
   width: 16px;
   margin-left: -8px;
