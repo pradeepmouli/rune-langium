@@ -1,0 +1,251 @@
+// SPDX-License-Identifier: FSL-1.1-ALv2
+// Copyright (c) 2026 Pradeep Mouli
+
+import { useEffect, useMemo, useState, type ReactElement } from 'react';
+import { Input } from '@rune-langium/design-system/ui/input';
+import { Button } from '@rune-langium/design-system/ui/button';
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle
+} from '@rune-langium/design-system/ui/dialog';
+import { WorkspaceTypePicker } from '../../components/WorkspaceTypePicker.js';
+import { useInstanceStore } from '../../store/instance-store.js';
+import { filterInstances, usePrototypeViewStore } from '../../store/prototype-view-store.js';
+import { withInstrumentation } from '../../services/instrumentation/core.js';
+
+function fieldValue(data: unknown, path: string): unknown {
+  return path.split('.').reduce<unknown>((value, segment) => {
+    if (!value || typeof value !== 'object' || Array.isArray(value)) return undefined;
+    return (value as Record<string, unknown>)[segment];
+  }, data);
+}
+
+function displayFieldValue(value: unknown): string {
+  if (value === undefined || value === null) return '—';
+  return typeof value === 'object' ? JSON.stringify(value) : String(value);
+}
+
+export const InstanceGridPanel = withInstrumentation(
+  function InstanceGridPanel(): ReactElement {
+    const instances = useInstanceStore((state) => state.instances);
+    const validationStatus = useInstanceStore((state) => state.validationStatus);
+    const saveStates = useInstanceStore((state) => state.saveStates);
+    const dispatchGenerateSchema = useInstanceStore((state) => state.dispatchGenerateSchema);
+    const duplicateInstance = useInstanceStore((state) => state.duplicateInstance);
+    const renameInstance = useInstanceStore((state) => state.renameInstance);
+    const removeInstance = useInstanceStore((state) => state.removeInstance);
+    const view = usePrototypeViewStore((state) => state.state);
+    const patch = usePrototypeViewStore((state) => state.patch);
+    const schema = useInstanceStore((state) => (view.typeFqn ? state.schemas.get(view.typeFqn) : undefined));
+    const rows = filterInstances(Object.values(instances), view.query, view.typeFqn);
+    const selectedOutsideFilter = view.selectedId && !rows.some((record) => record.id === view.selectedId);
+    const [renamingId, setRenamingId] = useState<string | null>(null);
+    const [renamedName, setRenamedName] = useState('');
+    const [deletingId, setDeletingId] = useState<string | null>(null);
+    const [actionError, setActionError] = useState<string | null>(null);
+    const renaming = renamingId ? instances[renamingId] : undefined;
+    const deleting = deletingId ? instances[deletingId] : undefined;
+    const fields = useMemo(() => (schema?.targetId === view.typeFqn ? schema.fields : []), [schema, view.typeFqn]);
+
+    useEffect(() => {
+      if (view.typeFqn) dispatchGenerateSchema(view.typeFqn);
+    }, [dispatchGenerateSchema, view.typeFqn]);
+
+    const closeRename = () => {
+      setRenamingId(null);
+      setRenamedName('');
+    };
+
+    const confirmRename = () => {
+      if (!renaming || !renamedName.trim()) return;
+      try {
+        renameInstance(renaming.id, renamedName);
+        closeRename();
+      } catch (error) {
+        setActionError(error instanceof Error ? error.message : String(error));
+      }
+    };
+
+    const confirmDelete = async () => {
+      if (!deleting) return;
+      const id = deleting.id;
+      setActionError(null);
+      try {
+        await removeInstance(id);
+        if (usePrototypeViewStore.getState().state.selectedId === id) patch({ selectedId: null });
+        setDeletingId(null);
+      } catch (error) {
+        setActionError(error instanceof Error ? error.message : String(error));
+      }
+    };
+
+    return (
+      <section data-testid="prototype-grid" className="flex h-full min-h-0 flex-col" aria-label="Instances">
+        <div className="flex flex-wrap gap-2 border-b border-border p-2">
+          <Input
+            aria-label="Search instances"
+            value={view.query}
+            onChange={(event) => patch({ query: event.target.value })}
+            placeholder="Search name or type"
+            className="h-8 min-w-48 flex-1"
+          />
+          <div className="w-64 max-w-full">
+            <WorkspaceTypePicker
+              label="Filter instance type"
+              value={view.typeFqn}
+              onSelect={(typeFqn) => patch({ typeFqn })}
+              filterKinds={['data', 'choice']}
+              allowClear
+            />
+          </div>
+        </div>
+        {selectedOutsideFilter && (
+          <p className="border-b border-border px-3 py-1 text-xs text-muted-foreground">
+            Selected instance is outside this filter.
+          </p>
+        )}
+        <div className="studio-scroll min-h-0 flex-1 overflow-auto">
+          <table className="w-full text-left text-sm">
+            <thead className="sticky top-0 bg-background text-xs text-muted-foreground">
+              <tr>
+                <th className="p-2">Name</th>
+                <th className="p-2">Type</th>
+                {fields.map((field) => (
+                  <th key={field.path} className="p-2">
+                    {field.label}
+                  </th>
+                ))}
+                <th className="p-2">Validation</th>
+                <th className="p-2">Save</th>
+                <th className="p-2">Actions</th>
+              </tr>
+            </thead>
+            <tbody>
+              {rows.map((record) => (
+                <tr
+                  key={record.id}
+                  role="row"
+                  tabIndex={0}
+                  aria-selected={record.id === view.selectedId}
+                  className="cursor-pointer border-t border-border/60 hover:bg-accent aria-[selected=true]:bg-accent"
+                  onClick={() => patch({ selectedId: record.id })}
+                  onKeyDown={(event) => {
+                    if (event.key === 'Enter' || event.key === ' ') {
+                      event.preventDefault();
+                      patch({ selectedId: record.id });
+                    }
+                  }}
+                >
+                  <td className="p-2 font-medium">{record.name}</td>
+                  <td className="p-2 text-muted-foreground">{record.typeFqn}</td>
+                  {fields.map((field) => (
+                    <td
+                      key={field.path}
+                      className="max-w-48 truncate p-2"
+                      title={displayFieldValue(fieldValue(record.data, field.path))}
+                    >
+                      {displayFieldValue(fieldValue(record.data, field.path))}
+                    </td>
+                  ))}
+                  <td className="p-2 capitalize">{validationStatus[record.id] ?? 'pending'}</td>
+                  <td className="p-2 capitalize">{saveStates[record.id]?.state ?? 'unsaved'}</td>
+                  <td className="p-2">
+                    <div className="flex gap-1">
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="xs"
+                        onClick={(event) => {
+                          event.stopPropagation();
+                          patch({
+                            selectedId: duplicateInstance(record.id),
+                            inspectorTab: 'form'
+                          });
+                        }}
+                      >
+                        Duplicate
+                      </Button>
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="xs"
+                        onClick={(event) => {
+                          event.stopPropagation();
+                          setActionError(null);
+                          setRenamingId(record.id);
+                          setRenamedName(record.name);
+                        }}
+                      >
+                        Rename
+                      </Button>
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="xs"
+                        onClick={(event) => {
+                          event.stopPropagation();
+                          setActionError(null);
+                          setDeletingId(record.id);
+                        }}
+                      >
+                        Delete
+                      </Button>
+                    </div>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+        {actionError ? (
+          <p role="alert" className="border-t border-border p-2 text-sm text-destructive">
+            {actionError}
+          </p>
+        ) : null}
+        <Dialog open={Boolean(renaming)} onOpenChange={(open) => !open && closeRename()}>
+          <DialogContent className="max-w-md">
+            <DialogHeader>
+              <DialogTitle>Rename instance</DialogTitle>
+              <DialogDescription>Choose a name for {renaming?.name}.</DialogDescription>
+            </DialogHeader>
+            <Input
+              aria-label="Instance name"
+              value={renamedName}
+              onChange={(event) => setRenamedName(event.target.value)}
+            />
+            <div className="flex justify-end gap-2">
+              <Button type="button" variant="outline" onClick={closeRename}>
+                Cancel
+              </Button>
+              <Button type="button" disabled={!renamedName.trim()} onClick={confirmRename}>
+                Rename
+              </Button>
+            </div>
+          </DialogContent>
+        </Dialog>
+        <Dialog open={Boolean(deleting)} onOpenChange={(open) => !open && setDeletingId(null)}>
+          <DialogContent className="max-w-md">
+            <DialogHeader>
+              <DialogTitle>Delete instance?</DialogTitle>
+              <DialogDescription>
+                Delete {deleting?.name}? Its saved instance data will be removed from this workspace.
+              </DialogDescription>
+            </DialogHeader>
+            <div className="flex justify-end gap-2">
+              <Button type="button" variant="outline" onClick={() => setDeletingId(null)}>
+                Cancel
+              </Button>
+              <Button type="button" variant="destructive" onClick={() => void confirmDelete()}>
+                Delete instance
+              </Button>
+            </div>
+          </DialogContent>
+        </Dialog>
+      </section>
+    );
+  },
+  { op: 'InstanceGridPanel' }
+);

@@ -6,6 +6,7 @@ import {
   isRosettaExpression,
   isRosettaFunction,
   isRosettaTypeAlias,
+  type Attribute,
   type RosettaExpression,
   type RosettaType,
   type RosettaFunction
@@ -61,10 +62,19 @@ export function getFunctionInputs(func: RosettaFunction) {
 }
 
 /**
- * Get the output attribute from a RosettaFunction.
+ * Get the effective output attribute, including dispatch signatures and inheritance.
  */
-export function getFunctionOutput(func: RosettaFunction) {
-  return func.output;
+export function getFunctionOutput(
+  func: RosettaFunction,
+  seen: Set<RosettaFunction> = new Set()
+): Attribute | undefined {
+  if (seen.has(func)) return undefined;
+  seen.add(func);
+  const signature = getFunctionSignature(func);
+  if (signature !== func) return getFunctionOutput(signature, seen);
+  if (func.output) return func.output;
+  const parent = func.superFunction?.ref;
+  return parent ? getFunctionOutput(parent, seen) : undefined;
 }
 
 /** Resolve a dispatch overload to its namespace's base declaration. */

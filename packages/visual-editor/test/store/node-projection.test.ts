@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: MIT
 // Copyright (c) 2026 Pradeep Mouli
 import { describe, it, expect } from 'vitest';
-import { makeNodeId, nameFromNodeId, splitNodeId } from '../../src/store/node-projection.js';
+import { makeNodeId, nameFromNodeId, qualifiedNameFromNodeId, splitNodeId } from '../../src/store/node-projection.js';
 import { makeEdgeId, parseEdgeId } from '../../src/store/node-projection.js';
 import { astRelevantProjection } from '../../src/store/node-projection.js';
 import { getMemberArray, ensureMemberArray, forEachMember } from '../../src/store/node-projection.js';
@@ -11,14 +11,18 @@ describe('node-projection id builders (V1, dot form)', () => {
   it('makeNodeId joins namespace and name with a dot (via qualifiedExportPath)', () => {
     expect(makeNodeId('cdm.base', 'Foo')).toBe('cdm.base.Foo');
     expect(makeNodeId('', 'Foo')).toBe('Foo'); // empty namespace → no leading dot
+    expect(makeNodeId('cdm.base', 'Foo', 'Data')).toBe('cdm.base.Foo#Data');
   });
   it('nameFromNodeId returns the trailing name via last-dot split', () => {
     expect(nameFromNodeId('cdm.base.Foo')).toBe('Foo');
     expect(nameFromNodeId('Foo')).toBe('Foo'); // no dot → whole string
+    expect(nameFromNodeId('cdm.base.Foo#Data')).toBe('Foo');
   });
   it('splitNodeId returns namespace + name via last-dot split', () => {
     expect(splitNodeId('cdm.base.Foo')).toEqual({ namespace: 'cdm.base', name: 'Foo' });
     expect(splitNodeId('Foo')).toEqual({ namespace: '', name: 'Foo' });
+    expect(splitNodeId('cdm.base.Foo#Data')).toEqual({ namespace: 'cdm.base', name: 'Foo' });
+    expect(qualifiedNameFromNodeId('cdm.base.Foo#Data')).toBe('cdm.base.Foo');
   });
 });
 

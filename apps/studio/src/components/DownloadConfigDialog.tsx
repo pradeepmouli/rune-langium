@@ -22,7 +22,7 @@
  */
 
 import React, { useMemo, useState } from 'react';
-import { TARGET_DESCRIPTORS, type Target } from '@rune-langium/codegen/export';
+import { TARGET_DESCRIPTORS, type ExportSelection, type Target } from '@rune-langium/codegen/export';
 import { useLatestRef } from '@rune-langium/visual-editor';
 import { Button } from '@rune-langium/design-system/ui/button';
 import { Badge } from '@rune-langium/design-system/ui/badge';
@@ -31,40 +31,7 @@ import { RadioGroup, RadioGroupItem } from '@rune-langium/design-system/ui/radio
 import { InteractiveDialog } from '@rune-langium/design-system/ui/interactive-dialog';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@rune-langium/design-system/ui/tooltip';
 import { withInstrumentation, Capture } from '../services/instrumentation/core.js';
-
-/** One layout choice rendered as a radio option. */
-export interface LayoutChoice {
-  value: string;
-  label: string;
-  hint?: string;
-}
-
-/**
- * Per-target content-panel config (§5.1 "per-target content panels").
- * Studio-local UI metadata — the *labels* and *control kinds* are a
- * presentation concern, distinct from the codegen package's option types.
- * Only the implemented targets (zod / typescript / json-schema) carry
- * layouts today; Phase 2 targets extend this map as their emitters land.
- */
-interface TargetPanelConfig {
-  layouts: LayoutChoice[];
-  /** Opinionated download default (§10.1) — overrides the library default. */
-  defaultLayout?: string;
-}
-
-const PER_NS: LayoutChoice = {
-  value: 'per-namespace',
-  label: 'Per-namespace',
-  hint: 'One file per namespace + barrel'
-};
-const BARREL: LayoutChoice = { value: 'barrel', label: 'Barrel', hint: 'Barrel + per-namespace files' };
-const SINGLE: LayoutChoice = { value: 'single-file', label: 'Single file', hint: 'All types in one file' };
-
-const TARGET_PANELS: Partial<Record<Target, TargetPanelConfig>> = {
-  zod: { layouts: [PER_NS, BARREL, SINGLE], defaultLayout: 'barrel' },
-  typescript: { layouts: [PER_NS, BARREL, SINGLE], defaultLayout: 'barrel' },
-  'json-schema': { layouts: [PER_NS, SINGLE], defaultLayout: 'single-file' }
-};
+import { TARGET_PANELS } from './export-target-settings.js';
 
 /** Final config emitted on [Generate]. */
 export interface DownloadConfig {
@@ -72,6 +39,8 @@ export interface DownloadConfig {
   layout?: string;
   /** The full emitted set: user-selected ∪ transitively-pulled dependencies. */
   namespaces: string[];
+  /** Explicit declaration roots for the Export workbench. */
+  selection?: ExportSelection;
   /**
    * Target-specific options collected from the per-target options form
    * (Phase 2, spec §5.1). Keyed by target name, e.g. `{ excel: { sheets: { ... } } }`.
@@ -91,6 +60,8 @@ export interface DownloadConfigDialogProps {
    * treated as having no dependencies (closure = {self}).
    */
   dependencyGraph: Record<string, readonly string[]>;
+  /** When supplied, replaces the legacy namespace allowlist for generation. */
+  selection?: ExportSelection;
   onClose: () => void;
   onGenerate: (config: DownloadConfig) => void;
   /**
@@ -169,6 +140,7 @@ export const DownloadConfigDialog = withInstrumentation(
     target,
     namespaces,
     dependencyGraph,
+    selection: exportSelection,
     onClose,
     onGenerate,
     optionsForm: OptionsForm
@@ -222,7 +194,10 @@ export const DownloadConfigDialog = withInstrumentation(
     }
     if (open !== prevOpen) setPrevOpen(open);
 
-    const selection = useMemo(() => computeNamespaceSelection(selected, dependencyGraph), [selected, dependencyGraph]);
+    const namespaceSelection = useMemo(
+      () => computeNamespaceSelection(selected, dependencyGraph),
+      [selected, dependencyGraph]
+    );
 
     function toggleNamespace(ns: string): void {
       setSelected((prev) => {
@@ -242,7 +217,8 @@ export const DownloadConfigDialog = withInstrumentation(
         // When there are no namespaces to choose from (dep graph not yet
         // populated / fail-soft empty), emit an empty list = "no filter" so
         // the server emits everything. Otherwise send the closed emit set.
-        namespaces: namespaces.length === 0 ? [] : Array.from(selection.emitted).sort(),
+        namespaces: exportSelection ? [] : namespaces.length === 0 ? [] : Array.from(namespaceSelection.emitted).sort(),
+        ...(exportSelection ? { selection: exportSelection } : {}),
         // Only include options when an OptionsForm was provided and it
         // actually collected values (avoids sending `options: {}` for
         // targets with no options form). Keyed by target so it matches the
@@ -256,7 +232,9 @@ export const DownloadConfigDialog = withInstrumentation(
     const hasNamespaces = namespaces.length > 0;
     // Disable Generate only when there ARE namespaces but the user deselected
     // them all. An empty namespace list is a valid "emit everything" state.
-    const generateDisabled = hasNamespaces && selection.emitted.size === 0;
+    const generateDisabled = exportSelection
+      ? exportSelection.namespaces.length === 0 && exportSelection.declarations.length === 0
+      : hasNamespaces && namespaceSelection.emitted.size === 0;
 
     return (
       <InteractiveDialog
@@ -326,7 +304,7 @@ export const DownloadConfigDialog = withInstrumentation(
         {hasNamespaces && (
           <div className="flex flex-col gap-2" data-testid="download-config-dialog__namespaces">
             <span className="text-xs font-semibold uppercase tracking-[0.12em] text-muted-foreground">
-              Namespaces ({selection.emitted.size} selected, {namespaces.length} total)
+              Namespaces ({namespaceSelection.emitted.size} selected, {namespaces.length} total)
             </span>
             {/* Explicit 0: the namespace list's dependency-source tooltips want to
           stay instant (dense, frequently-hovered rows) — preserve that
@@ -336,8 +314,8 @@ export const DownloadConfigDialog = withInstrumentation(
               <div className="flex flex-col gap-1.5">
                 {namespaces.map((ns) => {
                   const isSelected = selected.has(ns);
-                  const isPulled = selection.pulled.has(ns);
-                  const sources = selection.pulledBy.get(ns);
+                  const isPulled = namespaceSelection.pulled.has(ns);
+                  const sources = namespaceSelection.pulledBy.get(ns);
                   const id = `download-ns-${ns}`;
                   const row = (
                     <div

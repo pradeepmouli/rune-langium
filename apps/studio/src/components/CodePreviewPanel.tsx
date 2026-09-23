@@ -20,7 +20,7 @@ import { javascript } from '@codemirror/lang-javascript';
 import { json } from '@codemirror/lang-json';
 import type { Target } from '@rune-langium/codegen/export';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@rune-langium/design-system/ui/select';
-import { useLatestRef } from '@rune-langium/visual-editor';
+import { nameFromNodeId, useLatestRef } from '@rune-langium/visual-editor';
 import { studioEditorExtensions } from '../lang/editor-theme.js';
 import {
   downloadTargetViaRouter,
@@ -31,7 +31,7 @@ import {
 } from '../services/workspace.js';
 import { CodegenTargetsTable } from './CodegenTargetsTable.js';
 import { DownloadConfigDialog, type DownloadConfig } from './DownloadConfigDialog.js';
-import { ExcelOptionsFormAdapter } from '../codegen-forms/ExcelOptionsFormAdapter.js';
+import { TARGET_OPTION_FORMS } from './export-target-settings.js';
 import { useCodegenStore, type CodePreviewFile, type CodePreviewSnapshot } from '../store/codegen-store.js';
 import { useOutputStore, fmtLine } from '../store/output-store.js';
 import { usePreviewStore } from '../store/preview-store.js';
@@ -293,7 +293,7 @@ export const CodePreviewPanel = withInstrumentation(
     useEffect(() => {
       const view = editorViewRef.current;
       if (!view || !selectedTargetId || !activeFile) return;
-      const typeName = selectedTargetId.split('.').pop();
+      const typeName = nameFromNodeId(selectedTargetId);
       if (!typeName) return;
       const lines = activeFile.content.split('\n');
       for (let i = 0; i < lines.length; i++) {
@@ -395,7 +395,7 @@ export const CodePreviewPanel = withInstrumentation(
             dependencyGraph={dependencyGraph}
             onClose={() => setDownloadModalTarget(undefined)}
             onGenerate={handleModalGenerate}
-            optionsForm={downloadModalTarget === 'excel' ? ExcelOptionsFormAdapter : undefined}
+            optionsForm={TARGET_OPTION_FORMS[downloadModalTarget]}
           />
         ) : null}
       </section>

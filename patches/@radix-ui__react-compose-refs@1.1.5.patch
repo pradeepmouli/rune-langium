@@ -1,11 +1,9 @@
-diff --git a/dist/index.js b/dist/index.js
-index 5ba7a95bc7a29605f32aa010a14224ad87bf6589..45d19fe90c64561326d9ada7e5afeed0560e967e 100644
 --- a/dist/index.js
 +++ b/dist/index.js
-@@ -68,7 +68,68 @@ function composeRefs(...refs) {
-     }
+@@ -71,8 +71,61 @@
    };
  }
+ __name(composeRefs, "composeRefs");
 +function clearRef(ref, cleanup) {
 +  if (typeof cleanup == "function") {
 +    cleanup();
@@ -21,9 +19,7 @@ index 5ba7a95bc7a29605f32aa010a14224ad87bf6589..45d19fe90c64561326d9ada7e5afeed0
 +  React.useLayoutEffect(() => {
 +    const previousRefs = refsRef.current;
 +    const refsChanged = previousRefs.length !== refs.length || previousRefs.some((ref, index) => ref !== refs[index]);
-+    if (!refsChanged) {
-+      return;
-+    }
++    if (!refsChanged) return;
 +    const node = nodeRef.current;
 +    const cleanupMap = cleanupMapRef.current;
 +    if (node !== null) {
@@ -43,9 +39,7 @@ index 5ba7a95bc7a29605f32aa010a14224ad87bf6589..45d19fe90c64561326d9ada7e5afeed0
 +    nodeRef.current = node;
 +    if (node === null) {
 +      const cleanupMap = cleanupMapRef.current;
-+      for (const ref of refsRef.current) {
-+        clearRef(ref, cleanupMap.get(ref));
-+      }
++      for (const ref of refsRef.current) clearRef(ref, cleanupMap.get(ref));
 +      cleanupMapRef.current = /* @__PURE__ */ new Map();
 +      return;
 +    }
@@ -54,32 +48,27 @@ index 5ba7a95bc7a29605f32aa010a14224ad87bf6589..45d19fe90c64561326d9ada7e5afeed0
 +    for (const ref of refsRef.current) {
 +      const cleanup = setRef(ref, node);
 +      cleanupMap.set(ref, cleanup);
-+      if (!hasCleanup && typeof cleanup == "function") {
-+        hasCleanup = true;
-+      }
++      if (!hasCleanup && typeof cleanup == "function") hasCleanup = true;
 +    }
 +    cleanupMapRef.current = cleanupMap;
 +    if (hasCleanup) {
 +      return () => {
 +        const currentCleanupMap = cleanupMapRef.current;
-+        for (const ref of refsRef.current) {
-+          clearRef(ref, currentCleanupMap.get(ref));
-+        }
++        for (const ref of refsRef.current) clearRef(ref, currentCleanupMap.get(ref));
 +        cleanupMapRef.current = /* @__PURE__ */ new Map();
 +        nodeRef.current = null;
 +      };
 +    }
 +  }, []);
  }
+ __name(useComposedRefs, "useComposedRefs");
  //# sourceMappingURL=index.js.map
-diff --git a/dist/index.mjs b/dist/index.mjs
-index 7dd9172a7228d70a25f708d0fd577cfc69ea15a8..5c5396e4fccc36eda8a74b2fc98e073d911169c7 100644
 --- a/dist/index.mjs
 +++ b/dist/index.mjs
-@@ -31,8 +31,69 @@ function composeRefs(...refs) {
-     }
+@@ -36,8 +36,61 @@
    };
  }
+ __name(composeRefs, "composeRefs");
 +function clearRef(ref, cleanup) {
 +  if (typeof cleanup == "function") {
 +    cleanup();
@@ -95,9 +84,7 @@ index 7dd9172a7228d70a25f708d0fd577cfc69ea15a8..5c5396e4fccc36eda8a74b2fc98e073d
 +  React.useLayoutEffect(() => {
 +    const previousRefs = refsRef.current;
 +    const refsChanged = previousRefs.length !== refs.length || previousRefs.some((ref, index) => ref !== refs[index]);
-+    if (!refsChanged) {
-+      return;
-+    }
++    if (!refsChanged) return;
 +    const node = nodeRef.current;
 +    const cleanupMap = cleanupMapRef.current;
 +    if (node !== null) {
@@ -117,9 +104,7 @@ index 7dd9172a7228d70a25f708d0fd577cfc69ea15a8..5c5396e4fccc36eda8a74b2fc98e073d
 +    nodeRef.current = node;
 +    if (node === null) {
 +      const cleanupMap = cleanupMapRef.current;
-+      for (const ref of refsRef.current) {
-+        clearRef(ref, cleanupMap.get(ref));
-+      }
++      for (const ref of refsRef.current) clearRef(ref, cleanupMap.get(ref));
 +      cleanupMapRef.current = /* @__PURE__ */ new Map();
 +      return;
 +    }
@@ -128,22 +113,18 @@ index 7dd9172a7228d70a25f708d0fd577cfc69ea15a8..5c5396e4fccc36eda8a74b2fc98e073d
 +    for (const ref of refsRef.current) {
 +      const cleanup = setRef(ref, node);
 +      cleanupMap.set(ref, cleanup);
-+      if (!hasCleanup && typeof cleanup == "function") {
-+        hasCleanup = true;
-+      }
++      if (!hasCleanup && typeof cleanup == "function") hasCleanup = true;
 +    }
 +    cleanupMapRef.current = cleanupMap;
 +    if (hasCleanup) {
 +      return () => {
 +        const currentCleanupMap = cleanupMapRef.current;
-+        for (const ref of refsRef.current) {
-+          clearRef(ref, currentCleanupMap.get(ref));
-+        }
++        for (const ref of refsRef.current) clearRef(ref, currentCleanupMap.get(ref));
 +        cleanupMapRef.current = /* @__PURE__ */ new Map();
 +        nodeRef.current = null;
 +      };
 +    }
 +  }, []);
  }
+ __name(useComposedRefs, "useComposedRefs");
  export {
-   composeRefs,

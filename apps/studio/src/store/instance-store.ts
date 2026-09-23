@@ -1,12 +1,19 @@
 // SPDX-License-Identifier: FSL-1.1-ALv2
 // Copyright (c) 2026 Pradeep Mouli
 import { createInstanceGenerateSchemaMessage, createInstanceValidateMessage } from '../services/codegen-service.js';
-import { deleteInstance, listInstanceFiles, readInstance, writeInstance } from '../opfs/instances-fs.js';
+import { listInstanceFiles, readInstance } from '../opfs/instances-fs.js';
 import type { OpfsFs } from '../opfs/opfs-fs.js';
-import type { InstanceRecord, ValidationDiagnostic } from '@rune-langium/codegen/instances';
+import type { InstanceProvenance, InstanceRecord, ValidationDiagnostic } from '@rune-langium/codegen/instances';
 import type { FormPreviewSchema } from '@rune-langium/codegen/export';
 import type { PreviewStaleReason } from './preview-store.js';
 import { useOutputStore, fmtLine } from './output-store.js';
+import type { InstanceReadiness } from '../services/instance-readiness.js';
+import {
+  flushPersistedInstance,
+  instancePersistenceContext,
+  persistDelete,
+  persistInstance
+} from './instance-persistence.js';
 import { create } from 'zustand';
 
 function ulid(): string {
@@ -19,13 +26,21 @@ function ulid(): string {
 // not store state, since a Worker instance isn't serializable/comparable
 // the way zustand state is expected to be.
 let workerRef: Worker | undefined;
+let readinessRef: InstanceReadiness | undefined;
 let requestCounter = 0;
-const pendingRequests = new Map<string, string>(); // requestId -> instanceId
+const pendingRequests = new Map<string, { instanceId: string; epoch: number }>();
 // Tracks the LATEST outstanding validate requestId per instance so an
 // out-of-order response (an older request's result arriving after a newer
 // one, e.g. from rapid edits) can be dropped instead of overwriting fresher
 // diagnostics with stale ones (finding #9).
 const latestValidateRequestForInstance = new Map<string, string>(); // instanceId -> requestId
+
+function invalidateValidationRequests(instanceId: string): void {
+  latestValidateRequestForInstance.delete(instanceId);
+  for (const [requestId, pending] of pendingRequests) {
+    if (pending.instanceId === instanceId) pendingRequests.delete(requestId);
+  }
+}
 
 // Separate module-level map for instance-editing's schema fetches — must
 // never collide with dispatchValidate's pendingRequests above. These now
@@ -37,7 +52,9 @@ const latestValidateRequestForInstance = new Map<string, string>(); // instanceI
 // which target the Preview perspective re-generates on the next workspace
 // file change.
 let schemaRequestCounter = 0;
-const pendingSchemaRequests = new Map<string, string>(); // requestId -> typeFqn
+const pendingSchemaRequests = new Map<string, { typeFqn: string; epoch: number }>();
+const latestSchemaRequestForType = new Map<string, string>();
+const preparationControllers = new Map<string, AbortController>();
 
 // OPFS persistence context (finding #1) — set once both an `OpfsFs` instance
 // and the active workspace's root path are available. Follows the same
@@ -46,90 +63,62 @@ const pendingSchemaRequests = new Map<string, string>(); // requestId -> typeFqn
 let opfsFs: OpfsFs | undefined;
 let opfsWorkspaceRoot: string | undefined;
 
-// Per-instance persistence queue (round-4 finding #1) — fire-and-forget
-// `writeInstance`/`deleteInstance` calls issued for the SAME instance id
-// (e.g. one per keystroke from rapid edits) are not guaranteed to resolve
-// in the order they were issued; without sequencing, an older write
-// finishing AFTER a newer one (or a delete racing a still-in-flight write)
-// could leave stale — or wrongly-resurrected — data persisted to OPFS even
-// though the in-memory `instances` state already reflects the latest edit.
-// Chaining every operation for a given id onto that id's current queue tail
-// guarantees writes AND deletes for the same instance execute in call
-// order. Pruned back to empty once an operation's chain settles and no
-// newer operation has replaced it in the meantime, so the map doesn't grow
-// unboundedly across a long session of created-then-deleted instances.
-const instanceWriteQueue = new Map<string, Promise<void>>();
-
-function enqueueInstanceOp(id: string, op: () => Promise<void>): void {
-  const prior = instanceWriteQueue.get(id) ?? Promise.resolve();
-  const next = prior.then(op).finally(() => {
-    if (instanceWriteQueue.get(id) === next) {
-      instanceWriteQueue.delete(id);
-    }
-  });
-  instanceWriteQueue.set(id, next);
+export interface CreateInstanceInput {
+  data?: unknown;
+  provenance?: InstanceProvenance;
 }
 
-function persistInstance(record: InstanceRecord): void {
-  if (!opfsFs || !opfsWorkspaceRoot) return;
-  const fs = opfsFs;
-  const workspaceRoot = opfsWorkspaceRoot;
-  enqueueInstanceOp(record.id, () =>
-    writeInstance(fs, workspaceRoot, record).catch((err) => {
-      console.error('[instance-store] Failed to persist instance to OPFS:', err);
-      // The UI is optimistic (the edit already applied to in-memory state
-      // before this write was issued), so a failure here is otherwise
-      // invisible — the user sees their change "succeed" while it silently
-      // never reaches disk and is lost on reload.
-      useOutputStore
-        .getState()
-        .addLine(
-          fmtLine('instance', `failed to save "${record.name}"`, err instanceof Error ? err.message : String(err)),
-          'error',
-          { op: 'instance', subject: record.id }
-        );
-    })
-  );
+export type InstanceSaveState =
+  | { state: 'unsaved' | 'saving' | 'saved'; revision: number }
+  | { state: 'failed'; revision: number; message: string };
+
+function cloneData<T>(value: T): T {
+  return structuredClone(value);
 }
 
-function persistDelete(id: string): void {
-  if (!opfsFs || !opfsWorkspaceRoot) return;
-  const fs = opfsFs;
-  const workspaceRoot = opfsWorkspaceRoot;
-  enqueueInstanceOp(id, () =>
-    deleteInstance(fs, workspaceRoot, id).catch((err) => {
-      console.error('[instance-store] Failed to delete persisted instance from OPFS:', err);
-      // The instance already disappeared from in-memory state (removeInstance
-      // updates it synchronously), so a failed OPFS delete leaves an orphaned
-      // record on disk that can silently reappear on the next workspace load.
-      useOutputStore
-        .getState()
-        .addLine(
-          fmtLine('instance', 'failed to delete saved instance', err instanceof Error ? err.message : String(err)),
-          'error',
-          {
-            op: 'instance',
-            subject: id
-          }
-        );
-    })
+function uniqueName(name: string, instances: Record<string, InstanceRecord>, exceptId?: string): string {
+  const existing = new Set(
+    Object.values(instances)
+      .filter((record) => record.id !== exceptId)
+      .map((record) => record.name)
   );
+  if (!existing.has(name)) return name;
+  let suffix = 2;
+  while (existing.has(`${name} ${suffix}`)) suffix++;
+  return `${name} ${suffix}`;
 }
 
 interface InstanceStoreState {
   instances: Record<string, InstanceRecord>;
   validationErrors: Record<string, ValidationDiagnostic[]>;
+  validationStatus: Record<string, 'pending' | 'valid' | 'invalid' | 'unavailable'>;
   schemas: Map<string, FormPreviewSchema>;
   schemaErrors: Map<string, { reason: PreviewStaleReason; message: string }>;
-  createInstance(typeFqn: string, name: string): string;
+  saveStates: Record<string, InstanceSaveState>;
+  recordRevisions: Record<string, number>;
+  workspaceEpoch: number;
+  createInstance(typeFqn: string, name: string, input?: CreateInstanceInput): string;
   updateInstanceData(id: string, data: Record<string, unknown>): void;
-  removeInstance(id: string): void;
-  setWorker(worker: Worker): void;
+  renameInstance(id: string, name: string): void;
+  duplicateInstance(id: string): string;
+  removeInstance(id: string): Promise<void>;
+  retrySave(id: string): Promise<void>;
+  flushInstance(id: string): Promise<void>;
+  saveRecord(record: InstanceRecord): void;
+  markSaveFailed(id: string, revision: number, error: unknown): void;
+  setWorker(worker: Worker | undefined): void;
+  setReadiness(readiness: InstanceReadiness | undefined): void;
+  prepareInstance(id: string): Promise<void>;
+  retryInstance(id: string): Promise<void>;
+  revalidateInstances(): void;
+  advanceWorkspaceEpoch(): void;
   dispatchValidate(id: string): void;
   receiveValidateResult(requestId: string, diagnostics: ValidationDiagnostic[]): void;
   dispatchGenerateSchema(typeFqn: string): void;
   receiveSchemaResult(requestId: string, schema: FormPreviewSchema): boolean;
+  discardSchemaResult(requestId: string): string | undefined;
   receiveSchemaStale(requestId: string, reason: PreviewStaleReason, message: string): boolean;
+  handleWorkerFailure(message: string): void;
   setOpfsContext(fs: OpfsFs, workspaceRoot: string): void;
   loadInstancesFromOpfs(): Promise<void>;
 }
@@ -137,15 +126,46 @@ interface InstanceStoreState {
 export const useInstanceStore = create<InstanceStoreState>((set, get) => ({
   instances: {},
   validationErrors: {},
+  validationStatus: {},
   schemas: new Map(),
   schemaErrors: new Map(),
+  saveStates: {},
+  recordRevisions: {},
+  workspaceEpoch: 0,
 
-  createInstance(typeFqn, name) {
+  createInstance(typeFqn, name, input) {
     const id = ulid();
     const now = Date.now();
-    const record: InstanceRecord = { id, name, typeFqn, data: {}, createdAt: now, modifiedAt: now };
-    set((state) => ({ instances: { ...state.instances, [id]: record } }));
-    persistInstance(record);
+    const state = get();
+    const record: InstanceRecord = {
+      id,
+      name: uniqueName(name.trim() || 'Untitled instance', state.instances),
+      typeFqn,
+      data: cloneData(input?.data ?? {}),
+      ...(input?.provenance ? { provenance: cloneData(input.provenance) } : {}),
+      createdAt: now,
+      modifiedAt: now
+    };
+    const context = instancePersistenceContext(opfsFs, opfsWorkspaceRoot);
+    set((current) => ({
+      instances: { ...current.instances, [id]: record },
+      recordRevisions: { ...current.recordRevisions, [id]: 1 },
+      saveStates: {
+        ...current.saveStates,
+        [id]: { state: context ? 'saving' : 'unsaved', revision: 1 }
+      }
+    }));
+    if (context) {
+      void persistInstance(context, record).then(
+        () => {
+          const current = get();
+          if (current.recordRevisions[id] === 1 && current.workspaceEpoch === state.workspaceEpoch) {
+            set((latest) => ({ saveStates: { ...latest.saveStates, [id]: { state: 'saved', revision: 1 } } }));
+          }
+        },
+        (error: unknown) => get().markSaveFailed(id, 1, error)
+      );
+    }
     // Validate immediately (round-5 finding #2) — mirrors the exact
     // dispatchValidate(id) call already used at the end of
     // updateInstanceData and in loadInstancesFromOpfs's per-loaded-id loop.
@@ -155,7 +175,8 @@ export const useInstanceStore = create<InstanceStoreState>((set, get) => ({
     // with required fields showed as valid until the user happened to edit
     // it. dispatchValidate already no-ops gracefully if workerRef isn't set
     // yet, so this is safe to call unconditionally.
-    get().dispatchValidate(id);
+    if (readinessRef) void get().prepareInstance(id);
+    else get().dispatchValidate(id);
     return id;
   },
 
@@ -171,42 +192,236 @@ export const useInstanceStore = create<InstanceStoreState>((set, get) => ({
       updated = { ...existing, data, modifiedAt: Date.now() };
       return { instances: { ...state.instances, [id]: updated } };
     });
-    if (updated) persistInstance(updated);
-    get().dispatchValidate(id);
+    if (updated) get().saveRecord(updated);
+    if (readinessRef) void get().prepareInstance(id);
+    else get().dispatchValidate(id);
   },
 
-  removeInstance(id) {
+  renameInstance(id, name) {
+    const trimmed = name.trim();
+    if (!trimmed) throw new Error('Instance name cannot be empty.');
+    const record = get().instances[id];
+    if (!record) return;
+    const renamed = { ...record, name: uniqueName(trimmed, get().instances, id), modifiedAt: Date.now() };
+    set((state) => ({ instances: { ...state.instances, [id]: renamed } }));
+    get().saveRecord(renamed);
+    if (readinessRef && preparationControllers.has(id)) void get().prepareInstance(id);
+  },
+
+  duplicateInstance(id) {
+    const record = get().instances[id];
+    if (!record) throw new Error('Instance no longer exists.');
+    return get().createInstance(record.typeFqn, record.name, {
+      data: cloneData(record.data),
+      ...(record.provenance ? { provenance: cloneData(record.provenance) } : {})
+    });
+  },
+
+  async removeInstance(id) {
+    const record = get().instances[id];
+    if (!record) return;
+    preparationControllers.get(id)?.abort();
+    preparationControllers.delete(id);
+    const context = instancePersistenceContext(opfsFs, opfsWorkspaceRoot);
+    const revision = get().recordRevisions[id] ?? 0;
+    if (context) {
+      set((state) => ({ saveStates: { ...state.saveStates, [id]: { state: 'saving', revision } } }));
+      try {
+        await persistDelete(context, id);
+      } catch (error) {
+        const message = error instanceof Error ? error.message : String(error);
+        set((state) => ({
+          saveStates: { ...state.saveStates, [id]: { state: 'failed', revision, message } }
+        }));
+        useOutputStore.getState().addLine(fmtLine('instance', 'failed to delete saved instance', message), 'error', {
+          op: 'instance',
+          subject: id
+        });
+        throw error;
+      }
+    }
     set((state) => {
       const { [id]: _removed, ...rest } = state.instances;
-      return { instances: rest };
+      const { [id]: _saveState, ...saveStates } = state.saveStates;
+      const { [id]: _revision, ...recordRevisions } = state.recordRevisions;
+      return { instances: rest, saveStates, recordRevisions };
     });
-    persistDelete(id);
+  },
+
+  async retrySave(id) {
+    const record = get().instances[id];
+    if (!record) throw new Error('Instance no longer exists.');
+    get().saveRecord(record);
+    await get().flushInstance(id);
+  },
+
+  async flushInstance(id) {
+    const context = instancePersistenceContext(opfsFs, opfsWorkspaceRoot);
+    await flushPersistedInstance(context, id);
+    const state = get().saveStates[id];
+    if (state?.state === 'failed') throw new Error(state.message);
+  },
+
+  saveRecord(record) {
+    const context = instancePersistenceContext(opfsFs, opfsWorkspaceRoot);
+    const epoch = get().workspaceEpoch;
+    const nextRevision = (get().recordRevisions[record.id] ?? 0) + 1;
+    const snapshot = cloneData(record);
+    set((state) => ({
+      recordRevisions: { ...state.recordRevisions, [record.id]: nextRevision },
+      saveStates: {
+        ...state.saveStates,
+        [record.id]: { state: context ? 'saving' : 'unsaved', revision: nextRevision }
+      }
+    }));
+    if (!context) return;
+    void persistInstance(context, snapshot).then(
+      () => {
+        const current = get();
+        if (current.workspaceEpoch !== epoch || current.recordRevisions[record.id] !== nextRevision) return;
+        set((state) => ({
+          saveStates: { ...state.saveStates, [record.id]: { state: 'saved', revision: nextRevision } }
+        }));
+      },
+      (error: unknown) => get().markSaveFailed(record.id, nextRevision, error)
+    );
+  },
+
+  markSaveFailed(id, revision, error) {
+    const current = get();
+    if (current.recordRevisions[id] !== revision) return;
+    const message = error instanceof Error ? error.message : String(error);
+    set((state) => ({
+      saveStates: { ...state.saveStates, [id]: { state: 'failed', revision, message } }
+    }));
+    useOutputStore
+      .getState()
+      .addLine(fmtLine('instance', `failed to save "${current.instances[id]?.name ?? id}"`, message), 'error', {
+        op: 'instance',
+        subject: id
+      });
   },
 
   setWorker(worker) {
     workerRef = worker;
   },
 
+  setReadiness(readiness) {
+    readinessRef = readiness;
+    if (!readiness) return;
+    for (const id of Object.keys(get().instances)) void get().prepareInstance(id);
+  },
+
+  async prepareInstance(id) {
+    const record = get().instances[id];
+    const readiness = readinessRef;
+    if (!record) return;
+    if (!readiness) {
+      get().dispatchGenerateSchema(record.typeFqn);
+      get().dispatchValidate(id);
+      return;
+    }
+
+    preparationControllers.get(id)?.abort();
+    const controller = new AbortController();
+    preparationControllers.set(id, controller);
+    // The previous validation describes an older record revision. Fence its
+    // reply before readiness synchronizes files for this revision.
+    invalidateValidationRequests(id);
+    const epoch = get().workspaceEpoch;
+    const revision = record.modifiedAt;
+    set((state) => ({
+      validationStatus: { ...state.validationStatus, [id]: 'pending' },
+      validationErrors: Object.fromEntries(Object.entries(state.validationErrors).filter(([key]) => key !== id))
+    }));
+
+    try {
+      await readiness.ensure(record.typeFqn, controller.signal);
+      const current = get().instances[id];
+      if (controller.signal.aborted || get().workspaceEpoch !== epoch || !current || current.modifiedAt !== revision) {
+        return;
+      }
+      get().dispatchGenerateSchema(current.typeFqn);
+      get().dispatchValidate(id);
+    } catch (error) {
+      if (controller.signal.aborted || get().workspaceEpoch !== epoch || !get().instances[id]) return;
+      const message = error instanceof Error ? error.message : String(error);
+      set((state) => ({
+        validationStatus: { ...state.validationStatus, [id]: 'unavailable' },
+        schemaErrors: new Map(state.schemaErrors).set(record.typeFqn, { reason: 'generation-error', message })
+      }));
+    } finally {
+      if (preparationControllers.get(id) === controller) preparationControllers.delete(id);
+    }
+  },
+
+  retryInstance(id) {
+    return get().prepareInstance(id);
+  },
+
+  revalidateInstances() {
+    for (const id of Object.keys(get().instances)) {
+      const record = get().instances[id];
+      if (!record) continue;
+      set((state) => ({ validationStatus: { ...state.validationStatus, [id]: 'pending' } }));
+      get().dispatchGenerateSchema(record.typeFqn);
+      get().dispatchValidate(id);
+    }
+  },
+
+  advanceWorkspaceEpoch() {
+    for (const controller of preparationControllers.values()) controller.abort();
+    preparationControllers.clear();
+    pendingRequests.clear();
+    pendingSchemaRequests.clear();
+    latestSchemaRequestForType.clear();
+    set((state) => ({
+      workspaceEpoch: state.workspaceEpoch + 1,
+      validationErrors: {},
+      validationStatus: {},
+      schemas: new Map(),
+      schemaErrors: new Map()
+    }));
+  },
+
   dispatchValidate(id) {
     const record = get().instances[id];
-    if (!record || !workerRef) return;
+    if (!record) return;
+    if (!workerRef) {
+      const message = 'Instance validation is unavailable because the preview worker is not ready.';
+      set((state) => ({
+        validationStatus: { ...state.validationStatus, [id]: 'unavailable' },
+        schemaErrors: new Map(state.schemaErrors).set(record.typeFqn, { reason: 'generation-error', message })
+      }));
+      return;
+    }
     requestCounter++;
     const requestId = `validate:${id}:${requestCounter}`;
-    pendingRequests.set(requestId, id);
+    pendingRequests.set(requestId, { instanceId: id, epoch: get().workspaceEpoch });
     latestValidateRequestForInstance.set(id, requestId);
+    set((state) => ({ validationStatus: { ...state.validationStatus, [id]: 'pending' } }));
     workerRef.postMessage(
       createInstanceValidateMessage(record.typeFqn, record.data as Record<string, unknown>, requestId)
     );
   },
 
   receiveValidateResult(requestId, diagnostics) {
-    const id = pendingRequests.get(requestId);
-    if (!id) return;
+    const pending = pendingRequests.get(requestId);
+    if (!pending) return;
     pendingRequests.delete(requestId);
+    const { instanceId: id, epoch } = pending;
+    if (epoch !== get().workspaceEpoch) return;
     // Drop an out-of-order response: only the LATEST request issued for
     // this instance is allowed to write validationErrors (finding #9).
     if (latestValidateRequestForInstance.get(id) !== requestId) return;
-    set((state) => ({ validationErrors: { ...state.validationErrors, [id]: diagnostics } }));
+    set((state) => ({
+      validationErrors: { ...state.validationErrors, [id]: diagnostics },
+      validationStatus: {
+        ...state.validationStatus,
+        [id]:
+          state.validationStatus[id] === 'unavailable' ? 'unavailable' : diagnostics.length === 0 ? 'valid' : 'invalid'
+      }
+    }));
   },
 
   // Dispatches unconditionally (does not gate on schemas.has(typeFqn)) —
@@ -218,13 +433,16 @@ export const useInstanceStore = create<InstanceStoreState>((set, get) => ({
     if (!workerRef) return;
     schemaRequestCounter++;
     const requestId = `schema:${typeFqn}:${schemaRequestCounter}`;
-    pendingSchemaRequests.set(requestId, typeFqn);
+    pendingSchemaRequests.set(requestId, { typeFqn, epoch: get().workspaceEpoch });
+    latestSchemaRequestForType.set(typeFqn, requestId);
     workerRef.postMessage(createInstanceGenerateSchemaMessage(typeFqn, requestId));
   },
 
   receiveSchemaResult(requestId, schema) {
-    if (!pendingSchemaRequests.has(requestId)) return false;
+    const pending = pendingSchemaRequests.get(requestId);
+    if (!pending || pending.epoch !== get().workspaceEpoch) return false;
     pendingSchemaRequests.delete(requestId);
+    if (latestSchemaRequestForType.get(pending.typeFqn) !== requestId) return false;
     set((state) => {
       const schemas = new Map(state.schemas);
       schemas.set(schema.targetId, schema);
@@ -235,10 +453,19 @@ export const useInstanceStore = create<InstanceStoreState>((set, get) => ({
     return true;
   },
 
-  receiveSchemaStale(requestId, reason, message) {
-    const typeFqn = pendingSchemaRequests.get(requestId);
-    if (!typeFqn) return false;
+  discardSchemaResult(requestId) {
+    const pending = pendingSchemaRequests.get(requestId);
+    if (!pending || pending.epoch !== get().workspaceEpoch) return undefined;
     pendingSchemaRequests.delete(requestId);
+    return latestSchemaRequestForType.get(pending.typeFqn) === requestId ? pending.typeFqn : undefined;
+  },
+
+  receiveSchemaStale(requestId, reason, message) {
+    const pending = pendingSchemaRequests.get(requestId);
+    if (!pending || pending.epoch !== get().workspaceEpoch) return false;
+    const { typeFqn } = pending;
+    pendingSchemaRequests.delete(requestId);
+    if (latestSchemaRequestForType.get(typeFqn) !== requestId) return false;
     set((state) => {
       // Also drop any previously-cached schema for this typeFqn (Codex
       // round-2 finding #3) — InstanceFormPanel checks `schema` BEFORE
@@ -249,9 +476,29 @@ export const useInstanceStore = create<InstanceStoreState>((set, get) => ({
       schemas.delete(typeFqn);
       const schemaErrors = new Map(state.schemaErrors);
       schemaErrors.set(typeFqn, { reason, message });
-      return { schemas, schemaErrors };
+      const validationStatus = { ...state.validationStatus };
+      for (const [id, record] of Object.entries(state.instances)) {
+        if (record.typeFqn === typeFqn) validationStatus[id] = 'unavailable';
+      }
+      return { schemas, schemaErrors, validationStatus };
     });
     return true;
+  },
+
+  handleWorkerFailure(message) {
+    pendingRequests.clear();
+    pendingSchemaRequests.clear();
+    latestValidateRequestForInstance.clear();
+    latestSchemaRequestForType.clear();
+    set((state) => {
+      const validationStatus = { ...state.validationStatus };
+      const schemaErrors = new Map(state.schemaErrors);
+      for (const [id, record] of Object.entries(state.instances)) {
+        validationStatus[id] = 'unavailable';
+        schemaErrors.set(record.typeFqn, { reason: 'generation-error', message });
+      }
+      return { validationStatus, schemaErrors };
+    });
   },
 
   // Wires the shared `OpfsFs` + active workspace root (finding #1) — set
@@ -285,10 +532,28 @@ export const useInstanceStore = create<InstanceStoreState>((set, get) => ({
   // with any instance id in the new workspace — there's no reused key for
   // it to corrupt.
   setOpfsContext(fs, workspaceRoot) {
+    // App.tsx can receive refreshed metadata for the current workspace. Its
+    // persistence effect then re-applies this exact OPFS identity; that is not
+    // a workspace transition and must not discard live edits while the async
+    // restore is still catching up.
+    if (opfsFs === fs && opfsWorkspaceRoot === workspaceRoot) return;
     opfsFs = fs;
     opfsWorkspaceRoot = workspaceRoot;
+    for (const controller of preparationControllers.values()) controller.abort();
+    preparationControllers.clear();
+    pendingRequests.clear();
     pendingSchemaRequests.clear();
-    set({ instances: {}, validationErrors: {}, schemas: new Map(), schemaErrors: new Map() });
+    latestSchemaRequestForType.clear();
+    set((state) => ({
+      instances: {},
+      validationErrors: {},
+      validationStatus: {},
+      schemas: new Map(),
+      schemaErrors: new Map(),
+      saveStates: {},
+      recordRevisions: {},
+      workspaceEpoch: state.workspaceEpoch + 1
+    }));
     void get().loadInstancesFromOpfs();
   },
 
@@ -344,7 +609,18 @@ export const useInstanceStore = create<InstanceStoreState>((set, get) => ({
         // layering them on top of `loaded` is safe (not a stale-workspace
         // leak; the opfsFs/opfsWorkspaceRoot guard above already handles
         // the cross-workspace-switch case).
-        set((state) => ({ instances: { ...loaded, ...state.instances } }));
+        set((state) => {
+          const instances = { ...loaded, ...state.instances };
+          return {
+            instances,
+            recordRevisions: Object.fromEntries(
+              Object.keys(instances).map((id) => [id, state.recordRevisions[id] ?? 1])
+            ),
+            saveStates: Object.fromEntries(
+              Object.keys(instances).map((id) => [id, state.saveStates[id] ?? { state: 'saved', revision: 1 }])
+            )
+          };
+        });
         // Dispatch validation for every restored instance (round-3 finding
         // #3) — without this, `validationErrors` stays empty for records
         // loaded from OPFS (e.g. imported/raw JSON missing a required
@@ -358,7 +634,8 @@ export const useInstanceStore = create<InstanceStoreState>((set, get) => ({
         // "never revalidated at all".
         for (const id of Object.keys(loaded)) {
           try {
-            get().dispatchValidate(id);
+            if (readinessRef) void get().prepareInstance(id);
+            else get().dispatchValidate(id);
           } catch (err) {
             // The instance itself already loaded successfully (set() above
             // already applied it) — this is only a validation-dispatch

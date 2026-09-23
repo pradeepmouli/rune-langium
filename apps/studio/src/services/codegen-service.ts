@@ -49,6 +49,14 @@ export interface PreviewSetFilesMessage {
   type: 'preview:setFiles';
   files: PreviewFileEntry[];
   requestId?: string;
+  /** Monotonic provider-side revision for this exact preview-file snapshot. */
+  filesRevision: number;
+}
+
+export interface PreviewFilesReadyMessage {
+  type: 'preview:files-ready';
+  requestId: string;
+  filesRevision: number;
 }
 
 export interface PreviewGenerateMessage {
@@ -251,8 +259,17 @@ function isRecord(value: unknown): value is Record<string, unknown> {
 // `files[].content`/`serializedModelJson` are raw model source text — never
 // captured; only a count plus the app-minted requestId.
 export const createPreviewSetFilesMessage = withInstrumentation(
-  function createPreviewSetFilesMessage(files: PreviewFileEntry[], requestId?: string): PreviewSetFilesMessage {
-    return { type: 'preview:setFiles', files, ...(requestId ? { requestId } : {}) };
+  function createPreviewSetFilesMessage(
+    files: PreviewFileEntry[],
+    requestId: string | undefined,
+    filesRevision: number
+  ): PreviewSetFilesMessage {
+    return {
+      type: 'preview:setFiles',
+      files,
+      ...(requestId ? { requestId } : {}),
+      filesRevision
+    };
   },
   {
     op: 'createPreviewSetFilesMessage',
@@ -262,6 +279,24 @@ export const createPreviewSetFilesMessage = withInstrumentation(
       const [files, requestId] = value as [PreviewFileEntry[], string | undefined];
       return { fileCount: files.length, requestId };
     }
+  }
+);
+
+export const isPreviewFilesReadyMessage = withInstrumentation(
+  function isPreviewFilesReadyMessage(msg: unknown): msg is PreviewFilesReadyMessage {
+    if (!isRecord(msg)) return false;
+    return (
+      msg.type === 'preview:files-ready' &&
+      typeof msg.requestId === 'string' &&
+      typeof msg.filesRevision === 'number' &&
+      Number.isSafeInteger(msg.filesRevision) &&
+      msg.filesRevision >= 0
+    );
+  },
+  {
+    op: 'isPreviewFilesReadyMessage',
+    capture: Capture.Output,
+    sanitize: (value, which) => (which === 'output' ? value : undefined)
   }
 );
 
@@ -327,6 +362,7 @@ function isFormPreviewSchema(value: unknown): value is FormPreviewSchema {
   ) {
     return false;
   }
+  if (candidate.functionOutput !== undefined && !isFunctionPreviewOutput(candidate.functionOutput)) return false;
   if (
     candidate.sourceMap !== undefined &&
     (!Array.isArray(candidate.sourceMap) || !candidate.sourceMap.every(isPreviewSourceMapEntry))
@@ -334,6 +370,22 @@ function isFormPreviewSchema(value: unknown): value is FormPreviewSchema {
     return false;
   }
   return true;
+}
+
+function isFunctionPreviewOutput(value: unknown): boolean {
+  if (!isRecord(value)) return false;
+  return (
+    typeof value.typeFqn === 'string' &&
+    (value.kind === 'data' || value.kind === 'choice') &&
+    isRecord(value.cardinality) &&
+    typeof value.cardinality.min === 'number' &&
+    Number.isSafeInteger(value.cardinality.min) &&
+    value.cardinality.min >= 0 &&
+    (value.cardinality.max === 'unbounded' ||
+      (typeof value.cardinality.max === 'number' &&
+        Number.isSafeInteger(value.cardinality.max) &&
+        value.cardinality.max >= value.cardinality.min))
+  );
 }
 
 function isPreviewField(value: unknown): boolean {
@@ -357,7 +409,13 @@ function isPreviewField(value: unknown): boolean {
     case 'enum':
       return Array.isArray(candidate.enumValues) && candidate.enumValues.every(isEnumValue);
     case 'object':
-      return Array.isArray(candidate.children) && candidate.children.every(isPreviewField);
+      return (
+        Array.isArray(candidate.children) &&
+        candidate.children.every(isPreviewField) &&
+        (candidate.assignableTypeFqns === undefined ||
+          (Array.isArray(candidate.assignableTypeFqns) &&
+            candidate.assignableTypeFqns.every((typeFqn) => typeof typeFqn === 'string')))
+      );
     case 'array':
       return (
         Array.isArray(candidate.children) && candidate.children.length === 1 && candidate.children.every(isPreviewField)

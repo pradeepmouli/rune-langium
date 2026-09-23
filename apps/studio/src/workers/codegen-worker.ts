@@ -47,6 +47,7 @@ import {
 import type { Target, FormPreviewSchema, GeneratorOutput, GeneratorDiagnostic } from '@rune-langium/codegen/export';
 import { findDataNode, getActiveConditionPredicates } from '@rune-langium/codegen/instances';
 import type { ValidationDiagnostic } from '@rune-langium/codegen/instances';
+import { qualifiedNameFromNodeId } from '@rune-langium/visual-editor';
 import type { PreviewWorkerRequest } from '../services/codegen-service.js';
 import { z } from 'zod';
 import { isWorkerGlobalScope } from './runtime-guards.js';
@@ -134,6 +135,7 @@ let lastCodegenRequestId: string | undefined;
 let lastPreviewTargetId: string | undefined;
 let lastPreviewRequestId: string | undefined;
 let previewFilesVersion = 0;
+let previewFilesRevision = 0;
 const documentsCache = new Map<string, VersionedEntry<LangiumDocument[]>>();
 const previewSchemaCache = new Map<string, VersionedEntry<FormPreviewSchema[]>>();
 const previewGenerateCache = new Map<string, VersionedEntry<GeneratorOutput[]>>();
@@ -503,6 +505,16 @@ async function buildDocuments(): Promise<VersionedEntry<LangiumDocument[]>> {
   );
 }
 
+function generatedPreviewSchemaForTarget(
+  schemas: Awaited<ReturnType<typeof generatePreviewSchemas>>,
+  targetId: string
+) {
+  const [, targetKind] = targetId.split('#', 2);
+  return targetKind === 'RosettaFunction'
+    ? schemas.find((candidate) => candidate.kind === 'function')
+    : schemas.find((candidate) => candidate.kind !== 'function');
+}
+
 async function runPreview(targetId: string, requestId: string): Promise<void> {
   const scope = self as unknown as DedicatedWorkerGlobalScope;
 
@@ -518,6 +530,7 @@ async function runPreview(targetId: string, requestId: string): Promise<void> {
   }
 
   try {
+    const [generatorTargetId] = targetId.split('#', 2);
     const { version: documentsVersion, value: documents } = await buildDocuments();
     if (documents.length === 0) {
       scope.postMessage({
@@ -535,11 +548,10 @@ async function runPreview(targetId: string, requestId: string): Promise<void> {
     // call suspended across a `preview:setFiles` returns documents that
     // predate the live counter; caching under the live counter would mark
     // that stale-derived schema as valid for the new version.
-    const {
-      value: [schema]
-    } = getOrCompute(previewSchemaCache, targetId, documentsVersion, () =>
-      generatePreviewSchemas(documents, { targetId })
+    const { value: schemas } = getOrCompute(previewSchemaCache, targetId, documentsVersion, () =>
+      generatePreviewSchemas(documents, { targetId: generatorTargetId })
     );
+    const schema = generatedPreviewSchemaForTarget(schemas, targetId);
     if (!schema) {
       scope.postMessage({
         type: 'preview:stale',
@@ -551,7 +563,7 @@ async function runPreview(targetId: string, requestId: string): Promise<void> {
       return;
     }
 
-    scope.postMessage({ type: 'preview:result', targetId, requestId, schema });
+    scope.postMessage({ type: 'preview:result', targetId, requestId, schema: { ...schema, targetId } });
   } catch (err) {
     console.error('[codegen-worker] Preview generation error:', err);
     scope.postMessage({
@@ -586,6 +598,7 @@ async function runInstanceSchema(typeFqn: string, requestId: string): Promise<vo
   }
 
   try {
+    const [targetId] = typeFqn.split('#', 2);
     const { version: documentsVersion, value: documents } = await buildDocuments();
     if (documents.length === 0) {
       scope.postMessage({
@@ -599,11 +612,10 @@ async function runInstanceSchema(typeFqn: string, requestId: string): Promise<vo
 
     // See runPreview's identical comment — tagged with documentsVersion,
     // not the live previewFilesVersion.
-    const {
-      value: [schema]
-    } = getOrCompute(previewSchemaCache, typeFqn, documentsVersion, () =>
-      generatePreviewSchemas(documents, { targetId: typeFqn })
+    const { value: schemas } = getOrCompute(previewSchemaCache, typeFqn, documentsVersion, () =>
+      generatePreviewSchemas(documents, { targetId })
     );
+    const schema = generatedPreviewSchemaForTarget(schemas, typeFqn);
     if (!schema) {
       scope.postMessage({
         type: 'instance:generateSchemaStale',
@@ -846,6 +858,7 @@ function createGeneratedModuleLoader(outputs: readonly GeneratorOutput[]): {
 
 async function executeFunction(funcName: string, inputs: Record<string, unknown>, requestId: string): Promise<void> {
   const scope = self as unknown as DedicatedWorkerGlobalScope;
+  const functionFqn = qualifiedNameFromNodeId(funcName);
 
   try {
     const { version: documentsVersion, value: documents } = await buildDocuments();
@@ -875,11 +888,11 @@ async function executeFunction(funcName: string, inputs: Record<string, unknown>
     // for callers (tests, `instance:execute`-style future callers) that don't
     // have a namespace-qualified name to give.
     let selectedModulePath: string | undefined;
-    let selectedTargetId = funcName;
+    let selectedTargetId = functionFqn;
     let selectedExportName: string | undefined;
     for (const result of results) {
       const ns = result.relativePath.replace(/\//g, '.').replace(/\.ts$/, '');
-      const func = result.funcs.find((f) => f.name === funcName || `${ns}.${f.name}` === funcName);
+      const func = result.funcs.find((f) => f.name === functionFqn || `${ns}.${f.name}` === functionFqn);
       if (func) {
         selectedExportName = func.exportName ?? func.name;
         selectedModulePath = result.relativePath;
@@ -893,7 +906,7 @@ async function executeFunction(funcName: string, inputs: Record<string, unknown>
         type: 'preview:execute-error',
         requestId,
         funcName,
-        error: `Function '${funcName}' not found in generated code. Ensure the model has a valid func declaration and no parse errors.`
+        error: `Function '${functionFqn}' not found in generated code. Ensure the model has a valid func declaration and no parse errors.`
       });
       return;
     }
@@ -1049,8 +1062,17 @@ if (isWorkerGlobalScope()) {
         hydrateCuratedDocuments(msg.files);
         currentPreviewFiles = msg.files;
         previewFilesVersion++;
+        // The provider owns this monotonic sequence. Echo the exact revision
+        // that installed so a readiness waiter cannot resolve from another
+        // dispatch's receipt.
+        previewFilesRevision = msg.filesRevision;
         if (msg.requestId) {
           lastPreviewRequestId = msg.requestId;
+          (self as unknown as DedicatedWorkerGlobalScope).postMessage({
+            type: 'preview:files-ready',
+            requestId: msg.requestId,
+            filesRevision: previewFilesRevision
+          });
         }
         const requestId = msg.requestId ?? lastPreviewRequestId;
         if (lastPreviewTargetId && requestId) {

@@ -12,15 +12,19 @@
  * navigation moved to a dedicated chevron-right nav button per finding 4.
  */
 
-import { describe, it, expect, vi } from 'vitest';
+import { afterEach, describe, it, expect, vi } from 'vitest';
 import { render, screen, fireEvent } from '@testing-library/react';
+import userEvent from '@testing-library/user-event';
 import { NamespaceExplorerPanel } from '../../src/components/panels/NamespaceExplorerPanel.js';
 import type { TypeGraphNode, AnyGraphNode } from '../../src/types.js';
 import { TYPE_REF_PAYLOAD_MIME, isTypeRefPayload, typeRefMimeForKind } from '../../src/types/structure-view.js';
 import { testMeta } from '../helpers/node-meta.js';
 import { selectNodeRepository } from '../../src/store/node-repository.js';
 
-// Mock @tanstack/react-virtual to render all items in jsdom (no real scroll container)
+const virtualTreeTestState = vi.hoisted(() => ({ visibleIndices: undefined as number[] | undefined }));
+
+// Mock @tanstack/react-virtual so tests can select a small viewport without a
+// real scroll container.
 vi.mock('@tanstack/react-virtual', () => ({
   useVirtualizer: ({ count, estimateSize }: { count: number; estimateSize: (i: number) => number }) => {
     let offset = 0;
@@ -31,11 +35,18 @@ vi.mock('@tanstack/react-virtual', () => ({
       return item;
     });
     return {
-      getVirtualItems: () => items,
+      getVirtualItems: () =>
+        virtualTreeTestState.visibleIndices === undefined
+          ? items
+          : items.filter((item) => virtualTreeTestState.visibleIndices!.includes(item.index)),
       getTotalSize: () => offset
     };
   }
 }));
+
+afterEach(() => {
+  virtualTreeTestState.visibleIndices = undefined;
+});
 
 function makeNode(ns: string, name: string, astType: string = 'Data'): TypeGraphNode {
   const nodeTypeMap: Record<string, string> = {
@@ -233,6 +244,139 @@ describe('NamespaceExplorerPanel', () => {
     const searchInput = screen.getByTestId('namespace-search');
     fireEvent.change(searchInput, { target: { value: 'zzzznonexistent' } });
     expect(screen.getByText('No matching types or namespaces')).toBeTruthy();
+  });
+
+  it('keeps navigation separate from controlled selection', () => {
+    const onChange = vi.fn();
+    const { props } = renderPanel({
+      selection: { explicit: new Set(), requiredBy: new Map(), onChange }
+    });
+
+    fireEvent.click(screen.getByTestId('ns-type-checkbox-com.model.Trade'));
+    expect(onChange).toHaveBeenCalledOnce();
+    expect(onChange).toHaveBeenLastCalledWith(new Set(['com.model.Trade']));
+
+    fireEvent.click(screen.getByTestId('ns-type-nav-com.model.Trade'));
+    expect(props.onSelectNode).toHaveBeenCalledOnce();
+    expect(onChange).toHaveBeenCalledOnce();
+  });
+
+  it('keeps required items selected while allowing their explicit selection to be removed', () => {
+    const onChange = vi.fn();
+    renderPanel({
+      selection: {
+        explicit: new Set(['canonical:Trade']),
+        requiredBy: new Map([['canonical:Trade', ['canonical:Root']]]),
+        getSelectionId: (node) => `canonical:${node.data.name}`,
+        onChange
+      }
+    });
+
+    const checkbox = screen.getByTestId('ns-type-checkbox-com.model.Trade');
+    expect(checkbox).toHaveAttribute('aria-label', 'Trade, required by canonical:Root');
+    expect(checkbox).toBeChecked();
+    fireEvent.click(checkbox);
+
+    expect(onChange).toHaveBeenCalledWith(new Set());
+    expect(checkbox).toBeChecked();
+  });
+
+  it('does not allow a required-only item to be removed', () => {
+    renderPanel({
+      selection: {
+        explicit: new Set(),
+        requiredBy: new Map([['com.model.Trade', ['com.model.Event']]]),
+        onChange: vi.fn()
+      }
+    });
+
+    expect(screen.getByTestId('ns-type-checkbox-com.model.Trade')).toBeDisabled();
+    expect(screen.getByLabelText('Required by com.model.Event')).toBeTruthy();
+  });
+
+  it('selects the complete filtered result set while preserving hidden selections', () => {
+    const onChange = vi.fn();
+    renderPanel({
+      selection: { explicit: new Set(['com.lib.Date']), requiredBy: new Map(), onChange }
+    });
+
+    fireEvent.change(screen.getByTestId('namespace-search'), { target: { value: 'Trade' } });
+    fireEvent.click(screen.getByTestId('select-visible-results'));
+
+    expect(onChange).toHaveBeenLastCalledWith(new Set(['com.lib.Date', 'cdm.trade.Trade', 'com.model.Trade']));
+  });
+
+  it('uses all namespace descendants for indeterminate selection state', () => {
+    renderPanel({
+      selection: { explicit: new Set(['com.model.Trade']), requiredBy: new Map(), onChange: vi.fn() }
+    });
+
+    expect(screen.getByTestId('ns-seg-checkbox-com.model')).toHaveAttribute('data-indeterminate');
+  });
+
+  it('includes collapsed descendants when selecting a namespace', () => {
+    const onChange = vi.fn();
+    const nestedNodes = [makeNode('org.a.deep', 'First'), makeNode('org.b.deep', 'Second')];
+    renderPanel({
+      nodeRepository: repoFrom(nestedNodes),
+      expandedNamespaces: new Set(['org.a.deep', 'org.b.deep']),
+      selection: { explicit: new Set(), requiredBy: new Map(), onChange }
+    });
+
+    fireEvent.click(screen.getByTestId('ns-seg-checkbox-org'));
+
+    expect(onChange).toHaveBeenCalledWith(new Set(['org.a.deep.First', 'org.b.deep.Second']), {
+      kind: 'namespace',
+      namespaces: ['org.a.deep', 'org.b.deep'],
+      checked: true
+    });
+  });
+
+  it('keeps namespace operations whole while bulk selection follows the filter', () => {
+    const onChange = vi.fn();
+    renderPanel({ selection: { explicit: new Set(), requiredBy: new Map(), onChange } });
+
+    fireEvent.change(screen.getByTestId('namespace-search'), { target: { value: 'Trade' } });
+    fireEvent.click(screen.getByTestId('ns-seg-checkbox-com'));
+
+    expect(onChange).toHaveBeenCalledWith(new Set(['com.lib.Date', 'com.model.Event', 'com.model.Trade']), {
+      kind: 'namespace',
+      namespaces: ['com.model', 'com.lib'],
+      checked: true
+    });
+  });
+
+  it('supports Space activation on a selection checkbox', async () => {
+    const onChange = vi.fn();
+    renderPanel({ selection: { explicit: new Set(), requiredBy: new Map(), onChange } });
+    const checkbox = screen.getByTestId('ns-type-checkbox-com.model.Trade');
+    const user = userEvent.setup();
+
+    checkbox.focus();
+    await user.keyboard(' ');
+
+    expect(onChange).toHaveBeenCalledOnce();
+  });
+
+  it('includes a selected row that is outside the mounted virtual viewport', () => {
+    virtualTreeTestState.visibleIndices = [0];
+    const nodes = Array.from({ length: 30 }, (_, index) => makeNode('large', `Type${String(index).padStart(2, '0')}`));
+    const offscreenId = 'large.Type29';
+    const onChange = vi.fn();
+    renderPanel({
+      nodeRepository: repoFrom(nodes),
+      selection: { explicit: new Set([offscreenId]), requiredBy: new Map(), onChange }
+    });
+
+    expect(screen.queryByTestId(`ns-type-${offscreenId}`)).toBeNull();
+    expect(screen.getByTestId('ns-seg-checkbox-large')).toHaveAttribute('data-indeterminate');
+    fireEvent.click(screen.getByTestId('ns-seg-checkbox-large'));
+
+    expect(onChange).toHaveBeenCalledWith(new Set(nodes.map((node) => node.id)), {
+      kind: 'namespace',
+      namespaces: ['large'],
+      checked: true
+    });
   });
 
   it('highlights selected node', () => {

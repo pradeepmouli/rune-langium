@@ -103,7 +103,14 @@ export interface FolderHandleRecord {
   lastPermission: 'granted' | 'prompt' | 'denied';
 }
 
-export type SettingKey = 'theme' | 'telemetry-enabled' | 'reduced-motion' | 'editor.tab-size' | 'design-system-version';
+export type WorkbenchSettingKey = `workbench:${string}:v1`;
+export type SettingKey =
+  | 'theme'
+  | 'telemetry-enabled'
+  | 'reduced-motion'
+  | 'editor.tab-size'
+  | 'design-system-version'
+  | WorkbenchSettingKey;
 
 interface RuneStudioDB extends DBSchema {
   workspaces: { key: string; value: WorkspaceRecord };
@@ -306,11 +313,10 @@ export const saveSetting = withInstrumentation(
   async function saveSetting(key: SettingKey, value: unknown): Promise<void> {
     const db = await getDb();
     await db.put('settings', { key, value });
-    // `key` is a fixed SettingKey enum and `value` is always a benign
-    // primitive (theme name, boolean, tab-size number, version string) for
-    // every key in that enum — never user/model content. Safe to capture.
+    // Workbench keys can include workspace identifiers and values can include
+    // model names, so neither input is safe to capture.
   },
-  { op: 'saveSetting', capture: Capture.Input, sanitize: (value) => value }
+  { op: 'saveSetting' }
 );
 
 export const loadSetting = withInstrumentation(
@@ -319,7 +325,7 @@ export const loadSetting = withInstrumentation(
     const row = await db.get('settings', key);
     return row?.value as T | undefined;
   },
-  { op: 'loadSetting', capture: Capture.Input | Capture.Output, sanitize: (value) => value }
+  { op: 'loadSetting' }
 );
 
 // ---------- handles ----------

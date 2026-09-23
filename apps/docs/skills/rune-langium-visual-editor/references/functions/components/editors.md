@@ -26,6 +26,14 @@ getKindBadgeClasses(kind: TypeKind | "builtin"): string
 - `kind: TypeKind | "builtin"`
 **Returns:** `string`
 
+### `getKindDotClass`
+```ts
+getKindDotClass(kind: TypeKind | "builtin"): string
+```
+**Parameters:**
+- `kind: TypeKind | "builtin"`
+**Returns:** `string`
+
 ### `getKindLabel`
 Returns a human-readable label for a type kind.
 Delegates to the canonical KIND_LABEL map from KindBadge; handles the

@@ -14,7 +14,7 @@ afterEach(() => {
   __resetDocumentCacheForTests();
 });
 
-function manifest(id: 'cdm' | 'fpml'): CuratedManifest {
+function manifest(id: 'cdm' | 'fpml', cohort?: string): CuratedManifest {
   return {
     schemaVersion: 2,
     modelId: id,
@@ -25,8 +25,9 @@ function manifest(id: 'cdm' | 'fpml'): CuratedManifest {
     upstreamCommit: '',
     upstreamRef: 'master',
     archiveUrl: `https://example.com/${id}.tar.gz`,
+    ...(cohort ? { cohort } : {}),
     history: [],
-    dependencies: id === 'cdm' ? { fpml: 'latest' } : { cdm: 'latest' },
+    dependencies: id === 'cdm' ? { fpml: cohort ?? 'latest' } : { cdm: cohort ?? 'latest' },
     namespaces: {
       [id]: { deps: id === 'cdm' ? ['fpml'] : [], exports: [], artifact: `${id}.json.gz` },
       [`${id}.unused`]: { deps: [], exports: [], artifact: `${id}.unused.json.gz` }
@@ -34,13 +35,14 @@ function manifest(id: 'cdm' | 'fpml'): CuratedManifest {
   };
 }
 
-function request(): Request {
+function request(artifactEnvelope = false): Request {
   return new Request('http://example.com/api/codegen', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({
       files: [],
       target: 'typescript',
+      ...(artifactEnvelope ? { artifactEnvelope: 1 } : {}),
       curatedBundles: [{ id: 'cdm', version: 'latest' }],
       namespaces: ['cdm'],
       hydrateNamespaces: ['cdm']
@@ -51,6 +53,8 @@ function request(): Request {
 it.each(['codegen', 'parse'])(
   '%s loads cyclic bundle dependencies once and preserves cross-bundle targets',
   async (mode) => {
+    const cohort = `cohort-${'c'.repeat(64)}`;
+    const artifactEnvelope = mode === 'codegen';
     const { RuneDsl } = createRuneDslServices();
     const sources = new Map([
       [
@@ -79,14 +83,16 @@ it.each(['codegen', 'parse'])(
     );
     const manifests = vi
       .spyOn(curated, 'fetchCuratedManifest')
-      .mockImplementation(async (id) => manifest(id as 'cdm' | 'fpml'));
+      .mockImplementation(async (id) => manifest(id as 'cdm' | 'fpml', artifactEnvelope ? cohort : undefined));
     const namespaces = vi
       .spyOn(curated, 'fetchCuratedNamespace')
       .mockImplementation(async (id) => [serialized.get(id)!]);
     const handler = mode === 'parse' ? parseWorkspace : onRequestPost;
-    const response = await handler({ request: request() } as never);
+    const response = await handler({ request: request(artifactEnvelope) } as never);
     expect(response.status).toBe(200);
-    expect(manifests.mock.calls.map((call) => call[0])).toEqual(['cdm', 'fpml']);
+    expect(manifests.mock.calls.map((call) => call[0])).toEqual(
+      artifactEnvelope ? ['cdm', 'cdm', 'fpml'] : ['cdm', 'fpml']
+    );
     expect(namespaces.mock.calls.map((call) => call[2])).toEqual(['cdm.json.gz', 'fpml.json.gz']);
     if (mode === 'parse') {
       const payload = (await response.json()) as {
@@ -112,6 +118,10 @@ it.each(['codegen', 'parse'])(
       return;
     }
     const zip = await JSZip.loadAsync(await response.arrayBuffer());
+    expect(JSON.parse(await zip.file('.rune/export.json')!.async('string')).resolvedCohorts).toEqual({
+      cdm: cohort,
+      fpml: cohort
+    });
     expect(Object.keys(zip.files)).toEqual(expect.arrayContaining(['cdm.ts', 'fpml.ts']));
     expect(Object.keys(zip.files).some((path) => path.includes('unused'))).toBe(false);
     expect(await zip.file('cdm.ts')!.async('string')).toContain('quantity');

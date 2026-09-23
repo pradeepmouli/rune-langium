@@ -266,6 +266,8 @@ vi.mock('@rune-langium/visual-editor', async () => ({
   AST_TYPE_TO_NODE_TYPE: (
     await vi.importActual<typeof import('@rune-langium/visual-editor')>('@rune-langium/visual-editor')
   ).AST_TYPE_TO_NODE_TYPE,
+  buildTypeOptions: (await vi.importActual<typeof import('@rune-langium/visual-editor')>('@rune-langium/visual-editor'))
+    .buildTypeOptions,
   // Mirrors the production helper's fallback chain
   // (data.$type → data.typeKind → node.type → 'data'). Kept as a tiny
   // hand-rolled stub instead of re-importing the real helper so the mock
@@ -300,20 +302,25 @@ vi.mock('@rune-langium/visual-editor', async () => ({
     }, [value]);
     return ref;
   },
-  // Node-id utilities (3A′ dot-form helpers) — exact mirrors of node-projection.ts
+  // Node-id utilities — exact mirrors of node-projection.ts.
   // so ExplorePerspective can call them inside the mock module boundary.
+  isTypeNodeId: (nodeId: string) => !nodeId.endsWith('#RosettaFunction'),
+  qualifiedNameFromNodeId: (nodeId: string) => nodeId.split('#', 1)[0]!,
   nameFromNodeId: (nodeId: string) => {
-    const idx = nodeId.lastIndexOf('.');
-    return idx < 0 ? nodeId : nodeId.slice(idx + 1);
+    const qualifiedName = nodeId.split('#', 1)[0]!;
+    const idx = qualifiedName.lastIndexOf('.');
+    return idx < 0 ? qualifiedName : qualifiedName.slice(idx + 1);
   },
   splitNodeId: (nodeId: string) => {
-    const idx = nodeId.lastIndexOf('.');
-    if (idx < 0) return { namespace: '', name: nodeId };
-    return { namespace: nodeId.slice(0, idx), name: nodeId.slice(idx + 1) };
+    const qualifiedName = nodeId.split('#', 1)[0]!;
+    const idx = qualifiedName.lastIndexOf('.');
+    if (idx < 0) return { namespace: '', name: qualifiedName };
+    return { namespace: qualifiedName.slice(0, idx), name: qualifiedName.slice(idx + 1) };
   },
-  // Exact mirror of qualifiedExportPath/makeNodeId: bare name when namespace is
-  // empty (global), dotted otherwise — so empty-namespace ids stay valid (not `.Foo`).
-  makeNodeId: (namespace: string, name: string) => (namespace ? `${namespace}.${name}` : name),
+  makeNodeId: (namespace: string, name: string, kind?: string) => {
+    const qualifiedName = namespace ? `${namespace}.${name}` : name;
+    return kind ? `${qualifiedName}#${kind}` : qualifiedName;
+  },
   // Minimal stub — tests exercise ExplorePerspective's render path, not the
   // repository implementation. byId delegates to the Map directly.
   selectNodeRepository: (nodesById: Map<string, unknown>) => ({
@@ -321,7 +328,7 @@ vi.mock('@rune-langium/visual-editor', async () => ({
     byType: () => [],
     byNamespace: () => [],
     namespaces: () => [],
-    all: () => []
+    all: () => [...(nodesById?.values() ?? [])]
   })
 }));
 
@@ -585,20 +592,20 @@ describe('EditorPage preview target identity', () => {
     cleanup();
   });
 
-  it('posts preview:generate using the selected node fully-qualified id when display names collide', async () => {
+  it('posts preview:generate using the selected node kind-aware id when display names collide', async () => {
     editorStoreState.nodes = [
       {
-        id: 'alpha-trade',
-        data: { namespace: 'alpha', name: 'Trade', $type: 'data' },
+        id: 'alpha.Trade#Data',
+        data: { namespace: 'alpha', name: 'Trade', $type: 'Data' },
         meta: { namespace: 'alpha', errors: [], hasExternalRefs: false }
       },
       {
-        id: 'beta-trade',
-        data: { namespace: 'beta', name: 'Trade', $type: 'data' },
+        id: 'beta.Trade#Data',
+        data: { namespace: 'beta', name: 'Trade', $type: 'Data' },
         meta: { namespace: 'beta', errors: [], hasExternalRefs: false }
       }
     ];
-    editorStoreState.selectedNodeId = 'beta-trade';
+    editorStoreState.selectedNodeId = 'beta.Trade#Data';
 
     const _view = renderEditorPage({
       models: [],
@@ -610,13 +617,13 @@ describe('EditorPage preview target identity', () => {
       expect(MockWorker.instances[0]?.postMessage).toHaveBeenCalledWith(
         expect.objectContaining({
           type: 'preview:generate',
-          targetId: 'beta.Trade',
+          targetId: 'beta.Trade#Data',
           requestId: expect.any(String)
         })
       );
     });
 
-    expect(usePreviewStore.getState().selectedTargetId).toBe('beta.Trade');
+    expect(usePreviewStore.getState().selectedTargetId).toBe('beta.Trade#Data');
   });
 
   it('re-generates preview for a renamed target after the previous selection is transiently cleared', async () => {

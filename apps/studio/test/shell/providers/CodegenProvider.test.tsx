@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: FSL-1.1-ALv2
 // Copyright (c) 2026 Pradeep Mouli
-import { describe, it, expect, beforeEach } from 'vitest';
+import { describe, it, expect, beforeEach, vi } from 'vitest';
 import { render, act } from '@testing-library/react';
 import { useState } from 'react';
 
@@ -33,6 +33,13 @@ beforeEach(() => {
   // test below started mutating pendingHydrationNamespaces/hydratedNamespaces;
   // reset the touched fields so state doesn't leak between tests.
   useEditorStore.setState({ pendingHydrationNamespaces: [], hydratedNamespaces: [], hydrationNonce: 0 });
+  useInstanceStore.setState({
+    instances: {},
+    validationErrors: {},
+    validationStatus: {},
+    schemas: new Map(),
+    schemaErrors: new Map()
+  });
 });
 
 import { CodegenProvider } from '../../../src/shell/providers/CodegenProvider.js';
@@ -155,6 +162,237 @@ describe('CodegenProvider', () => {
     expect(useInstanceStore.getState().schemaErrors.get('test.instance.Unsupported')).toEqual({
       reason: 'unsupported-target',
       message: 'No form preview schema is available for test.instance.Unsupported.'
+    });
+  });
+
+  it('waits for this instance file-sync receipt before requesting schema and validation', async () => {
+    render(
+      <WorkspaceStateContext.Provider value={wsState('ws-instance-ready')}>
+        <CodegenProvider>
+          <div />
+        </CodegenProvider>
+      </WorkspaceStateContext.Provider>
+    );
+
+    const worker = FakeWorker.instances[0]!;
+    const id = useInstanceStore.getState().createInstance('user.missing.Type', 'Missing type');
+    await act(async () => {
+      await Promise.resolve();
+    });
+    const fileRequest = worker.posted.filter((message) => message.type === 'preview:setFiles').at(-1)!;
+    expect(worker.posted.some((message) => message.type === 'instance:generateSchema')).toBe(false);
+
+    act(() => {
+      for (const listener of worker.listeners.message ?? []) {
+        listener({
+          data: {
+            type: 'preview:files-ready',
+            requestId: fileRequest.requestId,
+            filesRevision: fileRequest.filesRevision
+          }
+        });
+      }
+    });
+
+    await vi.waitFor(() => {
+      const types = worker.posted.map((message) => message.type);
+      expect(types).toContain('instance:generateSchema');
+      expect(types).toContain('instance:validate');
+    });
+    expect(useInstanceStore.getState().validationStatus[id]).toBe('pending');
+  });
+
+  it('rejects a receipt whose revision does not match the dispatched instance file snapshot', async () => {
+    render(
+      <WorkspaceStateContext.Provider value={wsState('ws-revision-mismatch')}>
+        <CodegenProvider>
+          <div />
+        </CodegenProvider>
+      </WorkspaceStateContext.Provider>
+    );
+
+    const worker = FakeWorker.instances[0]!;
+    const id = useInstanceStore.getState().createInstance('user.missing.Type', 'Missing type');
+    await act(async () => {
+      await Promise.resolve();
+    });
+    const fileRequest = worker.posted.filter((message) => message.type === 'preview:setFiles').at(-1)!;
+
+    await act(async () => {
+      for (const listener of worker.listeners.message ?? []) {
+        listener({
+          data: {
+            type: 'preview:files-ready',
+            requestId: fileRequest.requestId,
+            filesRevision: fileRequest.filesRevision + 1
+          }
+        });
+      }
+      await Promise.resolve();
+    });
+
+    expect(worker.posted.some((message) => message.type === 'instance:generateSchema')).toBe(false);
+    expect(worker.posted.some((message) => message.type === 'instance:validate')).toBe(false);
+    await vi.waitFor(() => expect(useInstanceStore.getState().validationStatus[id]).toBe('unavailable'));
+    expect(useInstanceStore.getState().schemaErrors.get('user.missing.Type')?.message).toContain('expected');
+  });
+
+  it('rejects pending instance file-sync waiters when the worker crashes', async () => {
+    render(
+      <WorkspaceStateContext.Provider value={wsState('ws-worker-crash')}>
+        <CodegenProvider>
+          <div />
+        </CodegenProvider>
+      </WorkspaceStateContext.Provider>
+    );
+
+    const worker = FakeWorker.instances[0]!;
+    const id = useInstanceStore.getState().createInstance('user.missing.Type', 'Missing type');
+    await act(async () => {
+      await Promise.resolve();
+    });
+    expect(worker.posted.some((message) => message.type === 'preview:setFiles')).toBe(true);
+
+    await act(async () => {
+      for (const listener of worker.listeners.error ?? []) {
+        listener({ type: 'error', message: 'worker crashed' });
+      }
+      await Promise.resolve();
+    });
+
+    await vi.waitFor(() => expect(useInstanceStore.getState().validationStatus[id]).toBe('unavailable'));
+    expect(useInstanceStore.getState().schemaErrors.get('user.missing.Type')?.message).toContain(
+      'Preview worker crashed'
+    );
+    const postedBeforeRetry = worker.posted.length;
+    useInstanceStore.getState().retryInstance(id);
+    await act(async () => {
+      await Promise.resolve();
+    });
+    expect(worker.posted).toHaveLength(postedBeforeRetry);
+  });
+
+  it('does not synchronize a hydrated instance until the hydrated workspace files commit', async () => {
+    let commitHydratedFiles: (() => void) | undefined;
+    function Host() {
+      const [workspace, setWorkspace] = useState<WorkspaceState>({
+        ...wsState('ws-hydration-commit'),
+        deferredExports: [
+          {
+            filePath: 'curated/bundle.rosetta',
+            namespace: 'curated',
+            exports: [{ type: 'data', name: 'Address' }]
+          }
+        ]
+      });
+      commitHydratedFiles = () =>
+        setWorkspace((current) => ({
+          ...current,
+          files: [
+            ...current.files,
+            {
+              name: 'address.rosetta',
+              path: 'curated/address.rosetta',
+              content: 'namespace curated',
+              dirty: false
+            }
+          ]
+        }));
+      return (
+        <WorkspaceStateContext.Provider value={workspace}>
+          <CodegenProvider>
+            <div />
+          </CodegenProvider>
+        </WorkspaceStateContext.Provider>
+      );
+    }
+
+    render(<Host />);
+    const worker = FakeWorker.instances[0]!;
+    await act(async () => {
+      useInstanceStore.getState().createInstance('curated.Address', 'Address');
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+    expect(useEditorStore.getState().pendingHydrationNamespaces).toContain('curated');
+    const beforeHydration = worker.posted.filter((message) => message.type === 'preview:setFiles').length;
+
+    act(() => {
+      useEditorStore.getState().markNamespacesHydrated(['curated']);
+    });
+    await act(async () => {
+      await Promise.resolve();
+    });
+
+    expect(worker.posted.filter((message) => message.type === 'preview:setFiles')).toHaveLength(beforeHydration);
+
+    act(() => commitHydratedFiles?.());
+    await act(async () => {
+      await Promise.resolve();
+    });
+    const hydratedRequest = worker.posted.filter((message) => message.type === 'preview:setFiles').at(-1)!;
+    expect(hydratedRequest.files.some((file: { uri: string }) => file.uri.endsWith('/curated/address.rosetta'))).toBe(
+      true
+    );
+  });
+
+  it('synchronizes an already committed hydrated namespace without waiting for another files update', async () => {
+    useEditorStore.setState({ hydratedNamespaces: ['curated'], pendingHydrationNamespaces: [] });
+    const workspace: WorkspaceState = {
+      ...wsState('ws-already-hydrated'),
+      files: [
+        ...wsState('ws-already-hydrated').files,
+        {
+          name: 'address.rosetta',
+          path: 'curated/address.rosetta',
+          content: 'namespace curated',
+          dirty: false
+        }
+      ],
+      deferredExports: [
+        {
+          filePath: 'curated/bundle.rosetta',
+          namespace: 'curated',
+          exports: [{ type: 'data', name: 'Address' }]
+        }
+      ]
+    };
+    render(
+      <WorkspaceStateContext.Provider value={workspace}>
+        <CodegenProvider>
+          <div />
+        </CodegenProvider>
+      </WorkspaceStateContext.Provider>
+    );
+
+    const worker = FakeWorker.instances[0]!;
+    const initialRequest = worker.posted.filter((message) => message.type === 'preview:setFiles').at(-1)!;
+    act(() => {
+      for (const listener of worker.listeners.message ?? []) {
+        listener({
+          data: {
+            type: 'preview:files-ready',
+            requestId: initialRequest.requestId,
+            filesRevision: initialRequest.filesRevision
+          }
+        });
+      }
+    });
+    await act(async () => {
+      await Promise.resolve();
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+    const beforePrepare = worker.posted.filter((message) => message.type === 'preview:setFiles').length;
+    await act(async () => {
+      useInstanceStore.getState().createInstance('curated.Address', 'Address');
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+    await vi.waitFor(() => {
+      expect(worker.posted.filter((message) => message.type === 'preview:setFiles').length).toBeGreaterThan(
+        beforePrepare
+      );
     });
   });
 

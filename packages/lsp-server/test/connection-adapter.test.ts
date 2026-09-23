@@ -186,6 +186,16 @@ describe('createConnectionAdapter', () => {
     expect(typeof conn.workspace.getConfiguration).toBe('function');
     expect(typeof conn.workspace.applyEdit).toBe('function');
     expect(typeof conn.workspace.onDidCreateFiles).toBe('function');
+    expect(typeof conn.workspace.textDocumentContent.on).toBe('function');
+  });
+
+  it('maps workspace text-document-content requests', () => {
+    const server = createMockServer();
+    const conn = createConnectionAdapter(server as any);
+
+    conn.workspace.textDocumentContent.on(vi.fn());
+
+    expect(server.onRequest).toHaveBeenCalledWith('workspace/textDocumentContent', expect.any(Function));
   });
 
   it('should provide client sub-object with register', () => {

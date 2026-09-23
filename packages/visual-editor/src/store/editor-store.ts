@@ -108,9 +108,10 @@ export function disambiguateTypeRef(
 
 /**
  * Resolve a target node id from a bare type name, preferring the SOURCE node's
- * namespace: a `makeNodeId(ns, typeName)` keyed lookup on `nodesById` (the byId
- * surface), falling back to a bare-name scan for built-in/string types or
- * cross-namespace refs that have no node in the source namespace.
+ * namespace, then falls back to a bare-name scan for built-in/string types or
+ * cross-namespace refs that have no node in the source namespace. Node ids
+ * include declaration kind, while Rune type references do not, so this lookup
+ * deliberately compares source-level identity rather than constructing an id.
  *
  * The fallback preserves the pre-repository linear-scan behavior exactly; the
  * namespace-qualified hit only changes resolution in the ambiguous
@@ -123,11 +124,14 @@ function resolveTargetId(
   typeName: string
 ): string | undefined {
   const ns = nodesById.get(sourceNodeId)?.meta.namespace;
+  const isTypeTarget = (node: TypeGraphNode) => node.data.$type !== 'RosettaFunction';
   if (ns) {
-    const qualifiedId = makeNodeId(ns, typeName);
-    if (nodesById.has(qualifiedId)) return qualifiedId;
+    const local = allNodes.find(
+      (node) => isTypeTarget(node) && node.meta.namespace === ns && node.data.name === typeName
+    );
+    if (local) return local.id;
   }
-  return allNodes.find((n) => n.data.name === typeName)?.id;
+  return allNodes.find((node) => isTypeTarget(node) && node.data.name === typeName)?.id;
 }
 
 // ---------------------------------------------------------------------------
@@ -464,7 +468,7 @@ function buildDeferredPlaceholderNodes(entries: DeferredExportEntry[], existingI
       // are index-only (for cross-file reference resolution).
       if (!(exp.type in AST_TYPE_TO_NODE_TYPE)) continue;
       const nodeType = AST_TYPE_TO_NODE_TYPE[exp.type]!;
-      const nodeId = makeNodeId(entry.namespace, exp.name);
+      const nodeId = makeNodeId(entry.namespace, exp.name, exp.type);
       if (existingIds.has(nodeId)) continue;
       existingIds.add(nodeId);
       // Placeholder `data` is a minimal domain stub ($type + name only);
@@ -630,7 +634,7 @@ function buildNewTypeNode(kind: TypeKind, name: string, namespace: string, count
       break;
   }
   return {
-    id: makeNodeId(namespace, name),
+    id: makeNodeId(namespace, name, $type),
     type: kind,
     position: { x: counter * 50, y: counter * 50 },
     data: baseData as unknown as DomainNodeData,
@@ -1120,7 +1124,8 @@ export const createEditorStore = (overrides?: Partial<EditorState>) => {
           // -----------------------------------------------------------------------
 
           createType(kind: TypeKind, name: string, namespace: string): string {
-            const nodeId = makeNodeId(namespace, name);
+            const $type = NODE_TYPE_TO_AST_TYPE[kind] ?? 'Data';
+            const nodeId = makeNodeId(namespace, name, $type);
             nodeCounter++;
             // Build node OUTSIDE the recipe so nodeCounter++ side-effect is stable
             // and the constructed node is captured as a patch (fixes: raw set lost
@@ -1155,7 +1160,7 @@ export const createEditorStore = (overrides?: Partial<EditorState>) => {
 
             const oldName = target.data.name;
             const namespace = target.meta.namespace;
-            const newNodeId = makeNodeId(namespace, newName);
+            const newNodeId = makeNodeId(namespace, newName, target.data.$type);
             // No-op if the new id is already taken: with nodesById canonical, the
             // re-key's `set(newNodeId, …)` would silently overwrite the occupant
             // (a same-name no-op, or a real collision dropping another type). Bail

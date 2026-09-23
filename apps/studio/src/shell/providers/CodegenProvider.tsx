@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: FSL-1.1-ALv2
 // Copyright (c) 2026 Pradeep Mouli
 import type React from 'react';
-import { useEffect, useRef, useState, useCallback } from 'react';
+import { useEffect, useLayoutEffect, useRef, useState, useCallback } from 'react';
 import { useEditorStore } from '@rune-langium/visual-editor';
 import { useStudioToast } from '../../components/StudioToastProvider.js';
 import { useWorkspace } from './workspace-context.js';
@@ -17,10 +17,15 @@ import {
   isPreviewWorkerMessage,
   isPreviewExecuteResultMessage,
   isPreviewExecuteErrorMessage,
+  isPreviewFilesReadyMessage,
   isInstanceValidateResultMessage,
   isInstanceGenerateSchemaResultMessage,
   isInstanceGenerateSchemaStaleMessage
 } from '../../services/codegen-service.js';
+import { createInstanceReadiness } from '../../services/instance-readiness.js';
+import { createPreviewSessionClient, isPrototypeSessionRequest } from '../../services/preview-session-client.js';
+import type { InstanceReadiness } from '../../services/instance-readiness.js';
+import { PreviewSessionContext, type PreviewSessionFactory } from './preview-session-context.js';
 import { pathToUri } from '../../utils/uri.js';
 import { getRuneStudioTestApi } from '../../test-api.js';
 import { BUNDLE_MARKER_SUFFIX } from '../../services/workspace.js';
@@ -47,6 +52,23 @@ import type { InstrumentationNamespace } from '../../services/instrumentation/na
  */
 function findNamespacesForExport(deferredExports: DeferredExportEntry[], name: string): string[] {
   return deferredExports.filter((entry) => entry.exports.some((e) => e.name === name)).map((entry) => entry.namespace);
+}
+
+function findNamespacesForType(deferredExports: DeferredExportEntry[], typeFqn: string): string[] {
+  return deferredExports
+    .filter((entry) => entry.exports.some((entryExport) => `${entry.namespace}.${entryExport.name}` === typeFqn))
+    .map((entry) => entry.namespace);
+}
+
+function findUnhydratedNamespacesForUnresolved(
+  deferredExports: DeferredExportEntry[],
+  names: readonly string[],
+  hydratedNamespaces: readonly string[]
+): string[] {
+  const hydrated = new Set(hydratedNamespaces);
+  return [...new Set(names.flatMap((name) => findNamespacesForExport(deferredExports, name)))].filter(
+    (namespace) => !hydrated.has(namespace)
+  );
 }
 
 /** Extracts the referenced type names out of a form-preview schema's
@@ -85,14 +107,48 @@ const reportHydrationRetryExhausted = withInstrumentation(
 
 export const CodegenProvider = withInstrumentation(
   function CodegenProvider({ children }: { children: React.ReactNode }): React.ReactElement {
-    const { files, deferredExports } = useWorkspace();
+    const { files, deferredExports, workspaceId } = useWorkspace();
     const [codegenWorker, setCodegenWorker] = useState<Worker | null>(null);
+    const [previewSessionFactory, setPreviewSessionFactory] = useState<PreviewSessionFactory | null>(null);
 
     const previewRequestSequenceRef = useRef(0);
     const codegenRequestSequenceRef = useRef(0);
     const currentPreviewRequestIdRef = useRef<string | undefined>(undefined);
     const codegenCurrentRequestIdRef = useRef<string>('');
     const orchestratorRef = useRef<HydrationOrchestrator | null>(null);
+    const readinessRef = useRef<InstanceReadiness | null>(null);
+    const filesRef = useRef(files);
+    const deferredExportsRef = useRef(deferredExports);
+    const workspaceEpochRef = useRef(0);
+    const committedFilesVersionRef = useRef(0);
+    const committedHydratedNamespacesRef = useRef(new Set<string>());
+    const workerFilesRevisionRef = useRef(0);
+    const instanceHydrationSequenceRef = useRef(0);
+    const workerFileWaitersRef = useRef(
+      new Map<
+        string,
+        { epoch: number; filesRevision: number; resolve: (revision: number) => void; reject: (reason: Error) => void }
+      >()
+    );
+    const workspaceCommitWaitersRef = useRef(
+      new Set<{ afterVersion: number; resolve: () => void; reject: (reason: Error) => void }>()
+    );
+    filesRef.current = files;
+    deferredExportsRef.current = deferredExports;
+
+    // A hydration callback is delivered from the editor store before React has
+    // committed App's merged curated files. This layout effect is the concrete
+    // boundary after which filesRef is a real committed workspace snapshot.
+    useLayoutEffect(() => {
+      const version = ++committedFilesVersionRef.current;
+      committedHydratedNamespacesRef.current = new Set(useEditorStore.getState().hydratedNamespaces);
+      for (const waiter of workspaceCommitWaitersRef.current) {
+        if (version > waiter.afterVersion) {
+          workspaceCommitWaitersRef.current.delete(waiter);
+          waiter.resolve();
+        }
+      }
+    }, [files]);
 
     const { showToast } = useStudioToast();
     const previewSelectedTargetId = usePreviewStore((s) => s.selectedTargetId);
@@ -166,6 +222,134 @@ export const CodegenProvider = withInstrumentation(
       [receivePreviewStale, showToast]
     );
 
+    const syncWorkerFiles = useCallback(
+      (worker: Worker, signal?: AbortSignal): Promise<number> => {
+        const codegenFiles: Array<{ uri: string; content: string }> = [];
+        const previewFiles: Array<{ uri: string; content: string; serializedModelJson?: string }> = [];
+        for (const file of filesRef.current) {
+          if (!file.readOnly) codegenFiles.push({ uri: pathToUri(file.path), content: file.content });
+          if (file.path.endsWith(BUNDLE_MARKER_SUFFIX) || (file.refOnly && !file.serializedModelJson)) continue;
+          previewFiles.push({
+            uri: pathToUri(file.path),
+            content: file.content,
+            ...(file.serializedModelJson ? { serializedModelJson: file.serializedModelJson } : {})
+          });
+        }
+        const requestId = `preview:files:${++previewRequestSequenceRef.current}`;
+        const filesRevision = ++workerFilesRevisionRef.current;
+        const epoch = workspaceEpochRef.current;
+        currentPreviewRequestIdRef.current = requestId;
+        return new Promise<number>((resolve, reject) => {
+          const abort = () => {
+            workerFileWaitersRef.current.delete(requestId);
+            reject(new DOMException('Worker file synchronization was cancelled.', 'AbortError'));
+          };
+          if (signal?.aborted) return abort();
+          signal?.addEventListener('abort', abort, { once: true });
+          workerFileWaitersRef.current.set(requestId, {
+            epoch,
+            filesRevision,
+            resolve: (revision) => {
+              signal?.removeEventListener('abort', abort);
+              resolve(revision);
+            },
+            reject: (reason) => {
+              signal?.removeEventListener('abort', abort);
+              reject(reason);
+            }
+          });
+          try {
+            worker.postMessage({
+              type: 'codegen:setFiles',
+              files: codegenFiles,
+              requestId: `codegen:files:${++codegenRequestSequenceRef.current}`
+            });
+            worker.postMessage(createPreviewSetFilesMessage(previewFiles, requestId, filesRevision));
+          } catch (error) {
+            workerFileWaitersRef.current.delete(requestId);
+            signal?.removeEventListener('abort', abort);
+            handlePreviewWorkerFailure('Preview worker could not process updated files.', error);
+            reject(error instanceof Error ? error : new Error(String(error)));
+          }
+        });
+      },
+      [handlePreviewWorkerFailure]
+    );
+
+    const waitForCommittedWorkspaceFiles = useCallback((afterVersion: number, signal: AbortSignal): Promise<void> => {
+      if (signal.aborted) return Promise.reject(new DOMException('Instance preparation was cancelled.', 'AbortError'));
+      if (committedFilesVersionRef.current > afterVersion) return Promise.resolve();
+      return new Promise<void>((resolve, reject) => {
+        const waiter = {
+          afterVersion,
+          resolve: () => {
+            signal.removeEventListener('abort', abort);
+            resolve();
+          },
+          reject: (reason: Error) => {
+            signal.removeEventListener('abort', abort);
+            reject(reason);
+          }
+        };
+        const abort = () => {
+          workspaceCommitWaitersRef.current.delete(waiter);
+          reject(new DOMException('Instance preparation was cancelled.', 'AbortError'));
+        };
+        signal.addEventListener('abort', abort, { once: true });
+        workspaceCommitWaitersRef.current.add(waiter);
+      });
+    }, []);
+
+    const hydrateNamespaceForInstance = useCallback(
+      (namespace: string, signal: AbortSignal): Promise<void> => {
+        const orchestrator = orchestratorRef.current;
+        if (!orchestrator) return Promise.reject(new Error('Curated hydration is unavailable.'));
+        const targetId = `instance-readiness:${++instanceHydrationSequenceRef.current}`;
+        return new Promise<void>((resolve, reject) => {
+          let settled = false;
+          const finish = (error?: Error) => {
+            if (settled) return;
+            settled = true;
+            signal.removeEventListener('abort', onAbort);
+            if (error) reject(error);
+            else resolve();
+          };
+          const onAbort = () => finish(new DOMException('Instance preparation was cancelled.', 'AbortError'));
+          if (signal.aborted) return onAbort();
+          signal.addEventListener('abort', onAbort, { once: true });
+          orchestrator.requestHydration(namespace, {
+            retryFor: {
+              targetId,
+              onRetry: () => {
+                // HydrationOrchestrator intentionally fires on both success and
+                // dequeue-after-failure. Instance readiness must distinguish
+                // those outcomes rather than retrying a failed namespace forever.
+                if (useEditorStore.getState().hydratedNamespaces.includes(namespace)) {
+                  if (committedHydratedNamespacesRef.current.has(namespace)) {
+                    finish();
+                  } else {
+                    const versionBeforeCommit = committedFilesVersionRef.current;
+                    void waitForCommittedWorkspaceFiles(versionBeforeCommit, signal).then(
+                      () => finish(),
+                      (error: unknown) => finish(error instanceof Error ? error : new Error(String(error)))
+                    );
+                  }
+                } else {
+                  finish(new Error(`Could not hydrate curated namespace ${namespace}. Retry to try again.`));
+                }
+              }
+            }
+          });
+        });
+      },
+      [waitForCommittedWorkspaceFiles]
+    );
+
+    useEffect(() => {
+      workspaceEpochRef.current++;
+      useInstanceStore.getState().advanceWorkspaceEpoch();
+    }, [workspaceId]);
+
     // Initialise dedicated codegen worker once on mount.
     useEffect(() => {
       let worker: Worker | null = null;
@@ -189,51 +373,20 @@ export const CodegenProvider = withInstrumentation(
       };
     }, [handlePreviewWorkerFailure]);
 
-    // Sync worker file state whenever the workspace changes.
-    // codegen:setFiles uses only user-authored files (readOnly corpus files are
-    // not the target of local code generation).
-    // preview:setFiles includes ALL files so that corpus types (readOnly) can
-    // be form-previewed — the worker only parses with eagerLinking:false so the
-    // 186-file corpus costs one parse pass, not cross-reference resolution.
+    // Normal workspace updates use the same file-sync receipt as instance
+    // readiness. This effect precedes the selected-target effect so that a
+    // selected target's explicit preview request remains the current reply.
     useEffect(() => {
       if (!codegenWorker) return;
-      const codegenFiles: Array<{ uri: string; content: string }> = [];
-      for (const f of files) {
-        if (f.readOnly) continue;
-        codegenFiles.push({ uri: pathToUri(f.path), content: f.content });
-      }
-      // 019 Task #88 follow-up: thread `serializedModelJson` through to
-      // the preview worker so curated bundle files (which ship pre-parsed
-      // ASTs and an empty `content`) can be hydrated and previewed.
-      //
-      // List-only curated refs (`refOnly`, no `serializedModelJson`) are NOT
-      // parseable preview inputs: they use synthetic bundle/namespace paths and
-      // exist only so the explorer can surface deferred exports before hydration.
-      // Letting them reach the preview worker regresses into Langium's
-      // "no services for the extension ''" dead-end.
-      const allFiles: Array<{ uri: string; content: string; serializedModelJson?: string }> = [];
-      for (const f of files) {
-        if (f.path.endsWith(BUNDLE_MARKER_SUFFIX) || (f.refOnly && !f.serializedModelJson)) continue;
-        allFiles.push({
-          uri: pathToUri(f.path),
-          content: f.content,
-          ...(f.serializedModelJson ? { serializedModelJson: f.serializedModelJson } : {})
+      const epoch = workspaceEpochRef.current;
+      void syncWorkerFiles(codegenWorker)
+        .then(() => {
+          if (workspaceEpochRef.current === epoch) useInstanceStore.getState().revalidateInstances();
+        })
+        .catch(() => {
+          // Worker failure is reported by the shared synchronization path.
         });
-      }
-      const previewRequestId = `preview:files:${++previewRequestSequenceRef.current}`;
-      const codegenRequestId = `codegen:files:${++codegenRequestSequenceRef.current}`;
-      currentPreviewRequestIdRef.current = previewRequestId;
-      try {
-        codegenWorker.postMessage({
-          type: 'codegen:setFiles',
-          files: codegenFiles,
-          requestId: codegenRequestId
-        });
-        codegenWorker.postMessage(createPreviewSetFilesMessage(allFiles, previewRequestId));
-      } catch (error) {
-        handlePreviewWorkerFailure('Preview worker could not process updated files.', error);
-      }
-    }, [codegenWorker, files, handlePreviewWorkerFailure]);
+    }, [codegenWorker, files, syncWorkerFiles]);
 
     // Trigger form preview whenever the selected target changes. Files are
     // already current from the effect above; this effect only updates the target.
@@ -255,18 +408,49 @@ export const CodegenProvider = withInstrumentation(
     useEffect(() => {
       if (!codegenWorker) return;
       setWorkerRef(codegenWorker);
+      const readiness = createInstanceReadiness({
+        findNamespaces: (typeFqn) => findNamespacesForType(deferredExportsRef.current, typeFqn),
+        findNamespacesForUnresolved: (names) =>
+          findUnhydratedNamespacesForUnresolved(
+            deferredExportsRef.current,
+            names,
+            useEditorStore.getState().hydratedNamespaces
+          ),
+        hydrate: hydrateNamespaceForInstance,
+        waitForWorkerFiles: (signal) => syncWorkerFiles(codegenWorker, signal)
+      });
+      readinessRef.current = readiness;
+      setPreviewSessionFactory(() => () => createPreviewSessionClient(codegenWorker, readiness));
       useInstanceStore.getState().setWorker(codegenWorker);
+      useInstanceStore.getState().setReadiness(readiness);
       function handleMessage(e: MessageEvent<unknown>) {
         const msg = e.data;
         if (isTelemetryRecordMessage(msg)) {
           routeTelemetryRecord(msg.record);
           return;
         }
+        if (isPreviewFilesReadyMessage(msg)) {
+          const waiter = workerFileWaitersRef.current.get(msg.requestId);
+          if (!waiter) return;
+          workerFileWaitersRef.current.delete(msg.requestId);
+          if (waiter.epoch !== workspaceEpochRef.current) {
+            waiter.reject(new Error('Workspace changed before worker files were ready.'));
+          } else if (waiter.filesRevision !== msg.filesRevision) {
+            waiter.reject(
+              new Error(`Worker acknowledged files revision ${msg.filesRevision}; expected ${waiter.filesRevision}.`)
+            );
+          } else {
+            waiter.resolve(msg.filesRevision);
+          }
+          return;
+        }
         if (isPreviewExecuteResultMessage(msg)) {
+          if (isPrototypeSessionRequest(msg.requestId)) return;
           receiveExecutionResult(msg.funcName, msg.output);
           return;
         }
         if (isPreviewExecuteErrorMessage(msg)) {
+          if (isPrototypeSessionRequest(msg.requestId)) return;
           receiveExecutionError(msg.funcName, msg.error);
           return;
         }
@@ -284,7 +468,33 @@ export const CodegenProvider = withInstrumentation(
         // codegen worker's `lastPreviewTargetId`/`lastPreviewRequestId`, which
         // `preview:setFiles` re-runs preview generation against).
         if (isInstanceGenerateSchemaResultMessage(msg)) {
-          useInstanceStore.getState().receiveSchemaResult(msg.requestId, msg.schema);
+          if (isPrototypeSessionRequest(msg.requestId)) return;
+          const unresolvedNamespaces = findUnhydratedNamespacesForUnresolved(
+            deferredExportsRef.current,
+            extractUnresolvedNames(msg.schema.unsupportedFeatures),
+            useEditorStore.getState().hydratedNamespaces
+          );
+          if (unresolvedNamespaces.length === 0) {
+            useInstanceStore.getState().receiveSchemaResult(msg.requestId, msg.schema);
+            return;
+          }
+          const controller = new AbortController();
+          void readiness.hydrateSchemaDependencies(msg.schema, controller.signal).then(
+            (hydrated) => {
+              const store = useInstanceStore.getState();
+              if (!hydrated) {
+                store.receiveSchemaResult(msg.requestId, msg.schema);
+                return;
+              }
+              const typeFqn = store.discardSchemaResult(msg.requestId);
+              if (!typeFqn) return;
+              store.dispatchGenerateSchema(typeFqn);
+              for (const [id, instance] of Object.entries(store.instances)) {
+                if (instance.typeFqn === typeFqn) store.dispatchValidate(id);
+              }
+            },
+            () => useInstanceStore.getState().receiveSchemaResult(msg.requestId, msg.schema)
+          );
           return;
         }
         if (isInstanceGenerateSchemaStaleMessage(msg)) {
@@ -307,12 +517,13 @@ export const CodegenProvider = withInstrumentation(
               orchestrator.markResolved(targetId);
               clearHydrationRetriesRemaining(targetId);
             } else {
-              const namespacesToHydrate = new Set<string>();
-              for (const name of unresolvedNames) {
-                for (const namespace of findNamespacesForExport(deferredExports, name)) {
-                  namespacesToHydrate.add(namespace);
-                }
-              }
+              const namespacesToHydrate = new Set(
+                findUnhydratedNamespacesForUnresolved(
+                  deferredExports,
+                  unresolvedNames,
+                  useEditorStore.getState().hydratedNamespaces
+                )
+              );
               if (namespacesToHydrate.size === 0) {
                 // No unresolved name maps to a known deferred (curated, not-yet-
                 // hydrated) export -- every one is genuinely unresolved (a typo, a
@@ -376,6 +587,20 @@ export const CodegenProvider = withInstrumentation(
       function handleWorkerFailure(event: ErrorEvent | MessageEvent<unknown>) {
         const baseMessage =
           event.type === 'messageerror' ? 'Preview worker rejected a message.' : 'Preview worker crashed.';
+        // `syncWorkerFiles` waits for an explicit files-ready receipt. A worker
+        // failure means that receipt can no longer arrive, so reject every
+        // pending waiter before reporting the failure; otherwise instance
+        // readiness remains pending forever and its downstream timeout never
+        // starts.
+        for (const waiter of workerFileWaitersRef.current.values()) {
+          waiter.reject(new Error(baseMessage));
+        }
+        workerFileWaitersRef.current.clear();
+        // A terminated worker cannot acknowledge a later file sync. Clearing
+        // state runs this effect's cleanup, detaches it from all consumers,
+        // and makes later work fail as unavailable instead of waiting forever.
+        setCodegenWorker(null);
+        useInstanceStore.getState().handleWorkerFailure(baseMessage);
         // A genuine 'error' event on this shared worker is ALSO handled by
         // handleCodegenWorkerError below (same worker, both listeners fire),
         // which already shows its own crash toast (Codex P2) — suppress this
@@ -395,10 +620,22 @@ export const CodegenProvider = withInstrumentation(
         // dead worker and be silently dropped). Symmetric with setWorkerRef above;
         // CodegenProvider is a singleton so there is no remount race. (Codex P2)
         setWorkerRef(null);
+        readiness.dispose();
+        readinessRef.current = null;
+        setPreviewSessionFactory(null);
+        useInstanceStore.getState().setReadiness(undefined);
+        useInstanceStore.getState().setWorker(undefined);
+        for (const waiter of workerFileWaitersRef.current.values()) {
+          waiter.reject(new Error('Code generation worker was detached.'));
+        }
+        workerFileWaitersRef.current.clear();
+        for (const waiter of workspaceCommitWaitersRef.current) {
+          waiter.reject(new Error('Code generation worker was detached.'));
+        }
+        workspaceCommitWaitersRef.current.clear();
       };
     }, [
       codegenWorker,
-      deferredExports,
       handlePreviewWorkerFailure,
       previewSelectedTargetId,
       receivePreviewResult,
@@ -408,7 +645,9 @@ export const CodegenProvider = withInstrumentation(
       receiveValidateResult,
       setHydrationRetriesRemaining,
       clearHydrationRetriesRemaining,
-      setWorkerRef
+      setWorkerRef,
+      hydrateNamespaceForInstance,
+      syncWorkerFiles
     ]);
 
     // ---------------------------------------------------------------------------
@@ -504,7 +743,7 @@ export const CodegenProvider = withInstrumentation(
       }
     }, [codegenWorker, codegenActiveTarget, codegenPreviewTarget, showToast]);
 
-    return <>{children}</>;
+    return <PreviewSessionContext.Provider value={previewSessionFactory}>{children}</PreviewSessionContext.Provider>;
   },
   { op: 'CodegenProvider' }
 );

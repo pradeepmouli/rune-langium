@@ -4,6 +4,7 @@
 
 import { useCallback, useEffect, useId, useMemo, useRef, useState, type ChangeEvent, type ReactElement } from 'react';
 import type { FormPreviewSchema, PreviewField, PreviewSourceMapEntry } from '@rune-langium/codegen/export';
+import { qualifiedNameFromNodeId } from '@rune-langium/visual-editor';
 import { Button } from '@rune-langium/design-system/ui/button';
 import { Checkbox } from '@rune-langium/design-system/ui/checkbox';
 import { Input } from '@rune-langium/design-system/ui/input';
@@ -29,6 +30,28 @@ import {
 } from '../services/preview-validator.js';
 import { withInstrumentation } from '../services/instrumentation/core.js';
 
+export interface PreviewPresentation {
+  mode: 'scratch' | 'instance';
+  showPayload: boolean;
+  showHeader: boolean;
+}
+
+export type PayloadView =
+  | { kind: 'instance'; value: unknown }
+  | { kind: 'inputs'; value: Record<string, unknown> }
+  | { kind: 'result'; value: unknown };
+
+export interface InstanceSeed {
+  typeFqn: string;
+  data: Record<string, unknown>;
+}
+
+const SCRATCH_PRESENTATION: PreviewPresentation = {
+  mode: 'scratch',
+  showPayload: true,
+  showHeader: true
+};
+
 export interface FormPreviewPanelProps {
   schema?: FormPreviewSchema;
   status: PreviewStatus;
@@ -44,6 +67,8 @@ export interface FormPreviewPanelProps {
   errors?: Record<string, string>;
   valid?: boolean;
   validated?: boolean;
+  presentation?: PreviewPresentation;
+  onCreateInstance?: (seed: InstanceSeed) => void;
 }
 
 export const FormPreviewPanel = withInstrumentation(
@@ -57,7 +82,9 @@ export const FormPreviewPanel = withInstrumentation(
     onValuesChange,
     errors: controlledErrors,
     valid: controlledValid,
-    validated: controlledValidated
+    validated: controlledValidated,
+    presentation = SCRATCH_PRESENTATION,
+    onCreateInstance
   }: FormPreviewPanelProps): ReactElement {
     const isControlled = values !== undefined;
     const ensureSample = usePreviewStore((s) => s.ensureSample);
@@ -415,17 +442,34 @@ export const FormPreviewPanel = withInstrumentation(
         data-testid="panel-formPreview"
         className="studio-scroll flex h-full flex-col overflow-auto"
       >
-        <header className="flex items-center justify-between gap-3 border-b border-border px-3 py-2">
-          <h2 className="truncate text-sm font-semibold">{schema.title}</h2>
-          <div className="flex shrink-0 items-center gap-1.5">
-            <Button type="button" variant="ghost" size="xs" onClick={handleCopySample}>
-              Copy
-            </Button>
-            <Button type="button" variant="ghost" size="xs" onClick={handleReset}>
-              Reset
-            </Button>
-          </div>
-        </header>
+        {presentation.showHeader ? (
+          <header className="flex items-center justify-between gap-3 border-b border-border px-3 py-2">
+            <h2 className="truncate text-sm font-semibold">{schema.title}</h2>
+            <div className="flex shrink-0 items-center gap-1.5">
+              <Button type="button" variant="ghost" size="xs" onClick={handleCopySample}>
+                Copy
+              </Button>
+              <Button type="button" variant="ghost" size="xs" onClick={handleReset}>
+                {presentation.mode === 'instance' ? 'Reset values' : 'Reset'}
+              </Button>
+              {onCreateInstance && (schema.kind === 'data' || schema.kind === 'choice') ? (
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="xs"
+                  onClick={() =>
+                    onCreateInstance({
+                      typeFqn: qualifiedNameFromNodeId(schema.targetId),
+                      data: structuredClone(activeSample?.values ?? {})
+                    })
+                  }
+                >
+                  Create instance…
+                </Button>
+              ) : null}
+            </div>
+          </header>
+        ) : null}
         <p
           role={status.state === 'invalid' ? 'alert' : 'status'}
           aria-live="polite"
@@ -522,21 +566,23 @@ export const FormPreviewPanel = withInstrumentation(
               ) : null}
             </div>
           ) : null}
-          <details className="preview-panel__sample" data-testid="sample-data-view" open>
-            <summary className="cursor-pointer px-2 py-1 text-xs font-medium text-foreground">Sample data</summary>
-            <div className="space-y-2 border-t border-border p-2">
-              <pre
-                aria-label="Sample data output"
-                className="preview-panel__sample-output studio-scroll max-h-56 overflow-auto p-2 text-2xs leading-5 text-foreground"
-                data-testid="sample-data-output"
-              >
-                {activeSample?.serialized ?? '{}'}
-              </pre>
-              <p role="status" aria-live="polite" className="text-2xs text-muted-foreground">
-                {copyFeedback ?? 'Sample data stays in-memory until you explicitly copy it.'}
-              </p>
-            </div>
-          </details>
+          {presentation.showPayload ? (
+            <details className="preview-panel__sample" data-testid="sample-data-view" open>
+              <summary className="cursor-pointer px-2 py-1 text-xs font-medium text-foreground">Sample data</summary>
+              <div className="space-y-2 border-t border-border p-2">
+                <pre
+                  aria-label="Sample data output"
+                  className="preview-panel__sample-output studio-scroll max-h-56 overflow-auto p-2 text-2xs leading-5 text-foreground"
+                  data-testid="sample-data-output"
+                >
+                  {activeSample?.serialized ?? '{}'}
+                </pre>
+                <p role="status" aria-live="polite" className="text-2xs text-muted-foreground">
+                  {copyFeedback ?? 'Sample data stays in-memory until you explicitly copy it.'}
+                </p>
+              </div>
+            </details>
+          ) : null}
         </form>
       </section>
     );
@@ -792,7 +838,7 @@ function PreviewFieldControl({
     // Data type's own (non-arm) attributes still render as plain fields.
     const { armFields, otherFields } = splitChoiceArmFields(field.children ?? [], field.choiceArmPaths);
     return (
-      <FieldSet className="gap-1.5 p-2">
+      <FieldSet data-field-path={fieldPath} tabIndex={-1} className="gap-1.5 p-2">
         <FieldLegend variant="label" className="text-muted-foreground">
           {/* Inline +/- icon button replaces the verbose
               "Add <FieldLabel>" / "Remove <FieldLabel>" text — the
@@ -863,7 +909,7 @@ function PreviewFieldControl({
     const [child] = field.children ?? [];
 
     return (
-      <FieldSet className="gap-1.5 p-2">
+      <FieldSet data-field-path={fieldPath} tabIndex={-1} className="gap-1.5 p-2">
         <FieldLegend variant="label" className="text-muted-foreground">
           {/* Inline + icon button for "add another item to the array",
               same pattern as the optional-object section. aria-label
@@ -984,7 +1030,7 @@ function PreviewFieldControl({
 
   if (field.kind === 'boolean') {
     return (
-      <label className="flex items-center gap-2 text-xs font-medium">
+      <label data-field-path={fieldPath} className="flex items-center gap-2 text-xs font-medium">
         <Checkbox
           aria-label={resolvedFieldLabel(field, arrayIndices)}
           checked={Boolean(value)}
@@ -1001,7 +1047,7 @@ function PreviewFieldControl({
   }
 
   return (
-    <label className="block text-xs font-medium">
+    <label data-field-path={fieldPath} className="block text-xs font-medium">
       <span>{resolvedFieldLabel(field, arrayIndices)}</span>
       <Input
         aria-label={resolvedFieldLabel(field, arrayIndices)}

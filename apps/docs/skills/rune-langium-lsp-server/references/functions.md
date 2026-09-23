@@ -21,7 +21,7 @@ createRuneLspServer(): RuneLspServer
 **Returns:** `RuneLspServer` — A RuneLspServer ready for `listen(transport)`.
 ```ts
 import { createRuneLspServer } from '@rune-langium/lsp-server';
-import { WebSocketTransport } from '@lspeasy/core';
+import { WebSocketTransport } from '@lspeasy/core/transport/websocket';
 
 const lsp = createRuneLspServer();
 const transport = new WebSocketTransport(webSocket);

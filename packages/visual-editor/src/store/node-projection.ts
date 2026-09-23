@@ -10,8 +10,11 @@
  * `model-helpers.ts`'s `resolveNodeKind`; this module re-exports it for a single
  * import surface but does not re-implement it.)
  *
- * Node ids are the core qualified name (dot-separated, via qualifiedExportPath).
- * 3A′ hard cutover: `::` separator has been retired from node ids.
+ * Node ids retain the declaration kind as well as the core qualified name.
+ * The qualified-name portion remains dot-separated (via qualifiedExportPath);
+ * `#` separates it from the AST kind because `#` cannot occur in a Rune
+ * qualified name. This keeps a type and function with the same legal Rune
+ * name as distinct selectable graph nodes.
  */
 
 import { qualifiedExportPath, indexById, fromIndex } from '@rune-langium/core';
@@ -20,22 +23,58 @@ import type { EdgeKind, AnyGraphNode, TypeGraphNode, TypeGraphEdge } from '../ty
 // Re-export so callers can import EdgeKind from a single surface.
 export type { EdgeKind };
 
-/** Build the canonical top-level node id `${namespace}.${name}` (core qualified name). */
-export function makeNodeId(namespace: string, name: string): string {
-  return qualifiedExportPath(namespace, name);
+const NODE_KIND_SEPARATOR = '#';
+
+/** Rune declarations that may appear in a type reference. */
+export const TYPE_DECLARATION_KINDS = [
+  'Data',
+  'Choice',
+  'RosettaEnumeration',
+  'RosettaRecordType',
+  'RosettaTypeAlias',
+  'RosettaBasicType'
+] as const satisfies readonly TypeGraphNode['data']['$type'][];
+
+const TYPE_DECLARATION_KIND_SET: ReadonlySet<string> = new Set(TYPE_DECLARATION_KINDS);
+
+/** Build a kind-aware graph-node id from a Rune qualified name and AST kind. */
+export function makeNodeId(namespace: string, name: string, kind?: string): string {
+  const qualifiedName = qualifiedExportPath(namespace, name);
+  return kind ? `${qualifiedName}${NODE_KIND_SEPARATOR}${kind}` : qualifiedName;
+}
+
+/** Recover the Rune qualified name from a graph-node id. */
+export function qualifiedNameFromNodeId(nodeId: string): string {
+  const separator = nodeId.lastIndexOf(NODE_KIND_SEPARATOR);
+  return separator < 0 ? nodeId : nodeId.slice(0, separator);
+}
+
+/** Recover the optional AST declaration kind retained in a graph-node id. */
+export function kindFromNodeId(nodeId: string): string | undefined {
+  const separator = nodeId.lastIndexOf(NODE_KIND_SEPARATOR);
+  return separator < 0 ? undefined : nodeId.slice(separator + NODE_KIND_SEPARATOR.length) || undefined;
+}
+
+/** Whether a graph-node id names a declaration valid in a Rune type reference. */
+export function isTypeNodeId(nodeId: string): boolean {
+  const kind = kindFromNodeId(nodeId);
+  // Keep older, kindless ids navigable while rejecting known non-type kinds.
+  return kind === undefined || TYPE_DECLARATION_KIND_SET.has(kind);
 }
 
 /** The trailing simple name of a node id (everything after the last dot). */
 export function nameFromNodeId(nodeId: string): string {
-  const idx = nodeId.lastIndexOf('.');
-  return idx < 0 ? nodeId : nodeId.slice(idx + 1);
+  const qualifiedName = qualifiedNameFromNodeId(nodeId);
+  const idx = qualifiedName.lastIndexOf('.');
+  return idx < 0 ? qualifiedName : qualifiedName.slice(idx + 1);
 }
 
 /** Split a node id into `{ namespace, name }` by the last dot; namespace is '' when absent. */
 export function splitNodeId(nodeId: string): { namespace: string; name: string } {
-  const idx = nodeId.lastIndexOf('.');
-  if (idx < 0) return { namespace: '', name: nodeId };
-  return { namespace: nodeId.slice(0, idx), name: nodeId.slice(idx + 1) };
+  const qualifiedName = qualifiedNameFromNodeId(nodeId);
+  const idx = qualifiedName.lastIndexOf('.');
+  if (idx < 0) return { namespace: '', name: qualifiedName };
+  return { namespace: qualifiedName.slice(0, idx), name: qualifiedName.slice(idx + 1) };
 }
 
 // ---------------------------------------------------------------------------

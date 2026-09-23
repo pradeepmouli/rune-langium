@@ -64,6 +64,31 @@ describe('astToModel', () => {
       expect(tradeExtendsEdge).toBeDefined();
     });
 
+    it('creates extends edges from Data types to Choice parents', async () => {
+      const result = await parse(`
+        namespace "test.choice-parent"
+        version "1"
+
+        choice AssetChoice:
+          equity Equity (1..1)
+
+        type Equity:
+          ticker string (1..1)
+
+        type Basket extends AssetChoice:
+          name string (1..1)
+      `);
+      const { edges } = astToModel(result.value);
+
+      expect(edges).toContainEqual(
+        expect.objectContaining({
+          source: 'test.choice-parent.Basket#Data',
+          target: 'test.choice-parent.AssetChoice#Choice',
+          data: { kind: 'extends' }
+        })
+      );
+    });
+
     it('strips runtime-only AST fields from graph node data', async () => {
       const result = await parse(SIMPLE_INHERITANCE_SOURCE);
       const { nodes } = astToModel(result.value);
@@ -231,6 +256,42 @@ describe('astToModel', () => {
       expect(dataNodes.length).toBeGreaterThanOrEqual(2);
       expect(enumNodes.length).toBe(1);
     });
+  });
+
+  it('retains declarations that share a Rune name but have different kinds', async () => {
+    const result = await parse(`
+      namespace test
+      type Shared:
+        value string (1..1)
+      type UsesShared:
+        shared Shared (1..1)
+      func Shared:
+        inputs:
+          value string (1..1)
+        output: result Shared (1..1)
+    `);
+
+    const graph = astToModel(result.value);
+
+    expect(graph.nodes).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ id: 'test.Shared#Data', data: expect.objectContaining({ $type: 'Data' }) }),
+        expect.objectContaining({
+          id: 'test.Shared#RosettaFunction',
+          data: expect.objectContaining({ $type: 'RosettaFunction' })
+        })
+      ])
+    );
+    expect(graph.edges).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ source: 'test.UsesShared#Data', target: 'test.Shared#Data' }),
+        expect.objectContaining({
+          source: 'test.Shared#RosettaFunction',
+          target: 'test.Shared#Data',
+          data: expect.objectContaining({ label: 'output' })
+        })
+      ])
+    );
   });
 
   describe('TypeAlias types', () => {

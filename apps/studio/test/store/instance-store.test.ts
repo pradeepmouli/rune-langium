@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: FSL-1.1-ALv2
 // Copyright (c) 2026 Pradeep Mouli
-import { beforeEach, describe, expect, it } from 'vitest';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { useInstanceStore } from '../../src/store/instance-store.js';
 import { OpfsFs } from '../../src/opfs/opfs-fs.js';
 import { readInstance, writeInstance } from '../../src/opfs/instances-fs.js';
@@ -13,7 +13,57 @@ async function flush(): Promise<void> {
 
 describe('instance-store', () => {
   beforeEach(() => {
-    useInstanceStore.setState({ instances: {} });
+    useInstanceStore.getState().setReadiness(undefined);
+    useInstanceStore.getState().setWorker(undefined);
+    useInstanceStore.setState({
+      instances: {},
+      validationErrors: {},
+      validationStatus: {},
+      schemas: new Map(),
+      schemaErrors: new Map()
+    });
+  });
+
+  it('regenerates the schema and validates a restored instance after readiness acknowledges worker files', async () => {
+    const postMessage = vi.fn();
+    const ensure = vi.fn(async () => 11);
+    useInstanceStore.getState().setWorker({ postMessage } as unknown as Worker);
+    useInstanceStore.getState().setReadiness({ ensure, dispose: vi.fn() });
+    const id = useInstanceStore.getState().createInstance('curated.Party', 'Restored Party');
+
+    await vi.waitFor(() => expect(postMessage).toHaveBeenCalledTimes(2));
+    expect(ensure).toHaveBeenCalledWith('curated.Party', expect.any(AbortSignal));
+    expect(postMessage.mock.calls.map(([message]) => message.type)).toEqual([
+      'instance:generateSchema',
+      'instance:validate'
+    ]);
+    expect(useInstanceStore.getState().validationStatus[id]).toBe('pending');
+  });
+
+  it('prepares OPFS-restored instances when readiness is installed after the worker', async () => {
+    const fs = new OpfsFs(createOpfsRoot() as never);
+    await writeInstance(fs, '/ws-ready-after-restore', {
+      id: '01J000000000000000000099',
+      name: 'Restored first',
+      typeFqn: 'curated.Party',
+      data: {},
+      createdAt: 1000,
+      modifiedAt: 1000
+    });
+    useInstanceStore.getState().setOpfsContext(fs, '/ws-ready-after-restore');
+    await flush();
+
+    const postMessage = vi.fn();
+    const ensure = vi.fn(async () => 12);
+    useInstanceStore.getState().setWorker({ postMessage } as unknown as Worker);
+    useInstanceStore.getState().setReadiness({ ensure, dispose: vi.fn() });
+
+    await vi.waitFor(() => expect(postMessage).toHaveBeenCalledTimes(2));
+    expect(ensure).toHaveBeenCalledWith('curated.Party', expect.any(AbortSignal));
+    expect(postMessage.mock.calls.map(([message]) => message.type)).toEqual([
+      'instance:generateSchema',
+      'instance:validate'
+    ]);
   });
 
   it('createInstance adds a record keyed by id, with provenance defaulting to manual authoring', () => {
@@ -22,6 +72,94 @@ describe('instance-store', () => {
     expect(record?.name).toBe('My Party');
     expect(record?.typeFqn).toBe('test.Party');
     expect(record?.data).toEqual({});
+  });
+
+  it('marks a new instance unavailable when no preview worker can validate it', () => {
+    const id = useInstanceStore.getState().createInstance('test.Party', 'My Party');
+
+    expect(useInstanceStore.getState().validationStatus[id]).toBe('unavailable');
+    expect(useInstanceStore.getState().schemaErrors.get('test.Party')?.message).toMatch(/worker is not ready/i);
+  });
+
+  it('copies incoming preview data and assigns a truthful saved state after flushing OPFS', async () => {
+    const fs = new OpfsFs(createOpfsRoot() as never);
+    useInstanceStore.getState().setOpfsContext(fs, '/ws-snapshot');
+    await flush();
+    const payload = { address: { city: 'London' } };
+    const id = useInstanceStore.getState().createInstance('test.Party', 'Party', { data: payload });
+    payload.address.city = 'Paris';
+
+    await useInstanceStore.getState().flushInstance(id);
+    expect(useInstanceStore.getState().instances[id]?.data).toEqual({ address: { city: 'London' } });
+    expect(useInstanceStore.getState().saveStates[id]?.state).toBe('saved');
+    expect((await readInstance(fs, '/ws-snapshot', id)).data).toEqual({ address: { city: 'London' } });
+  });
+
+  it('renames and duplicates with independent data and a unique display name', async () => {
+    const fs = new OpfsFs(createOpfsRoot() as never);
+    useInstanceStore.getState().setOpfsContext(fs, '/ws-lifecycle');
+    await flush();
+    const id = useInstanceStore.getState().createInstance('test.Party', 'Party', { data: { name: 'Alice' } });
+    await useInstanceStore.getState().flushInstance(id);
+    useInstanceStore.getState().renameInstance(id, 'Review Party');
+    const copyId = useInstanceStore.getState().duplicateInstance(id);
+    useInstanceStore.getState().updateInstanceData(copyId, { name: 'Bob' });
+    await useInstanceStore.getState().flushInstance(copyId);
+
+    expect(useInstanceStore.getState().instances[id]).toMatchObject({ name: 'Review Party', data: { name: 'Alice' } });
+    expect(useInstanceStore.getState().instances[copyId]).toMatchObject({
+      name: 'Review Party 2',
+      data: { name: 'Bob' }
+    });
+    expect(() => useInstanceStore.getState().renameInstance(id, '   ')).toThrow('cannot be empty');
+  });
+
+  it('restarts pending preparation after renaming an instance', async () => {
+    const postMessage = vi.fn();
+    let finishFirst!: (value: number) => void;
+    let finishSecond!: (value: number) => void;
+    const ensure = vi
+      .fn()
+      .mockImplementationOnce(() => new Promise<number>((resolve) => (finishFirst = resolve)))
+      .mockImplementationOnce(() => new Promise<number>((resolve) => (finishSecond = resolve)));
+    useInstanceStore.getState().setWorker({ postMessage } as unknown as Worker);
+    const id = useInstanceStore.getState().createInstance('test.Party', 'Party');
+    postMessage.mockClear();
+    useInstanceStore.getState().setReadiness({ ensure, dispose: vi.fn() });
+
+    useInstanceStore.getState().renameInstance(id, 'Renamed Party');
+    expect(ensure).toHaveBeenCalledTimes(2);
+    finishFirst(1);
+    finishSecond(2);
+
+    await vi.waitFor(() =>
+      expect(postMessage).toHaveBeenCalledWith(expect.objectContaining({ type: 'instance:validate' }))
+    );
+    expect(postMessage.mock.calls.map(([message]) => message.type)).toEqual([
+      'instance:generateSchema',
+      'instance:validate'
+    ]);
+    expect(useInstanceStore.getState().instances[id]?.name).toBe('Renamed Party');
+  });
+
+  it('keeps a failed record visible and retries its current revision', async () => {
+    const fs = new OpfsFs(createOpfsRoot() as never);
+    const originalWrite = fs.writeFile.bind(fs);
+    let fail = true;
+    vi.spyOn(fs, 'writeFile').mockImplementation(async (path: string, value: never) => {
+      if (fail) throw new Error('disk full');
+      return originalWrite(path, value);
+    });
+    useInstanceStore.getState().setOpfsContext(fs, '/ws-retry');
+    await flush();
+    const id = useInstanceStore.getState().createInstance('test.Party', 'Retry me');
+    await vi.waitFor(() => expect(useInstanceStore.getState().saveStates[id]).toMatchObject({ state: 'failed' }));
+    expect(useInstanceStore.getState().instances[id]?.name).toBe('Retry me');
+    fail = false;
+    await useInstanceStore.getState().retrySave(id);
+
+    expect(useInstanceStore.getState().saveStates[id]?.state).toBe('saved');
+    expect((await readInstance(fs, '/ws-retry', id)).name).toBe('Retry me');
   });
 
   it('updateInstanceData replaces the record data with the full given object and bumps modifiedAt', () => {
@@ -33,9 +171,9 @@ describe('instance-store', () => {
     expect(after.modifiedAt).toBeGreaterThanOrEqual(before);
   });
 
-  it('deleteInstance removes the record', () => {
+  it('deleteInstance removes the record', async () => {
     const id = useInstanceStore.getState().createInstance('test.Party', 'My Party');
-    useInstanceStore.getState().removeInstance(id);
+    await useInstanceStore.getState().removeInstance(id);
     expect(useInstanceStore.getState().instances[id]).toBeUndefined();
   });
 
@@ -102,6 +240,23 @@ describe('instance-store', () => {
     useInstanceStore.getState().receiveValidateResult(firstRequestId, [{ path: 'name', message: 'stale' }]);
 
     expect(useInstanceStore.getState().validationErrors[id]).toEqual([{ path: 'name', message: 'fresh' }]);
+  });
+
+  it('drops a prior validation response while a changed instance waits for readiness', () => {
+    const postMessage = vi.fn();
+    useInstanceStore.getState().setWorker({ postMessage } as unknown as Worker);
+    const id = useInstanceStore.getState().createInstance('test.Party', 'My Party');
+    const priorRequestId = postMessage.mock.calls[0]![0].requestId as string;
+    useInstanceStore.getState().setReadiness({
+      ensure: vi.fn(() => new Promise<number>(() => undefined)),
+      dispose: vi.fn()
+    });
+
+    useInstanceStore.getState().updateInstanceData(id, { name: 'Changed' });
+    useInstanceStore.getState().receiveValidateResult(priorRequestId, [{ path: 'name', message: 'stale' }]);
+
+    expect(useInstanceStore.getState().validationStatus[id]).toBe('pending');
+    expect(useInstanceStore.getState().validationErrors[id]).toBeUndefined();
   });
 
   it('dispatchGenerateSchema posts an instance:generateSchema message on its own channel (not preview:generate — finding #6/#7)', () => {
@@ -260,7 +415,7 @@ describe('instance-store — OPFS persistence (finding #1)', () => {
 
     const id = useInstanceStore.getState().createInstance('test.Party', 'My Party');
     await flush();
-    useInstanceStore.getState().removeInstance(id);
+    await useInstanceStore.getState().removeInstance(id);
     await flush();
 
     await expect(readInstance(fs, '/ws1', id)).rejects.toThrow();
@@ -299,6 +454,17 @@ describe('instance-store — OPFS persistence (finding #1)', () => {
     await flush();
 
     expect(Object.keys(useInstanceStore.getState().instances)).toHaveLength(0);
+  });
+
+  it('keeps live instances when refreshed metadata reapplies the same OPFS context', async () => {
+    const fs = new OpfsFs(createOpfsRoot() as never);
+    useInstanceStore.getState().setOpfsContext(fs, '/ws-same');
+    await flush();
+    const id = useInstanceStore.getState().createInstance('test.Party', 'Unsaved Party');
+
+    useInstanceStore.getState().setOpfsContext(fs, '/ws-same');
+
+    expect(useInstanceStore.getState().instances[id]?.name).toBe('Unsaved Party');
   });
 
   it('gracefully no-ops (does not throw) when no OpfsFs context has been set yet', () => {
@@ -471,6 +637,49 @@ describe('instance-store — OPFS persistence (finding #1)', () => {
     expect(useInstanceStore.getState().schemas.has('test.Party')).toBe(false);
   });
 
+  it('preserves new-workspace schema and validation state when old replies arrive after an epoch switch', () => {
+    const postMessage = vi.fn();
+    useInstanceStore.getState().setWorker({ postMessage } as unknown as Worker);
+    const oldId = useInstanceStore.getState().createInstance('old.Party', 'Old Party');
+    const validationRequest = postMessage.mock.calls.find(([message]) => message.type === 'instance:validate')![0];
+    useInstanceStore.getState().dispatchGenerateSchema('old.Party');
+    const schemaRequest = postMessage.mock.calls.find(([message]) => message.type === 'instance:generateSchema')![0];
+
+    useInstanceStore.getState().advanceWorkspaceEpoch();
+    const newSchema = {
+      schemaVersion: 1,
+      targetId: 'new.Party',
+      title: 'New Party',
+      status: 'ready',
+      fields: []
+    } as never;
+    useInstanceStore.setState({
+      instances: {
+        'new-instance': {
+          id: 'new-instance',
+          name: 'New Party',
+          typeFqn: 'new.Party',
+          data: {},
+          createdAt: 2,
+          modifiedAt: 2
+        }
+      },
+      schemas: new Map([['new.Party', newSchema]]),
+      validationErrors: { 'new-instance': [] },
+      validationStatus: { 'new-instance': 'valid' }
+    });
+
+    expect(useInstanceStore.getState().receiveSchemaResult(schemaRequest.requestId, newSchema)).toBe(false);
+    useInstanceStore
+      .getState()
+      .receiveValidateResult(validationRequest.requestId, [{ path: '', message: `old ${oldId} response` }]);
+
+    const state = useInstanceStore.getState();
+    expect(state.schemas.get('new.Party')).toBe(newSchema);
+    expect(state.validationErrors).toEqual({ 'new-instance': [] });
+    expect(state.validationStatus).toEqual({ 'new-instance': 'valid' });
+  });
+
   it('logs an op-log error when persisting an instance write fails, since the UI already shows the edit as saved', async () => {
     useOutputStore.setState({ lines: [] });
     const fs = new OpfsFs(createOpfsRoot() as never);
@@ -496,8 +705,7 @@ describe('instance-store — OPFS persistence (finding #1)', () => {
     useOutputStore.setState({ lines: [] });
 
     vi.spyOn(fs, 'unlink').mockRejectedValue(new Error('permission denied'));
-    useInstanceStore.getState().removeInstance(id);
-    await flush();
+    await expect(useInstanceStore.getState().removeInstance(id)).rejects.toThrow('permission denied');
 
     const entry = useOutputStore.getState().lines.find((l) => l.op === 'instance' && l.subject === id);
     expect(entry).toBeDefined();

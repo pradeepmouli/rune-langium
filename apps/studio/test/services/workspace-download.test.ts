@@ -264,4 +264,37 @@ describe('downloadTargetViaRouter', () => {
     expect(body.curatedBundles).toHaveLength(1);
     expect(body.curatedBundles[0]).toEqual({ id: 'cdm', version: 'latest' });
   });
+
+  it('sends declaration selection without a legacy namespace allowlist', async () => {
+    const requestMock = vi.spyOn(downloadClient, 'requestCodegenDownload').mockResolvedValue(
+      new Response('x', {
+        status: 200,
+        headers: { 'Content-Disposition': 'attachment; filename="out.zip"' }
+      })
+    );
+    const fakeAnchor = makeFakeAnchor();
+    vi.spyOn(document, 'createElement').mockReturnValue(fakeAnchor);
+    vi.spyOn(document.body, 'appendChild').mockReturnValue(fakeAnchor);
+    vi.spyOn(document.body, 'removeChild').mockReturnValue(fakeAnchor);
+    vi.spyOn(URL, 'createObjectURL').mockReturnValue('blob:test');
+    vi.spyOn(URL, 'revokeObjectURL').mockReturnValue(undefined);
+
+    const selection = {
+      namespaces: [],
+      declarations: [{ namespace: 'app', name: 'Party', kind: 'Data' }]
+    };
+    await downloadTargetViaRouter(FILES, 'typescript', {}, [], [], [], selection);
+
+    expect(requestMock.mock.calls[0]?.[0]).toMatchObject({ selection });
+    expect(requestMock.mock.calls[0]?.[0]?.namespaces).toBeUndefined();
+  });
+
+  it('rejects ambiguous declaration and namespace scopes before the request', async () => {
+    await expect(
+      downloadTargetViaRouter(FILES, 'typescript', {}, [], ['app'], [], {
+        namespaces: [],
+        declarations: [{ namespace: 'app', name: 'Party', kind: 'Data' }]
+      })
+    ).rejects.toThrow('Declaration selection cannot be combined');
+  });
 });
