@@ -31,7 +31,7 @@ import React, { useImperativeHandle } from 'react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { cleanup, screen, fireEvent } from '@testing-library/react';
 import { setRuneStudioTestApi } from '../../src/test-api.js';
-import { closeDialogViaEscape } from '../helpers/radix-dialog.js';
+import { closeDialogViaEscape } from '../helpers/base-ui-overlay.js';
 import { usePerspectiveStore } from '../../src/store/perspective-store.js';
 
 const { editorStoreState, useEditorStore } = vi.hoisted(() => {
@@ -284,7 +284,7 @@ describe('EditorPage — Curated Models button wiring', () => {
 
     // Shared helper — wraps `userEvent.keyboard('{Escape}')` + `waitFor` to
     // ride out Radix's async Presence unmount. See
-    // `test/helpers/radix-dialog.ts` and the Copilot review on PR #215.
+    // `test/helpers/base-ui-overlay.ts` waits for the portal to unmount.
     await closeDialogViaEscape('curated-models-dialog');
   });
 });

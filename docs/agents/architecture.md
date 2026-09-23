@@ -24,7 +24,7 @@ and CLI/codegen/LSP → core.
 
 ## Studio Runtime
 
-- Studio uses React 19, React Flow 12, Dockview, zustand 5/zundo 2, Tailwind CSS 4, Radix UI, and CodeMirror 6. Manifests currently use TypeScript 7 and Langium 4.3; check manifests before changing versions.
+- Studio uses React 19, React Flow 12, Dockview, zustand 5/zundo 2, Tailwind CSS 4, Base UI, and CodeMirror 6. Manifests currently use TypeScript 7 and Langium 4.3; check manifests before changing versions.
 - OPFS stores workspace files; IndexedDB stores metadata, caches, settings, and layouts.
 - `apps/studio/src/shell/providers/StudioProviders.tsx` composes provider responsibilities; `LspProvider.tsx` owns the LSP client and transport lifecycle.
 - `WorkbenchHost` owns Dockview mounting, stable panel bridges, native-layout restore, serialization subscriptions, and disposal. Each perspective supplies a `WorkbenchDefinition` with its panels, titles, and default builder. `DockShell` remains Explore's adapter: it owns migration of `PanelLayoutRecord`, the Explore factory layout, toolbar/shortcuts, center-pane policy, and utility-tray collapse behavior. Per-workspace perspective preferences use versioned workbench settings; they must contain UI state only, never model payloads or generated artifacts.

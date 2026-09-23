@@ -4,8 +4,8 @@
 /**
  * Tests for OperatorPalette — categorized operator picker.
  *
- * NOTE: OperatorPalette now uses DS Popover (renders via Portal into
- * document.body) + Command (cmdk). Queries target document.body.
+ * NOTE: OperatorPalette uses DS Popover (rendered through a portal into
+ * document.body) and the Base UI-backed Command. Queries target document.body.
  *
  * @module
  */
@@ -40,10 +40,11 @@ describe('OperatorPalette', () => {
     const input = document.body.querySelector('[data-testid="palette-search"]') as HTMLInputElement;
     fireEvent.change(input, { target: { value: 'filter' } });
 
-    // Should show filter operator — cmdk items use data-slot="command-item"
+    // Filtered command items retain the shared data slot.
     const items = document.body.querySelectorAll('[data-slot="command-item"]');
     const labels = Array.from(items).map((b) => b.textContent);
     expect(labels.some((l) => l?.toLowerCase().includes('filter'))).toBe(true);
+    expect(labels.some((l) => l?.includes('+ Add'))).toBe(false);
   });
 
   it('calls onSelect with created node when operator clicked', () => {
@@ -51,7 +52,7 @@ describe('OperatorPalette', () => {
     const onClose = vi.fn();
     render(<OperatorPalette open={true} onSelect={onSelect} onClose={onClose} />);
 
-    // Click the first cmdk command-item (operator)
+    // Click the first command item (operator)
     const firstItem = document.body.querySelector('[data-slot="command-item"]');
     expect(firstItem).toBeTruthy();
     fireEvent.click(firstItem!);

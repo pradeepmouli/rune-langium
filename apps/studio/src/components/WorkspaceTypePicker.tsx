@@ -20,6 +20,7 @@ import {
   CommandItem,
   CommandList
 } from '@rune-langium/design-system/ui/command';
+import type { CommandEntryGroup } from '@rune-langium/design-system/ui/command';
 import { Popover, PopoverContent, PopoverTrigger } from '@rune-langium/design-system/ui/popover';
 import { ChevronsUpDown } from 'lucide-react';
 import { withInstrumentation } from '../services/instrumentation/core.js';
@@ -103,47 +104,64 @@ export const WorkspaceTypePicker = withInstrumentation(
               }
             />
           )}
-          renderPopover={({ groups, searchQuery, onSearchChange, onSelect: selectOption, allowClear: canClear }) => (
-            <PopoverContent className="w-80 p-0" align="start">
-              <Command label={searchLabel} shouldFilter={false}>
-                <CommandInput autoFocus placeholder={searchLabel} value={searchQuery} onValueChange={onSearchChange} />
-                <CommandList>
-                  <CommandEmpty>No matching types.</CommandEmpty>
-                  {canClear && (
-                    <CommandGroup>
-                      <CommandItem value="__clear__" aria-label="Clear selection" onSelect={() => selectOption(null)}>
-                        Clear selection
-                      </CommandItem>
-                    </CommandGroup>
-                  )}
-                  {groups.map((group) => (
-                    <CommandGroup key={group.label} heading={group.label}>
-                      {group.options.map((option) => {
-                        const optionLabel = `${option.label}${option.namespace ? ` — ${option.namespace}` : ''}`;
-                        return (
-                          <CommandItem
-                            key={option.value}
-                            value={option.value}
-                            aria-label={optionLabel}
-                            onSelect={() => selectOption(option.value)}
-                          >
-                            <span
-                              className={`size-2 shrink-0 rounded-full ${getKindDotClass(option.kind)}`}
-                              aria-hidden="true"
-                            />
-                            <span>{option.label}</span>
-                            {option.namespace && (
-                              <span className="ml-auto text-xs text-muted-foreground">{option.namespace}</span>
-                            )}
+          renderPopover={({ groups, onSelect: selectOption, allowClear: canClear }) => {
+            const commandGroups: CommandEntryGroup<TypeOption | null>[] = [
+              ...groups.map((group) => ({
+                id: `namespace:${group.label}`,
+                items: group.options.map((option) => ({
+                  value: option,
+                  label: option.label,
+                  searchText: `${option.label} ${option.namespace ?? ''}`
+                }))
+              })),
+              ...(canClear ? [{ id: 'clear', items: [{ value: null, label: 'Clear selection' }] }] : [])
+            ];
+
+            return (
+              <PopoverContent className="w-80 p-0" align="start">
+                <Command items={commandGroups} onItemSelect={(option) => selectOption(option?.value ?? null)}>
+                  <CommandInput autoFocus aria-label={searchLabel} placeholder={searchLabel} />
+                  <CommandList>
+                    <CommandEmpty>No matching types.</CommandEmpty>
+                    {groups.map((group) => (
+                      <CommandGroup<TypeOption | null>
+                        key={group.label}
+                        id={`namespace:${group.label}`}
+                        heading={group.label}
+                      >
+                        {(item) => {
+                          const option = item.value;
+                          if (!option) return null;
+                          const optionLabel = `${option.label}${option.namespace ? ` — ${option.namespace}` : ''}`;
+                          return (
+                            <CommandItem key={option.value} value={item} aria-label={optionLabel}>
+                              <span
+                                className={`size-2 shrink-0 rounded-full ${getKindDotClass(option.kind)}`}
+                                aria-hidden="true"
+                              />
+                              <span>{option.label}</span>
+                              {option.namespace && (
+                                <span className="ml-auto text-xs text-muted-foreground">{option.namespace}</span>
+                              )}
+                            </CommandItem>
+                          );
+                        }}
+                      </CommandGroup>
+                    ))}
+                    {canClear && (
+                      <CommandGroup<TypeOption | null> id="clear">
+                        {(item) => (
+                          <CommandItem key="clear" value={item} aria-label="Clear selection">
+                            Clear selection
                           </CommandItem>
-                        );
-                      })}
-                    </CommandGroup>
-                  ))}
-                </CommandList>
-              </Command>
-            </PopoverContent>
-          )}
+                        )}
+                      </CommandGroup>
+                    )}
+                  </CommandList>
+                </Command>
+              </PopoverContent>
+            );
+          }}
         />
       </Popover>
     );

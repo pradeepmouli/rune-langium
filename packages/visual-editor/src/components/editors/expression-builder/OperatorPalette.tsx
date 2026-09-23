@@ -20,7 +20,8 @@ import {
   CommandInput,
   CommandItem,
   CommandList,
-  CommandSeparator
+  CommandSeparator,
+  type CommandEntry
 } from '@rune-langium/design-system/ui/command';
 import { OPERATOR_CATALOG } from './operator-catalog.js';
 import type { OperatorDefinition } from './operator-catalog.js';
@@ -36,6 +37,10 @@ export interface OperatorPaletteProps {
   /** Callback to open the reference picker from the palette. */
   onOpenReferencePicker?: () => void;
 }
+
+type PaletteCommand =
+  | { readonly kind: 'operator'; readonly operator: AnnotatedOperator }
+  | { readonly kind: 'reference' };
 
 export function OperatorPalette({
   open,
@@ -61,6 +66,21 @@ export function OperatorPalette({
       operators: cat.operators.map((op) => ({ ...op, recommended: true }))
     }));
 
+  const commandCategories = categories.map((category) => ({
+    ...category,
+    items: [...category.operators]
+      .sort((a, b) => Number(b.recommended) - Number(a.recommended))
+      .map<CommandEntry<PaletteCommand>>((operator) => ({
+        value: { kind: 'operator', operator },
+        label: operator.label,
+        searchText: `${operator.label} ${operator.description}`
+      }))
+  }));
+  const referenceItem: CommandEntry<PaletteCommand> | undefined = onOpenReferencePicker
+    ? { value: { kind: 'reference' }, label: 'Variable', searchText: 'variable pick from scope' }
+    : undefined;
+  const commandGroups = [...commandCategories, ...(referenceItem ? [{ id: 'reference', items: [referenceItem] }] : [])];
+
   return (
     <Popover
       open={open}
@@ -78,58 +98,65 @@ export function OperatorPalette({
         render={<span aria-hidden style={{ position: 'absolute', width: 0, height: 0, pointerEvents: 'none' }} />}
       />
       <PopoverContent className="w-64 p-0" align="start" sideOffset={4} data-testid="operator-palette">
-        <Command>
-          <CommandInput placeholder="Search operators..." data-testid="palette-search" autoFocus />
+        <Command
+          items={commandGroups}
+          onItemSelect={(command) => {
+            if (command.kind === 'reference') {
+              onOpenReferencePicker?.();
+              onClose();
+              return;
+            }
+            handleSelect(command.operator);
+          }}
+        >
+          <CommandInput
+            aria-label="Search operators"
+            placeholder="Search operators..."
+            data-testid="palette-search"
+            autoFocus
+          />
           <CommandList className="studio-scroll max-h-60">
             <CommandEmpty>No operators found.</CommandEmpty>
-            {categories.map((category, idx) => {
-              // Sort: recommended first, then non-recommended
-              const sorted = [...category.operators].sort((a, b) => {
-                if (a.recommended === b.recommended) return 0;
-                return a.recommended ? -1 : 1;
-              });
-
+            {commandCategories.map((category, idx) => {
               return (
                 <div key={category.id}>
                   {idx > 0 && <CommandSeparator />}
-                  <CommandGroup heading={category.label}>
-                    {sorted.map((op: AnnotatedOperator) => (
-                      <CommandItem
-                        key={`${op.$type}-${op.operator ?? op.label}`}
-                        value={`${op.label} ${op.description}`}
-                        onSelect={() => handleSelect(op)}
-                        data-testid={`palette-option-${op.label}`}
-                        data-recommended={op.recommended}
-                        aria-label={`${op.label}${op.recommended ? '' : ' (not recommended for this context)'}`}
-                        className={op.recommended ? '' : 'opacity-50'}
-                      >
-                        <span className="font-mono font-medium">{op.label}</span>
-                        <span className="text-3xs text-muted-foreground">{op.description}</span>
-                      </CommandItem>
-                    ))}
+                  <CommandGroup<PaletteCommand> id={category.id} heading={category.label}>
+                    {(item) => {
+                      const operator = item.value.kind === 'operator' ? item.value.operator : null;
+                      if (!operator) return null;
+                      return (
+                        <CommandItem
+                          key={`${operator.$type}-${operator.operator ?? operator.label}`}
+                          value={item}
+                          data-testid={`palette-option-${operator.label}`}
+                          data-recommended={operator.recommended}
+                          aria-label={`${operator.label}${operator.recommended ? '' : ' (not recommended for this context)'}`}
+                          className={operator.recommended ? '' : 'opacity-50'}
+                        >
+                          <span className="font-mono font-medium">{operator.label}</span>
+                          <span className="text-3xs text-muted-foreground">{operator.description}</span>
+                        </CommandItem>
+                      );
+                    }}
                   </CommandGroup>
                 </div>
               );
             })}
+            {referenceItem ? (
+              <>
+                <CommandSeparator />
+                <CommandGroup<PaletteCommand> id="reference">
+                  {(item) => (
+                    <CommandItem value={item} data-testid="palette-open-reference">
+                      <span className="font-mono font-medium">Variable</span>
+                      <span className="text-3xs text-muted-foreground">Pick from scope</span>
+                    </CommandItem>
+                  )}
+                </CommandGroup>
+              </>
+            ) : null}
           </CommandList>
-          {onOpenReferencePicker && (
-            <>
-              <CommandSeparator />
-              <div className="p-1">
-                <CommandItem
-                  value="variable pick from scope"
-                  onSelect={() => {
-                    onOpenReferencePicker();
-                    onClose();
-                  }}
-                  data-testid="palette-open-reference"
-                >
-                  <span className="font-mono font-medium">Variable</span>
-                  <span className="text-3xs text-muted-foreground">Pick from scope</span>
-                </CommandItem>
-              </div>
-            </>
-          )}
         </Command>
       </PopoverContent>
     </Popover>
