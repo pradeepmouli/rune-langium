@@ -7,6 +7,7 @@ import { dirname, resolve } from 'node:path';
 import { createHash } from 'node:crypto';
 import type { Route } from '@playwright/test';
 import { checkout as test, expect, loadCdm } from '../fixtures.js';
+import { typeNavigationButton } from '../../helpers/type-navigation.js';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 // Resolves to apps/studio/test/fixtures/curated/cdm-tiny.tar.gz — confirmed
@@ -229,24 +230,9 @@ test.describe('J16 — Resilience & chrome', () => {
     'J16 toasts appear and auto-dismiss',
     { annotation: { type: 'journey-subid', description: 'toasts' } },
     async ({ page, evidence }) => {
-      // Reuses the exact real trigger found in ExportPerspective.tsx's
-      // handleModalGenerate: a CodegenDownloadError (thrown on any non-OK
-      // /api/codegen response) calls showToast({ variant: 'destructive',
-      // title: 'Code generation failed', ... }) — a REGULAR toast (default
-      // duration={4000}), not a loading toast (those never auto-dismiss; see
-      // StudioToastProvider.tsx's showLoadingToast, timeout: 0).
-      //
-      // Unlike J13's own generate-flow test (which deliberately exercises the
-      // REAL /api/codegen endpoint and soft-asserts around its known prod
-      // flakiness — see that file's header comment), this test's whole
-      // purpose is narrower: "does the toast-appears-and-auto-dismisses UI
-      // mechanism work," not "does codegen actually succeed or fail." Relying
-      // on the real endpoint happening to fail made this test non-deterministic
-      // (a healthy /api/codegen meant the toast assertion never actually ran).
-      // Force the failure deterministically instead, using the same
-      // page.route mocking technique this journey's own first test
-      // (curated-load-cancel, above) already established for forcing
-      // deterministic network behavior.
+      // The Code tab still uses DownloadConfigDialog and reports server-backed
+      // download failures as a toast. Force that response so this journey
+      // tests toast display and dismissal independently of codegen health.
       await page.route('**/api/codegen', async (route: Route) => {
         await route.fulfill({
           status: 500,
@@ -265,36 +251,15 @@ test.describe('J16 — Resilience & chrome', () => {
         }
       ]);
       await expect(page.getByTestId('explore-workbench')).toBeVisible();
-      await page.getByTestId('rail-export').click();
-      await expect(page.getByTestId('export-perspective')).toBeVisible({ timeout: 20000 });
-      // Specific, source-confirmed testid (read from CodegenTargetsTable.tsx)
-      // — same target J13/J17 already use on this branch, rather than the
-      // broader role/name query this test used previously.
+      await page.getByTestId('namespace-search').fill('Sample');
+      await typeNavigationButton(page, 'toast.Sample').click();
+      await page.getByRole('tab', { name: 'Code' }).click();
       await page.getByTestId('codegen-targets-table__download-zod').click();
       await expect(page.getByTestId('download-config-dialog')).toBeVisible({ timeout: 10000 });
       await page.getByTestId('download-config-dialog__generate').click();
 
-      // Live-verified this session against packages/design-system/src/ui/toast.tsx
-      // + @base-ui/react's ToastRoot source (node_modules/@base-ui/react/toast/root/ToastRoot.js):
-      // the rendered toast root has `role="dialog"` (Base UI sets
-      // `role: isHighPriority ? 'alertdialog' : 'dialog'`; StudioToastProvider
-      // never sets `toast.priority`, so it's always the `'dialog'` branch),
-      // with `aria-labelledby` pointing at the rendered `ToastTitle` — and
-      // `showToast` here is called with `title: 'Code generation failed'`, so
-      // the dialog's accessible name is that title text. `getByRole('dialog',
-      // { name: ... })` is therefore the correct, real locator — NOT a
-      // plain-text locator, since the description text ("detail") is separate
-      // and the title/description are two different child elements under the
-      // same role="dialog" root.
-      //
-      // /api/codegen is now deterministically mocked to fail above, so the
-      // toast is guaranteed to fire via ExportPerspective's own real error
-      // handling — there is no longer a legitimate "endpoint happened to
-      // succeed" case to soft-assert around. A softFinding fallback here
-      // would silently mask a genuine regression in the toast mechanism
-      // itself (this test's actual subject), so the assertions below are
-      // hard, not soft — deliberately different from J13's generate test,
-      // which still soft-asserts because it exercises the real endpoint.
+      // Base UI names the toast dialog from its title; the mocked failure
+      // therefore gives us a stable accessible locator.
       const toast = page.getByRole('dialog', { name: 'Code generation failed' });
       await expect(toast).toBeVisible({ timeout: 20000 });
       await evidence.checkpoint('toast-appeared');

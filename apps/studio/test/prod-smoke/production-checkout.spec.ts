@@ -5,6 +5,7 @@ import { Buffer } from 'node:buffer';
 import { execFileSync } from 'node:child_process';
 import { expect, test } from '@playwright/test';
 import { expectSourceReadOnly } from '../prod-ux/readiness.js';
+import { typeNavigationButton } from '../helpers/type-navigation.js';
 
 const CF_PAGES_PROJECT = 'daikonic-dev';
 const CF_PRODUCTION_BRANCH = 'master';
@@ -87,12 +88,10 @@ test.describe('production checkout smoke', () => {
     const namespaceSearch = page.getByTestId('namespace-search');
     await namespaceSearch.fill('BusinessDayConvention');
 
-    await page.getByTestId(`ns-type-nav-${ENUM_NODE_ID}`).click();
-    await expect(page.getByText(ENUM_NODE_ID, { exact: true })).toBeVisible({ timeout: 15000 });
+    await typeNavigationButton(page, ENUM_NODE_ID, 'RosettaEnumeration').click();
 
     await namespaceSearch.fill('BusinessCenters');
-    await page.getByTestId(`ns-type-nav-${DATA_NODE_ID}`).click();
-    await expect(page.getByText(DATA_NODE_ID, { exact: true })).toBeVisible({ timeout: 15000 });
+    await typeNavigationButton(page, DATA_NODE_ID).click();
 
     await page.getByRole('button', { name: 'Structure' }).click();
     await expect(page.getByTestId('structure-view-flow')).toBeVisible();
@@ -131,8 +130,7 @@ test.describe('production checkout smoke', () => {
     const namespaceSearch = page.getByTestId('namespace-search');
     await namespaceSearch.fill('Counterparty');
 
-    await page.getByTestId(`ns-type-nav-${COUNTERPARTY_NODE_ID}`).click();
-    await expect(page.getByText(COUNTERPARTY_NODE_ID, { exact: true })).toBeVisible({ timeout: 15_000 });
+    await typeNavigationButton(page, COUNTERPARTY_NODE_ID).click();
 
     await page.getByRole('button', { name: 'Inspector' }).click();
     await expect(centerStack.getByRole('heading', { name: 'Counterparty' })).toBeVisible({ timeout: 10_000 });
@@ -170,7 +168,7 @@ test.describe('production checkout smoke', () => {
 
     const namespaceSearch = page.getByTestId('namespace-search');
     await namespaceSearch.fill('Counterparty');
-    await page.getByTestId(`ns-type-nav-${COUNTERPARTY_NODE_ID}`).click();
+    await typeNavigationButton(page, COUNTERPARTY_NODE_ID).click();
 
     await expect(page.getByTestId('rune-node-hydrating-spinner')).toBeVisible({ timeout: 5_000 });
 

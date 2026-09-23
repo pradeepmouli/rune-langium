@@ -62,12 +62,10 @@ describe('StudioToastProvider', () => {
 
     screen.getByText('show-loading').click();
 
-    const toast = await screen.findByText('Loading demo.namespace…');
-    expect(toast).toBeTruthy();
-    const toastRoot = toast.closest('[data-slot="toast"]');
-    expect(toastRoot).not.toBeNull();
-    expect(toastRoot!.getAttribute('data-variant')).toBe('loading');
-    expect(toastRoot!.querySelector('[data-slot="spinner"]')).not.toBeNull();
+    const toastRoot = await screen.findByRole('dialog', { name: 'Loading demo.namespace…' });
+    expect(toastRoot.getAttribute('data-variant')).toBe('loading');
+    expect(toastRoot.querySelector('[data-slot="spinner"]')).not.toBeNull();
+    expect(toastRoot.querySelector('[data-slot="toast-description"]')).toHaveTextContent('Loading demo.namespace…');
   });
 
   it('dismissToast removes a toast by the id showLoadingToast returned', async () => {
@@ -93,11 +91,9 @@ describe('StudioToastProvider', () => {
 
     screen.getByText('show').click();
 
-    const toast = await screen.findByText('Plain notification');
-    const toastRoot = toast.closest('[data-slot="toast"]');
-    expect(toastRoot).not.toBeNull();
-    expect(toastRoot!.getAttribute('data-variant')).toBe('destructive');
-    expect(toastRoot!.querySelector('[data-slot="spinner"]')).toBeNull();
+    const toastRoot = await screen.findByRole('dialog', { name: 'Plain notification' });
+    expect(toastRoot.getAttribute('data-variant')).toBe('destructive');
+    expect(toastRoot.querySelector('[data-slot="spinner"]')).toBeNull();
   });
 });
 

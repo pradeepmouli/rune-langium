@@ -477,6 +477,11 @@ export const FormPreviewPanel = withInstrumentation(
         >
           {summaryMessage}
         </p>
+        {activeSample?.validated && activeSample.errors[''] ? (
+          <p role="alert" className="px-3 pt-1 text-xs text-destructive">
+            {activeSample.errors['']}
+          </p>
+        ) : null}
         <form className="preview-panel__body studio-scroll space-y-3 overflow-auto p-3">
           {schema.kind === 'choice' ? (
             <ChoiceFieldGroup

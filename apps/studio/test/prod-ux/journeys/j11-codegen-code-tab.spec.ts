@@ -2,6 +2,7 @@
 // Copyright (c) 2026 Pradeep Mouli
 
 import { checkout as test, expect, loadCdm, authorScratchType } from '../fixtures.js';
+import { typeNavigationButton } from '../../helpers/type-navigation.js';
 import { ANCHOR_DATA } from '../anchors.js';
 
 // Target keys match packages/codegen/src/types.ts's `Target` union exactly
@@ -27,7 +28,7 @@ test.describe('J11 — Client-side codegen (Code tab)', () => {
 
     const namespaceSearch = page.getByTestId('namespace-search');
     await namespaceSearch.fill('BusinessCenters');
-    await page.getByTestId(`ns-type-nav-${ANCHOR_DATA}`).click();
+    await typeNavigationButton(page, ANCHOR_DATA).click();
 
     await page.getByRole('tab', { name: 'Code' }).click();
     await expect(page.getByTestId('panel-codePreview')).toBeVisible({ timeout: 20000 });
@@ -88,7 +89,7 @@ test.describe('J11 — Client-side codegen (Code tab)', () => {
       namespace: SCRATCH_NAMESPACE,
       attributes: [{ name: 'title', typeName: 'string', cardinality: '(1..1)' }]
     });
-    await page.getByTestId(`ns-type-nav-${SCRATCH_NAMESPACE}.${SCRATCH_TYPE}`).click();
+    await typeNavigationButton(page, `${SCRATCH_NAMESPACE}.${SCRATCH_TYPE}`).click();
     await page.getByRole('tab', { name: 'Code' }).click();
     await expect(page.getByTestId('panel-codePreview')).toBeVisible({ timeout: 20000 });
 

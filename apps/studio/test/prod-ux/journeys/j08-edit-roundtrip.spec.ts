@@ -10,6 +10,7 @@ import {
   waitForPerfLogOpId,
   captureOpLogSnapshot
 } from '../fixtures.js';
+import { typeNavigationButton } from '../../helpers/type-navigation.js';
 import type { Page } from '@playwright/test';
 
 const platformModifier = process.platform === 'darwin' ? 'Meta' : 'Control';
@@ -56,7 +57,7 @@ test.describe('J8 — Edit round-trip (workspace file only, never curated)', () 
     // of silently appending a duplicate `type X:` block. Open the created
     // node's Inspector (a 3-way split alongside Structure/Source, not a
     // separate view) via the nav-arrow testid, matching J04's pattern.
-    await page.getByTestId(`ns-type-nav-${NODE_ID}`).click();
+    await typeNavigationButton(page, NODE_ID).click();
     await page.getByRole('button', { name: 'Inspector' }).click();
     // TypeHeader renders the editable name as an <Input data-slot="type-name-input">
     // (aria-label "Data type name"), not a heading — the heading role only
@@ -248,7 +249,7 @@ test.describe('J8 — Edit round-trip (workspace file only, never curated)', () 
     await expect(page.getByTestId('explore-workbench')).toBeVisible({ timeout: 20000 });
     const namespaceSearch = page.getByTestId('namespace-search');
     await namespaceSearch.fill(TYPE_NAME);
-    await expect(page.getByTestId(`ns-type-nav-${NODE_ID}`)).toBeVisible({ timeout: 15000 });
+    await expect(typeNavigationButton(page, NODE_ID)).toBeVisible({ timeout: 15000 });
     await evidence.checkpoint('reloaded-persisted');
 
     // Source tab reflects the edits, and — the regression this journey
@@ -256,7 +257,7 @@ test.describe('J8 — Edit round-trip (workspace file only, never curated)', () 
     // patched into the existing declaration in place, not appended as a
     // duplicate: exactly one `type ScratchOrder:` block, carrying the
     // added `notes (0..*)` attribute, survives the reload.
-    await page.getByTestId(`ns-type-nav-${NODE_ID}`).click();
+    await typeNavigationButton(page, NODE_ID).click();
     await ensureSourcePaneOpen(page);
     const sourceEditor = page.getByTestId('source-editor').locator('.cm-content');
     await expect(sourceEditor).toBeVisible({ timeout: 10000 });

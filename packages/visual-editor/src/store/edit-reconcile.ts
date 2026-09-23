@@ -67,6 +67,36 @@ function valueEqual(a: unknown, b: unknown): boolean {
   }
 }
 
+const PARSE_METADATA_KEYS = new Set([
+  '$cstNode',
+  '$cstRange',
+  '$textRegion',
+  '$container',
+  '$containerProperty',
+  '$containerIndex',
+  '$document'
+]);
+
+/** Compare authored patch fields while allowing a parsed AST to carry metadata. */
+function parsedContainsPatchValue(parsed: unknown, patched: unknown): boolean {
+  if (Object.is(parsed, patched)) return true;
+  if (Array.isArray(patched)) {
+    return (
+      Array.isArray(parsed) &&
+      parsed.length === patched.length &&
+      patched.every((item, index) => parsedContainsPatchValue(parsed[index], item))
+    );
+  }
+  if (patched === null || typeof patched !== 'object') return false;
+  if (parsed === null || typeof parsed !== 'object' || Array.isArray(parsed)) return false;
+  return Object.entries(patched).every(
+    ([key, value]) =>
+      PARSE_METADATA_KEYS.has(key) ||
+      (Object.prototype.hasOwnProperty.call(parsed, key) &&
+        parsedContainsPatchValue((parsed as Record<string, unknown>)[key], value))
+  );
+}
+
 /** Navigate `root` along a patch path; report whether it exists and its value. */
 function readPath(root: GraphDraft, path: ReadonlyArray<string | number>): { found: boolean; value: unknown } {
   let cur: unknown = root;
@@ -106,6 +136,39 @@ export function patchAlreadySatisfied(parse: GraphDraft, patch: Patch): boolean 
 }
 
 /**
+ * An added array item may be edited before its first source reparse. Compare
+ * the add with those later field edits applied, or a parse containing the
+ * finished item will replay the original add and duplicate it.
+ */
+function finalAddedValue(patches: Patches, index: number): unknown {
+  const added = patches[index]!;
+  if (added.op !== 'add' || !Array.isArray(added.path)) return added.value;
+
+  let value = added.value;
+  const parentPath = added.path.slice(0, -1);
+  for (const later of patches.slice(index + 1)) {
+    if (!Array.isArray(later.path)) continue;
+    const sameArray = parentPath.every((segment, pathIndex) => Object.is(segment, later.path[pathIndex]));
+    if (!sameArray) continue;
+    // An insertion or removal can shift indices. In that case retain the
+    // original conservative comparison rather than attach another row's edit.
+    if (later.path.length === added.path.length && (later.op === 'add' || later.op === 'remove')) {
+      return added.value;
+    }
+    const editsAddedItem =
+      later.path.length > added.path.length &&
+      added.path.every((segment, pathIndex) => Object.is(segment, later.path[pathIndex]));
+    if (!editsAddedItem) continue;
+    try {
+      value = apply({ value }, [{ ...later, path: ['value', ...later.path.slice(added.path.length)] }]).value;
+    } catch {
+      return added.value;
+    }
+  }
+  return value;
+}
+
+/**
  * Reconcile pending user-edit patches with a fresh, healthy parse:
  *   1. drop patches the parse already satisfies (round-tripped through source),
  *   2. replay the rest on top of the parse so in-flight edits survive,
@@ -131,7 +194,11 @@ export function reconcileParse(
     return { nodesById: parse.nodes, edgesById: parse.edges, remainingPatches: [] };
   }
 
-  const unsatisfied = pending.filter((p) => !patchAlreadySatisfied(parse, p));
+  const unsatisfied = pending.filter((patch, index) => {
+    if (patch.op !== 'add' || !Array.isArray(patch.path)) return !patchAlreadySatisfied(parse, patch);
+    const { found, value } = readPath(parse, patch.path);
+    return !found || !parsedContainsPatchValue(value, finalAddedValue(pending, index));
+  });
   if (unsatisfied.length === 0) {
     return { nodesById: parse.nodes, edgesById: parse.edges, remainingPatches: [] };
   }

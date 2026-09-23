@@ -3,6 +3,7 @@
 
 import JSZip from 'jszip';
 import { expect, test } from '@playwright/test';
+import { typeSelectionCheckbox } from '../helpers/type-navigation.js';
 
 const source = `namespace demo
 type Address:
@@ -51,7 +52,7 @@ test('selects and previews a captured declaration export', async ({ page }) => {
   await expect(page.getByTestId('explore-workbench')).toBeVisible({ timeout: 15_000 });
   await page.getByTestId('rail-export').click();
   await expect(page.getByTestId('export-perspective')).toBeVisible();
-  await page.getByTestId('ns-type-checkbox-demo.Party').click();
+  await typeSelectionCheckbox(page.getByTestId('export-perspective'), 'demo.Party').click();
   await page.getByRole('button', { name: 'Generate 1 selected' }).click();
   await expect(page.getByTestId('export-artifact-preview')).toBeVisible();
   await expect(page.getByLabel('Generated export code')).toContainText('export interface Party');
@@ -70,16 +71,16 @@ test('keeps export selection and settings reachable at a constrained width', asy
   await page.getByTestId('rail-export').click();
 
   const perspective = page.getByTestId('export-perspective');
-  const panes = perspective.getByRole('navigation', { name: 'Export panes' });
+  const panes = perspective.getByRole('tablist');
   const selection = perspective.getByTestId('export-selection').first();
   const settings = perspective.getByTestId('export-settings').first();
   await expect(panes).toBeVisible();
   await expect(selection).toBeVisible();
   await expect(settings).not.toBeVisible();
 
-  await panes.getByRole('button', { name: 'Settings' }).click();
+  await panes.getByRole('tab', { name: 'Settings' }).click();
   await expect(settings).toBeVisible();
   await expect(selection).not.toBeVisible();
-  await panes.getByRole('button', { name: 'Selection' }).click();
+  await panes.getByRole('tab', { name: 'Selection' }).click();
   await expect(selection).toBeVisible();
 });

@@ -498,10 +498,11 @@ describe('preview-store dispatchValidate/receiveValidateResult', () => {
 
   it('dispatchValidate posts an instance:validate message and receiveValidateResult writes errors/valid onto the sample', () => {
     const postMessage = vi.fn();
+    const targetId = 'alpha.Trade#Data';
     usePreviewStore.getState().setWorkerRef({ postMessage } as unknown as Worker);
-    usePreviewStore.getState().updateSampleValues('alpha.Trade', { value: '' }, true);
+    usePreviewStore.getState().updateSampleValues(targetId, { value: '' }, true);
 
-    usePreviewStore.getState().dispatchValidate('alpha.Trade', { value: '' });
+    usePreviewStore.getState().dispatchValidate(targetId, { value: '' });
     expect(postMessage).toHaveBeenCalledWith(
       expect.objectContaining({ type: 'instance:validate', typeFqn: 'alpha.Trade', data: { value: '' } })
     );
@@ -509,13 +510,13 @@ describe('preview-store dispatchValidate/receiveValidateResult', () => {
 
     usePreviewStore.getState().receiveValidateResult(requestId, [{ path: 'value', message: 'Value is required' }]);
 
-    expect(usePreviewStore.getState().samples.get('alpha.Trade')).toMatchObject({
+    expect(usePreviewStore.getState().samples.get(targetId)).toMatchObject({
       values: { value: '' },
       errors: { value: 'Value is required' },
       valid: false,
       validated: true
     });
-    expect(usePreviewStore.getState().status).toEqual({ state: 'invalid', targetId: 'alpha.Trade' });
+    expect(usePreviewStore.getState().status).toEqual({ state: 'invalid', targetId });
   });
 
   it('drops a stale out-of-order receiveValidateResult in favor of the latest dispatched request', () => {

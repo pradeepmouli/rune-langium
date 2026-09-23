@@ -27,8 +27,8 @@ describe('type graph window bridge', () => {
   });
 
   it('installs a read-only window.__runeStudioTypeGraph.snapshot()', () => {
-    const nodeA = fakeNode('a.Trade', 'Data', 'Trade');
-    const nodeB = fakeNode('a.Party', 'Data', 'Party');
+    const nodeA = fakeNode('a.Trade#Data', 'Data', 'Trade');
+    const nodeB = fakeNode('a.Party#Data', 'Data', 'Party');
     nodeB.meta.deferred = true;
     useEditorStore.setState({
       nodesById: new Map([
@@ -44,8 +44,8 @@ describe('type graph window bridge', () => {
     expect(snapshot).toHaveLength(2);
     expect(snapshot).toEqual(
       expect.arrayContaining([
-        { id: 'a.Trade', data: nodeA.data, deferred: false },
-        { id: 'a.Party', data: nodeB.data, deferred: true }
+        { id: 'a.Trade#Data', data: nodeA.data, deferred: false },
+        { id: 'a.Party#Data', data: nodeB.data, deferred: true }
       ])
     );
   });

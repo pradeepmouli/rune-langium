@@ -2,6 +2,7 @@
 // Copyright (c) 2026 Pradeep Mouli
 
 import { checkout as test, expect, loadCdm, authorScratchType } from '../fixtures.js';
+import { typeNavigationButton } from '../../helpers/type-navigation.js';
 import { ANCHOR_DATA } from '../anchors.js';
 import { walkTypeClosure } from '../type-closure.js';
 import type { TypeClosureRecord } from '../evidence.js';
@@ -114,9 +115,9 @@ test.describe('J18 — Data-type closure mapping (scripted completeness check)',
     // the first place, so checking without re-navigating back to the root
     // was vacuous (always passes, never actually exercises the root's own
     // fields) — explicitly re-select the root first, same
-    // namespace-search + `ns-type-nav-<fqn>` pattern used throughout this file.
+    // namespace search and kind-aware navigation pattern used throughout this file.
     await page.getByTestId('namespace-search').fill('ScratchClosureRoot');
-    await page.getByTestId(`ns-type-nav-${SCRATCH_ROOT_FQN}`).click();
+    await typeNavigationButton(page, SCRATCH_ROOT_FQN).click();
     const formPreviewPanel = page.getByTestId('panel-formPreview');
     await expect(formPreviewPanel).toBeVisible({ timeout: 20000 });
 
@@ -132,7 +133,7 @@ test.describe('J18 — Data-type closure mapping (scripted completeness check)',
     // Inspector specifically rather than asserting over the whole page,
     // which would be vacuous once the walk has moved off it.
     await page.getByTestId('namespace-search').fill('ScratchClosureChoice');
-    await page.getByTestId(`ns-type-nav-${SCRATCH_CHOICE_FQN}`).click();
+    await typeNavigationButton(page, SCRATCH_CHOICE_FQN, 'Choice').click();
     await page.getByRole('button', { name: 'Inspector' }).click();
     await expect(page.getByRole('heading', { name: 'ScratchClosureChoice' })).toBeVisible({ timeout: 15000 });
     await expect(page.locator('[data-slot="type-link"][disabled]')).toHaveCount(0);

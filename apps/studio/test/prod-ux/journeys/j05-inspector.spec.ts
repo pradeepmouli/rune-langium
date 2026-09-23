@@ -2,6 +2,7 @@
 // Copyright (c) 2026 Pradeep Mouli
 
 import { checkout as test, expect, loadCdm } from '../fixtures.js';
+import { typeNavigationButton } from '../../helpers/type-navigation.js';
 import { expectPopulatedAttributes } from '../readiness.js';
 import { ANCHOR_DATA } from '../anchors.js';
 
@@ -17,8 +18,7 @@ test.describe('J05 — Inspector pane', () => {
 
     await page.getByTestId('rail-explore').click();
     await page.getByTestId('namespace-search').fill('BusinessCenters');
-    await page.getByTestId(`ns-type-nav-${ANCHOR_DATA}`).click();
-    await expect(page.getByText(ANCHOR_DATA, { exact: true })).toBeVisible({ timeout: 15000 });
+    await typeNavigationButton(page, ANCHOR_DATA).click();
 
     await page.getByRole('button', { name: 'Inspector' }).click();
     await expect(centerStack.getByRole('heading', { name: 'BusinessCenters' })).toBeVisible();
@@ -35,7 +35,7 @@ test.describe('J05 — Inspector pane', () => {
       await loadCdm(page, evidence);
       await page.getByTestId('rail-explore').click();
       await page.getByTestId('namespace-search').fill('BusinessCenters');
-      await page.getByTestId(`ns-type-nav-${ANCHOR_DATA}`).click();
+      await typeNavigationButton(page, ANCHOR_DATA).click();
       for (const name of ['Graph', 'Source', 'Inspector']) {
         const button = page.getByRole('button', { name, exact: true });
         if ((await button.getAttribute('aria-pressed')) !== 'true') await button.click();
