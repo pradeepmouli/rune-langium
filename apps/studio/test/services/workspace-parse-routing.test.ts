@@ -38,7 +38,7 @@ describe('parseWorkspace routing', () => {
 
     const parsed = parseWorkspaceViaRouter([], {
       hydrateNamespaces: ['cdm.base.math'],
-      retryCuratedHydration: true
+      requireCuratedHydration: true
     });
     await vi.advanceTimersByTimeAsync(PARSE_ROUTER_TIMEOUT_MS);
     await expect(parsed).resolves.toMatchObject({ models: [] });
@@ -57,7 +57,7 @@ describe('parseWorkspace routing', () => {
     global.fetch = fetchMock;
 
     await expect(
-      parseWorkspaceViaRouter([], { hydrateNamespaces: ['cdm.base.math'], retryCuratedHydration: true })
+      parseWorkspaceViaRouter([], { hydrateNamespaces: ['cdm.base.math'], requireCuratedHydration: true })
     ).resolves.toMatchObject({ models: [] });
     expect(fetchMock).toHaveBeenCalledTimes(2);
   });

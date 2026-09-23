@@ -496,7 +496,7 @@ export const parseWorkspaceFiles = withInstrumentation(
       const response = await parseWorkspaceViaRouter(userFiles, {
         curatedBundles,
         hydrateNamespaces: options.hydrateNamespaces,
-        retryCuratedHydration: options.requireCuratedHydration
+        requireCuratedHydration: options.requireCuratedHydration
       });
       const errMap = new Map<string, string[]>();
       for (const [k, v] of Object.entries(response.errors)) {
@@ -581,7 +581,7 @@ export const parseWorkspaceViaRouter = withInstrumentation(
     options: {
       curatedBundles?: Array<{ id: string; version: string }>;
       hydrateNamespaces?: string[];
-      retryCuratedHydration?: boolean;
+      requireCuratedHydration?: boolean;
     } = {}
   ): Promise<ParseWorkspaceResponse> {
     const body = JSON.stringify({
@@ -613,7 +613,7 @@ export const parseWorkspaceViaRouter = withInstrumentation(
     } catch (error) {
       const transient =
         error instanceof OperationTimeoutError || (error instanceof ParseRouterHttpError && error.status >= 500);
-      if (!transient || !options.retryCuratedHydration) throw error;
+      if (!transient || !options.requireCuratedHydration) throw error;
       data = (await requestParse()) as typeof data;
     }
 
