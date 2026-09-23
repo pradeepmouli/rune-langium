@@ -21,8 +21,9 @@ path the user gives you):
    first.**
 2. `screenshots/<journey>/…png` — read them; do not review blind.
 3. Playwright HTML/JSON report + traces (`trace.zip` on retried tests).
-4. `axe/` results, `known-issues.json` ledger, `verify-production.sh` output
-   (embedded in the manifest).
+4. `axe/J17/attempt<N>/` raw checkpoint results when J17 ran. Read endpoint
+   verification output separately. The harness records soft findings in the
+   manifest; it does not maintain a `known-issues.json` ledger.
 
 If the manifest is missing, fall back to the Playwright report alone and say so
 prominently — the run predates or bypassed the evidence collector.
@@ -52,8 +53,9 @@ For every FAIL/DEGRADED/BLOCKED journey, assign exactly one class:
   it does not classify corpus-drift automatically. You (the reviewer) assign
   `BLOCKED(corpus-drift)` by verifying the anchor against the live curated
   manifest. Fix is an `anchors.ts` update, not app code.
-- **known-issue** — matches a `known-issues.json` ledger entry. Check the
-  entry's `expires`/`issueUrl`: an expired ledger entry is a finding in itself.
+- **known-issue** — the manifest's soft finding names an understood, still
+  applicable limitation. Verify its current behavior and any linked GitHub
+  issue; do not infer an expiry date or issue URL from the finding ID alone.
 - **flake/infra** — passed on retry, or failure is a timeout with no
   corroborating console/network evidence. Check the trace before concluding
   flake; two consecutive runs flaking the same step is a regression until
@@ -76,7 +78,7 @@ checkpoint image check:
 - layout integrity — no clipped/overflowing panels, no dockview panes collapsed
   to zero, no overlapping chrome; the single-topbar contract holds (exactly one
   AppHeader, correct per-perspective title/actions);
-- theme consistency — J15 captures both themes; look for unstyled flashes,
+- theme consistency — check the theme actually available in the run; look for unstyled flashes,
   hairline borders missing outside studio scope, tokens rendering as raw
   fallbacks;
 - state correctness — empty states only where content is genuinely absent

@@ -75,6 +75,11 @@ traces, and axe results — to `apps/studio/test/prod-ux/report/`, meant to be
 read by the `prod-ux-review` agent skill (`.agents/skills/prod-ux-review/`),
 not by eye.
 
+J17 retains full axe JSON for each checkpoint under
+`report/axe/J17/attempt<N>/`; the manifest records its verdict and soft
+findings. The harness uses those soft findings directly and has no
+`known-issues.json` ledger.
+
 **Nightly automation:** `.github/workflows/prod-ux-nightly.yml` runs this on
 a schedule (04:41 UTC) and uploads `report/` as the `prod-ux-report` build
 artifact — this job never fails the build; a red journey is evidence, not a

@@ -1137,5 +1137,34 @@ describe('FormPreviewPanel', () => {
       expect(onExecute).toHaveBeenCalledWith('beta.CalcTrade', {});
       expect(onExecute).not.toHaveBeenCalledWith('CalcTrade', expect.anything());
     });
+
+    it('runs on the first click after editing inputs without asking the data-type validator to validate a function', async () => {
+      const user = userEvent.setup();
+      const onExecute = vi.fn();
+      const postMessage = vi.fn();
+      usePreviewStore.getState().setWorkerRef({ postMessage } as unknown as Worker);
+      const schema: FormPreviewSchema = {
+        ...calcTradeSchema,
+        fields: [
+          { path: 's1', label: 'S1', kind: 'string', required: false },
+          { path: 's2', label: 'S2', kind: 'string', required: false }
+        ]
+      };
+      render(
+        <FormPreviewPanel
+          schema={schema}
+          status={{ state: 'ready', targetId: schema.targetId }}
+          onExecute={onExecute}
+        />
+      );
+
+      await user.type(screen.getByRole('textbox', { name: 'S1' }), 'hello');
+      await user.type(screen.getByRole('textbox', { name: 'S2' }), 'hello');
+      await user.click(screen.getByRole('button', { name: 'Run' }));
+
+      expect(onExecute).toHaveBeenCalledExactlyOnceWith('beta.CalcTrade', { s1: 'hello', s2: 'hello' });
+      expect(postMessage).not.toHaveBeenCalled();
+      expect(screen.getByText('Ready to run function')).toBeInTheDocument();
+    });
   });
 });

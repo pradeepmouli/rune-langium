@@ -28,7 +28,7 @@ import type { InstanceReadiness } from '../../services/instance-readiness.js';
 import { PreviewSessionContext, type PreviewSessionFactory } from './preview-session-context.js';
 import { pathToUri } from '../../utils/uri.js';
 import { getRuneStudioTestApi } from '../../test-api.js';
-import { BUNDLE_MARKER_SUFFIX } from '../../services/workspace.js';
+import { BUNDLE_MARKER_SUFFIX, type WorkspaceFile } from '../../services/workspace.js';
 import type { CodegenWorkerMessage } from '../../components/CodePreviewPanel.js';
 import { HydrationOrchestrator, MAX_HYDRATION_RETRIES_PER_TARGET } from '../../services/hydration-orchestrator.js';
 import type { DeferredExportEntry } from '../../workers/parser-worker.js';
@@ -38,17 +38,21 @@ import { withInstrumentation } from '../../services/instrumentation/core.js';
 import { RetryExhaustedError } from '../../services/instrumentation/errors.js';
 import type { InstrumentationNamespace } from '../../services/instrumentation/namespace.js';
 
+/** Exclude user declarations, which /api/parse also lists for Explorer navigation. */
+function curatedDeferredExports(
+  deferredExports: DeferredExportEntry[],
+  files: readonly WorkspaceFile[]
+): DeferredExportEntry[] {
+  // /api/parse includes user declarations in deferredExports so Explorer can
+  // locate them. They are already present in the worker's source file set;
+  // requesting curated hydration for one can never complete.
+  const userPaths = new Set(files.filter((file) => !file.bundleId).map((file) => file.path));
+  return deferredExports.filter((entry) => !userPaths.has(entry.filePath));
+}
+
 /**
- * Looks up which curated namespace(s) export `name`, so a `preview:result`'s
- * `unresolved-reference:<name>` can be resolved to namespaces the
- * HydrationOrchestrator can hydrate. Returns an empty array for names that
- * are not a known deferred (curated, not-yet-hydrated) export — those are
- * genuinely unresolved and must not trigger a retry. Multiple curated
- * namespaces can export the same type name (e.g. `Scheme` recurs across
- * standard bodies), and there's no namespace-qualifying info available at
- * this call site to disambiguate — so every candidate is hydrated; hydrating
- * one that turns out not to be the reference's actual target is wasted
- * work, not an incorrectness.
+ * Find curated namespaces exporting an unresolved name. Several namespaces
+ * may export the same name, so every candidate is hydrated before retrying.
  */
 function findNamespacesForExport(deferredExports: DeferredExportEntry[], name: string): string[] {
   return deferredExports.filter((entry) => entry.exports.some((e) => e.name === name)).map((entry) => entry.namespace);
@@ -62,11 +66,13 @@ function findNamespacesForType(deferredExports: DeferredExportEntry[], typeFqn: 
 
 function findUnhydratedNamespacesForUnresolved(
   deferredExports: DeferredExportEntry[],
+  files: readonly WorkspaceFile[],
   names: readonly string[],
   hydratedNamespaces: readonly string[]
 ): string[] {
   const hydrated = new Set(hydratedNamespaces);
-  return [...new Set(names.flatMap((name) => findNamespacesForExport(deferredExports, name)))].filter(
+  const curatedExports = curatedDeferredExports(deferredExports, files);
+  return [...new Set(names.flatMap((name) => findNamespacesForExport(curatedExports, name)))].filter(
     (namespace) => !hydrated.has(namespace)
   );
 }
@@ -409,10 +415,12 @@ export const CodegenProvider = withInstrumentation(
       if (!codegenWorker) return;
       setWorkerRef(codegenWorker);
       const readiness = createInstanceReadiness({
-        findNamespaces: (typeFqn) => findNamespacesForType(deferredExportsRef.current, typeFqn),
+        findNamespaces: (typeFqn) =>
+          findNamespacesForType(curatedDeferredExports(deferredExportsRef.current, filesRef.current), typeFqn),
         findNamespacesForUnresolved: (names) =>
           findUnhydratedNamespacesForUnresolved(
             deferredExportsRef.current,
+            filesRef.current,
             names,
             useEditorStore.getState().hydratedNamespaces
           ),
@@ -471,6 +479,7 @@ export const CodegenProvider = withInstrumentation(
           if (isPrototypeSessionRequest(msg.requestId)) return;
           const unresolvedNamespaces = findUnhydratedNamespacesForUnresolved(
             deferredExportsRef.current,
+            filesRef.current,
             extractUnresolvedNames(msg.schema.unsupportedFeatures),
             useEditorStore.getState().hydratedNamespaces
           );
@@ -520,6 +529,7 @@ export const CodegenProvider = withInstrumentation(
               const namespacesToHydrate = new Set(
                 findUnhydratedNamespacesForUnresolved(
                   deferredExports,
+                  filesRef.current,
                   unresolvedNames,
                   useEditorStore.getState().hydratedNamespaces
                 )

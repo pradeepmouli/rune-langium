@@ -116,7 +116,13 @@ test.describe('J18 — Data-type closure mapping (scripted completeness check)',
     // was vacuous (always passes, never actually exercises the root's own
     // fields) — explicitly re-select the root first, same
     // namespace search and kind-aware navigation pattern used throughout this file.
-    await page.getByTestId('namespace-search').fill('ScratchClosureRoot');
+    // A source reveal used to focus CodeMirror after node selection. Keep
+    // Structure active and assert that each query reached the filter rather
+    // than the source document.
+    await page.getByRole('button', { name: 'Structure' }).click();
+    const namespaceSearch = page.getByTestId('namespace-search');
+    await namespaceSearch.fill('ScratchClosureRoot');
+    await expect(namespaceSearch).toHaveValue('ScratchClosureRoot');
     await typeNavigationButton(page, SCRATCH_ROOT_FQN).click();
     const formPreviewPanel = page.getByTestId('panel-formPreview');
     await expect(formPreviewPanel).toBeVisible({ timeout: 20000 });
@@ -132,7 +138,9 @@ test.describe('J18 — Data-type closure mapping (scripted completeness check)',
     // editable TypeReferenceField instead), so this targets that node's
     // Inspector specifically rather than asserting over the whole page,
     // which would be vacuous once the walk has moved off it.
-    await page.getByTestId('namespace-search').fill('ScratchClosureChoice');
+    await namespaceSearch.fill('ScratchClosureChoice');
+    await expect(namespaceSearch).toHaveValue('ScratchClosureChoice');
+    await expect(typeNavigationButton(page, SCRATCH_CHOICE_FQN, 'Choice')).toBeVisible({ timeout: 10000 });
     await typeNavigationButton(page, SCRATCH_CHOICE_FQN, 'Choice').click();
     await page.getByRole('button', { name: 'Inspector' }).click();
     await expect(page.getByRole('heading', { name: 'ScratchClosureChoice' })).toBeVisible({ timeout: 15000 });
