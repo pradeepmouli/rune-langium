@@ -36,10 +36,36 @@ describe('installInstrumentationEdgeSink', () => {
     resetInstrumentationThresholdForTests();
     const logSpy = vi.spyOn(console, 'log').mockImplementation(() => {});
     installInstrumentationEdgeSink({});
-    setInstrumentationThreshold('info');
+    const nowSpy = vi.spyOn(performance, 'now');
     const wrapped = withInstrumentation(() => 1, { op: 'edgeOp', level: 'info' });
     wrapped();
     expect(logSpy).not.toHaveBeenCalled();
+    expect(nowSpy).not.toHaveBeenCalled();
+    nowSpy.mockRestore();
+    logSpy.mockRestore();
+  });
+
+  it('configures trace timing spans by operation without logging captured payloads', () => {
+    resetInstrumentationForTests();
+    const logSpy = vi.spyOn(console, 'log').mockImplementation(() => {});
+    installInstrumentationEdgeSink({
+      INSTRUMENTATION_ENABLED: 'true',
+      INSTRUMENTATION_LEVEL: 'trace',
+      INSTRUMENTATION_OPS: 'fetchCuratedManifest, fetchCuratedNamespace',
+      INSTRUMENTATION_TIMING_ONLY: 'true'
+    });
+    withInstrumentation(() => 'secret', {
+      op: 'fetchCuratedManifest',
+      level: 'trace',
+      capture: Capture.Output
+    })();
+    withInstrumentation(() => 1, { op: 'unrelatedOperation', level: 'trace' })();
+
+    expect(logSpy).toHaveBeenCalledTimes(1);
+    const record = JSON.parse(logSpy.mock.calls[0]![0] as string);
+    expect(record).toMatchObject({ op: 'fetchCuratedManifest', level: 'trace' });
+    expect(record.durationMs).toBeGreaterThanOrEqual(0);
+    expect(record).not.toHaveProperty('output');
     logSpy.mockRestore();
   });
 });

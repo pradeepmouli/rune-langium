@@ -70,16 +70,43 @@ export function addInstrumentationSink(sink: Emit): () => void {
 }
 
 // Module scope in core.ts:
-// - Vite/rolldown builds (browser + both workers): `import.meta.env` is
-//   statically replaced, so IS_PROD folds to a build-time constant and the
-//   instrumentation branch below it is eliminated from prod bundles.
+// - Vite/rolldown builds (browser + both workers): production diagnostics
+//   are eliminated unless explicitly included in that build.
 // - Non-Vite runtimes (Pages Functions, Node): `import.meta.env` is
-//   undefined; the optional chain makes IS_PROD a safe runtime `false`
+//   undefined; the optional chain leaves the build gate disabled
 //   (their own gates — env binding / threshold — still apply).
 // - The cast keeps this type-checking under tsconfigs without vite/client.
-const IS_PROD = (import.meta as { env?: { PROD?: boolean } }).env?.PROD === true;
+const BUILD_DISABLE_INSTRUMENTATION =
+  (import.meta as { env?: { PROD?: boolean; VITE_ENABLE_INSTRUMENTATION?: string } }).env?.PROD === true &&
+  (import.meta as { env?: { VITE_ENABLE_INSTRUMENTATION?: string } }).env?.VITE_ENABLE_INSTRUMENTATION !== 'true';
 
 let isEnabledCheck: () => boolean = () => true;
+let allowedOperations: ReadonlySet<string> | undefined;
+let timingOnly = false;
+
+export interface InstrumentationConfig {
+  level?: Level;
+  operations?: readonly string[];
+  timingOnly?: boolean;
+}
+
+export interface InstrumentationEnvironment {
+  INSTRUMENTATION_LEVEL?: string;
+  INSTRUMENTATION_OPS?: string;
+  INSTRUMENTATION_TIMING_ONLY?: string;
+}
+
+export function instrumentationConfigFromEnv(env: InstrumentationEnvironment): InstrumentationConfig {
+  const level = env.INSTRUMENTATION_LEVEL;
+  const operations = env.INSTRUMENTATION_OPS?.split(',')
+    .map((op) => op.trim())
+    .filter(Boolean);
+  return {
+    level: level && Object.hasOwn(LEVEL_ORDER, level) ? (level as Level) : 'info',
+    operations: operations?.length ? operations : undefined,
+    timingOnly: env.INSTRUMENTATION_TIMING_ONLY === 'true'
+  };
+}
 
 /**
  * Sets the module-level sink for the current runtime context. Call exactly
@@ -94,9 +121,16 @@ let isEnabledCheck: () => boolean = () => true;
  * Cloudflare Functions and (post-Task-9) Node consumers can't import a
  * browser zustand store.
  */
-export function configureInstrumentation(emit: Emit, isEnabled: () => boolean = () => true): void {
+export function configureInstrumentation(
+  emit: Emit,
+  isEnabled: () => boolean = () => true,
+  config: InstrumentationConfig = {}
+): void {
   currentEmit = emit;
   isEnabledCheck = isEnabled;
+  if (config.level) threshold = config.level;
+  allowedOperations = config.operations ? new Set(config.operations) : undefined;
+  timingOnly = config.timingOnly ?? false;
 }
 
 /** Test-only: restores the pre-configuration no-op sink and default threshold between test files. */
@@ -104,6 +138,8 @@ export function resetInstrumentationForTests(): void {
   currentEmit = noopEmit;
   additionalSinks.clear();
   isEnabledCheck = () => true;
+  allowedOperations = undefined;
+  timingOnly = false;
   resetInstrumentationThresholdForTests();
 }
 
@@ -126,18 +162,32 @@ export function emitRecord(record: TelemetryRecord): void {
   // Matches this module's own "telemetry must never throw into the app"
   // invariant (see configureInstrumentation) — isolated the same way
   // dispatchToSinks isolates each additional sink.
+  const emitted = timingOnly
+    ? {
+        op: record.op,
+        level: record.level,
+        captured: 0,
+        subject: record.subject,
+        signature: record.signature,
+        durationMs: record.durationMs,
+        namespace: record.namespace,
+        message: record.message,
+        toast: record.toast,
+        ts: record.ts
+      }
+    : record;
   try {
-    currentEmit(record);
+    currentEmit(emitted);
   } catch {
     /* a sink must never break the app or its siblings */
   }
-  dispatchToSinks(additionalSinks, record);
+  dispatchToSinks(additionalSinks, emitted);
 }
 
 // Dispatches ONLY to additionalSinks (Activity/Toast), never to
 // currentEmit (the primary diagnostic/telemetry-shipping sink — gated by
-// the developer's own opt-in and eliminated from prod bundles by design,
-// see IS_PROD below). Used exclusively by the notify-only fast path: a
+// the developer's own opt-in and excluded from production Vite builds unless
+// explicitly configured). Used exclusively by the notify-only fast path: a
 // namespace-tagged call's user-facing notification must reach the user
 // regardless of production build mode or telemetry opt-in — see
 // docs/superpowers/specs/2026-08-02-instrumentation-multi-sink-design.md.
@@ -287,8 +337,8 @@ function runNotifyOnly<F extends (...args: any[]) => any>(
   // duration is exactly what a diagnostic span (e.g. a connect-phase
   // timing) exists to report — a hardcoded 0 here would silently defeat
   // that for every production build, since this is the ONLY path
-  // namespace-tagged calls take in prod (see makeWithInstrumentation's
-  // IS_PROD branch above).
+  // namespace-tagged calls take when diagnostics are compiled out (see
+  // makeWithInstrumentation's build gate above).
   const start = performance.now();
   try {
     const result = fn.apply(thisArg, args);
@@ -377,11 +427,11 @@ function makeWithInstrumentation(binding?: ChildBinding) {
       // user even here — see runNotifyOnly's own doc comment. Every other
       // call (no namespace, the overwhelming majority) takes the exact
       // same bare `fn.apply` path as before this branch existed.
-      if (IS_PROD) {
+      if (BUILD_DISABLE_INSTRUMENTATION) {
         if (!opts.namespace) return fn.apply(this, args);
         return runNotifyOnly(fn, opts, op, this, args);
       }
-      if (!isEnabledCheck()) {
+      if (!isEnabledCheck() || (allowedOperations && !allowedOperations.has(op))) {
         if (!opts.namespace) return fn.apply(this, args);
         return runNotifyOnly(fn, opts, op, this, args);
       }
@@ -432,7 +482,7 @@ function makeWithInstrumentation(binding?: ChildBinding) {
                 emitSuccessWithContext(
                   op,
                   level,
-                  capture,
+                  timingOnly ? 0 : capture,
                   args,
                   value,
                   sanitize,
@@ -458,7 +508,7 @@ function makeWithInstrumentation(binding?: ChildBinding) {
           emitSuccessWithContext(
             op,
             level,
-            capture,
+            timingOnly ? 0 : capture,
             args,
             result,
             sanitize,
