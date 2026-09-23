@@ -2,20 +2,39 @@
 
 ## store
 
-### `makeNodeId`
-Build the canonical top-level node id `${namespace}.${name}` (core qualified name).
+### `isTypeNodeId`
+Whether a graph-node id names a declaration valid in a Rune type reference.
 ```ts
-makeNodeId(namespace: string, name: string): string
+isTypeNodeId(nodeId: string): boolean
+```
+**Parameters:**
+- `nodeId: string`
+**Returns:** `boolean`
+
+### `makeNodeId`
+Build a kind-aware graph-node id from a Rune qualified name and AST kind.
+```ts
+makeNodeId(namespace: string, name: string, kind?: string): string
 ```
 **Parameters:**
 - `namespace: string`
 - `name: string`
+- `kind: string` (optional)
 **Returns:** `string`
 
 ### `nameFromNodeId`
 The trailing simple name of a node id (everything after the last dot).
 ```ts
 nameFromNodeId(nodeId: string): string
+```
+**Parameters:**
+- `nodeId: string`
+**Returns:** `string`
+
+### `qualifiedNameFromNodeId`
+Recover the Rune qualified name from a graph-node id.
+```ts
+qualifiedNameFromNodeId(nodeId: string): string
 ```
 **Parameters:**
 - `nodeId: string`

@@ -2,66 +2,219 @@
 // SPDX-License-Identifier: FSL-1.1-ALv2
 // Copyright (c) 2026 Pradeep Mouli
 
-/**
- * PrototypePerspective — full-height sidebar+detail screen for instance
- * authoring. Sidebar lists/creates instances (InstanceExplorerPanel); the
- * detail pane shows the selected instance's fields (InstanceFormPanel),
- * validation/raw JSON (InstanceInspectorPanel), and function execution
- * (InstanceFunctionPanel) behind tabs. Selection is local UI state — no
- * dedicated store, matching GitSyncPerspective's pattern for this
- * complexity level.
- */
-import { useState } from 'react';
-import type { ReactElement } from 'react';
-import { InstanceExplorerPanel } from '../../panels/InstanceExplorerPanel.js';
-import { InstanceFormPanel } from '../../panels/InstanceFormPanel.js';
+import { useEffect, useMemo, useRef, useState, type ChangeEvent, type ReactElement } from 'react';
+import type { DockviewApi } from 'dockview-react';
+import type { WorkbenchDefinition } from '../../workbench-types.js';
+import { WorkbenchHost } from '../../WorkbenchHost.js';
+import { Button } from '@rune-langium/design-system/ui/button';
+import { jsonCodec } from '@rune-langium/codegen/instances';
+import { InstanceCreateDialog } from '../../../components/InstanceCreateDialog.js';
+import { usePrototypeViewStore } from '../../../store/prototype-view-store.js';
+import { useWorkspaceOptional } from '../../providers/workspace-context.js';
 import { InstanceInspectorPanel } from '../../panels/InstanceInspectorPanel.js';
-import { InstanceFunctionPanel } from '../../panels/InstanceFunctionPanel.js';
-import { Tabs, TabsList, TabsTrigger, TabsContent } from '@rune-langium/design-system/ui/tabs';
+import { InstanceGridPanel } from '../../panels/InstanceGridPanel.js';
+import { InstanceGraphPanel } from '../../panels/InstanceGraphPanel.js';
+import { useInstanceStore } from '../../../store/instance-store.js';
 import { withInstrumentation } from '../../../services/instrumentation/core.js';
+import { usePrototypeNavigationStore } from '../../../services/prototype-navigation.js';
+
+function addPayloadGraph(api: DockviewApi, width: number): void {
+  if (api.getPanel('prototype.payloadGraph')) return;
+  const inspector = api.getPanel('prototype.inspector');
+  if (!inspector) return;
+  const graph = api.addPanel({
+    id: 'prototype.payloadGraph',
+    component: 'prototype.payloadGraph',
+    title: 'Payload graph',
+    position:
+      width < 768
+        ? { referenceGroup: inspector.group, direction: 'within' }
+        : { referencePanel: inspector.id, direction: 'right' }
+  });
+  if (width >= 768) graph.group.api.setConstraints({ minimumWidth: 280 });
+}
 
 export const PrototypePerspective = withInstrumentation(
   function PrototypePerspective(): ReactElement {
-    const [selectedId, setSelectedId] = useState<string | undefined>(undefined);
+    const workspace = useWorkspaceOptional();
+    const view = usePrototypeViewStore((state) => state.state);
+    const activate = usePrototypeViewStore((state) => state.activate);
+    const patch = usePrototypeViewStore((state) => state.patch);
+    const pendingIntent = usePrototypeNavigationStore((state) => state.pending);
+    const consumePrototypeIntent = usePrototypeNavigationStore((state) => state.consume);
+    const [creating, setCreating] = useState(false);
+    const [seed, setSeed] = useState<Parameters<typeof InstanceCreateDialog>[0]['seed']>();
+    const [importError, setImportError] = useState<string | null>(null);
+    const [focusedPayloadPointer, setFocusedPayloadPointer] = useState<string | undefined>();
+    const [activationReady, setActivationReady] = useState(false);
+    const importInputRef = useRef<HTMLInputElement>(null);
+    const activationRef = useRef<{ workspaceId: string; promise: Promise<void> } | undefined>(undefined);
+    const selectedRecord = useInstanceStore((state) =>
+      view.selectedId ? state.instances[view.selectedId] : undefined
+    );
+
+    useEffect(() => {
+      const workspaceId = workspace?.workspaceId;
+      if (!workspaceId) {
+        setActivationReady(false);
+        return;
+      }
+      if (activationRef.current?.workspaceId !== workspaceId) {
+        setActivationReady(false);
+        activationRef.current = { workspaceId, promise: activate(workspaceId) };
+      }
+      let cancelled = false;
+      void activationRef.current.promise.then(() => {
+        if (cancelled) return;
+        const intent = consumePrototypeIntent(workspaceId);
+        if (intent?.kind === 'create') {
+          setSeed(intent.seed);
+          setCreating(true);
+        }
+        if (intent?.kind === 'open') patch({ selectedId: intent.instanceId, inspectorTab: 'form' });
+        setActivationReady(true);
+      });
+      return () => {
+        cancelled = true;
+      };
+    }, [activate, consumePrototypeIntent, patch, pendingIntent, workspace?.workspaceId]);
+    useEffect(() => setFocusedPayloadPointer(undefined), [selectedRecord?.id]);
+
+    const definition = useMemo<WorkbenchDefinition>(
+      () => ({
+        id: 'prototype',
+        panels: {
+          'prototype.inspector': () =>
+            view.selectedId ? (
+              <InstanceInspectorPanel instanceId={view.selectedId} focusedPayloadPointer={focusedPayloadPointer} />
+            ) : (
+              <div className="flex h-full items-center justify-center p-3 text-sm text-muted-foreground">
+                Select or create an instance to inspect it.
+              </div>
+            ),
+          'prototype.grid': () => <InstanceGridPanel />,
+          ...(view.graphVisible
+            ? {
+                'prototype.payloadGraph': () =>
+                  selectedRecord ? (
+                    <InstanceGraphPanel
+                      record={selectedRecord}
+                      onSelectPointer={(pointer) => setFocusedPayloadPointer(pointer)}
+                    />
+                  ) : (
+                    <div className="flex h-full items-center justify-center p-3 text-sm text-muted-foreground">
+                      Select an instance to inspect its payload graph.
+                    </div>
+                  )
+              }
+            : {})
+        },
+        titles: {
+          'prototype.inspector': 'Inspector',
+          'prototype.grid': 'Instances',
+          ...(view.graphVisible ? { 'prototype.payloadGraph': 'Payload graph' } : {})
+        },
+        buildDefault(api, width) {
+          const inspector = api.addPanel({
+            id: 'prototype.inspector',
+            component: 'prototype.inspector',
+            title: 'Inspector'
+          });
+          if (view.graphVisible) addPayloadGraph(api, width);
+          api.addPanel({
+            id: 'prototype.grid',
+            component: 'prototype.grid',
+            title: 'Instances',
+            position:
+              width < 768
+                ? { referenceGroup: inspector.group, direction: 'within' }
+                : { referencePanel: inspector.id, direction: 'below' }
+          });
+        },
+        reconcile(api, width) {
+          if (view.graphVisible) addPayloadGraph(api, width);
+        }
+      }),
+      [focusedPayloadPointer, selectedRecord, view.graphVisible, view.selectedId]
+    );
+
+    const importJson = async (event: ChangeEvent<HTMLInputElement>) => {
+      const file = event.target.files?.[0];
+      event.target.value = '';
+      if (!file) return;
+      const result = jsonCodec.import(await file.text(), view.typeFqn ?? '');
+      if (result.diagnostics.length > 0 || result.data === undefined) {
+        setImportError(result.diagnostics.map((diagnostic) => diagnostic.message).join(' '));
+        return;
+      }
+      setImportError(null);
+      setSeed({ data: result.data, ...(view.typeFqn ? { typeFqn: view.typeFqn } : {}) });
+      setCreating(true);
+    };
 
     return (
-      <section data-testid="prototype-perspective" className="flex h-full min-h-0">
-        <aside className="w-64 shrink-0 border-r border-border">
-          <InstanceExplorerPanel selectedId={selectedId} onSelect={setSelectedId} />
-        </aside>
-        <div className="min-w-0 flex-1">
-          {selectedId ? (
-            <Tabs defaultValue="fields" className="flex h-full flex-col">
-              <TabsList>
-                <TabsTrigger value="fields">Fields</TabsTrigger>
-                <TabsTrigger value="inspector">Inspector</TabsTrigger>
-                <TabsTrigger value="function">Function</TabsTrigger>
-              </TabsList>
-              <TabsContent value="fields" className="min-h-0 flex-1">
-                {/* `key={selectedId}` forces a full remount of InstanceFormPanel
-              (and its nested FormPreviewPanel) on every instance switch —
-              FormPreviewPanel's `controlledMeta` local state (errors/valid/
-              validated) is scoped to the component instance's lifetime, not
-              keyed by instance id, so without a remount, switching from
-              instance A to instance B could keep showing A's validation
-              errors until B is edited (finding #8). Scoped to just this
-              panel (not the whole Tabs group) so the active tab selection
-              survives an instance switch. */}
-                <InstanceFormPanel key={selectedId} instanceId={selectedId} />
-              </TabsContent>
-              <TabsContent value="inspector" className="min-h-0 flex-1 overflow-auto">
-                <InstanceInspectorPanel instanceId={selectedId} />
-              </TabsContent>
-              <TabsContent value="function" className="min-h-0 flex-1">
-                <InstanceFunctionPanel />
-              </TabsContent>
-            </Tabs>
+      <section data-testid="prototype-perspective" className="flex h-full min-h-0 flex-col">
+        <div className="flex flex-wrap items-center justify-between gap-2 border-b border-border px-3 py-2">
+          <p className="text-sm text-muted-foreground">Persistent instances</p>
+          <div className="flex flex-wrap items-center gap-2">
+            <input
+              ref={importInputRef}
+              type="file"
+              accept="application/json,.json"
+              aria-label="Import JSON"
+              className="sr-only"
+              onChange={importJson}
+            />
+            <Button type="button" variant="ghost" size="sm" onClick={() => importInputRef.current?.click()}>
+              Import JSON
+            </Button>
+            <Button
+              type="button"
+              variant="ghost"
+              size="sm"
+              aria-pressed={view.graphVisible}
+              onClick={() => patch({ graphVisible: !view.graphVisible })}
+            >
+              Payload graph
+            </Button>
+            <Button
+              type="button"
+              size="sm"
+              onClick={() => {
+                setSeed(undefined);
+                setCreating(true);
+              }}
+            >
+              New instance
+            </Button>
+          </div>
+        </div>
+        <div className="min-h-0 flex-1">
+          {activationReady ? (
+            <WorkbenchHost
+              key={view.graphVisible ? 'with-payload-graph' : 'without-payload-graph'}
+              definition={definition}
+              initialNativeLayout={view.nativeLayout}
+              onNativeLayoutChange={(nativeLayout) => patch({ nativeLayout })}
+              className="h-full min-w-0 w-full"
+            />
           ) : (
-            <div className="studio-fade-in flex h-full items-center justify-center p-6 text-center text-sm text-muted-foreground">
-              Select an instance from the list, or create one, to start editing.
-            </div>
+            <p role="status" className="p-3 text-sm text-muted-foreground">
+              Restoring Prototype workspace…
+            </p>
           )}
         </div>
+        {importError ? (
+          <p role="alert" className="border-t border-border p-2 text-sm text-destructive">
+            {importError}
+          </p>
+        ) : null}
+        <InstanceCreateDialog
+          seed={seed}
+          open={creating}
+          onClose={() => setCreating(false)}
+          onCreated={(id) => patch({ selectedId: id, inspectorTab: 'form' })}
+        />
       </section>
     );
   },

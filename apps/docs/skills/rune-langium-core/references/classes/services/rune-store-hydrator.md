@@ -27,6 +27,7 @@ constructor(services: LangiumCoreServices): RuneStoreHydrator
 - `linker: Linker`
 - `grammarElementIdMap: BiMap<AbstractElement, number>`
 - `tokenTypeIdMap: BiMap<number, TokenType>`
+- `cstNodeBuilder: CstNodeBuilder` — Used to assemble the CST during hydration; `CstNodeBuilder` is not a service, so we keep a local instance.
 **Methods:**
 - `dehydrateNode<T>(node: T): Dehydrated<T>` — Dehydrate a single AST node to its Dehydrated&lt;T&gt; wire form.
 - `createDehyrationContext(node: AstNode): DehydrateContext` — CST nodes never survive dehydration here (see class doc), so skip the

@@ -79,6 +79,7 @@ import { renderModel } from '@rune-langium/codegen/rosetta';
 import { validateGraph } from '../validation/edit-validator.js';
 import { useEditorStore } from '../store/editor-store.js';
 import { selectNodeRepository } from '../store/node-repository.js';
+import { qualifiedNameFromNodeId } from '../store/node-projection.js';
 import type {
   RuneTypeGraphProps,
   RuneTypeGraphRef,
@@ -850,17 +851,19 @@ const RuneTypeGraphInner = forwardRef<RuneTypeGraphRef, RuneTypeGraphProps>(func
       },
 
       focusNode(nodeId: string) {
-        const node = graphNodes.find((n) => n.id === nodeId);
+        // Keep the public graph API accepting Rune qualified names even though
+        // the internal graph key also carries declaration kind.
+        const node = graphNodes.find((n) => n.id === nodeId || qualifiedNameFromNodeId(n.id) === nodeId);
         if (node) {
           runViewportAction({
-            focusNodeId: nodeId,
+            focusNodeId: node.id,
             mode: 'center-and-fit-node'
           });
           // Programmatically select the target node in React Flow
           setNodes((prev) => {
             let changed = false;
             const next = prev.map((n) => {
-              const isSelected = n.id === nodeId;
+              const isSelected = n.id === node.id;
               if ((n.selected ?? false) === isSelected) {
                 return n;
               }

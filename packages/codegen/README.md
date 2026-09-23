@@ -10,6 +10,23 @@ Code generation and preview-schema utilities for parsed Rune DSL / Rosetta model
 - Build inspector/form schemas with `generatePreviewSchemas`
 - Surface generator diagnostics through `GeneratorError`
 
+## Selected exports
+
+`generate()` accepts an optional `selection` for dependency-closed exports. Its
+`namespaces` list makes every declaration in those namespaces an export root;
+its `declarations` list selects individual roots by `{ namespace, kind, name }`.
+The generator follows linked references from those roots and emits every needed
+top-level declaration without mutating the parsed documents. Use this instead of
+the legacy `GeneratorOptions.namespaces` allowlist when exporting individual
+declarations; the two scopes are intentionally mutually exclusive in Studio's
+download API.
+
+Use `generateSelected()` when the caller also needs a receipt. It returns the
+generated files and the exact explicit and dependency-included declarations
+used for emission, plus a kind-aware `requiredBy` map from each dependency to
+its explicit roots, without resolving the workspace a second time. Studio
+stores that receipt in its downloadable artifact envelope.
+
 ## TypeScript functions
 
 Rune functions emit named exports with a single typed input object and an explicit

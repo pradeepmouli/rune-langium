@@ -1,265 +1,184 @@
-// @instrumentation-codemod-applied
 // SPDX-License-Identifier: FSL-1.1-ALv2
 // Copyright (c) 2026 Pradeep Mouli
 
-/**
- * ExportPerspective — full-height sidebar screen for code generation + export.
- *
- * This is a READ-ONLY consumer of `useCodegenStore`. It does NOT subscribe to
- * the codegen worker and does NOT post messages. The single worker owner is
- * EditorPage, which drives `codegen:generate` requests and dispatches results
- * into the store (Codex P2 fix — no double-subscription).
- *
- * Layout:
- *   - `CodegenTargetsTable` — target selector; selecting a target calls
- *     `setActiveTarget`/`setCodePreviewTarget` which EditorPage's effect
- *     observes to trigger generation.
- *   - Read-only preview — displays the generated output from `useCodegenStore`
- *     (the `snapshot` populated by `receiveCodePreviewResult`).
- *   - Download — opens `DownloadConfigDialog` and calls `downloadTargetViaRouter`
- *     (the same client-side /api/codegen route used by CodePreviewPanel).
- *   - Empty state — shown when no snapshot is available yet.
- */
+/** Declaration-scoped export workbench: roots, settings, then captured output. */
 
 import type { ReactElement } from 'react';
-import { useCallback, useMemo, useState } from 'react';
-import type { Target } from '@rune-langium/codegen/export';
-import { CodegenTargetsTable } from '../../../components/CodegenTargetsTable.js';
-import { DownloadConfigDialog, type DownloadConfig } from '../../../components/DownloadConfigDialog.js';
-import { ExcelOptionsFormAdapter } from '../../../codegen-forms/ExcelOptionsFormAdapter.js';
-import {
-  downloadTargetViaRouter,
-  CodegenDownloadError,
-  collectCuratedBundlesFromWorkspace,
-  collectCuratedSourcesForCodegen,
-  type WorkspaceFile
-} from '../../../services/workspace.js';
-import { useCodegenStore } from '../../../store/codegen-store.js';
-import { useOutputStore, fmtLine } from '../../../store/output-store.js';
-import { TARGET_LABELS } from '../../../components/codegen-ui.js';
-import { useStudioToast } from '../../../components/StudioToastProvider.js';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import type { ExportSelection } from '@rune-langium/codegen/export';
+import type { WorkbenchDefinition } from '../../workbench-types.js';
+import { WorkbenchHost } from '../../WorkbenchHost.js';
+import type { WorkspaceFile } from '../../../services/workspace.js';
+import { downloadExportArtifact } from '../../../services/export-artifact.js';
 import { withInstrumentation } from '../../../services/instrumentation/core.js';
+import { useExportWorkbenchStore } from '../../../store/export-workbench-store.js';
+import { exportSourceFingerprint } from '../../../services/export-request.js';
+import { useExportNavigationStore } from '../../../services/export-navigation.js';
+import { ExportSelectionPanel } from '../../panels/ExportSelectionPanel.js';
+import { ExportSettingsPanel } from '../../panels/ExportSettingsPanel.js';
+import { ExportPreviewPanel } from '../../panels/ExportPreviewPanel.js';
 
 export interface ExportPerspectiveProps {
-  /**
-   * Workspace files forwarded from EditorPage via PerspectiveHost.
-   * Used by the Download flow to POST to /api/codegen.
-   */
   files?: ReadonlyArray<WorkspaceFile>;
+  /** Stable workspace identity for artifact ownership and settings persistence. */
+  workspaceId?: string;
 }
 
 export const ExportPerspective = withInstrumentation(
-  function ExportPerspective({ files }: ExportPerspectiveProps): ReactElement {
-    const activeTarget = useCodegenStore((s) => s.activeTarget);
-    const setActiveTarget = useCodegenStore((s) => s.setActiveTarget);
-    const setCodePreviewTarget = useCodegenStore((s) => s.setCodePreviewTarget);
-    const snapshot = useCodegenStore((s) => s.snapshot);
-    const dependencyGraph = useCodegenStore((s) => s.dependencyGraph);
-    const namespaceList = useMemo(() => Object.keys(dependencyGraph).sort(), [dependencyGraph]);
+  function ExportPerspective({ files, workspaceId }: ExportPerspectiveProps): ReactElement {
+    const config = useExportWorkbenchStore((state) => state.config);
+    const run = useExportWorkbenchStore((state) => state.run);
+    const activeFile = useExportWorkbenchStore((state) => state.activeFile);
+    const nativeLayout = useExportWorkbenchStore((state) => state.nativeLayout);
+    const activate = useExportWorkbenchStore((state) => state.activate);
+    const configure = useExportWorkbenchStore((state) => state.configure);
+    const generate = useExportWorkbenchStore((state) => state.generate);
+    const cancel = useExportWorkbenchStore((state) => state.cancel);
+    const invalidate = useExportWorkbenchStore((state) => state.invalidate);
+    const setActiveFile = useExportWorkbenchStore((state) => state.setActiveFile);
+    const setNativeLayout = useExportWorkbenchStore((state) => state.setNativeLayout);
+    const [sourceRevision, setSourceRevision] = useState(0);
+    const [activationReady, setActivationReady] = useState(false);
+    const sourceRevisionRef = useRef(sourceRevision);
+    const activationRef = useRef<{ workspaceId: string; promise: Promise<void> } | undefined>(undefined);
+    const requiredBy = useMemo(
+      () =>
+        new Map(
+          Object.entries(run.status === 'ready' ? (run.artifact.manifest.resolvedSelection?.requiredBy ?? {}) : {})
+        ),
+      [run]
+    );
+    const sourceFingerprint = useMemo(() => exportSourceFingerprint(workspaceId, files ?? []), [files, workspaceId]);
 
-    const { showToast } = useStudioToast();
+    useEffect(() => {
+      if (!workspaceId) {
+        setActivationReady(false);
+        return;
+      }
+      if (activationRef.current?.workspaceId !== workspaceId) {
+        setActivationReady(false);
+        activationRef.current = { workspaceId, promise: activate(workspaceId) };
+      }
+      let cancelled = false;
+      void activationRef.current.promise.then(() => {
+        if (cancelled) return;
+        const intent = useExportNavigationStore.getState().consume(workspaceId);
+        if (intent) configure({ ...useExportWorkbenchStore.getState().config, selection: intent.selection });
+        setActivationReady(true);
+      });
+      return () => {
+        cancelled = true;
+      };
+    }, [activate, configure, workspaceId]);
+    useEffect(() => {
+      const revision = sourceRevisionRef.current + 1;
+      sourceRevisionRef.current = revision;
+      setSourceRevision(revision);
+      invalidate(revision);
+    }, [invalidate, sourceFingerprint]);
 
-    // Download modal state (mirrors CodePreviewPanel's download flow).
-    const [downloadModalTarget, setDownloadModalTarget] = useState<Target | undefined>(undefined);
-    const [downloadingTarget, setDownloadingTarget] = useState<Target | undefined>(undefined);
-
-    const handleView = useCallback(
-      (target: Target) => {
-        if (activeTarget === target) {
-          setActiveTarget(undefined);
-        } else {
-          setActiveTarget(target);
-          if (target !== useCodegenStore.getState().codePreviewTarget) {
-            setCodePreviewTarget(target);
-          }
+    const handleSelectionChange = useCallback(
+      (selection: ExportSelection) => configure({ ...config, selection }),
+      [config, configure]
+    );
+    const handleGenerate = useCallback(() => {
+      void generate({
+        workspaceId: workspaceId ?? 'unsaved-workspace',
+        sourceRevision,
+        config,
+        files: files ?? []
+      });
+    }, [config, files, generate, sourceRevision, workspaceId]);
+    const definition = useMemo<WorkbenchDefinition>(
+      () => ({
+        id: 'export',
+        panels: {
+          'export.selection': () => (
+            <div data-testid="export-selection" className="h-full min-h-0">
+              <ExportSelectionPanel
+                selection={config.selection}
+                requiredBy={requiredBy}
+                included={run.status === 'ready' ? run.artifact.manifest.resolvedSelection?.included : undefined}
+                includedCount={
+                  run.status === 'ready' ? run.artifact.manifest.resolvedSelection?.included.length : undefined
+                }
+                onChange={handleSelectionChange}
+              />
+            </div>
+          ),
+          'export.settings': () => (
+            <div data-testid="export-settings" className="h-full min-h-0">
+              <ExportSettingsPanel
+                config={config}
+                onChange={configure}
+                onGenerate={handleGenerate}
+                onCancel={cancel}
+                status={run.status}
+              />
+            </div>
+          ),
+          'export.preview': () => (
+            <div data-testid="export-preview" className="h-full min-h-0">
+              <ExportPreviewPanel
+                run={run}
+                activeFile={activeFile}
+                onActiveFileChange={setActiveFile}
+                onDownload={() => {
+                  if (run.status === 'ready') downloadExportArtifact(run.artifact);
+                }}
+              />
+            </div>
+          )
+        },
+        titles: {
+          'export.selection': 'Selection',
+          'export.settings': 'Settings',
+          'export.preview': 'Generated output'
+        },
+        buildDefault(api, width) {
+          const selection = api.addPanel({
+            id: 'export.selection',
+            component: 'export.selection',
+            title: 'Selection'
+          });
+          const settings = api.addPanel({
+            id: 'export.settings',
+            component: 'export.settings',
+            title: 'Settings',
+            position:
+              width < 768
+                ? { referenceGroup: selection.group, direction: 'within' }
+                : { referencePanel: selection.id, direction: 'right' }
+          });
+          const preview = api.addPanel({
+            id: 'export.preview',
+            component: 'export.preview',
+            title: 'Generated output',
+            position: { referencePanel: selection.id, direction: 'below' }
+          });
+          if (width >= 768) settings.group.api.setConstraints({ minimumWidth: 320 });
+          preview.group.api.setConstraints({ minimumHeight: 220 });
         }
-      },
-      [activeTarget, setActiveTarget, setCodePreviewTarget]
+      }),
+      [activeFile, cancel, config, configure, handleGenerate, handleSelectionChange, requiredBy, run, setActiveFile]
     );
 
-    const handleDownload = useCallback(
-      (target: Target) => {
-        const fileList = files ?? [];
-        const hasUserFiles = fileList.some((f) => !f.readOnly);
-        const hasCurated = collectCuratedBundlesFromWorkspace(fileList).length > 0;
-        if (!hasUserFiles && !hasCurated) {
-          console.warn(
-            '[ExportPerspective] Download skipped — workspace has no user files and no curated bundles for target:',
-            target
-          );
-          return;
-        }
-        setDownloadModalTarget(target);
-      },
-      [files]
-    );
-
-    const handleModalGenerate = useCallback(
-      async (config: DownloadConfig) => {
-        const newTarget = config.target;
-        setDownloadModalTarget(undefined);
-        const fileList = files ?? [];
-        const requestFiles: Array<{ path: string; content: string }> = [];
-        for (const f of fileList) {
-          if (f.readOnly) continue;
-          requestFiles.push({ path: f.path, content: f.content });
-        }
-        const { curatedBundles, curatedDocs } = collectCuratedSourcesForCodegen(fileList);
-        const targetOptions = (config.options?.[newTarget] ?? {}) as Record<string, unknown>;
-        const layoutOption = config.layout ? { layout: config.layout } : {};
-        const options = config.layout || config.options ? { [newTarget]: { ...targetOptions, ...layoutOption } } : {};
-        setDownloadingTarget(newTarget);
-        try {
-          await downloadTargetViaRouter(
-            requestFiles,
-            newTarget,
-            options,
-            curatedBundles,
-            config.namespaces,
-            curatedDocs
-          );
-        } catch (err) {
-          if (err instanceof CodegenDownloadError) {
-            const detail = err.diagnostics.length > 0 ? err.diagnostics.map((d) => d.message).join('; ') : err.message;
-            showToast({ title: 'Code generation failed', description: detail, variant: 'destructive' });
-            useOutputStore.getState().addLine(fmtLine('codegen', err.message), 'error');
-            err.diagnostics.forEach((d) =>
-              useOutputStore
-                .getState()
-                .addLine(fmtLine('codegen', d.message, d.code), d.severity === 'error' ? 'error' : 'warn')
-            );
-            console.error(
-              `[ExportPerspective] /api/codegen ${err.status} for target ${newTarget}: ${err.message}`,
-              err.diagnostics
-            );
-          } else {
-            const msg = err instanceof Error ? err.message : 'Unexpected error during download.';
-            showToast({ title: 'Download failed', description: msg, variant: 'destructive' });
-            useOutputStore.getState().addLine(fmtLine('codegen', msg), 'error');
-            console.error('[ExportPerspective] Download failed for target', newTarget, err);
-          }
-        } finally {
-          setDownloadingTarget(undefined);
-        }
-      },
-      [files, showToast]
-    );
-
-    // Derive read-only preview content from the store snapshot.
-    const activeContent = useMemo(() => {
-      if (snapshot.status !== 'ready' && snapshot.status !== 'stale') return undefined;
-      const file = snapshot.files.find((f) => f.relativePath === snapshot.activeRelativePath) ?? snapshot.files[0];
-      return file?.content;
-    }, [snapshot]);
-
-    const previewLabel = useMemo(() => {
-      if (!activeTarget) return undefined;
-      return TARGET_LABELS[activeTarget];
-    }, [activeTarget]);
-
-    // overflow-hidden (not auto): the targets table and the preview <pre>
-    // each own their scrolling — an outer scrollbar would double up.
     return (
-      <section data-testid="export-perspective" className="h-full overflow-hidden flex flex-col">
-        <div className="flex flex-col flex-1 min-h-0">
-          {/* Target selector — always visible */}
-          <div data-testid="export-targets-section" className="shrink-0">
-            <CodegenTargetsTable
-              onView={handleView}
-              onDownload={handleDownload}
-              inflightTarget={downloadingTarget}
-              activeTarget={activeTarget}
+      <section data-testid="export-perspective" className="flex h-full min-h-0 flex-col overflow-hidden">
+        <div className="min-h-0 flex-1">
+          {activationReady ? (
+            <WorkbenchHost
+              definition={definition}
+              initialNativeLayout={nativeLayout}
+              onNativeLayoutChange={setNativeLayout}
+              className="h-full min-w-0 w-full"
             />
-          </div>
-
-          {/* Read-only preview area */}
-          {activeTarget !== undefined ? (
-            <div className="flex-1 flex flex-col min-h-0 overflow-hidden">
-              {/* Toolbar */}
-              <div className="shrink-0 flex items-center gap-2 px-3 py-1.5 border-b border-border/70 bg-card/40">
-                {previewLabel && (
-                  <span className="text-sm font-medium text-foreground" data-testid="export-active-target">
-                    {previewLabel}
-                  </span>
-                )}
-                <div className="ml-auto text-right">
-                  {snapshot.status === 'waiting' && (
-                    <span
-                      className="block text-xs text-muted-foreground"
-                      data-testid="export-preview-status"
-                      aria-live="polite"
-                    >
-                      Generating…
-                    </span>
-                  )}
-                  {snapshot.status === 'unavailable' && (
-                    <span
-                      className="block text-xs text-muted-foreground"
-                      data-testid="export-preview-status"
-                      aria-live="polite"
-                    >
-                      Preview unavailable — reload Studio
-                    </span>
-                  )}
-                  {(snapshot.status === 'ready' || snapshot.status === 'stale') && (
-                    <span
-                      className="block text-xs text-muted-foreground"
-                      data-testid="export-preview-status"
-                      aria-live="polite"
-                    >
-                      {snapshot.status === 'stale' ? 'Outdated — fix errors to refresh' : `Generated (${previewLabel})`}
-                    </span>
-                  )}
-                </div>
-              </div>
-
-              {/* Content */}
-              {activeContent !== undefined ? (
-                <pre
-                  // Keyed on the target so switching targets fades the new
-                  // output in instead of popping.
-                  key={activeTarget}
-                  data-testid="export-preview-content"
-                  className="studio-fade-in studio-scroll flex-1 overflow-auto p-3 text-xs font-mono text-foreground bg-card/20 whitespace-pre"
-                >
-                  {activeContent}
-                </pre>
-              ) : (
-                <div
-                  data-testid="export-preview-empty"
-                  className="flex-1 flex items-center justify-center px-6 py-8 text-center"
-                >
-                  <p className="text-xs text-muted-foreground max-w-[22rem]">
-                    {snapshot.status === 'waiting'
-                      ? 'Generating preview…'
-                      : 'Select a target above to generate a preview.'}
-                  </p>
-                </div>
-              )}
-            </div>
           ) : (
-            <div
-              data-testid="export-preview-empty"
-              className="flex-1 flex items-center justify-center px-6 py-8 text-center"
-            >
-              <p className="text-xs text-muted-foreground max-w-[22rem]">
-                Select a target above to generate a preview.
-              </p>
-            </div>
+            <p role="status" className="p-3 text-sm text-muted-foreground">
+              Restoring Export workspace…
+            </p>
           )}
         </div>
-
-        {downloadModalTarget !== undefined ? (
-          <DownloadConfigDialog
-            open
-            target={downloadModalTarget}
-            namespaces={namespaceList}
-            dependencyGraph={dependencyGraph}
-            onClose={() => setDownloadModalTarget(undefined)}
-            onGenerate={handleModalGenerate}
-            optionsForm={downloadModalTarget === 'excel' ? ExcelOptionsFormAdapter : undefined}
-          />
-        ) : null}
       </section>
     );
   },

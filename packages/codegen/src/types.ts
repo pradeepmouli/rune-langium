@@ -128,6 +128,8 @@ export interface GeneratorOptions {
    * passed directly may produce output with unresolved imports.
    */
   namespaces?: readonly string[];
+  /** Optional top-level declaration roots for a dependency-closed export. */
+  selection?: ExportSelection;
 
   // 019 spec §3.1 — per-target option blocks. Each emitter reads its
   // own slot. TS structural typing narrows access via `options[target]`
@@ -147,6 +149,21 @@ export interface GeneratorOptions {
   openapi?: OpenApiOptions;
   // 021 Phase 3 — no per-target option block yet; the XSD emitter has no
   // configurable knobs (unlike Excel/OpenAPI's Zod-schema option blocks).
+}
+
+/** Serializable identity for a selected top-level Rune declaration. */
+export interface ExportDeclarationSelection {
+  namespace: string;
+  name: string;
+  kind: string;
+}
+
+/** Namespace and declaration roots requested for an export. */
+export interface ExportSelection {
+  /** Namespaces whose declarations are all export roots. */
+  namespaces: readonly string[];
+  /** Individual declaration roots, combined with whole selected namespaces. */
+  declarations: readonly ExportDeclarationSelection[];
 }
 
 /**
@@ -266,6 +283,10 @@ export interface PreviewEnumField extends PreviewFieldBase {
 
 export interface PreviewObjectField extends PreviewFieldBase {
   kind: 'object';
+  /** Fully-qualified Rune type resolved for this object input. */
+  referencedTypeFqn?: string;
+  /** Fully-qualified concrete types assignable to this reference. */
+  assignableTypeFqns?: string[];
   children: PreviewField[];
   /**
    * `children[].path` values that are Choice-ancestor-derived arms requiring
@@ -305,6 +326,13 @@ export interface PreviewSourceMapEntry {
 
 export type FormPreviewKind = 'data' | 'typeAlias' | 'choice' | 'function';
 
+/** The declared result identity for a function preview schema. */
+export interface FunctionPreviewOutput {
+  typeFqn: string;
+  kind: 'data' | 'choice';
+  cardinality: { min: number; max: number | 'unbounded' };
+}
+
 export interface FormPreviewSchema {
   schemaVersion: 1;
   targetId: string;
@@ -312,6 +340,12 @@ export interface FormPreviewSchema {
   kind?: FormPreviewKind;
   status: 'ready' | 'unsupported';
   fields: PreviewField[];
+  /**
+   * The resolved result type for a function. This remains available when the
+   * function belongs to a lazily hydrated curated bundle instead of the local
+   * workspace model list.
+   */
+  functionOutput?: FunctionPreviewOutput;
   unsupportedFeatures?: string[];
   sourceMap?: PreviewSourceMapEntry[];
   /**

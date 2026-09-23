@@ -14,7 +14,7 @@ export type NodeOf<K extends AnyDomain['$type']> = Node<Extract<AnyDomain, { $ty
 /**
  * Typed, read-only lookup surface over the editor's nodes. Built as a PURE
  * derived snapshot from the `nodesById` Map-as-SoT — never a second source of
- * truth. `byId` keys on `node.id` (= `makeNodeId(ns, name)` = qualified name).
+ * truth. `byId` keys on `node.id` (= `makeNodeId(ns, name, $type)`).
  *
  * Declared standalone (not `extends Repository<TypeGraphNode>`): `byType`
  * narrows its `K` constraint to `AnyDomain['$type']`, which is a contravariant

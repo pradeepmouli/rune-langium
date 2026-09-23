@@ -8,12 +8,14 @@ import JSZip from 'jszip';
 import {
   IMPLEMENTED_TARGETS,
   TARGET_DESCRIPTORS,
+  type ExportSelection,
   type GeneratorDiagnostic,
   type GeneratorOutput,
   type Target
 } from '@rune-langium/codegen/export';
 import { loadCuratedWorkspace, curatedWorkspaceErrorResponse } from './curated-workspace.js';
 import { withInstrumentation, Capture } from './instrumentation/core.js';
+import type { ExportArtifactManifest } from './export-artifact.js';
 
 interface CodegenRequestBody {
   files: Array<{ path: string; content: string }>;
@@ -68,6 +70,10 @@ interface CodegenRequestBody {
    * Absent for legacy/direct callers → all namespaces emitted.
    */
   namespaces?: string[];
+  /** Optional declaration roots emitted in addition to selected namespaces. */
+  selection?: ExportSelection;
+  /** Return a ZIP artifact envelope with an inspectable manifest. */
+  artifactEnvelope?: 1;
 }
 
 /**
@@ -268,6 +274,24 @@ export const __documentCacheIsBusyForTests = withInstrumentation(
   }
 );
 
+function isExportSelection(value: unknown): value is ExportSelection {
+  if (!value || typeof value !== 'object') return false;
+  const selection = value as { namespaces?: unknown; declarations?: unknown };
+  return (
+    Array.isArray(selection.namespaces) &&
+    selection.namespaces.every((namespace) => typeof namespace === 'string') &&
+    Array.isArray(selection.declarations) &&
+    selection.declarations.every(
+      (declaration) =>
+        declaration &&
+        typeof declaration === 'object' &&
+        typeof (declaration as { namespace?: unknown }).namespace === 'string' &&
+        typeof (declaration as { name?: unknown }).name === 'string' &&
+        typeof (declaration as { kind?: unknown }).kind === 'string'
+    )
+  );
+}
+
 function isValidRequest(body: unknown): body is CodegenRequestBody {
   if (!body || typeof body !== 'object') return false;
   const b = body as { files?: unknown; target?: unknown; curatedBundles?: unknown; curatedDocs?: unknown };
@@ -326,7 +350,22 @@ function isValidRequest(body: unknown): body is CodegenRequestBody {
       return false;
     }
   }
+  const selection = (body as { selection?: unknown }).selection;
+  if (selection !== undefined && !isExportSelection(selection)) return false;
+  if (selection !== undefined && ns !== undefined) return false;
+  if (
+    (body as { artifactEnvelope?: unknown }).artifactEnvelope !== undefined &&
+    (body as { artifactEnvelope?: unknown }).artifactEnvelope !== 1
+  ) {
+    return false;
+  }
   return true;
+}
+
+/** Namespace seeds for curated hydration; selection controls final emission. */
+function requestedNamespaces(body: CodegenRequestBody): readonly string[] {
+  if (!body.selection) return body.namespaces ?? [];
+  return [...new Set([...body.selection.namespaces, ...body.selection.declarations.map((item) => item.namespace)])];
 }
 
 /**
@@ -396,7 +435,12 @@ async function loadAllDocuments(
   curatedFetcher: ((url: string, init?: RequestInit) => Promise<Response>) | undefined,
   requestedNamespaces: readonly string[],
   curatedDocs: ReadonlyArray<{ uri: string; serializedModel: string }>
-): Promise<{ docs: import('langium').LangiumDocument[]; curatedError?: Response; namespaces?: string[] }> {
+): Promise<{
+  docs: import('langium').LangiumDocument[];
+  curatedError?: Response;
+  namespaces?: string[];
+  resolvedCohorts?: Record<string, string>;
+}> {
   const [{ createRuneDslServices, hydrateModelDocuments }, { EmptyFileSystem, URI }] = await Promise.all([
     import('@rune-langium/core'),
     import('langium')
@@ -440,10 +484,14 @@ async function loadAllDocuments(
   // CDM at 128 MiB) — the manifest records the dependency graph so we walk
   // it here without fetching+parsing any documents upfront.
   let namespaces: string[] | undefined;
+  let resolvedCohorts: Record<string, string> | undefined;
   if (curatedBundles.length > 0) {
     try {
       const loaded = await loadCuratedWorkspace(curatedBundles, seeds, curatedFetcher, true);
       namespaces = [...new Set([...requestedNamespaces, ...loaded.closure])];
+      resolvedCohorts = Object.fromEntries(
+        loaded.bundles.flatMap((bundle) => (bundle.manifest.cohort ? [[bundle.id, bundle.manifest.cohort]] : []))
+      );
       const entries = loaded.bundles.flatMap((bundle) =>
         bundle.documents.map((entry) => ({ uri: curatedKeyToUri(entry.uri, URI), json: entry.serializedModel }))
       );
@@ -488,7 +536,7 @@ async function loadAllDocuments(
     await builder.build(userDocs, { validation: false });
   }
 
-  return { docs, namespaces };
+  return { docs, namespaces, ...(resolvedCohorts ? { resolvedCohorts } : {}) };
 }
 
 function hasParserErrors(docs: ReadonlyArray<import('langium').LangiumDocument>): GeneratorDiagnostic[] {
@@ -511,7 +559,8 @@ function fatalDiagnostics(outputs: readonly GeneratorOutput[]): GeneratorDiagnos
   return outputs.flatMap((o) => o.diagnostics.filter((d) => d.severity === 'error'));
 }
 
-function downloadFilename(target: Target, outputs: readonly GeneratorOutput[]): string {
+function downloadFilename(target: Target, outputs: readonly GeneratorOutput[], artifactEnvelope = false): string {
+  if (artifactEnvelope) return `${target}-output.zip`;
   const descriptor = TARGET_DESCRIPTORS[target];
   // Multi-file results are always returned as a zip via `zipResponse`,
   // regardless of contract. Codex review on PR #165 caught that a
@@ -576,6 +625,55 @@ async function zipResponse(outputs: readonly GeneratorOutput[], filename: string
   });
 }
 
+function isSafeArtifactPath(path: string): boolean {
+  return path.length > 0 && !path.startsWith('/') && !path.split('/').includes('..') && path !== '.rune/export.json';
+}
+
+async function artifactEnvelopeResponse(
+  target: Target,
+  outputs: readonly GeneratorOutput[],
+  filename: string,
+  selection: ExportSelection | undefined,
+  resolvedSelection?: ExportArtifactManifest['resolvedSelection'],
+  resolvedCohorts?: ExportArtifactManifest['resolvedCohorts']
+): Promise<Response> {
+  const zip = new JSZip();
+  const files: ExportArtifactManifest['files'] = [];
+  const paths = new Set<string>();
+  for (const output of outputs) {
+    if (!isSafeArtifactPath(output.relativePath) || paths.has(output.relativePath)) {
+      throw new Error(`Unsafe or duplicate generated artifact path '${output.relativePath}'.`);
+    }
+    paths.add(output.relativePath);
+    const payload = output.binary ?? output.content;
+    zip.file(output.relativePath, payload);
+    files.push({
+      path: output.relativePath,
+      kind: output.binary ? 'binary' : 'text',
+      ...(output.mimeType ? { mimeType: output.mimeType } : {}),
+      bytes: typeof payload === 'string' ? new TextEncoder().encode(payload).byteLength : payload.byteLength
+    });
+  }
+  const manifest: ExportArtifactManifest = {
+    version: 1,
+    target,
+    ...(selection ? { selection } : {}),
+    ...(resolvedSelection ? { resolvedSelection } : {}),
+    ...(resolvedCohorts && Object.keys(resolvedCohorts).length > 0 ? { resolvedCohorts } : {}),
+    files,
+    diagnostics: outputs.flatMap((output) => output.diagnostics)
+  };
+  zip.file('.rune/export.json', JSON.stringify(manifest));
+  return new Response(await zip.generateAsync({ type: 'arraybuffer' }), {
+    status: 200,
+    headers: {
+      'Content-Type': 'application/zip',
+      'Content-Disposition': `attachment; filename="${filename}"`,
+      'X-Rune-Export-Filename': filename
+    }
+  });
+}
+
 /**
  * Build the `GeneratorOptions` to pass to `generate()`, filling in the
  * Pages-Function-opinionated layout default for the target when the
@@ -593,6 +691,7 @@ function applyPagesFunctionDefaults(body: CodegenRequestBody): Record<string, un
   if (Array.isArray(body.namespaces) && body.namespaces.length > 0) {
     result.namespaces = body.namespaces;
   }
+  if (body.selection) result.selection = body.selection;
   const target = body.target;
   const serverDefault = PAGES_FUNCTION_DEFAULT_LAYOUT[target];
   if (!serverDefault) return result;
@@ -655,11 +754,12 @@ export const handleCodegenDownload = withInstrumentation(
 
       const cacheKey =
         body.files.length === 0 && curatedBundles.length > 0
-          ? documentCacheKey(curatedBundles, body.namespaces ?? [])
+          ? documentCacheKey(curatedBundles, requestedNamespaces(body))
           : undefined;
 
       let documents: import('langium').LangiumDocument[];
       let resolvedNamespaces: string[] | undefined;
+      let resolvedCohorts: Record<string, string> | undefined;
       // Set whenever this request is consuming a cache entry (whether it
       // just registered it or coalesced onto an existing one) — released in
       // the outer `finally` below, which now spans from registration all the
@@ -708,7 +808,7 @@ export const handleCodegenDownload = withInstrumentation(
             const promise = (
               stalePending.length > 0 ? Promise.allSettled(stalePending) : Promise.resolve(undefined)
             ).then(() =>
-              loadAllDocuments(body.files, curatedBundles, curatedFetcher, body.namespaces ?? [], curatedDocs)
+              loadAllDocuments(body.files, curatedBundles, curatedFetcher, requestedNamespaces(body), curatedDocs)
             );
             const newEntry = { promise, cachedAt: now, pending: true, activeConsumers: [] };
             entry = newEntry;
@@ -803,6 +903,7 @@ export const handleCodegenDownload = withInstrumentation(
           }
           documents = result.docs;
           resolvedNamespaces = result.namespaces;
+          resolvedCohorts = result.resolvedCohorts;
         } else {
           // A non-cacheable request (has user files, so its own document set
           // can't safely be reused by a later request) can still compete for
@@ -835,12 +936,13 @@ export const handleCodegenDownload = withInstrumentation(
             body.files,
             curatedBundles,
             curatedFetcher,
-            body.namespaces ?? [],
+            requestedNamespaces(body),
             curatedDocs
           );
           if (result.curatedError) return result.curatedError;
           documents = result.docs;
           resolvedNamespaces = result.namespaces;
+          resolvedCohorts = result.resolvedCohorts;
         }
 
         const parseErrors = hasParserErrors(documents);
@@ -855,10 +957,27 @@ export const handleCodegenDownload = withInstrumentation(
         // target (019 Phase 0.5.5) — the studio's Download flow delegates
         // its layout choice to the server, so `body.options.<target>.layout`
         // is only set when a caller wants to override the server's choice.
-        const { generate } = await import('@rune-langium/codegen/export');
+        const { generate, generateSelected, unknownExportSelectionDiagnostics } =
+          await import('@rune-langium/codegen/export');
         const generatorOptions = applyPagesFunctionDefaults(body);
         if (resolvedNamespaces && body.namespaces) generatorOptions.namespaces = resolvedNamespaces;
-        const outputs = await generate(documents, generatorOptions);
+        const selectedGeneration = body.selection
+          ? await generateSelected(documents, body.selection, generatorOptions)
+          : undefined;
+        const selectionReceipt = selectedGeneration?.selection;
+        const unknownSelectionDiagnostics = selectionReceipt ? unknownExportSelectionDiagnostics(selectionReceipt) : [];
+        if (unknownSelectionDiagnostics.length) {
+          return jsonError(
+            400,
+            'One or more selected export roots do not exist in the workspace',
+            unknownSelectionDiagnostics.map((diagnostic) => ({
+              severity: 'error' as const,
+              code: diagnostic.code,
+              message: diagnostic.message
+            }))
+          );
+        }
+        const outputs = selectedGeneration?.outputs ?? (await generate(documents, generatorOptions));
 
         const errors = fatalDiagnostics(outputs);
         if (errors.length > 0) {
@@ -868,7 +987,23 @@ export const handleCodegenDownload = withInstrumentation(
           return jsonError(400, 'No output was generated (workspace had no namespaces)');
         }
 
-        const filename = downloadFilename(body.target, outputs);
+        const filename = downloadFilename(body.target, outputs, body.artifactEnvelope === 1);
+        if (body.artifactEnvelope === 1) {
+          return artifactEnvelopeResponse(
+            body.target,
+            outputs,
+            filename,
+            body.selection,
+            selectionReceipt
+              ? {
+                  explicit: selectionReceipt.explicit,
+                  included: selectionReceipt.included,
+                  requiredBy: Object.fromEntries(selectionReceipt.requiredBy)
+                }
+              : undefined,
+            resolvedCohorts
+          );
+        }
         if (outputs.length === 1) {
           return singleArtifactResponse(body.target, outputs[0]!, filename);
         }

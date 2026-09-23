@@ -8,7 +8,9 @@
  */
 
 import { parse, parseWorkspace, createRuneDslServices, type RosettaModel } from '@rune-langium/core';
+import type { ExportSelection } from '@rune-langium/codegen/export';
 import { requestCodegenDownload } from './codegen-download-client.js';
+import { sanitizeDownloadFilename } from './export.js';
 import { EmptyFileSystem } from 'langium';
 import type { CuratedSerializedDocument } from '@rune-langium/curated-schema';
 import { CURATED_MODEL_IDS } from '@rune-langium/curated-schema';
@@ -1094,6 +1096,27 @@ export class CodegenDownloadError extends Error {
   }
 }
 
+/** Decode the documented /api/codegen failure envelope into its shared error type. */
+export const throwCodegenDownloadError = withInstrumentation(
+  async function throwCodegenDownloadError(response: Response): Promise<never> {
+    let envelope: { ok?: boolean; error?: string; diagnostics?: unknown } = {};
+    try {
+      envelope = (await response.json()) as typeof envelope;
+    } catch {
+      // A gateway can return a non-JSON failure before the application handler.
+    }
+    const diagnostics = Array.isArray(envelope.diagnostics)
+      ? (envelope.diagnostics as ReadonlyArray<{ severity: string; code: string; message: string }>)
+      : [];
+    throw new CodegenDownloadError(
+      envelope.error ?? `/api/codegen HTTP ${response.status}`,
+      response.status,
+      diagnostics
+    );
+  },
+  { op: 'throwCodegenDownloadError' }
+);
+
 /**
  * Sanitize a filename so it's safe to assign to `<a download="...">`.
  * Strips control chars (incl. CR/LF, which could enable header-style
@@ -1105,16 +1128,6 @@ export class CodegenDownloadError extends Error {
  * filenames, but a malicious or compromised response shouldn't be
  * able to coerce the browser into saving with a path-traversal name.
  */
-function sanitizeDownloadFilename(raw: string, fallback: string): string {
-  // Take the basename: drop everything up to and including the last
-  // slash or backslash. Handles posix, windows, and mixed separators.
-  const basename = raw.replace(/^.*[/\\]/, '');
-  // Strip control characters (including CR/LF) and quotes.
-  // eslint-disable-next-line no-control-regex
-  const cleaned = basename.replace(/[\x00-\x1f"]/g, '').trim();
-  return cleaned.length > 0 ? cleaned : fallback;
-}
-
 /**
  * Pull the `filename="..."` value from a Content-Disposition header.
  * Falls back to the given default when the header is missing or
@@ -1155,7 +1168,9 @@ export const downloadTargetViaRouter = withInstrumentation(
     options: Record<string, unknown> = {},
     curatedBundles: ReadonlyArray<{ id: string; version: string }> = [],
     namespaces: ReadonlyArray<string> = [],
-    curatedDocs: ReadonlyArray<{ uri: string; serializedModel: string }> = []
+    curatedDocs: ReadonlyArray<{ uri: string; serializedModel: string }> = [],
+    selection?: ExportSelection,
+    signal?: AbortSignal
   ): Promise<void> {
     const body: Record<string, unknown> = { files, target, options };
     // Send BOTH when available — NOT mutually exclusive. The server prefers
@@ -1179,24 +1194,17 @@ export const downloadTargetViaRouter = withInstrumentation(
     }
     // §5.3 — forward the modal's dependency-closed namespace subset. Empty =
     // no filter (emit everything), matching the server's interpretation.
+    if (selection && namespaces.length > 0) {
+      throw new TypeError('Declaration selection cannot be combined with a legacy namespace allowlist.');
+    }
     if (namespaces.length > 0) {
       body.namespaces = namespaces;
     }
-    const response = await requestCodegenDownload(body);
+    if (selection) body.selection = selection;
+    const response = await requestCodegenDownload(body, signal);
 
     if (!response.ok) {
-      let envelope: { ok?: boolean; error?: string; diagnostics?: unknown } = {};
-      try {
-        envelope = (await response.json()) as typeof envelope;
-      } catch {
-        // Non-JSON response (e.g. 502 from the edge before reaching the
-        // function). Keep the empty envelope; the status code alone is
-        // enough information for the user.
-      }
-      const diags = Array.isArray(envelope.diagnostics)
-        ? (envelope.diagnostics as ReadonlyArray<{ severity: string; code: string; message: string }>)
-        : [];
-      throw new CodegenDownloadError(envelope.error ?? `/api/codegen HTTP ${response.status}`, response.status, diags);
+      return throwCodegenDownloadError(response);
     }
 
     const blob = await response.blob();

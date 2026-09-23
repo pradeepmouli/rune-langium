@@ -26,7 +26,7 @@ import {
 import type { RosettaModel, RosettaRootElement } from '@rune-langium/core';
 import type { TypeGraphNode, TypeGraphEdge, GraphNodeMeta, GraphFilters, TypeKind } from '../types.js';
 import { getTypeRefText, getRefText, formatCardinality, resolveNodeKind } from './model-helpers.js';
-import { makeNodeId, makeEdgeId } from '../store/node-projection.js';
+import { makeNodeId, makeEdgeId, qualifiedNameFromNodeId, TYPE_DECLARATION_KINDS } from '../store/node-projection.js';
 
 // ---------------------------------------------------------------------------
 // Options / Result
@@ -120,16 +120,25 @@ interface MemberLikeRef {
   card?: { inf: number; sup?: number; unbounded: boolean };
 }
 
+type AstKind = TypeGraphNode['data']['$type'];
+type NodeIdLookup = ReadonlyMap<string, ReadonlyMap<AstKind, string>>;
+
+function resolveNodeId(lookup: NodeIdLookup, name: string, kinds: readonly AstKind[]): string | undefined {
+  const candidates = lookup.get(name);
+  if (!candidates) return undefined;
+  return kinds.map((kind) => candidates.get(kind)).find((nodeId): nodeId is string => nodeId !== undefined);
+}
+
 function getAttributeEdges(
   nodeId: string,
   members: MemberLikeRef[],
-  nameToNodeId: Map<string, string>
+  resolveTypeReference: (name: string) => string | undefined
 ): TypeGraphEdge[] {
   const edges: TypeGraphEdge[] = [];
   for (const member of members) {
     const typeName = getTypeRefText(member.typeCall);
     if (typeName) {
-      const targetNodeId = nameToNodeId.get(typeName);
+      const targetNodeId = resolveTypeReference(typeName);
       if (targetNodeId && targetNodeId !== nodeId) {
         edges.push({
           id: makeEdgeId('attribute-ref', { source: nodeId, target: targetNodeId, label: member.name ?? typeName }),
@@ -179,7 +188,7 @@ export function astToModel(models: unknown, options?: AstToModelOptions): AstToM
       const kind = resolveNodeKind(element) as TypeKind;
 
       if (!passesFilter(kind, namespace, name, filters)) continue;
-      const nodeId = makeNodeId(namespace, name);
+      const nodeId = makeNodeId(namespace, name, element.$type);
       if (nodeIdSet.has(nodeId)) continue;
 
       if (
@@ -198,12 +207,20 @@ export function astToModel(models: unknown, options?: AstToModelOptions): AstToM
     }
   }
 
-  // Build name → nodeId lookup
-  const nameToNodeId = new Map<string, string>();
+  // Index source-level names by declaration kind. Rune type references and
+  // function-parent references occupy different namespaces even when their
+  // written names are the same.
+  const nodeIdsByName = new Map<string, Map<AstKind, string>>();
   for (const node of nodes) {
-    nameToNodeId.set(node.id, node.id);
-    nameToNodeId.set(node.data.name, node.id);
+    for (const name of [node.data.name, qualifiedNameFromNodeId(node.id)]) {
+      const byKind = nodeIdsByName.get(name) ?? new Map<AstKind, string>();
+      byKind.set(node.data.$type, node.id);
+      nodeIdsByName.set(name, byKind);
+    }
   }
+  const resolveTypeReference = (name: string) => resolveNodeId(nodeIdsByName, name, TYPE_DECLARATION_KINDS);
+  const resolveEnumReference = (name: string) => resolveNodeId(nodeIdsByName, name, ['RosettaEnumeration']);
+  const resolveFunctionReference = (name: string) => resolveNodeId(nodeIdsByName, name, ['RosettaFunction']);
 
   // Second pass: create edges
   for (const node of nodes) {
@@ -215,7 +232,7 @@ export function astToModel(models: unknown, options?: AstToModelOptions): AstToM
       // `$type` is the union discriminant — `d` narrows to Dehydrated<Data>.
       const parentName = getRefText(d.superType);
       if (parentName) {
-        const parentNodeId = nameToNodeId.get(parentName);
+        const parentNodeId = resolveTypeReference(parentName);
         if (parentNodeId) {
           edges.push({
             id: makeEdgeId('extends', { source: node.id, target: parentNodeId }),
@@ -227,13 +244,15 @@ export function astToModel(models: unknown, options?: AstToModelOptions): AstToM
         }
       }
       // Attribute reference edges
-      edges.push(...getAttributeEdges(node.id, (d.attributes ?? []) as unknown as MemberLikeRef[], nameToNodeId));
+      edges.push(
+        ...getAttributeEdges(node.id, (d.attributes ?? []) as unknown as MemberLikeRef[], resolveTypeReference)
+      );
     } else if ($type === 'Choice') {
       // Choice option edges
       for (const opt of (d.attributes ?? []) as unknown as MemberLikeRef[]) {
         const typeName = getTypeRefText(opt.typeCall);
         if (typeName) {
-          const targetNodeId = nameToNodeId.get(typeName);
+          const targetNodeId = resolveTypeReference(typeName);
           if (targetNodeId) {
             edges.push({
               id: makeEdgeId('choice-option', { source: node.id, target: targetNodeId, label: typeName }),
@@ -248,7 +267,7 @@ export function astToModel(models: unknown, options?: AstToModelOptions): AstToM
     } else if ($type === 'RosettaEnumeration') {
       const parentName = getRefText(d.parent);
       if (parentName) {
-        const parentNodeId = nameToNodeId.get(parentName);
+        const parentNodeId = resolveEnumReference(parentName);
         if (parentNodeId) {
           edges.push({
             id: makeEdgeId('enum-extends', { source: node.id, target: parentNodeId }),
@@ -261,11 +280,11 @@ export function astToModel(models: unknown, options?: AstToModelOptions): AstToM
       }
     } else if ($type === 'RosettaFunction') {
       // Input parameter type references
-      edges.push(...getAttributeEdges(node.id, (d.inputs ?? []) as unknown as MemberLikeRef[], nameToNodeId));
+      edges.push(...getAttributeEdges(node.id, (d.inputs ?? []) as unknown as MemberLikeRef[], resolveTypeReference));
       // Output type reference
       const outputTypeName = getTypeRefText((d.output as unknown as MemberLikeRef | undefined)?.typeCall);
       if (outputTypeName) {
-        const targetNodeId = nameToNodeId.get(outputTypeName);
+        const targetNodeId = resolveTypeReference(outputTypeName);
         if (targetNodeId && targetNodeId !== node.id) {
           edges.push({
             id: makeEdgeId('attribute-ref', { source: node.id, target: targetNodeId, label: 'output' }),
@@ -279,7 +298,7 @@ export function astToModel(models: unknown, options?: AstToModelOptions): AstToM
       // Super-function inheritance
       const superName = getRefText(d.superFunction);
       if (superName) {
-        const parentNodeId = nameToNodeId.get(superName);
+        const parentNodeId = resolveFunctionReference(superName);
         if (parentNodeId) {
           edges.push({
             id: makeEdgeId('extends', { source: node.id, target: parentNodeId }),
@@ -291,11 +310,11 @@ export function astToModel(models: unknown, options?: AstToModelOptions): AstToM
         }
       }
     } else if ($type === 'RosettaRecordType') {
-      edges.push(...getAttributeEdges(node.id, d.features ?? [], nameToNodeId));
+      edges.push(...getAttributeEdges(node.id, d.features ?? [], resolveTypeReference));
     } else if ($type === 'RosettaTypeAlias') {
       const targetType = getTypeRefText(d.typeCall);
       if (targetType) {
-        const targetNodeId = nameToNodeId.get(targetType);
+        const targetNodeId = resolveTypeReference(targetType);
         if (targetNodeId && targetNodeId !== node.id) {
           edges.push({
             id: makeEdgeId('type-alias-ref', { source: node.id, target: targetNodeId }),
@@ -308,7 +327,9 @@ export function astToModel(models: unknown, options?: AstToModelOptions): AstToM
       }
     } else if ($type === 'Annotation') {
       // Attribute reference edges (same convention as Data attributes).
-      edges.push(...getAttributeEdges(node.id, (d.attributes ?? []) as unknown as MemberLikeRef[], nameToNodeId));
+      edges.push(
+        ...getAttributeEdges(node.id, (d.attributes ?? []) as unknown as MemberLikeRef[], resolveTypeReference)
+      );
     }
   }
 
@@ -327,7 +348,7 @@ export function astToModel(models: unknown, options?: AstToModelOptions): AstToM
     if (members) {
       node.meta.hasExternalRefs = members.some((m) => {
         const t = getTypeRefText(m.typeCall);
-        return Boolean(t && !nameToNodeId.has(t));
+        return Boolean(t && !resolveTypeReference(t));
       });
     }
   }

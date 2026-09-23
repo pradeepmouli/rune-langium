@@ -209,6 +209,62 @@ describe('POST /api/codegen', () => {
     expect(res.status).toBe(400);
   });
 
+  it('emits a selected declaration and its linked dependency without unrelated siblings', async () => {
+    const res = await onRequestPost({
+      request: makeRequest({
+        files: [
+          {
+            path: 'selection.rune',
+            content: `namespace test
+type Address:
+  city string (1..1)
+type Party:
+  address Address (1..1)
+type Unrelated:
+  ignored string (1..1)`
+          }
+        ],
+        target: 'typescript',
+        options: { typescript: { layout: 'per-namespace' } },
+        selection: { namespaces: [], declarations: [{ namespace: 'test', name: 'Party', kind: 'Data' }] }
+      })
+    } as never);
+    expect(res.status).toBe(200);
+    const output = await res.text();
+    expect(output).toMatch(/(?:class|interface|type|enum)\s+Address\b/);
+    expect(output).toMatch(/(?:class|interface|type|enum)\s+Party\b/);
+    expect(output).not.toMatch(/(?:class|interface|type|enum)\s+Unrelated\b/);
+  });
+
+  it('rejects simultaneous declaration and legacy namespace scopes', async () => {
+    const res = await onRequestPost({
+      request: makeRequest({
+        files: [{ path: 'x.rune', content: ONE_NAMESPACE }],
+        target: 'typescript',
+        namespaces: ['x'],
+        selection: { namespaces: [], declarations: [{ namespace: 'x', name: 'T', kind: 'Data' }] }
+      })
+    } as never);
+    expect(res.status).toBe(400);
+  });
+
+  it('rejects an unknown declaration selection with an actionable diagnostic', async () => {
+    const res = await onRequestPost({
+      request: makeRequest({
+        files: [{ path: 'x.rune', content: ONE_NAMESPACE }],
+        target: 'typescript',
+        selection: { namespaces: [], declarations: [{ namespace: 'x', name: 'Missing', kind: 'Data' }] }
+      })
+    } as never);
+    expect(res.status).toBe(400);
+    const body = await asJson(res);
+    expect(body.diagnostics).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ code: 'unknown-export-selection', message: expect.stringContaining('x.Missing') })
+      ])
+    );
+  });
+
   it("JSON Schema default ('single-file') returns one bundled model.schema.json", async () => {
     const res = await onRequestPost({
       request: makeRequest({

@@ -23,8 +23,10 @@ import { useWorkspaceActions } from './workspace-actions-context.js';
 import { useDiagnosticsStore } from '../../store/diagnostics-store.js';
 import { combineFileDiagnostics } from '../explore-diagnostics.js';
 import { useExploreFileNavStore } from '../explore-file-nav-store.js';
-import { useExportDialogStore } from '../export-dialog-store.js';
 import { useImportDialogStore } from '../import-dialog-store.js';
+import { useExportNavigationStore } from '../../services/export-navigation.js';
+import { usePerspectiveStore } from '../../store/perspective-store.js';
+import { useEditorStore } from '@rune-langium/visual-editor';
 import type { LspDiagnostic } from '../../store/diagnostics-store.js';
 import { withInstrumentation } from '../../services/instrumentation/core.js';
 
@@ -212,8 +214,25 @@ export const ExploreCenterSlot = withInstrumentation(
 
 export const ExploreActions = withInstrumentation(
   function ExploreActions() {
-    const setShowExportDialog = useExportDialogStore((s) => s.setOpen);
+    const workspace = useWorkspace();
+    const selectedNode = useEditorStore((state) =>
+      state.selectedNodeId ? state.nodesById.get(state.selectedNodeId) : undefined
+    );
+    const openExport = useExportNavigationStore((state) => state.openExport);
+    const setActivePerspective = usePerspectiveStore((state) => state.setActivePerspective);
     const setShowImportDialog = useImportDialogStore((s) => s.setOpen);
+    const exportSelected = () => {
+      const data = selectedNode?.data as { name?: string; $type?: string } | undefined;
+      const namespace = selectedNode?.meta.namespace;
+      if (workspace.workspaceId && namespace && data?.name && data.$type) {
+        openExport(workspace.workspaceId, {
+          namespaces: [],
+          declarations: [{ namespace, name: data.name, kind: data.$type }]
+        });
+      } else {
+        setActivePerspective('export');
+      }
+    };
     return (
       <>
         <Button variant="ghost" size="icon-sm" aria-label="Validate" title="Validate">
@@ -223,8 +242,8 @@ export const ExploreActions = withInstrumentation(
           variant="ghost"
           size="icon-sm"
           aria-label="Export code"
-          title="Export code"
-          onClick={() => setShowExportDialog(true)}
+          title={selectedNode ? 'Export selected declaration' : 'Open Export'}
+          onClick={exportSelected}
         >
           <Download />
         </Button>

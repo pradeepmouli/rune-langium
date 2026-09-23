@@ -106,6 +106,9 @@ class FakeApi {
   // Restores panels from a native-shape snapshot. Supports the optional
   // per-panel `testGroupHeight` hook so tests can restore a collapsed tray.
   fromJSON = (data: unknown) => {
+    if ((data as { testThrow?: unknown })?.testThrow) {
+      throw new Error('native restore failed');
+    }
     const panels = (data as { panels?: Record<string, { contentComponent?: string; testGroupHeight?: number }> })
       ?.panels;
     for (const [id, panel] of Object.entries(panels ?? {})) {
@@ -579,6 +582,36 @@ describe('DockShell — dockview integration (T065)', () => {
     const sizeCalls = lastApi?.groups?.get('p-activity')?.sizeCalls ?? [];
     fireEvent.click(toggle);
     expect(sizeCalls[sizeCalls.length - 1]).toEqual({ height: 220 });
+  });
+
+  it('rebuilds and persists the actual factory default when native restore rejects', async () => {
+    const onLayoutChange = vi.fn();
+    render(
+      <DockShell
+        studioVersion="0.1.0"
+        workspaceId="ws-1"
+        onLayoutChange={onLayoutChange}
+        initialLayout={
+          {
+            version: LAYOUT_SCHEMA_VERSION,
+            writtenBy: '0.1.0',
+            dockview: {
+              shape: 'native',
+              json: {
+                grid: { root: {} },
+                panels: { 'p-problems': { contentComponent: 'workspace.problems' } },
+                testThrow: true
+              }
+            }
+          } as never
+        }
+      />
+    );
+    await act(() => new Promise((resolve) => setTimeout(resolve, 5)));
+
+    const restored = onLayoutChange.mock.calls.at(-1)?.[0];
+    expect(restored?.dockview).toMatchObject({ shape: 'factory' });
+    expect(restored?.dockview).toHaveProperty('columns');
   });
 });
 

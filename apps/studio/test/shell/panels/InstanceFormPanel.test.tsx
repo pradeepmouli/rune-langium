@@ -82,7 +82,8 @@ describe('InstanceFormPanel', () => {
       useInstanceStore.getState().receiveSchemaResult(requestId, partySchema);
     });
 
-    expect(screen.getByRole('heading', { name: 'Party' })).toBeInTheDocument();
+    expect(screen.getByRole('textbox', { name: 'Name' })).toBeInTheDocument();
+    expect(screen.queryByRole('heading', { name: 'Party' })).not.toBeInTheDocument();
   });
 
   it('an edit + blur calls updateInstanceData with the instance id and the full updated values object', () => {

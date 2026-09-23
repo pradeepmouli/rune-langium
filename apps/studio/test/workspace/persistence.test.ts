@@ -6,8 +6,13 @@
  * Backed by `fake-indexeddb` (already in use across the studio test suite).
  */
 
-import { describe, it, expect, beforeEach } from 'vitest';
+import { afterEach, describe, it, expect, beforeEach } from 'vitest';
 import 'fake-indexeddb/auto';
+import {
+  configureInstrumentation,
+  resetInstrumentationForTests,
+  setInstrumentationThreshold
+} from '@rune-langium/instrumentation-core';
 import {
   saveWorkspace,
   loadWorkspace,
@@ -45,6 +50,10 @@ beforeEach(async () => {
     req.onerror = () => reject(req.error);
     req.onblocked = () => resolveDelete();
   });
+});
+
+afterEach(() => {
+  resetInstrumentationForTests();
 });
 
 describe('persistence — workspace CRUD (T014)', () => {
@@ -98,5 +107,27 @@ describe('persistence — settings store', () => {
     await saveSetting('theme', 'light');
     await saveSetting('theme', 'system');
     expect(await loadSetting('theme')).toBe('system');
+  });
+
+  it('does not capture dynamic workbench keys or stored values', async () => {
+    const emitted: unknown[] = [];
+    configureInstrumentation((record) => emitted.push(record));
+    setInstrumentationThreshold('trace');
+    const key = 'workbench:["private-workspace","prototype"]:v1' as const;
+    const value = { selectedId: 'private.namespace.Model' };
+
+    await saveSetting(key, value);
+    await loadSetting(key);
+
+    const settingRecords = emitted.filter(
+      (record): record is { op: string } =>
+        typeof record === 'object' &&
+        record !== null &&
+        'op' in record &&
+        ((record as { op: string }).op === 'saveSetting' || (record as { op: string }).op === 'loadSetting')
+    );
+    expect(settingRecords).toHaveLength(2);
+    expect(JSON.stringify(settingRecords)).not.toContain('private-workspace');
+    expect(JSON.stringify(settingRecords)).not.toContain('private.namespace.Model');
   });
 });

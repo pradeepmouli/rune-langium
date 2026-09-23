@@ -35,15 +35,17 @@ import {
   NameCell,
   CardinalityCell,
   TypePickerCell,
-  BUILTIN_TYPES,
   AST_TYPE_TO_NODE_TYPE,
-  resolveNodeKind,
+  buildTypeOptions,
   annotationsToDisplay,
   conditionsToDisplay,
   useEditorStore,
   useModelSourceSync,
   useLatestRef,
+  makeNodeId,
   nameFromNodeId,
+  isTypeNodeId,
+  qualifiedNameFromNodeId,
   splitNodeId,
   selectNodeRepository
 } from '@rune-langium/visual-editor';
@@ -64,7 +66,7 @@ import type {
 } from '@rune-langium/visual-editor';
 import { useStructureViewStore } from '../store/structure-view-store.js';
 import type { RosettaModel } from '@rune-langium/core';
-import { qualifiedExportPath, namespaceFromModelName } from '@rune-langium/core';
+import { namespaceFromModelName } from '@rune-langium/core';
 import { SourceEditor } from '../components/SourceEditor.js';
 import type { SourceEditorRef } from '../components/SourceEditor.js';
 import { ConnectionStatus } from '../components/ConnectionStatus.js';
@@ -111,6 +113,7 @@ import { resolveEditorFilePath, useExploreFileNavStore } from './explore-file-na
 import { useExportDialogStore } from './export-dialog-store.js';
 import { useImportDialogStore } from './import-dialog-store.js';
 import { HydrationOrchestrator } from '../services/hydration-orchestrator.js';
+import { useExploreNavigationStore } from '../services/explore-navigation.js';
 import { withInstrumentation } from '../services/instrumentation/core.js';
 
 /**
@@ -439,6 +442,7 @@ export const ExplorePerspective = withInstrumentation(
     const setShowExportDialog = useExportDialogStore((s) => s.setOpen);
     const showImportDialog = useImportDialogStore((s) => s.open);
     const setShowImportDialog = useImportDialogStore((s) => s.setOpen);
+    const setExploreNavigateToType = useExploreNavigationStore((s) => s.setNavigateToType);
     // Curated Models modal — wired from the ActivityBar's Database button.
     // The Welcome screen renders <ModelLoader /> inline; inside EditorPage we
     // reuse the same component in a Dialog so the affordance stays discoverable
@@ -719,7 +723,7 @@ export const ExplorePerspective = withInstrumentation(
               };
             }
           ).$cstNode?.range;
-          sourceByTargetId.set(`${namespace}.${name}`, {
+          sourceByTargetId.set(makeNodeId(namespace, name, element.$type), {
             sourceUri,
             sourceIndex,
             sourceRange:
@@ -751,11 +755,11 @@ export const ExplorePerspective = withInstrumentation(
           const namespace = node.meta?.namespace;
           if (!namespace || !data.name) return undefined;
           return {
-            id: `${namespace}.${data.name}`,
+            id: node.id,
             namespace,
             name: data.name,
             kind: data.$type ?? 'unknown',
-            ...sourceByTargetId.get(`${namespace}.${data.name}`)
+            ...sourceByTargetId.get(node.id)
           };
         })
         .filter((target): target is FormPreviewTarget => target !== undefined);
@@ -782,13 +786,8 @@ export const ExplorePerspective = withInstrumentation(
       if (!selectedNodeId) {
         return;
       }
-      const name = (selectedNodeData as unknown as { name?: string } | null)?.name;
-      const namespace = selectedNodeMeta?.namespace;
-      if (!namespace || !name) {
-        return;
-      }
-      selectPreviewTarget(`${namespace}.${name}`);
-    }, [selectedNodeData, selectedNodeMeta, selectedNodeId, selectPreviewTarget]);
+      selectPreviewTarget(selectedNodeId);
+    }, [selectedNodeId, selectPreviewTarget]);
 
     useEffect(() => {
       if (!selectedNodeId) {
@@ -1006,12 +1005,12 @@ export const ExplorePerspective = withInstrumentation(
       for (const entry of resolvedModelFiles) {
         const model = entry.model as {
           name?: unknown;
-          elements?: Array<{ name?: string }>;
+          elements?: Array<{ name?: string; $type?: string }>;
         };
         const ns = namespaceFromModelName(model.name) ?? 'unknown';
         for (const element of model.elements ?? []) {
           const name = element.name ?? 'unknown';
-          const nodeId = qualifiedExportPath(ns, name);
+          const nodeId = makeNodeId(ns, name, element.$type);
           if (!map.has(nodeId)) map.set(nodeId, entry.filePath);
         }
       }
@@ -1019,7 +1018,7 @@ export const ExplorePerspective = withInstrumentation(
       for (const entry of deferredExports) {
         for (const exp of entry.exports) {
           if (!(exp.type in AST_TYPE_TO_NODE_TYPE)) continue;
-          const nodeId = qualifiedExportPath(entry.namespace, exp.name);
+          const nodeId = makeNodeId(entry.namespace, exp.name, exp.type);
           if (!map.has(nodeId)) map.set(nodeId, entry.filePath);
         }
       }
@@ -1040,7 +1039,7 @@ export const ExplorePerspective = withInstrumentation(
           }
         }
         if (!meta?.namespace) return undefined;
-        const nodeId = qualifiedExportPath(meta.namespace, d.name);
+        const nodeId = makeNodeId(meta.namespace, d.name, typeof d.$type === 'string' ? d.$type : undefined);
         return nodeIdToFilePath.get(nodeId);
       },
       [files, nodeIdToFilePath]
@@ -1303,7 +1302,10 @@ export const ExplorePerspective = withInstrumentation(
 
     const navigateToNode = useCallback(
       (nodeId: string) => {
-        const targetNode = nodeRepository.byId(nodeId);
+        const targetNode =
+          nodeRepository.byId(nodeId) ??
+          nodeRepository.all().find((node) => isTypeNodeId(node.id) && qualifiedNameFromNodeId(node.id) === nodeId);
+        const resolvedNodeId = targetNode?.id ?? nodeId;
         const exists = Boolean(targetNode);
         if (!exists) {
           const shortName = nameFromNodeId(nodeId);
@@ -1316,26 +1318,31 @@ export const ExplorePerspective = withInstrumentation(
         }
         // History tracking (back-stack push + forward-stack invalidation) is
         // handled generically by the selectedNodeId subscription above.
-        storeSelectNode(nodeId, { reapplyFocusMode: true });
+        storeSelectNode(resolvedNodeId, { reapplyFocusMode: true });
         const targetMeta = targetNode?.meta;
         if (targetMeta?.deferred && targetMeta.namespace) {
           orchestratorRef.current?.requestHydration(targetMeta.namespace, {
             retryFor: {
-              targetId: nodeId,
+              targetId: resolvedNodeId,
               onRetry: () => {
                 // See handleExplorerSelectNode above for why no macrotask defer
                 // is needed here (unlike Task 3's CodegenProvider case).
-                storeSelectNode(nodeId, { reapplyFocusMode: false });
+                storeSelectNode(resolvedNodeId, { reapplyFocusMode: false });
               }
             }
           });
         }
-        if (!focusMode && shouldCenterNavigationTarget(nodeId)) {
-          graphRef.current?.focusNode(nodeId);
+        if (!focusMode && shouldCenterNavigationTarget(resolvedNodeId)) {
+          graphRef.current?.focusNode(resolvedNodeId);
         }
       },
       [focusMode, showToast, shouldCenterNavigationTarget, nodeRepository, storeSelectNode]
     );
+
+    useEffect(() => {
+      setExploreNavigateToType(navigateToNode);
+      return () => setExploreNavigateToType(undefined);
+    }, [navigateToNode, setExploreNavigateToType]);
 
     const navigateBack = useCallback(() => {
       const prev = navigationHistoryRef.current.pop();
@@ -1567,20 +1574,7 @@ export const ExplorePerspective = withInstrumentation(
       return warnings;
     }, [combinedDiagnostics.errors, combinedDiagnostics.warnings, getSerializedFiles]);
 
-    const availableTypes: TypeOption[] = useMemo(() => {
-      const builtinOptions: TypeOption[] = BUILTIN_TYPES.map((t) => ({
-        value: `builtin::${t}`,
-        label: t,
-        kind: 'builtin' as const
-      }));
-      const graphOptions: TypeOption[] = storeNodes.map((n) => ({
-        value: n.id,
-        label: n.data.name,
-        kind: resolveNodeKind(n) as TypeOption['kind'],
-        namespace: n.meta.namespace
-      }));
-      return [...builtinOptions, ...graphOptions];
-    }, [storeNodes]);
+    const availableTypes: TypeOption[] = useMemo(() => buildTypeOptions(nodeRepository), [nodeRepository]);
 
     const synonymSourceOptions: SourceRefOption[] = useMemo(() => {
       const out: SourceRefOption[] = [];

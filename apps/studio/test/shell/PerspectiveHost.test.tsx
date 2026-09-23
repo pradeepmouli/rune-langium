@@ -38,6 +38,7 @@ describe('PerspectiveHost', () => {
   it('keeps Explore mounted (never remounts) across a switch away and back', () => {
     render(<PerspectiveHost hasWorkspace hasExploreContent />);
     const slot = () => screen.getByTestId('explore-probe').closest('[data-perspective-slot="explore"]') as HTMLElement;
+    const editor = screen.getByTestId('explore-probe');
     expect(exploreMounts.count).toBe(1);
     expect(slot().style.display).not.toBe('none'); // visible when active
 
@@ -50,6 +51,7 @@ describe('PerspectiveHost', () => {
 
     act(() => usePerspectiveStore.getState().setActivePerspective('explore'));
     expect(exploreMounts.count).toBe(1); // STILL 1 — definitive: no remount
+    expect(screen.getByTestId('explore-probe')).toBe(editor);
     expect(slot().style.display).not.toBe('none');
   });
 

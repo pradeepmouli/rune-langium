@@ -44,6 +44,19 @@ it('returns the transferred artifact and releases the worker', async () => {
   expect(vi.getTimerCount()).toBe(0);
 });
 
+it('uses the Pages endpoint when curated source arrays are empty', async () => {
+  const fetchMock = vi.fn().mockResolvedValue(new Response('generated'));
+  vi.stubGlobal('fetch', fetchMock);
+  const userOnlyBody = { ...body, curatedBundles: [], curatedDocs: [] };
+
+  await expect(requestCodegenDownload(userOnlyBody)).resolves.toBeInstanceOf(Response);
+
+  expect(fetchMock).toHaveBeenCalledWith(
+    '/api/codegen',
+    expect.objectContaining({ method: 'POST', body: JSON.stringify(userOnlyBody) })
+  );
+});
+
 it.each(['error', 'messageerror', 'reply', 'timeout'])('settles and releases on %s', async (kind) => {
   const result = requestCodegenDownload(body);
   const rejected = expect(result).rejects.toThrow();
@@ -53,6 +66,18 @@ it.each(['error', 'messageerror', 'reply', 'timeout'])('settles and releases on 
   if (kind === 'reply') worker.onmessage?.({ data: { error: 'build failed' } });
   if (kind === 'timeout') await vi.advanceTimersByTimeAsync(120_000);
   await rejected;
+  expect(worker.terminate).toHaveBeenCalledOnce();
+  expect(vi.getTimerCount()).toBe(0);
+});
+
+it('cancels a curated request and releases its worker', async () => {
+  const controller = new AbortController();
+  const result = requestCodegenDownload(body, controller.signal);
+  const worker = DownloadWorker.current;
+
+  controller.abort();
+
+  await expect(result).rejects.toMatchObject({ name: 'AbortError' });
   expect(worker.terminate).toHaveBeenCalledOnce();
   expect(vi.getTimerCount()).toBe(0);
 });

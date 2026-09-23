@@ -2,60 +2,144 @@
 // Copyright (c) 2026 Pradeep Mouli
 
 import { act, fireEvent, render, screen } from '@testing-library/react';
-import { beforeEach, describe, expect, it } from 'vitest';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
+const { mockReadWorkbenchSettings } = vi.hoisted(() => ({
+  mockReadWorkbenchSettings: vi.fn(async (_workspaceId: string, _key: string, fallback: unknown) => fallback)
+}));
+vi.mock('../../../../src/shell/workbench-settings.js', () => ({
+  readWorkbenchSettings: mockReadWorkbenchSettings,
+  writeWorkbenchSettings: vi.fn(async () => undefined)
+}));
+vi.mock('../../../../src/shell/WorkbenchHost.js', () => ({
+  WorkbenchHost: ({ definition }: { definition: { panels: Record<string, () => React.ReactElement> } }) => (
+    <div data-testid="mock-prototype-workbench">
+      {Object.entries(definition.panels).map(([id, Panel]) => (
+        <div key={id} data-testid={`prototype-workbench-panel-${id}`}>
+          <Panel />
+        </div>
+      ))}
+    </div>
+  )
+}));
 import { PrototypePerspective } from '../../../../src/shell/perspectives/screens/PrototypePerspective.js';
 import { useInstanceStore } from '../../../../src/store/instance-store.js';
+import { usePrototypeViewStore } from '../../../../src/store/prototype-view-store.js';
+import { requestPrototype, usePrototypeNavigationStore } from '../../../../src/services/prototype-navigation.js';
+import { WorkspaceStateContext, type WorkspaceState } from '../../../../src/shell/providers/workspace-context.js';
 import { installFakeValidatingWorkerForInstances } from '../../../helpers/fake-validating-worker.js';
 
 describe('PrototypePerspective', () => {
   beforeEach(() => {
+    mockReadWorkbenchSettings.mockReset();
+    mockReadWorkbenchSettings.mockImplementation(
+      async (_workspaceId: string, _key: string, fallback: unknown) => fallback
+    );
     useInstanceStore.setState({
       instances: {},
       validationErrors: {},
+      validationStatus: {},
       schemas: new Map(),
-      schemaErrors: new Map()
+      schemaErrors: new Map(),
+      saveStates: {},
+      recordRevisions: {}
     });
+    usePrototypeViewStore.setState({
+      workspaceId: 'workspace-a',
+      state: {
+        selectedId: null,
+        query: '',
+        typeFqn: null,
+        inspectorTab: 'form',
+        graphVisible: false
+      }
+    });
+    usePrototypeNavigationStore.setState({ pending: null });
   });
 
-  it('renders the empty state when no instance is selected', () => {
-    render(<PrototypePerspective />);
+  const workspace: WorkspaceState = {
+    workspaceId: 'workspace-a',
+    workspaceKind: 'browser-only',
+    workspaceName: 'workspace-a',
+    fileCount: 0,
+    files: [],
+    models: [],
+    parsedModels: [],
+    deferredExports: [],
+    parseErrors: new Map()
+  };
+
+  async function renderPerspective() {
+    const result = render(
+      <WorkspaceStateContext.Provider value={workspace}>
+        <PrototypePerspective />
+      </WorkspaceStateContext.Provider>
+    );
+    await screen.findByTestId('mock-prototype-workbench');
+    return result;
+  }
+
+  it('renders the empty state when no instance is selected', async () => {
+    await renderPerspective();
     expect(screen.getByTestId('prototype-perspective')).toBeInTheDocument();
-    expect(screen.getByText(/select an instance from the list, or create one/i)).toBeInTheDocument();
+    expect(screen.getByText(/select or create an instance to inspect it/i)).toBeInTheDocument();
   });
 
-  it('creating an instance via the explorer selects it and shows the Fields tab by default', () => {
-    render(<PrototypePerspective />);
-
-    fireEvent.change(screen.getByLabelText('New instance type'), { target: { value: 'test.Party' } });
-    fireEvent.change(screen.getByLabelText('New instance name'), { target: { value: 'Acme' } });
-    fireEvent.click(screen.getByRole('button', { name: 'Create' }));
-
-    // Empty state is gone, tabs are present, Fields tab active by default —
-    // InstanceFormPanel has no worker attached in this test, so it renders
-    // its "waiting" status (matching InstanceFormPanel.test.tsx's own pattern).
-    expect(screen.queryByText(/select an instance from the list, or create one/i)).not.toBeInTheDocument();
-    expect(screen.getByRole('tab', { name: 'Fields' })).toBeInTheDocument();
-    expect(screen.getByText(/generating preview for the selected type/i)).toBeInTheDocument();
+  it('selecting a grid row opens its Form tab by default', async () => {
+    const id = useInstanceStore.getState().createInstance('test.Party', 'Acme');
+    await renderPerspective();
+    fireEvent.click(screen.getByRole('row', { name: /Acme/ }));
+    expect(usePrototypeViewStore.getState().state.selectedId).toBe(id);
+    expect(screen.getByRole('tab', { name: 'Form' })).toHaveAttribute('aria-selected', 'true');
   });
 
-  it('switching to the Inspector tab shows InstanceInspectorPanel content for the same instance', () => {
-    render(<PrototypePerspective />);
-
-    fireEvent.change(screen.getByLabelText('New instance type'), { target: { value: 'test.Party' } });
-    fireEvent.change(screen.getByLabelText('New instance name'), { target: { value: 'Acme' } });
-    fireEvent.click(screen.getByRole('button', { name: 'Create' }));
-
-    const inspectorTab = screen.getByRole('tab', { name: 'Inspector' });
-    act(() => {
-      fireEvent.click(inspectorTab);
+  it('registers Inspector, Instances, and Payload graph panels with the shared host', async () => {
+    useInstanceStore.getState().createInstance('test.Party', 'Acme', {
+      data: { address: { city: 'London' } }
     });
+    await renderPerspective();
+    fireEvent.click(screen.getByRole('button', { name: 'Payload graph' }));
 
-    expect(screen.getByText('Validation')).toBeInTheDocument();
-    expect(screen.getByText('Provenance')).toBeInTheDocument();
-    expect(screen.getByText('Raw JSON')).toBeInTheDocument();
+    expect(screen.getByTestId('prototype-workbench-panel-prototype.inspector')).toBeInTheDocument();
+    expect(screen.getByTestId('prototype-workbench-panel-prototype.grid')).toBeInTheDocument();
+    expect(screen.getByTestId('prototype-workbench-panel-prototype.payloadGraph')).toBeInTheDocument();
   });
 
-  it('does not carry over stale field-level validation errors when switching between instances of the same type (finding #8)', () => {
+  it('omits the Payload graph panel until it is enabled', async () => {
+    await renderPerspective();
+
+    expect(screen.queryByTestId('prototype-workbench-panel-prototype.payloadGraph')).not.toBeInTheDocument();
+  });
+
+  it('keeps Inspector details with the selected Form', async () => {
+    useInstanceStore.getState().createInstance('test.Party', 'Acme');
+    await renderPerspective();
+    fireEvent.click(screen.getByRole('row', { name: /Acme/ }));
+    expect(screen.getAllByText('Validation')).not.toHaveLength(0);
+    expect(screen.getByText('Provenance')).toBeInTheDocument();
+    expect(screen.getByLabelText('Instance payload')).toBeInTheDocument();
+  });
+
+  it('opens the shared creation dialog with imported JSON values', async () => {
+    await renderPerspective();
+    const file = new File(['{"name":"Acme"}'], 'party.json', { type: 'application/json' });
+
+    fireEvent.change(screen.getByLabelText('Import JSON'), { target: { files: [file] } });
+
+    expect(await screen.findByRole('heading', { name: 'New instance' })).toBeVisible();
+    expect(screen.getByRole('button', { name: 'Instance type' })).toBeVisible();
+  });
+
+  it('keeps malformed JSON out of the creation flow', async () => {
+    await renderPerspective();
+    const file = new File(['{'], 'broken.json', { type: 'application/json' });
+
+    fireEvent.change(screen.getByLabelText('Import JSON'), { target: { files: [file] } });
+
+    expect(await screen.findByRole('alert')).toHaveTextContent(/JSON/i);
+    expect(screen.queryByRole('heading', { name: 'New instance' })).not.toBeInTheDocument();
+  });
+
+  it('does not carry over stale field-level validation errors when switching between instances of the same type (finding #8)', async () => {
     const partySchema = {
       schemaVersion: 1 as const,
       targetId: 'test.Party',
@@ -79,26 +163,70 @@ describe('PrototypePerspective', () => {
       useInstanceStore.getState().updateInstanceData(idB, { name: 'Bob' });
     });
 
-    render(<PrototypePerspective />);
+    await renderPerspective();
 
     // Select instance A and blur its empty required field to produce a
     // validation error.
     act(() => {
-      fireEvent.click(screen.getByRole('button', { name: 'Instance A' }));
+      fireEvent.click(screen.getByRole('row', { name: /Instance A/ }));
     });
     act(() => {
       fireEvent.blur(screen.getByLabelText('Name'));
     });
-    expect(screen.getByText('Name is required')).toBeInTheDocument();
+    expect(screen.getAllByText('Name is required')).not.toHaveLength(0);
 
     // Switch to instance B — its Name field is genuinely valid, so it must
     // NOT show A's stale error.
     act(() => {
-      fireEvent.click(screen.getByRole('button', { name: 'Instance B' }));
+      fireEvent.click(screen.getByRole('row', { name: /Instance B/ }));
     });
 
-    expect(screen.queryByText('Name is required')).not.toBeInTheDocument();
+    expect(screen.queryAllByText('Name is required')).toHaveLength(0);
     expect(useInstanceStore.getState().instances[idA]).toBeDefined();
     expect(useInstanceStore.getState().instances[idB]).toBeDefined();
+  });
+
+  it('consumes a creation intent that arrives after Prototype is mounted', async () => {
+    await renderPerspective();
+
+    act(() =>
+      requestPrototype('workspace-a', { kind: 'create', seed: { typeFqn: 'test.Party', data: { name: 'Acme' } } })
+    );
+
+    expect(await screen.findByRole('heading', { name: 'New instance' })).toBeVisible();
+  });
+
+  it('consumes an instance-opening intent after the workspace is active', async () => {
+    const id = useInstanceStore.getState().createInstance('test.Party', 'Acme');
+    await renderPerspective();
+
+    act(() => requestPrototype('workspace-a', { kind: 'open', instanceId: id }));
+
+    await vi.waitFor(() => expect(usePrototypeViewStore.getState().state.selectedId).toBe(id));
+    expect(usePrototypeViewStore.getState().state.inspectorTab).toBe('form');
+  });
+
+  it('applies an opening intent after delayed workspace preferences restore', async () => {
+    let resolveSettings!: (value: unknown) => void;
+    mockReadWorkbenchSettings.mockImplementation(
+      () =>
+        new Promise((resolve) => {
+          resolveSettings = resolve;
+        })
+    );
+    usePrototypeViewStore.setState({ workspaceId: null });
+    const id = useInstanceStore.getState().createInstance('test.Party', 'Acme');
+    render(
+      <WorkspaceStateContext.Provider value={workspace}>
+        <PrototypePerspective />
+      </WorkspaceStateContext.Provider>
+    );
+
+    act(() => requestPrototype('workspace-a', { kind: 'open', instanceId: id }));
+    await act(async () => resolveSettings({ selectedId: 'restored' }));
+    await screen.findByTestId('mock-prototype-workbench');
+
+    expect(usePrototypeViewStore.getState().state.selectedId).toBe(id);
+    expect(usePrototypeViewStore.getState().state.inspectorTab).toBe('form');
   });
 });

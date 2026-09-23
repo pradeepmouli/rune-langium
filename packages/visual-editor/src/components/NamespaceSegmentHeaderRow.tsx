@@ -13,7 +13,7 @@
  * (constant in the flat layouts) via `indentPx`.
  */
 
-import type { CSSProperties, JSX } from 'react';
+import type { CSSProperties, JSX, ReactNode } from 'react';
 import { ChevronRight, ChevronDown } from 'lucide-react';
 import { Button } from '@rune-langium/design-system/ui/button';
 import { NumberChiclet } from '@rune-langium/design-system/ui/number-chiclet';
@@ -45,6 +45,8 @@ export const NAMESPACE_TREE_INDENT_BASE = 8;
 export const NAMESPACE_TREE_TYPE_INDENT = 16;
 
 export interface NamespaceSegmentHeaderRowProps {
+  /** Optional control rendered before the tree expansion button. */
+  leading?: ReactNode;
   /** Aggregated full dotted path shown as the label (e.g. "cdm.base.datetime"). */
   fullPath: string;
   /** Whether this segment is expanded (controls the chevron + collapse state). */
@@ -73,6 +75,7 @@ export interface NamespaceSegmentHeaderRowProps {
 }
 
 export function NamespaceSegmentHeaderRow({
+  leading,
   fullPath,
   expanded,
   count,
@@ -106,6 +109,7 @@ export function NamespaceSegmentHeaderRow({
         className="rune-ns-seg-header flex items-center gap-1 border-t border-border/60 px-2 py-1 text-sm cursor-default text-foreground"
         style={segStyle}
       >
+        {leading}
         <Button
           variant="ghost"
           size="icon-xs"

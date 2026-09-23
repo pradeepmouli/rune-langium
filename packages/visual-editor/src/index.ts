@@ -39,6 +39,8 @@ export { EditorFormPanel } from './components/panels/EditorFormPanel.js';
 export type { EditorFormPanelProps } from './components/panels/EditorFormPanel.js';
 export { NamespaceExplorerPanel } from './components/panels/NamespaceExplorerPanel.js';
 export type { NamespaceExplorerPanelProps } from './components/panels/NamespaceExplorerPanel.js';
+export { selectionState, toggleVisible } from './utils/explorer-selection.js';
+export type { ExplorerSelection, ExplorerSelectionAction } from './utils/explorer-selection.js';
 
 // Editor components (P2)
 export { TypeCreator } from './components/editors/TypeCreator.js';
@@ -47,7 +49,7 @@ export { AttributeEditor } from './components/editors/AttributeEditor.js';
 export type { AttributeEditorProps } from './components/editors/AttributeEditor.js';
 
 // New editor form sub-components
-export { TypeSelector, getKindBadgeClasses, getKindLabel } from './components/editors/TypeSelector.js';
+export { TypeSelector, getKindBadgeClasses, getKindDotClass, getKindLabel } from './components/editors/TypeSelector.js';
 export type {
   TypeSelectorProps,
   TypeSelectorTriggerProps,
@@ -140,9 +142,16 @@ export type { GroupInfo } from './layout/grouped-layout.js';
 
 // Namespace tree utilities
 export { buildNamespaceTree, filterNamespaceTree } from './utils/namespace-tree.js';
+export { buildTypeOptions } from './utils/type-options.js';
 
-// Node-id utilities (dot-form helpers for 3A′ consumers)
-export { makeNodeId, nameFromNodeId, splitNodeId } from './store/node-projection.js';
+// Node-id utilities
+export {
+  isTypeNodeId,
+  makeNodeId,
+  nameFromNodeId,
+  qualifiedNameFromNodeId,
+  splitNodeId
+} from './store/node-projection.js';
 
 // Store (for advanced consumers)
 export { createEditorStore, useEditorStore } from './store/editor-store.js';
