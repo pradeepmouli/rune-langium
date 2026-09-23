@@ -181,7 +181,11 @@ export const handleTypeRefDrop = withInstrumentation(
   }
 );
 
-function scrollToPosition(view: EditorView | null, position: { line: number; character: number }): void {
+function scrollToPosition(
+  view: EditorView | null,
+  position: { line: number; character: number },
+  focus: boolean
+): void {
   if (!view) return;
   const clampedLine = Math.max(1, Math.min(position.line, view.state.doc.lines));
   const lineInfo = view.state.doc.line(clampedLine);
@@ -191,7 +195,7 @@ function scrollToPosition(view: EditorView | null, position: { line: number; cha
     selection: { anchor: selectionAnchor },
     effects: EditorView.scrollIntoView(selectionAnchor, { y: 'center' })
   });
-  view.contentDOM.focus({ preventScroll: true });
+  if (focus) view.contentDOM.focus({ preventScroll: true });
 }
 
 /**
@@ -318,7 +322,7 @@ const renderSourceEditor = withInstrumentation(
 
     // Expose imperative handle for programmatic navigation
     useImperativeHandle(ref, () => {
-      const revealPosition = (position: { line: number; character: number }, filePath?: string) => {
+      const revealPosition = (position: { line: number; character: number }, filePath?: string, focus = true) => {
         // If a different file is specified, switch to it first
         if (filePath && filePath !== selectedPath) {
           const target = files.find((f) => f.path === filePath || f.name === filePath);
@@ -328,19 +332,23 @@ const renderSourceEditor = withInstrumentation(
             // Schedule the scroll after the editor is recreated for the new file
             requestAnimationFrame(() => {
               requestAnimationFrame(() => {
-                scrollToPosition(editorViewRef.current, position);
+                scrollToPosition(editorViewRef.current, position, focus);
               });
             });
             return;
           }
         }
-        scrollToPosition(editorViewRef.current, position);
+        scrollToPosition(editorViewRef.current, position, focus);
       };
       return {
         revealLine(line: number, filePath?: string) {
-          revealPosition({ line, character: 1 }, filePath);
+          // Explorer selection synchronizes source position without moving
+          // keyboard focus away from the type filter or another active pane.
+          revealPosition({ line, character: 1 }, filePath, false);
         },
-        revealPosition
+        revealPosition(position, filePath) {
+          revealPosition(position, filePath);
+        }
       };
     }, [files, selectedPath, onFileSelect]);
 

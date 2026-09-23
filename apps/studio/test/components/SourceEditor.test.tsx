@@ -193,6 +193,24 @@ describe('SourceEditor', () => {
       expect(lastEditorView?.contentDOM.focus).toHaveBeenCalledWith({ preventScroll: true });
     });
 
+    it('scrolls to an explorer-selected line without stealing focus from the filter', () => {
+      const ref = React.createRef<import('../../src/components/SourceEditor.js').SourceEditorRef>();
+      render(<SourceEditor ref={ref} files={sampleFiles} />);
+      const filter = document.createElement('input');
+      document.body.append(filter);
+      filter.focus();
+
+      ref.current?.revealLine(2);
+
+      expect(lastEditorView?.dispatch).toHaveBeenCalledWith({
+        selection: { anchor: 10 },
+        effects: { anchor: 10 }
+      });
+      expect(lastEditorView?.contentDOM.focus).not.toHaveBeenCalled();
+      expect(document.activeElement).toBe(filter);
+      filter.remove();
+    });
+
     it('switches files before revealing a source position in another tab', async () => {
       const ref = React.createRef<import('../../src/components/SourceEditor.js').SourceEditorRef>();
       const onFileSelect = vi.fn();

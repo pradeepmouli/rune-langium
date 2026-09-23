@@ -243,6 +243,14 @@ export const FormPreviewPanel = withInstrumentation(
           onValuesChange?.(nextValues);
           return;
         }
+        if (schema.kind === 'function') {
+          // A function is not a Data/Choice instance. Its generated callable
+          // checks the input contract when Run executes; sending its FQN to
+          // instance:validate asks the standalone Data schema emitter for a
+          // target it cannot resolve.
+          updateSampleValues(schema.targetId, nextValues, false);
+          return;
+        }
         updateSampleValues(schema.targetId, nextValues, validated);
         if (validated) {
           dispatchValidate(schema.targetId, nextValues);
@@ -252,7 +260,7 @@ export const FormPreviewPanel = withInstrumentation(
     );
 
     const handleFieldBlur = useCallback(() => {
-      if (!schema || !activeSample) return;
+      if (!schema || !activeSample || schema.kind === 'function') return;
       applyValidation(activeSample.values, true);
     }, [activeSample, applyValidation, schema]);
 
@@ -1137,6 +1145,10 @@ function getSummaryMessage(schema: FormPreviewSchema, status: PreviewStatus, sam
 
   if (status.state === 'stale') {
     return `Stale preview: ${status.message}`;
+  }
+
+  if (schema.kind === 'function') {
+    return 'Ready to run function';
   }
 
   if (!sample?.validated) {

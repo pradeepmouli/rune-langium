@@ -202,6 +202,47 @@ describe('CodegenProvider', () => {
     expect(useInstanceStore.getState().validationStatus[id]).toBe('pending');
   });
 
+  it('does not hydrate a user type that the parse response also lists as a deferred export', async () => {
+    const workspace = {
+      ...wsState('ws-user-export'),
+      deferredExports: [{ filePath: 'a.rosetta', namespace: 'a', exports: [{ type: 'Data', name: 'Type' }] }]
+    };
+    render(
+      <WorkspaceStateContext.Provider value={workspace}>
+        <CodegenProvider>
+          <div />
+        </CodegenProvider>
+      </WorkspaceStateContext.Provider>
+    );
+
+    const worker = FakeWorker.instances[0]!;
+    const id = useInstanceStore.getState().createInstance('a.Type', 'User type');
+    await vi.waitFor(() => {
+      expect(worker.posted.filter((message) => message.type === 'preview:setFiles').length).toBeGreaterThan(1);
+    });
+    expect(useEditorStore.getState().pendingHydrationNamespaces).toEqual([]);
+
+    const fileRequest = worker.posted.filter((message) => message.type === 'preview:setFiles').at(-1)!;
+    act(() => {
+      for (const listener of worker.listeners.message ?? []) {
+        listener({
+          data: {
+            type: 'preview:files-ready',
+            requestId: fileRequest.requestId,
+            filesRevision: fileRequest.filesRevision
+          }
+        });
+      }
+    });
+    await vi.waitFor(() => {
+      expect(worker.posted).toContainEqual(
+        expect.objectContaining({ type: 'instance:generateSchema', typeFqn: 'a.Type' })
+      );
+      expect(worker.posted).toContainEqual(expect.objectContaining({ type: 'instance:validate', typeFqn: 'a.Type' }));
+    });
+    expect(useInstanceStore.getState().validationStatus[id]).toBe('pending');
+  });
+
   it('rejects a receipt whose revision does not match the dispatched instance file snapshot', async () => {
     render(
       <WorkspaceStateContext.Provider value={wsState('ws-revision-mismatch')}>

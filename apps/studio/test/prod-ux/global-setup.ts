@@ -12,6 +12,8 @@ import path from 'node:path';
  * a worker cannot survive a retry's fresh process.
  */
 export default async function globalSetup(): Promise<void> {
-  const manifestPath = path.join(process.cwd(), 'test/prod-ux/report/run-manifest.json');
+  const reportDir = path.join(process.cwd(), 'test/prod-ux/report');
+  const manifestPath = path.join(reportDir, 'run-manifest.json');
   await rm(manifestPath, { force: true });
+  await rm(path.join(reportDir, 'axe', 'J17'), { recursive: true, force: true });
 }

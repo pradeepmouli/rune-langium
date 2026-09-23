@@ -2,8 +2,11 @@
 // Copyright (c) 2026 Pradeep Mouli
 
 import type { Page } from '@playwright/test';
+import { mkdir, writeFile } from 'node:fs/promises';
+import path from 'node:path';
 import AxeBuilder from '@axe-core/playwright';
 import { checkout as test, expect, loadCdm } from '../fixtures.js';
+import { REPORT_DIR } from '../evidence.js';
 import { waitForEntranceAnimations } from '../readiness.js';
 import { ANCHOR_DATA } from '../anchors.js';
 import { typeNavigationButton } from '../../helpers/type-navigation.js';
@@ -17,11 +20,13 @@ interface AxeSweepResult {
   blocking: number;
 }
 
-async function sweepAxe(page: Page, checkpointName: string): Promise<AxeSweepResult> {
+async function sweepAxe(page: Page, checkpointName: string, artifactDir: string): Promise<AxeSweepResult> {
   await waitForEntranceAnimations(page);
   const builder = new AxeBuilder({ page });
   for (const sel of SELECTORS_TO_EXCLUDE) builder.exclude(sel);
   const results = await builder.analyze();
+  await mkdir(artifactDir, { recursive: true });
+  await writeFile(path.join(artifactDir, `${checkpointName}.json`), JSON.stringify(results, null, 2));
   const blocking = results.violations.filter((v) => ['serious', 'critical'].includes(v.impact ?? ''));
   if (blocking.length > 0) {
     console.log(`[axe:${checkpointName}:blocking]`, JSON.stringify(blocking, null, 2));
@@ -32,41 +37,42 @@ async function sweepAxe(page: Page, checkpointName: string): Promise<AxeSweepRes
 test.describe('J17 — Accessibility sweep', () => {
   test.skip(!process.env.PLAYWRIGHT_PROD_SMOKE, 'set PLAYWRIGHT_PROD_SMOKE=1 to run against a deployed Studio');
 
-  test('J17 axe sweep across all perspectives and the Import/Export dialogs', async ({ page, evidence }) => {
+  test('J17 axe sweep across all perspectives and the Import/Export dialogs', async ({ page, evidence }, testInfo) => {
     const results: AxeSweepResult[] = [];
+    const artifactDir = path.join(REPORT_DIR, 'axe', 'J17', `attempt${testInfo.retry}`);
 
     await loadCdm(page, evidence);
 
     await page.getByTestId('rail-explore').click();
     await expect(page.getByTestId('explore-workbench')).toBeVisible({ timeout: 20000 });
-    results.push(await sweepAxe(page, 'explore'));
+    results.push(await sweepAxe(page, 'explore', artifactDir));
     await evidence.checkpoint('axe-explore');
 
     await page.getByTestId('rail-workspaces').click();
     await expect(page.getByTestId('model-loader')).toBeVisible({ timeout: 20000 });
-    results.push(await sweepAxe(page, 'workspaces'));
+    results.push(await sweepAxe(page, 'workspaces', artifactDir));
     await evidence.checkpoint('axe-workspaces');
 
     await page.getByTestId('rail-git').click();
     await expect(page.getByTestId('git-perspective')).toBeVisible({ timeout: 20000 });
-    results.push(await sweepAxe(page, 'git'));
+    results.push(await sweepAxe(page, 'git', artifactDir));
     await evidence.checkpoint('axe-git');
 
     await page.getByTestId('rail-export').click();
     await expect(page.getByTestId('export-perspective')).toBeVisible({ timeout: 20000 });
-    results.push(await sweepAxe(page, 'export'));
+    results.push(await sweepAxe(page, 'export', artifactDir));
     await evidence.checkpoint('axe-export');
 
     await page.getByTestId('rail-settings').click();
     await expect(page.getByTestId('settings-perspective')).toBeVisible({ timeout: 20000 });
-    results.push(await sweepAxe(page, 'settings'));
+    results.push(await sweepAxe(page, 'settings', artifactDir));
     await evidence.checkpoint('axe-settings');
 
     await page.getByTestId('rail-explore').click();
     await expect(page.getByTestId('explore-workbench')).toBeVisible({ timeout: 20000 });
     await page.getByRole('button', { name: 'Import' }).click();
     await expect(page.getByTestId('import-dialog')).toBeVisible({ timeout: 10000 });
-    results.push(await sweepAxe(page, 'import-dialog'));
+    results.push(await sweepAxe(page, 'import-dialog', artifactDir));
     await evidence.checkpoint('axe-import-dialog');
     await page.keyboard.press('Escape');
     await expect(page.getByTestId('import-dialog')).not.toBeVisible({ timeout: 5000 });
@@ -78,7 +84,7 @@ test.describe('J17 — Accessibility sweep', () => {
     await page.getByRole('tab', { name: 'Code' }).click();
     await page.getByTestId('codegen-targets-table__download-zod').click();
     await expect(page.getByTestId('download-config-dialog')).toBeVisible({ timeout: 10000 });
-    results.push(await sweepAxe(page, 'download-config-dialog'));
+    results.push(await sweepAxe(page, 'download-config-dialog', artifactDir));
     await evidence.checkpoint('axe-download-config-dialog');
     await page.getByTestId('download-config-dialog__cancel').click();
     await expect(page.getByTestId('download-config-dialog')).not.toBeVisible({ timeout: 5000 });
