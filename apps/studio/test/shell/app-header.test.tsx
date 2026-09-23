@@ -5,6 +5,7 @@ import { render, screen, cleanup } from '@testing-library/react';
 import { PERSPECTIVES } from '../../src/shell/perspectives/perspective-registry.js';
 import { usePerspectiveStore } from '../../src/store/perspective-store.js';
 import { AppHeader } from '../../src/shell/AppHeader.js';
+import { PerspectiveHeading } from '../../src/shell/perspectives/PerspectiveHeading.js';
 import { WorkspaceStateContext, type WorkspaceState } from '../../src/shell/providers/workspace-context.js';
 import {
   WorkspaceActionsContext,
@@ -88,6 +89,15 @@ describe('perspective registry chrome contract', () => {
   it('showsFileTabs is retired', () => {
     for (const p of PERSPECTIVES) {
       expect('showsFileTabs' in p, `${p.id} still carries showsFileTabs`).toBe(false);
+    }
+  });
+  it('each perspective has one accessible page heading in the shared chrome', () => {
+    for (const perspective of PERSPECTIVES) {
+      const { unmount } = render(<PerspectiveHeading perspectiveId={perspective.id} />);
+      expect(
+        screen.getByRole('heading', { level: 1, name: perspective.title ?? perspective.label })
+      ).toBeInTheDocument();
+      unmount();
     }
   });
 });
