@@ -136,10 +136,11 @@ Report anything a user would notice, even under a PASS verdict.
 - Axe: `critical` should already have failed the run; enumerate `serious` with
   the offending selector and screenshot.
 
-### 5. Reconcile the ledger
+### 5. Reconcile soft findings
 
-List ledger entries that (a) no longer reproduce — candidates for removal,
-(b) expired, (c) are missing — recurring soft findings not yet enrolled.
+List manifest soft findings that still reproduce, those that no longer reproduce,
+and recurring limitations missing from the current manifest. Check linked GitHub
+issues when available; do not infer enrollment or expiry dates from finding IDs.
 
 ## Output format
 
@@ -161,12 +162,12 @@ present it in your reply):
 
 ## UX observations (non-blocking)
 ## Timings vs budget
-## Ledger reconciliation
+## Soft-finding reconciliation
 ## Suggested follow-ups (ordered; which findings warrant GitHub issues)
 ```
 
 Severity order: regression in a core loop (load/edit/persist/export) >
-regression elsewhere > expired known-issue > a11y serious > UX observation >
+regression elsewhere > unresolved known issue > a11y serious > UX observation >
 noise. Rank findings most-severe-first; when drafting issues, group findings
 sharing one root cause into one issue — fix patterns, not symptoms.
 
@@ -176,14 +177,13 @@ When given a **fleet rollup / session digests** (from
 `pnpm --filter @rune-langium/studio run telemetry:digest`, i.e. the telemetry
 worker's `GET /v1/digest`) instead of — or alongside — a harness bundle:
 
-- Skip the screenshot/assertion steps (there are none); everything else
-  applies unchanged: the digest uses the same op vocabulary, budgets, and
-  ledger as the run manifest.
+- Skip the screenshot/assertion steps (there are none); the digest uses the
+  same op vocabulary and budgets as the run manifest. Reconcile signatures
+  with prior rollups and manifest soft findings when those are available.
 - Triage **signatures, not events**: for each error/warn signature, classify
   with the same 5-class taxonomy, prioritized by affected-session count and
   the `new-in-this-deploy` flag (a low-volume signature that appeared with
-  the current deploy outranks a high-volume long-standing one already in the
-  ledger).
+  the current deploy outranks a high-volume signature seen in prior rollups).
 - Timing review runs on the per-op p50/p95-vs-budget table; flag ops whose
   p95 crossed budget or whose violation rate rose vs the prior rollup.
 - Drill down via the sampled sessionIds/opIds on a signature → correlated CF
@@ -198,8 +198,8 @@ worker's `GET /v1/digest`) instead of — or alongside — a harness bundle:
 - Every claim must cite evidence you actually opened (screenshot, trace,
   manifest field, CF log). No verdict from the harness is trusted unverified.
 - Do not re-run the harness or "fix" prod-side anything during review; the
-  review is read-only. Proposing an `anchors.ts` or ledger update is output,
-  not an edit you make.
+  review is read-only. Proposing an `anchors.ts` update or a follow-up issue is
+  output, not an edit you make.
 - Do not reply to bot/PR comments as part of this workflow.
 - If the bundle is partial (missing screenshots for a journey, no traces),
   degrade gracefully and list the gaps in the report header — an evidence gap
