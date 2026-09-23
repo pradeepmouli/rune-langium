@@ -11,6 +11,7 @@ import { parse, parseWorkspace, createRuneDslServices, type RosettaModel } from 
 import type { ExportSelection } from '@rune-langium/codegen/export';
 import { requestCodegenDownload } from './codegen-download-client.js';
 import { sanitizeDownloadFilename } from './export.js';
+import { OperationTimeoutError, withAbortTimeout } from './with-abort-timeout.js';
 import { EmptyFileSystem } from 'langium';
 import type { CuratedSerializedDocument } from '@rune-langium/curated-schema';
 import { CURATED_MODEL_IDS } from '@rune-langium/curated-schema';
@@ -33,6 +34,13 @@ import { isTelemetryRecordMessage } from './instrumentation/worker-sink.js';
 /** Known curated bundle ids — guards deferredExports filePath prefixes so user
  *  files that happen to live under `${bundleId}/...` aren't mis-grouped. */
 const CURATED_BUNDLE_IDS = new Set<string>(CURATED_MODEL_IDS);
+export const PARSE_ROUTER_TIMEOUT_MS = 45_000;
+
+class ParseRouterHttpError extends Error {
+  constructor(readonly status: number) {
+    super(`/api/parse HTTP ${status}`);
+  }
+}
 
 export interface WorkspaceFile {
   name: string;
@@ -462,7 +470,7 @@ export const collectCuratedSourcesForCodegen = withInstrumentation(
 export const parseWorkspaceFiles = withInstrumentation(
   async function parseWorkspaceFiles(
     files: WorkspaceFile[],
-    options: { hydrateNamespaces?: string[] } = {}
+    options: { hydrateNamespaces?: string[]; requireCuratedHydration?: boolean } = {}
   ): Promise<ParseWorkspaceFilesResult> {
     const wantsHydration = (options.hydrateNamespaces?.length ?? 0) > 0;
     if (files.length === 0 && !wantsHydration) {
@@ -487,7 +495,8 @@ export const parseWorkspaceFiles = withInstrumentation(
     try {
       const response = await parseWorkspaceViaRouter(userFiles, {
         curatedBundles,
-        hydrateNamespaces: options.hydrateNamespaces
+        hydrateNamespaces: options.hydrateNamespaces,
+        requireCuratedHydration: options.requireCuratedHydration
       });
       const errMap = new Map<string, string[]>();
       for (const [k, v] of Object.entries(response.errors)) {
@@ -502,6 +511,10 @@ export const parseWorkspaceFiles = withInstrumentation(
         curatedRefOnlyFiles: response.curatedRefOnlyFiles
       };
     } catch (error) {
+      // Browser-only parsing cannot supply a requested curated namespace.
+      // Let App dequeue the failed hydration instead of marking it hydrated
+      // from a user-file-only fallback result.
+      if (options.requireCuratedHydration) throw error;
       // Router failed (network error, Pages Function unavailable, etc.) — fall back
       // to synchronous main-thread parsing so the editor stays functional.
       console.warn('[workspace] parseWorkspaceFiles via router failed:', error);
@@ -565,21 +578,29 @@ export const _resetParserWorkerForTests = withInstrumentation(
 export const parseWorkspaceViaRouter = withInstrumentation(
   async function parseWorkspaceViaRouter(
     files: Array<{ name: string; content: string }>,
-    options: { curatedBundles?: Array<{ id: string; version: string }>; hydrateNamespaces?: string[] } = {}
+    options: {
+      curatedBundles?: Array<{ id: string; version: string }>;
+      hydrateNamespaces?: string[];
+      requireCuratedHydration?: boolean;
+    } = {}
   ): Promise<ParseWorkspaceResponse> {
-    const response = await fetch('/api/parse', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        files,
-        curatedBundles: options.curatedBundles ?? [],
-        hydrateNamespaces: options.hydrateNamespaces ?? []
-      })
+    const body = JSON.stringify({
+      files,
+      curatedBundles: options.curatedBundles ?? [],
+      hydrateNamespaces: options.hydrateNamespaces ?? []
     });
-    if (!response.ok) {
-      throw new Error(`/api/parse HTTP ${response.status}`);
-    }
-    const data = (await response.json()) as {
+    const requestParse = () =>
+      withAbortTimeout(async (signal) => {
+        const response = await fetch('/api/parse', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body,
+          signal
+        });
+        if (!response.ok) throw new ParseRouterHttpError(response.status);
+        return response.json();
+      }, PARSE_ROUTER_TIMEOUT_MS);
+    let data: {
       ok: boolean;
       models: ParseWorkspaceResponse['models'];
       deferredExports: ParseWorkspaceResponse['deferredExports'];
@@ -587,6 +608,14 @@ export const parseWorkspaceViaRouter = withInstrumentation(
       hydrationState: { documents: HydrateRequest['documents'] };
       dependencyGraph?: Record<string, string[]>;
     };
+    try {
+      data = (await requestParse()) as typeof data;
+    } catch (error) {
+      const transient =
+        error instanceof OperationTimeoutError || (error instanceof ParseRouterHttpError && error.status >= 500);
+      if (!transient || !options.requireCuratedHydration) throw error;
+      data = (await requestParse()) as typeof data;
+    }
 
     if (!data.ok) {
       // Same reason as above: bubble up to the outer fallback with the full
@@ -706,8 +735,8 @@ export const parseWorkspaceViaRouter = withInstrumentation(
     //
     //   1. Worker REACHABLE but reports `ok: false` — a real hydration
     //      failure. linkDocument lookups would silently miss the affected
-    //      docs. Throw so parseWorkspaceFiles' outer catch reparses the
-    //      workspace through the main-thread fallback (Codex review P2).
+    //      docs. Throw so the caller either falls back for ordinary parsing
+    //      or reports failed curated hydration.
     //   2. Worker UNREACHABLE (e.g. running in jsdom without a real Worker,
     //      worker crashed, postMessage timeout) — log + accept the degraded
     //      state. linkDocument will fail downstream but the graph still

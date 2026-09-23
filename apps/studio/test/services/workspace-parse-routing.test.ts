@@ -2,7 +2,7 @@
 // Copyright (c) 2026 Pradeep Mouli
 
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
-import { parseWorkspaceViaRouter, parseWorkspaceFiles } from '../../src/services/workspace.js';
+import { PARSE_ROUTER_TIMEOUT_MS, parseWorkspaceViaRouter, parseWorkspaceFiles } from '../../src/services/workspace.js';
 import type { WorkspaceFile } from '../../src/services/workspace.js';
 
 describe('parseWorkspace routing', () => {
@@ -14,6 +14,52 @@ describe('parseWorkspace routing', () => {
 
   afterEach(() => {
     global.fetch = originalFetch;
+    vi.useRealTimers();
+  });
+
+  it('retries a timed-out curated hydration request once', async () => {
+    vi.useFakeTimers();
+    const fetchMock = vi
+      .fn()
+      .mockImplementationOnce(
+        (_url: string, init: RequestInit) =>
+          new Promise<Response>((_, reject) => {
+            init.signal?.addEventListener('abort', () => reject(new DOMException('aborted', 'AbortError')), {
+              once: true
+            });
+          })
+      )
+      .mockResolvedValueOnce(
+        new Response(
+          JSON.stringify({ ok: true, models: [], deferredExports: [], errors: {}, hydrationState: { documents: [] } })
+        )
+      );
+    global.fetch = fetchMock;
+
+    const parsed = parseWorkspaceViaRouter([], {
+      hydrateNamespaces: ['cdm.base.math'],
+      requireCuratedHydration: true
+    });
+    await vi.advanceTimersByTimeAsync(PARSE_ROUTER_TIMEOUT_MS);
+    await expect(parsed).resolves.toMatchObject({ models: [] });
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+  });
+
+  it('retries a transient server error during curated hydration', async () => {
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValueOnce(new Response('', { status: 502 }))
+      .mockResolvedValueOnce(
+        new Response(
+          JSON.stringify({ ok: true, models: [], deferredExports: [], errors: {}, hydrationState: { documents: [] } })
+        )
+      );
+    global.fetch = fetchMock;
+
+    await expect(
+      parseWorkspaceViaRouter([], { hydrateNamespaces: ['cdm.base.math'], requireCuratedHydration: true })
+    ).resolves.toMatchObject({ models: [] });
+    expect(fetchMock).toHaveBeenCalledTimes(2);
   });
 
   it('POSTs to /api/parse for parseWorkspace requests', async () => {
@@ -138,6 +184,40 @@ describe('parseWorkspaceFiles — curated bundle collection', () => {
   });
 
   afterEach(() => vi.restoreAllMocks());
+
+  it('rejects failed curated hydration instead of accepting a user-only fallback', async () => {
+    global.fetch = vi.fn().mockRejectedValue(new TypeError('network unavailable'));
+    const files: WorkspaceFile[] = [
+      {
+        name: 'user.rosetta',
+        path: 'user.rosetta',
+        content: 'namespace demo\ntype Foo:\n  bar string (1..1)',
+        dirty: false
+      }
+    ];
+
+    await expect(
+      parseWorkspaceFiles(files, { hydrateNamespaces: ['cdm.base.math'], requireCuratedHydration: true })
+    ).rejects.toThrow('network unavailable');
+  });
+
+  it('keeps browser fallback for edits that preserve hydrated namespaces', async () => {
+    const fetchMock = vi.fn().mockResolvedValueOnce(new Response('', { status: 502 }));
+    global.fetch = fetchMock;
+    const files: WorkspaceFile[] = [
+      {
+        name: 'user.rosetta',
+        path: 'user.rosetta',
+        content: 'namespace demo\ntype Foo:\n  bar string (1..1)',
+        dirty: true
+      }
+    ];
+
+    const result = await parseWorkspaceFiles(files, { hydrateNamespaces: ['cdm.base.math'] });
+    expect(result.parseMode).toBe('main-thread-fallback');
+    expect(result.fallbackMessage).toContain('/api/parse HTTP 502');
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+  });
 
   it('sends curatedBundles derived from bundleId/bundleVersion on WorkspaceFile', async () => {
     const fetchMock = vi.fn().mockResolvedValue(

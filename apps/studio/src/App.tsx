@@ -260,7 +260,7 @@ function AppContent() {
     // that triggered it.
     const label = pendingHydration.length === 1 ? pendingHydration[0] : `${pendingHydration.length} namespaces`;
     const toastId = showLoadingToast({ description: `Loading ${label}…` });
-    void parseWorkspaceFiles(files, { hydrateNamespaces: requested })
+    void parseWorkspaceFiles(files, { hydrateNamespaces: requested, requireCuratedHydration: true })
       .then((result) => {
         if (cancelled) return;
         applyParseResult(result, { preserveSemanticModelOnErrors: true });

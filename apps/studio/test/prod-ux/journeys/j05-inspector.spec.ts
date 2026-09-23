@@ -21,7 +21,7 @@ test.describe('J05 — Inspector pane', () => {
     await typeNavigationButton(page, ANCHOR_DATA).click();
 
     await page.getByRole('button', { name: 'Inspector' }).click();
-    await expect(centerStack.getByRole('heading', { name: 'BusinessCenters' })).toBeVisible();
+    await expect(centerStack.getByRole('heading', { name: 'BusinessCenters' })).toBeVisible({ timeout: 30_000 });
     await expect(centerStack.getByText('cdm.base.datetime', { exact: true })).toBeVisible();
     await expect(centerStack.getByText('Reference Only', { exact: true })).toBeVisible();
     await expectPopulatedAttributes(centerStack);
