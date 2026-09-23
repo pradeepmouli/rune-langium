@@ -5,6 +5,7 @@ import { Buffer } from 'node:buffer';
 import { test as base, expect, type Locator, type Page } from '@playwright/test';
 import { EvidenceCollector, appendJourneyRecord, type JourneyRecord } from './evidence.js';
 import { exceedsBudget } from './timings.js';
+import { typeNavigationButton } from '../helpers/type-navigation.js';
 
 interface CheckoutFixtures {
   evidence: EvidenceCollector;
@@ -389,7 +390,7 @@ export async function authorScratchType(page: Page, spec: ScratchTypeSpec): Prom
 
   const namespaceSearch = page.getByTestId('namespace-search');
   await namespaceSearch.fill(spec.name);
-  await expect(page.getByTestId(`ns-type-nav-${spec.namespace}.${spec.name}`)).toBeVisible({ timeout: 15000 });
+  await expect(typeNavigationButton(page, `${spec.namespace}.${spec.name}`)).toBeVisible({ timeout: 15000 });
 }
 
 export interface ScratchFunctionInputSpec {
@@ -483,5 +484,7 @@ export async function authorScratchFunction(page: Page, spec: ScratchFunctionSpe
 
   const namespaceSearch = page.getByTestId('namespace-search');
   await namespaceSearch.fill(spec.name);
-  await expect(page.getByTestId(`ns-type-nav-${spec.namespace}.${spec.name}`)).toBeVisible({ timeout: 15000 });
+  await expect(typeNavigationButton(page, `${spec.namespace}.${spec.name}`, 'RosettaFunction')).toBeVisible({
+    timeout: 15000
+  });
 }

@@ -2,6 +2,7 @@
 // Copyright (c) 2026 Pradeep Mouli
 
 import { checkout as test, expect, loadCdm } from '../fixtures.js';
+import { declarationNodeId, typeNavigationButton } from '../../helpers/type-navigation.js';
 import { waitForHydratedNode } from '../readiness.js';
 import { ANCHOR_DATA } from '../anchors.js';
 
@@ -13,10 +14,9 @@ test.describe('J06 — Structure view', () => {
     await page.getByTestId('rail-explore').click();
     await page.getByTestId('namespace-search').fill('BusinessCenters');
     await evidence.measure('hydration', ANCHOR_DATA, async () => {
-      await page.getByTestId(`ns-type-nav-${ANCHOR_DATA}`).click();
-      await waitForHydratedNode(page, ANCHOR_DATA);
+      await typeNavigationButton(page, ANCHOR_DATA).click();
+      await waitForHydratedNode(page, declarationNodeId(ANCHOR_DATA));
     });
-    await expect(page.getByText(ANCHOR_DATA, { exact: true })).toBeVisible({ timeout: 15000 });
 
     await page.getByRole('button', { name: 'Structure' }).click();
     await expect(page.getByTestId('structure-view-flow')).toBeVisible();

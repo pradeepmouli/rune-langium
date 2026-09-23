@@ -193,6 +193,22 @@ describe('FormPreviewPanel', () => {
     expect(screen.queryByText('Expected integer')).not.toBeInTheDocument();
   });
 
+  it('shows validation errors that are not attached to a field', () => {
+    const postMessage = vi.fn();
+    usePreviewStore.getState().setWorkerRef({ postMessage } as unknown as Worker);
+    render(<FormPreviewPanel schema={numericSchema} status={{ state: 'ready', targetId: numericSchema.targetId }} />);
+
+    fireEvent.blur(screen.getByLabelText('Quantity'));
+    const requestId = postMessage.mock.lastCall![0].requestId;
+    act(() =>
+      usePreviewStore
+        .getState()
+        .receiveValidateResult(requestId, [{ path: '', message: 'Structural validation unavailable: unknown type' }])
+    );
+
+    expect(screen.getByRole('alert')).toHaveTextContent('Structural validation unavailable: unknown type');
+  });
+
   it('shows a no-selection state when no schema is available', () => {
     render(<FormPreviewPanel schema={undefined} status={{ state: 'waiting' }} />);
 

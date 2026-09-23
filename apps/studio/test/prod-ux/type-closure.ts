@@ -3,7 +3,7 @@
 
 import { waitForHydratedNode } from './readiness.js';
 import type { Page } from '@playwright/test';
-import { BUILTIN_TYPES } from '@rune-langium/visual-editor';
+import { BUILTIN_TYPES, isTypeNodeId, qualifiedNameFromNodeId } from '@rune-langium/visual-editor';
 
 export interface TypeClosureResult {
   rootFqn: string;
@@ -19,26 +19,7 @@ const NAV_TESTID_PREFIX = 'ns-type-nav-';
 
 const BUILTIN_TYPE_SET: ReadonlySet<string> = new Set(BUILTIN_TYPES);
 
-/**
- * Extracts a node's outgoing type references from its raw domain payload.
- *
- * Verified directly against the generated AST this session (NOT trusted
- * from the plan's own skeleton, which assumed `Choice.options`):
- *   - `Data#attributes: Attribute[]` (packages/visual-editor/src/components/
- *     editors/AttributeRow.tsx's doc comment: canonical path
- *     `attributes[].typeCall.type.$refText`)
- *   - `Choice#attributes: ChoiceOption[]` — Choice's member field is ALSO
- *     named `attributes`, not `options` (packages/core/src/generated/ast.ts;
- *     confirmed by packages/codegen/src/preview-schema.ts's own
- *     `choice.attributes.map(...)` usage). `ChoiceOption` carries the same
- *     `typeCall.type.$refText` shape as `Attribute`.
- *   - `RosettaEnumeration` has no outgoing type refs — just `enumValues`
- *     (RosettaEnumValue[], no typeCall) — returns [] for any other $type.
- *
- * `$type` values are the AST discriminators themselves ('Data' | 'Choice' |
- * 'RosettaEnumeration' | ...), not the lowercase React-Flow node-kind
- * strings (model-helpers.ts's resolveNodeKind maps between the two).
- */
+/** Data and Choice members use the same AST type-reference path. */
 function extractTypeRefs(nodeData: unknown): string[] {
   const data = nodeData as {
     $type?: string;
@@ -54,106 +35,44 @@ function extractTypeRefs(nodeData: unknown): string[] {
 }
 
 /**
- * Resolves a queued bare/short type ref to a real fully-qualified testid,
- * given the set of currently-rendered `ns-type-nav-<fqn>` candidate testids.
- *
- * Precedence (mirrors the same one heuristic the REAL production resolver
- * commits to — `packages/visual-editor/src/adapters/ast-to-model.ts`'s edge
- * construction, documented in
- * `docs/superpowers/specs/2026-06-18-domain-substrate-phase4-domain-repository-design.md`'s
- * "Cross-namespace bare refs (explicit scope boundary)" section — NOT a
- * fuller reimplementation of it):
- *
- *   1. Exact match on the raw `ref` itself against a full testid. In
- *      practice this only ever fires for the root, which callers pass in as
- *      an already-fully-qualified id.
- *   2. Same-namespace-qualify: try `${sourceNamespace}.${ref}` as an exact
- *      testid match, when `sourceNamespace` is known. This is the ONE
- *      heuristic production itself applies to a bare ref — qualify with the
- *      referencing node's own namespace first.
- *   3. Corpus-wide short-name fallback (`id.endsWith('.' + shortName)`) —
- *      kept for genuine cross-namespace imports. Per the design doc, this
- *      remains a pre-existing, accepted ambiguity in production too (it can
- *      match the wrong homonym); walking further to resolve real
- *      cross-namespace imports would require reimplementing Langium's scope
- *      provider, which is explicitly out of scope both here and in the
- *      cited design doc's own "Out of scope" section.
- *
- * Pure/no-DOM so it's unit-testable without mocking Playwright.
+ * Find a visible type declaration by full name, then same namespace, then short name.
+ * The last fallback is ambiguous for cross-namespace homonyms, matching the
+ * explorer's existing scope limit; function nodes are never candidates.
  */
-export function resolveCandidateFqn(
+export function resolveCandidateNodeId(
   candidateTestIds: string[],
   ref: string,
   sourceNamespace: string | undefined,
   navTestIdPrefix: string
 ): string | undefined {
-  const exact = candidateTestIds.find((id) => id === `${navTestIdPrefix}${ref}`);
-  if (exact) return exact.slice(navTestIdPrefix.length);
+  const candidates = candidateTestIds
+    .filter((testId) => testId.startsWith(navTestIdPrefix))
+    .map((testId) => testId.slice(navTestIdPrefix.length))
+    .filter(isTypeNodeId);
+  const exact = candidates.find((nodeId) => qualifiedNameFromNodeId(nodeId) === ref);
+  if (exact) return exact;
 
   if (sourceNamespace) {
-    const qualifiedTestId = `${navTestIdPrefix}${sourceNamespace}.${ref}`;
-    const qualified = candidateTestIds.find((id) => id === qualifiedTestId);
-    if (qualified) return qualified.slice(navTestIdPrefix.length);
+    const qualified = candidates.find((nodeId) => qualifiedNameFromNodeId(nodeId) === `${sourceNamespace}.${ref}`);
+    if (qualified) return qualified;
   }
 
   const shortName = ref.split('.').pop()!;
-  const shortMatch = candidateTestIds.find((id) => id.endsWith(`.${shortName}`));
-  return shortMatch?.slice(navTestIdPrefix.length);
+  return candidates.find((nodeId) => qualifiedNameFromNodeId(nodeId).endsWith(`.${shortName}`));
 }
 
 /**
- * Walks the transitive attribute-type closure from `rootFqn`, driving the
- * real explorer UI (namespace-search + `ns-type-nav-<fqn>` click) rather
- * than reading the bridge alone — this is what actually triggers on-demand
- * hydration for a never-visited curated namespace (J04b's regression
- * pattern), and it's the mechanism the plan calls for the closure walk to
- * exercise.
- *
- * IMPORTANT deviation from the plan's original skeleton: a member's
- * `typeCall.type.$refText` is the type name AS WRITTEN IN SOURCE, which for
- * both same-namespace and import-qualified cross-namespace references is
- * just the bare/short type name (confirmed against a real cross-namespace
- * fixture, packages/codegen/test/fixtures/choice-typed-attribute-crossns/
- * holder.rune: `asset Asset (0..1)` refers to `Asset` via `import
- * test.ctaxns.base.*`, no namespace prefix). It is NOT a fully-qualified
- * id, so it can't be used directly to build a `ns-type-nav-<fqn>` testid or
- * as a `visited` cycle-guard key.
- *
- * Each queued ref carries its SOURCE NAMESPACE (the namespace of the node
- * that referenced it, derived from that node's own resolved FQN) alongside
- * the bare ref text, and `attemptedRefsByNamespace` dedupes on the pair
- * (`sourceNamespace`, `ref`), not on the bare ref alone — two different
- * nodes in different namespaces referencing the same short type name (e.g.
- * both `Foo`) are each attempted and resolved independently, rather than
- * the second silently colliding with the first in a bare-refText Set.
- * Resolution of each (ref, sourceNamespace) pair to a real fully-qualified
- * id is delegated to `resolveCandidateFqn` above (same-namespace-qualify
- * first, corpus-wide shortname fallback second) BEFORE it's treated as
- * visited/mapped/unmapped. A ref that resolves to nothing is genuinely
- * unmapped, not merely not-yet-hydrated — the namespace search surfaces
- * every type in the corpus, hydrated or not (proven by J04b: it locates a
- * never-visited curated namespace with no prior navigation).
- *
- * Going further — walking `import` statements to fully resolve genuine
- * cross-namespace bare refs — is explicitly OUT OF SCOPE: it would require
- * reimplementing Langium's scope provider, which production itself does not
- * do at this seam either (see the cited design doc's "Out of scope"
- * section: "Cross-namespace bare-ref resolution beyond same-namespace
- * qualify (pre-existing ambiguity; not regressed)").
+ * Walk attribute references through the explorer so each visit triggers the
+ * same on-demand hydration as a user click. References are source spellings,
+ * often short names; carry the source namespace until a graph node is found.
  */
 export async function walkTypeClosure(
   page: Page,
   rootFqn: string,
   namespaceSearchTestId: string
 ): Promise<TypeClosureResult> {
-  const visited = new Set<string>(); // resolved fully-qualified ids only — this is what VISITED_CAP counts
-  // (sourceNamespace -> refTexts already queued from that namespace, resolved
-  // or not) — de-dupes requeue churn WITHOUT collapsing two different nodes'
-  // same-named-but-different-namespace refs into one attempt. Keyed by a Map
-  // of Sets (not a composite string key) to sidestep the retired raw-id `::`
-  // construction pattern (rune/no-raw-node-id) — this isn't a node id, but
-  // the lint rule matches the syntax either way. See the
-  // resolveCandidateFqn/walkTypeClosure doc comments above.
+  const visited = new Set<string>();
+  // A short reference must be attempted separately in each source namespace.
   const attemptedRefsByNamespace = new Map<string, Set<string>>();
   const NO_NAMESPACE = ''; // stand-in map key for the root's undefined sourceNamespace
   const hasAttempted = (sourceNamespace: string | undefined, ref: string): boolean =>
@@ -197,33 +116,28 @@ export async function walkTypeClosure(
     // which would let evaluateAll below read stale previous-query testids
     // and produce a false "unmapped" result for a type that's really mapped.
     await page
-      .waitForFunction(
-        ({ prefix, name }) => {
-          const els = Array.from(document.querySelectorAll(`[data-testid^="${prefix}"]`));
-          return els.some((el) => el.getAttribute('data-testid')?.endsWith(`.${name}`));
-        },
-        { prefix: NAV_TESTID_PREFIX, name: shortName },
-        { timeout: 10000 }
-      )
+      .getByRole('button', { name: `Navigate to ${shortName}`, exact: true })
+      .first()
+      .waitFor({ timeout: 10000 })
       .catch(() => {
         /* zero matches is a legitimate outcome — falls through to unmapped below */
       });
     const candidateTestIds = await navRows.evaluateAll((els) => els.map((el) => el.getAttribute('data-testid') ?? ''));
 
-    const resolvedFqn = resolveCandidateFqn(candidateTestIds, ref, sourceNamespace, NAV_TESTID_PREFIX);
-
-    if (!resolvedFqn) {
+    const resolvedNodeId = resolveCandidateNodeId(candidateTestIds, ref, sourceNamespace, NAV_TESTID_PREFIX);
+    if (!resolvedNodeId) {
       unmapped.push(ref);
       continue;
     }
+    const resolvedFqn = qualifiedNameFromNodeId(resolvedNodeId);
     if (visited.has(resolvedFqn)) continue;
     visited.add(resolvedFqn);
 
-    await page.getByTestId(`${NAV_TESTID_PREFIX}${resolvedFqn}`).click();
+    await page.getByTestId(`${NAV_TESTID_PREFIX}${resolvedNodeId}`).click();
     hydrationsTriggered++;
-    await waitForHydratedNode(page, resolvedFqn);
+    await waitForHydratedNode(page, resolvedNodeId);
     const snapshot = await page.evaluate(() => window.__runeStudioTypeGraph?.snapshot() ?? []);
-    const node = snapshot.find((n) => n.id === resolvedFqn);
+    const node = snapshot.find((n) => n.id === resolvedNodeId);
     if (!node) {
       unmapped.push(resolvedFqn);
       continue;

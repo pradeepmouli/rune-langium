@@ -5,6 +5,8 @@ import type { Page } from '@playwright/test';
 import AxeBuilder from '@axe-core/playwright';
 import { checkout as test, expect, loadCdm } from '../fixtures.js';
 import { waitForEntranceAnimations } from '../readiness.js';
+import { ANCHOR_DATA } from '../anchors.js';
+import { typeNavigationButton } from '../../helpers/type-navigation.js';
 
 // Mirrors test/e2e/a11y.spec.ts's exclusion list exactly — third-party
 // widget a11y debt tracked separately per FR-A04, not this journey's gate.
@@ -69,11 +71,11 @@ test.describe('J17 — Accessibility sweep', () => {
     await page.keyboard.press('Escape');
     await expect(page.getByTestId('import-dialog')).not.toBeVisible({ timeout: 5000 });
 
-    await page.getByTestId('rail-export').click();
-    await expect(page.getByTestId('export-perspective')).toBeVisible({ timeout: 20000 });
-    // Confirmed live against J13 (task-2, this branch): the real per-target
-    // trigger is `codegen-targets-table__download-zod`, not a generic
-    // "download" role/name guess — see file-header comment.
+    await page.getByTestId('rail-explore').click();
+    const explore = page.getByTestId('explore-workbench');
+    await explore.getByTestId('namespace-search').fill('BusinessCenters');
+    await typeNavigationButton(explore, ANCHOR_DATA).click();
+    await page.getByRole('tab', { name: 'Code' }).click();
     await page.getByTestId('codegen-targets-table__download-zod').click();
     await expect(page.getByTestId('download-config-dialog')).toBeVisible({ timeout: 10000 });
     results.push(await sweepAxe(page, 'download-config-dialog'));

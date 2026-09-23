@@ -6,7 +6,7 @@ import { useEditorStore, selectNodeRepository } from '@rune-langium/visual-edito
 import { withInstrumentation } from './instrumentation/core.js';
 
 export interface TypeGraphNodeSnapshot {
-  /** = the node's qualified name (makeNodeId(ns, name)). */
+  /** Kind-aware graph node id. */
   id: string;
   /**
    * The node's raw domain payload (a lossless Dehydrated<T> per the

@@ -158,6 +158,7 @@ export const ExportPerspective = withInstrumentation(
           });
           if (width >= 768) settings.group.api.setConstraints({ minimumWidth: 320 });
           preview.group.api.setConstraints({ minimumHeight: 220 });
+          if (width < 768) selection.api.setActive();
         }
       }),
       [activeFile, cancel, config, configure, handleGenerate, handleSelectionChange, requiredBy, run, setActiveFile]

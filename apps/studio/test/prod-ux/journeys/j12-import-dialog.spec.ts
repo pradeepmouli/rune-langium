@@ -3,6 +3,7 @@
 
 import { Buffer } from 'node:buffer';
 import { checkout as test, expect } from '../fixtures.js';
+import { typeNavigationButton } from '../../helpers/type-navigation.js';
 
 const WORKSPACE_FILE_NAME = 'party.rosetta';
 const WORKSPACE_FILE_CONTENT = 'namespace test\ntype Party:\n  name string (1..1)\n';
@@ -165,7 +166,7 @@ test.describe('J12 — Import dialog (inbound codegen)', () => {
     // other journey uses for a post-mutation existence check.
     const namespaceSearch = page.getByTestId('namespace-search');
     await namespaceSearch.fill('Widget');
-    await expect(page.getByTestId('ns-type-nav-smoke.jsonschema.Widget')).toBeVisible({ timeout: 15000 });
+    await expect(typeNavigationButton(page, 'smoke.jsonschema.Widget')).toBeVisible({ timeout: 15000 });
 
     // Reopen for OpenAPI — this is where state-reset-between-formats matters:
     // a prior format's error/summary/preview must not leak into this run.
@@ -187,7 +188,7 @@ test.describe('J12 — Import dialog (inbound codegen)', () => {
       await expect(page.getByTestId('import-dialog')).not.toBeVisible({ timeout: 10000 });
     });
     await namespaceSearch.fill('Party');
-    await expect(page.getByTestId('ns-type-nav-smoke.openapi.Party')).toBeVisible();
+    await expect(typeNavigationButton(page, 'smoke.openapi.Party')).toBeVisible();
     await evidence.checkpoint('openapi-imported');
 
     // SQL — exercises the tree-sitter WASM grammar-fetch path (PR #390's
@@ -215,7 +216,7 @@ test.describe('J12 — Import dialog (inbound codegen)', () => {
       await expect(page.getByTestId('import-dialog')).not.toBeVisible({ timeout: 10000 });
     });
     await namespaceSearch.fill('Party');
-    await expect(page.getByTestId('ns-type-nav-smoke.sql.Party')).toBeVisible();
+    await expect(typeNavigationButton(page, 'smoke.sql.Party')).toBeVisible();
     await evidence.checkpoint('sql-imported');
 
     // XSD.
@@ -234,7 +235,7 @@ test.describe('J12 — Import dialog (inbound codegen)', () => {
       await expect(page.getByTestId('import-dialog')).not.toBeVisible({ timeout: 10000 });
     });
     await namespaceSearch.fill('Party');
-    await expect(page.getByTestId('ns-type-nav-smoke.xsd.Party')).toBeVisible();
+    await expect(typeNavigationButton(page, 'smoke.xsd.Party')).toBeVisible();
     await evidence.checkpoint('xsd-imported');
   });
 });

@@ -90,6 +90,9 @@ export function NamespaceSegmentHeaderRow({
   const kindChips = kindCounts
     ? KIND_CHIP_ORDER.filter((k) => (kindCounts[k] ?? 0) > 0).map((k) => ({ kind: k, count: kindCounts[k]! }))
     : [];
+  const kindSummary = kindChips
+    .map(({ kind, count: kindCount }) => `${kindCount} ${KIND_LABEL[kind].toLowerCase()}`)
+    .join(' · ');
   // Resting fill deepens with depth (40% → +8%/level, capped at 72%) so nesting
   // is legible without a per-depth indent. Passed as a CSS variable so the
   // `.rune-ns-seg-header:hover` rule can still override the background (an inline
@@ -143,6 +146,7 @@ export function NamespaceSegmentHeaderRow({
           // the next row on narrow panels / many kinds. Keep it one line.
           className="flex flex-nowrap items-center gap-x-1.5 overflow-hidden pb-1 text-3xs text-muted-foreground/80"
           style={{ paddingLeft: `${indentPx + 28}px` }}
+          title={kindSummary}
           data-testid={dataTestId ? `${dataTestId}-kinds` : undefined}
         >
           {kindChips.map(({ kind, count: kindCount }, i) => (

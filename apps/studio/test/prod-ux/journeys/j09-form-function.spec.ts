@@ -2,6 +2,7 @@
 // Copyright (c) 2026 Pradeep Mouli
 
 import { checkout as test, expect, loadCdm, authorScratchType, authorScratchFunction, readOpLog } from '../fixtures.js';
+import { typeNavigationButton } from '../../helpers/type-navigation.js';
 import { ANCHOR_DATA, ANCHOR_FUNCTION } from '../anchors.js';
 
 test.describe('J9 — Form preview & function execution', () => {
@@ -18,7 +19,7 @@ test.describe('J9 — Form preview & function execution', () => {
       const namespaceSearch = page.getByTestId('namespace-search');
       await namespaceSearch.fill('BusinessCenters');
       const curatedFormStartedAt = Date.now();
-      await page.getByTestId(`ns-type-nav-${ANCHOR_DATA}`).click();
+      await typeNavigationButton(page, ANCHOR_DATA).click();
       const formPanel = page.getByTestId('panel-formPreview');
       await expect(formPanel.getByRole('heading', { name: 'BusinessCenters' })).toBeVisible({ timeout: 30_000 });
       await expect(formPanel.getByText('Generating preview', { exact: false })).toHaveCount(0);
@@ -33,7 +34,7 @@ test.describe('J9 — Form preview & function execution', () => {
         attributes: [{ name: 'quantity', typeName: 'int', cardinality: '(1..1)' }]
       });
       const scratchFormStartedAt = Date.now();
-      await page.getByTestId('ns-type-nav-scratch.j9form.ScratchWidget').click();
+      await typeNavigationButton(page, 'scratch.j9form.ScratchWidget').click();
       const quantityField = formPanel.getByLabel('Quantity', { exact: true });
       await expect(quantityField).toBeVisible({ timeout: 20_000 });
       const scratchFormRenderMs = Date.now() - scratchFormStartedAt;
@@ -78,7 +79,7 @@ test.describe('J9 — Form preview & function execution', () => {
       // sub-tab).
       const namespaceSearch = page.getByTestId('namespace-search');
       await namespaceSearch.fill('StringEquals');
-      await page.getByTestId(`ns-type-nav-${ANCHOR_FUNCTION}`).click();
+      await typeNavigationButton(page, ANCHOR_FUNCTION, 'RosettaFunction').click();
       await expect(page.getByTestId('panel-formPreview')).toBeVisible({ timeout: 20000 });
 
       // `exact: true` — Playwright's getByLabel does substring, case-
@@ -117,7 +118,7 @@ test.describe('J9 — Form preview & function execution', () => {
       });
       // authorScratchFunction only asserts the nav row is visible — the
       // caller navigates into it (same pattern as authorScratchType above).
-      await page.getByTestId('ns-type-nav-scratch.j9func.Double').click();
+      await typeNavigationButton(page, 'scratch.j9func.Double', 'RosettaFunction').click();
       await expect(page.getByTestId('panel-formPreview')).toBeVisible({ timeout: 20000 });
       // `exact: true` — see the S1/S2 comment above; a bare 'X' also matches
       // unrelated chrome.

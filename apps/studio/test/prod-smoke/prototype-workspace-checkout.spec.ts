@@ -51,6 +51,7 @@ test.describe('prototype workspace checkout smoke', () => {
   test('creates an instance, edits a field via the worker-backed schema pipeline, and reflects it in the Inspector', async ({
     page
   }) => {
+    await page.setViewportSize({ width: 1280, height: 720 });
     await loadWorkspace(page);
 
     await page.getByTestId('rail-prototype').click();
@@ -62,7 +63,16 @@ test.describe('prototype workspace checkout smoke', () => {
     await page.keyboard.press('Enter');
     await expect(page.getByRole('button', { name: 'Instance type' })).toContainText('Party');
     await page.getByLabel('Instance name').fill(INSTANCE_NAME);
-    await page.getByRole('button', { name: 'Create instance' }).click();
+    const createButton = page.getByRole('button', { name: 'Create instance' });
+    expect(
+      await createButton.evaluate((button) => {
+        const rect = button.getBoundingClientRect();
+        const hit = document.elementFromPoint(rect.left + rect.width / 2, rect.top + rect.height / 2);
+        return hit === button || button.contains(hit);
+      }),
+      'the dialog button must receive pointer events above dockview dividers'
+    ).toBe(true);
+    await createButton.click();
 
     // Selecting the new row keeps its identity header and form in the same
     // Inspector. Schema generation still happens through the codegen worker.
@@ -75,10 +85,10 @@ test.describe('prototype workspace checkout smoke', () => {
 
     const prototype = page.getByTestId('prototype-perspective');
     await expect(prototype.getByLabel('Instance payload')).toContainText('"Acme"', { timeout: 10000 });
+    const instanceRow = prototype.getByTestId('prototype-grid').getByRole('row', { name: new RegExp(INSTANCE_NAME) });
+    await expect(instanceRow.getByRole('cell', { name: 'valid', exact: true })).toBeVisible({ timeout: 20000 });
 
     // The selected row and Inspector read the same persisted store record.
-    await expect(
-      page.getByTestId('prototype-grid').getByRole('row', { name: new RegExp(INSTANCE_NAME) })
-    ).toBeVisible();
+    await expect(instanceRow).toBeVisible();
   });
 });

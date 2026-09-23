@@ -106,6 +106,29 @@ describe('edit-reconcile', () => {
     expect(remainingPatches.length).toBe(0); // cleared — no longer pending
   });
 
+  it('does not duplicate an added attribute renamed before its source reparse', () => {
+    const initial = [dataNode('ns.Alpha', 'Alpha', [{ name: 'quantity', type: 'number' }])];
+    const added = commitGraphEdit(initial, NO_EDGES, (draft) => {
+      (draft.nodes.get('ns.Alpha')!.data as { attributes: Array<{ name: string; type: string }> }).attributes.push({
+        name: '',
+        type: 'string'
+      });
+    });
+    const renamed = commitGraphEdit(added.nodes, NO_EDGES, (draft) => {
+      (draft.nodes.get('ns.Alpha')!.data as { attributes: Array<{ name: string }> }).attributes[1]!.name = 'notes';
+    });
+
+    const parsed = [
+      dataNode('ns.Alpha', 'Alpha', [
+        { name: 'quantity', type: 'number' },
+        { name: 'notes', type: 'string', $cstRange: { start: 20, end: 42 } }
+      ])
+    ];
+    const { nodesById } = reconcileParse(parsed, NO_EDGES, [...added.patches, ...renamed.patches]);
+    const attributes = (nodesById.get('ns.Alpha')!.data as { attributes: Array<{ name: string }> }).attributes;
+    expect(attributes.map((attribute) => attribute.name)).toEqual(['quantity', 'notes']);
+  });
+
   it('is a no-op when there are no pending patches', () => {
     const parse = [dataNode('ns.Alpha', 'Alpha', [{ name: 'x', type: 'string' }])];
     const { nodesById, remainingPatches } = reconcileParse(parse, NO_EDGES, []);

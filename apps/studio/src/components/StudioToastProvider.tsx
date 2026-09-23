@@ -184,7 +184,7 @@ function StudioToastInner({ children }: { children: ReactNode }) {
             <div className="flex items-start gap-2">
               {t.type === 'loading' && <Spinner className="size-4 shrink-0 mt-0.5" />}
               <div className="grid gap-1">
-                {t.title ? <ToastTitle>{t.title}</ToastTitle> : null}
+                <ToastTitle className={t.title ? undefined : 'sr-only'}>{t.title ?? t.description}</ToastTitle>
                 <ToastDescription>{t.description}</ToastDescription>
               </div>
             </div>

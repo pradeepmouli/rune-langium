@@ -2,6 +2,7 @@
 // Copyright (c) 2026 Pradeep Mouli
 
 import { create } from 'zustand';
+import { qualifiedNameFromNodeId } from '@rune-langium/visual-editor';
 import type { FormPreviewSchema, PreviewField, PreviewSourceMapEntry } from '@rune-langium/codegen/export';
 import type { ValidationDiagnostic } from '@rune-langium/codegen/instances';
 import { useOutputStore, fmtLine } from './output-store.js';
@@ -444,7 +445,7 @@ export const usePreviewStore = create<PreviewStore>((set, get) => ({
     const requestId = `validate:${targetId}:${dispatchValidateCounter}`;
     pendingValidateRequests.set(requestId, targetId);
     latestValidateRequestForTarget.set(targetId, requestId);
-    worker.postMessage(createInstanceValidateMessage(targetId, data, requestId));
+    worker.postMessage(createInstanceValidateMessage(qualifiedNameFromNodeId(targetId), data, requestId));
   },
 
   receiveValidateResult(requestId, diagnostics) {

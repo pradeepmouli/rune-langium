@@ -4,10 +4,10 @@
 import { expect, type Locator, type Page } from '@playwright/test';
 import type {} from '../../src/services/type-graph-window-bridge.js';
 
-export async function waitForHydratedNode(page: Page, fqn: string): Promise<void> {
+export async function waitForHydratedNode(page: Page, nodeId: string): Promise<void> {
   await page.waitForFunction(
     (id) => window.__runeStudioTypeGraph?.snapshot().some((node) => node.id === id && !node.deferred),
-    fqn,
+    nodeId,
     { timeout: 30_000 }
   );
 }

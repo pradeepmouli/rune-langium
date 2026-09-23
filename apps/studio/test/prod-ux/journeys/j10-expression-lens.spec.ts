@@ -2,6 +2,7 @@
 // Copyright (c) 2026 Pradeep Mouli
 
 import { checkout as test, expect, authorScratchFunction } from '../fixtures.js';
+import { typeNavigationButton } from '../../helpers/type-navigation.js';
 
 const NAMESPACE = 'scratch.j10cond';
 const FUNCTION_NAME = 'ValidateAmount';
@@ -30,7 +31,7 @@ test.describe('J10 — Expression language lens', () => {
       body: 'amount',
       condition: { name: CONDITION_NAME, expression: 'amount > 0' }
     });
-    await page.getByTestId(`ns-type-nav-${NODE_ID}`).click();
+    await typeNavigationButton(page, NODE_ID, 'RosettaFunction').click();
     await evidence.checkpoint('function-authored');
 
     // Conditions render inside the "Inspector" tab (the center Graph/
