@@ -470,7 +470,7 @@ export const collectCuratedSourcesForCodegen = withInstrumentation(
 export const parseWorkspaceFiles = withInstrumentation(
   async function parseWorkspaceFiles(
     files: WorkspaceFile[],
-    options: { hydrateNamespaces?: string[] } = {}
+    options: { hydrateNamespaces?: string[]; requireCuratedHydration?: boolean } = {}
   ): Promise<ParseWorkspaceFilesResult> {
     const wantsHydration = (options.hydrateNamespaces?.length ?? 0) > 0;
     if (files.length === 0 && !wantsHydration) {
@@ -513,7 +513,7 @@ export const parseWorkspaceFiles = withInstrumentation(
       // Browser-only parsing cannot supply a requested curated namespace.
       // Let App dequeue the failed hydration instead of marking it hydrated
       // from a user-file-only fallback result.
-      if (wantsHydration) throw error;
+      if (options.requireCuratedHydration) throw error;
       // Router failed (network error, Pages Function unavailable, etc.) — fall back
       // to synchronous main-thread parsing so the editor stays functional.
       console.warn('[workspace] parseWorkspaceFiles via router failed:', error);

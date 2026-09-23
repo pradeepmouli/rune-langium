@@ -193,9 +193,25 @@ describe('parseWorkspaceFiles — curated bundle collection', () => {
       }
     ];
 
-    await expect(parseWorkspaceFiles(files, { hydrateNamespaces: ['cdm.base.math'] })).rejects.toThrow(
-      'network unavailable'
-    );
+    await expect(
+      parseWorkspaceFiles(files, { hydrateNamespaces: ['cdm.base.math'], requireCuratedHydration: true })
+    ).rejects.toThrow('network unavailable');
+  });
+
+  it('keeps browser fallback for edits that preserve hydrated namespaces', async () => {
+    global.fetch = vi.fn().mockRejectedValue(new TypeError('network unavailable'));
+    const files: WorkspaceFile[] = [
+      {
+        name: 'user.rosetta',
+        path: 'user.rosetta',
+        content: 'namespace demo\ntype Foo:\n  bar string (1..1)',
+        dirty: true
+      }
+    ];
+
+    const result = await parseWorkspaceFiles(files, { hydrateNamespaces: ['cdm.base.math'] });
+    expect(result.parseMode).toBe('main-thread-fallback');
+    expect(result.fallbackMessage).toContain('network unavailable');
   });
 
   it('sends curatedBundles derived from bundleId/bundleVersion on WorkspaceFile', async () => {
