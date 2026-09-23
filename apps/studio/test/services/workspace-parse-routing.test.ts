@@ -36,7 +36,10 @@ describe('parseWorkspace routing', () => {
       );
     global.fetch = fetchMock;
 
-    const parsed = parseWorkspaceViaRouter([], { hydrateNamespaces: ['cdm.base.math'] });
+    const parsed = parseWorkspaceViaRouter([], {
+      hydrateNamespaces: ['cdm.base.math'],
+      retryCuratedHydration: true
+    });
     await vi.advanceTimersByTimeAsync(PARSE_ROUTER_TIMEOUT_MS);
     await expect(parsed).resolves.toMatchObject({ models: [] });
     expect(fetchMock).toHaveBeenCalledTimes(2);
@@ -53,9 +56,9 @@ describe('parseWorkspace routing', () => {
       );
     global.fetch = fetchMock;
 
-    await expect(parseWorkspaceViaRouter([], { hydrateNamespaces: ['cdm.base.math'] })).resolves.toMatchObject({
-      models: []
-    });
+    await expect(
+      parseWorkspaceViaRouter([], { hydrateNamespaces: ['cdm.base.math'], retryCuratedHydration: true })
+    ).resolves.toMatchObject({ models: [] });
     expect(fetchMock).toHaveBeenCalledTimes(2);
   });
 
@@ -199,7 +202,8 @@ describe('parseWorkspaceFiles — curated bundle collection', () => {
   });
 
   it('keeps browser fallback for edits that preserve hydrated namespaces', async () => {
-    global.fetch = vi.fn().mockRejectedValue(new TypeError('network unavailable'));
+    const fetchMock = vi.fn().mockResolvedValueOnce(new Response('', { status: 502 }));
+    global.fetch = fetchMock;
     const files: WorkspaceFile[] = [
       {
         name: 'user.rosetta',
@@ -211,7 +215,8 @@ describe('parseWorkspaceFiles — curated bundle collection', () => {
 
     const result = await parseWorkspaceFiles(files, { hydrateNamespaces: ['cdm.base.math'] });
     expect(result.parseMode).toBe('main-thread-fallback');
-    expect(result.fallbackMessage).toContain('network unavailable');
+    expect(result.fallbackMessage).toContain('/api/parse HTTP 502');
+    expect(fetchMock).toHaveBeenCalledTimes(1);
   });
 
   it('sends curatedBundles derived from bundleId/bundleVersion on WorkspaceFile', async () => {

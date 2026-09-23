@@ -495,7 +495,8 @@ export const parseWorkspaceFiles = withInstrumentation(
     try {
       const response = await parseWorkspaceViaRouter(userFiles, {
         curatedBundles,
-        hydrateNamespaces: options.hydrateNamespaces
+        hydrateNamespaces: options.hydrateNamespaces,
+        retryCuratedHydration: options.requireCuratedHydration
       });
       const errMap = new Map<string, string[]>();
       for (const [k, v] of Object.entries(response.errors)) {
@@ -577,7 +578,11 @@ export const _resetParserWorkerForTests = withInstrumentation(
 export const parseWorkspaceViaRouter = withInstrumentation(
   async function parseWorkspaceViaRouter(
     files: Array<{ name: string; content: string }>,
-    options: { curatedBundles?: Array<{ id: string; version: string }>; hydrateNamespaces?: string[] } = {}
+    options: {
+      curatedBundles?: Array<{ id: string; version: string }>;
+      hydrateNamespaces?: string[];
+      retryCuratedHydration?: boolean;
+    } = {}
   ): Promise<ParseWorkspaceResponse> {
     const body = JSON.stringify({
       files,
@@ -608,7 +613,7 @@ export const parseWorkspaceViaRouter = withInstrumentation(
     } catch (error) {
       const transient =
         error instanceof OperationTimeoutError || (error instanceof ParseRouterHttpError && error.status >= 500);
-      if (!transient || !options.hydrateNamespaces?.length) throw error;
+      if (!transient || !options.retryCuratedHydration) throw error;
       data = (await requestParse()) as typeof data;
     }
 
