@@ -44,9 +44,9 @@ describe('POST /api/curated-source', () => {
     expect(fetchNamespace).toHaveBeenCalledWith('cdm', 'latest', artifact, undefined);
   });
 
-  it('rejects a changed artifact before fetching its source', async () => {
+  it('rejects an artifact key outside the curated namespace mirror path', async () => {
     const fetcher = await import('../../src/services/curated-fetch.js');
-    vi.spyOn(fetcher, 'fetchCuratedManifest').mockResolvedValue(manifest as never);
+    const fetchManifest = vi.spyOn(fetcher, 'fetchCuratedManifest');
     const fetchNamespace = vi.spyOn(fetcher, 'fetchCuratedNamespace');
 
     const response = await onRequestPost({
@@ -54,34 +54,38 @@ describe('POST /api/curated-source', () => {
         bundleId: 'cdm',
         version: 'latest',
         namespace: 'cdm.base.math',
-        expectedArtifactKey: JSON.stringify(['cdm', 'artifacts/older/ns/cdm.base.math.json.gz'])
+        expectedArtifactKey: JSON.stringify(['cdm', 'https://example.com/private.json.gz'])
       })
     } as never);
 
-    expect(response.status).toBe(409);
+    expect(response.status).toBe(400);
+    expect(fetchManifest).not.toHaveBeenCalled();
     expect(fetchNamespace).not.toHaveBeenCalled();
   });
 
-  it('pins source lookup to the cohort of an already downloaded JSON artifact', async () => {
+  it('uses the exact cached date-and-hash artifact after latest moves', async () => {
     const fetcher = await import('../../src/services/curated-fetch.js');
-    const cohort = `cohort-${'a'.repeat(64)}`;
-    const pinnedArtifact = `artifacts/${cohort}/ns/cdm.base.math.json.gz`;
-    const manifestSpy = vi.spyOn(fetcher, 'fetchCuratedManifest').mockResolvedValue({
-      namespaces: { 'cdm.base.math': { artifact: pinnedArtifact, deps: [], exports: [] } }
-    } as never);
-    vi.spyOn(fetcher, 'fetchCuratedNamespace').mockResolvedValue([]);
+    const cachedArtifact =
+      'https://www.daikonic.dev/curated/cdm/artifacts/2026-09-13-abc123def456/ns/cdm.base.math.json.gz';
+    const manifestSpy = vi.spyOn(fetcher, 'fetchCuratedManifest');
+    const fetchNamespace = vi.spyOn(fetcher, 'fetchCuratedNamespace').mockResolvedValue([]);
 
     const response = await onRequestPost({
       request: request({
         bundleId: 'cdm',
         version: 'latest',
         namespace: 'cdm.base.math',
-        expectedArtifactKey: JSON.stringify(['cdm', pinnedArtifact])
+        expectedArtifactKey: JSON.stringify(['cdm', cachedArtifact])
       })
     } as never);
 
     expect(response.status).toBe(200);
-    expect(manifestSpy).toHaveBeenCalledWith('cdm', cohort, undefined);
+    expect(manifestSpy).not.toHaveBeenCalled();
+    expect(fetchNamespace).toHaveBeenCalledWith('cdm', 'latest', cachedArtifact, undefined);
+    expect(await response.json()).toEqual({
+      artifactKey: JSON.stringify(['cdm', cachedArtifact]),
+      documents: []
+    });
   });
 
   it('reports a legacy artifact with declarations but no original source', async () => {

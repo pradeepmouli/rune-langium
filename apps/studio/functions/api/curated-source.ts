@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: FSL-1.1-ALv2
 // Copyright (c) 2026 Pradeep Mouli
 
-import { CURATED_MODEL_IDS, CuratedCohortSchema } from '@rune-langium/curated-schema';
+import { CURATED_MODEL_IDS } from '@rune-langium/curated-schema';
 import {
   fetchCuratedManifest,
   fetchCuratedNamespace,
@@ -20,6 +20,20 @@ interface SourceRequest {
   version: string;
   namespace: string;
   expectedArtifactKey?: string;
+}
+
+function isPublishedNamespaceArtifact(bundleId: string, artifact: string): boolean {
+  try {
+    const url = new URL(artifact, `https://www.daikonic.dev/curated/${bundleId}/`);
+    return (
+      url.origin === 'https://www.daikonic.dev' &&
+      url.search === '' &&
+      url.hash === '' &&
+      new RegExp(`^/curated/${bundleId}/artifacts/[^/]+/ns/[^/]+\\.json\\.gz$`).test(url.pathname)
+    );
+  } catch {
+    return false;
+  }
 }
 
 const instrumentedOnRequestPost = withInstrumentation(
@@ -45,7 +59,7 @@ const instrumentedOnRequestPost = withInstrumentation(
     ) {
       return Response.json({ error: 'Invalid curated source request' }, { status: 400 });
     }
-    let manifestVersion = body.version;
+    let expectedArtifact: string | undefined;
     if (body.expectedArtifactKey !== undefined) {
       let key: unknown;
       try {
@@ -56,21 +70,24 @@ const instrumentedOnRequestPost = withInstrumentation(
       if (!Array.isArray(key) || key.length !== 2 || key[0] !== body.bundleId || typeof key[1] !== 'string') {
         return Response.json({ error: 'Invalid artifact key' }, { status: 400 });
       }
-      const cohort = key[1].match(/(?:^|\/)artifacts\/(cohort-[a-f0-9]{64})\//)?.[1];
-      if (cohort && CuratedCohortSchema.safeParse(cohort).success) manifestVersion = cohort;
+      if (!isPublishedNamespaceArtifact(body.bundleId, key[1])) {
+        return Response.json({ error: 'Invalid artifact location' }, { status: 400 });
+      }
+      expectedArtifact = key[1];
     }
     const fetcher = env?.CURATED_MIRROR
       ? (url: string, init?: RequestInit) => env.CURATED_MIRROR!.fetch(url, init)
       : undefined;
     try {
-      const manifest = await fetchCuratedManifest(body.bundleId, manifestVersion, fetcher);
-      const artifact = manifest.namespaces?.[body.namespace]?.artifact;
+      const artifact =
+        expectedArtifact ??
+        (await fetchCuratedManifest(body.bundleId, body.version, fetcher)).namespaces?.[body.namespace]?.artifact;
       if (!artifact) return Response.json({ error: 'Namespace not found' }, { status: 404 });
       const artifactKey = curatedArtifactKey(body.bundleId, artifact);
-      if (body.expectedArtifactKey && body.expectedArtifactKey !== artifactKey) {
-        return Response.json({ error: 'Curated artifact changed' }, { status: 409 });
+      if (!isPublishedNamespaceArtifact(body.bundleId, artifact)) {
+        return Response.json({ error: 'Invalid artifact location' }, { status: 502 });
       }
-      const documents = await fetchCuratedNamespace(body.bundleId, manifestVersion, artifact, fetcher);
+      const documents = await fetchCuratedNamespace(body.bundleId, body.version, artifact, fetcher);
       if (documents.some((doc) => doc.content.length === 0 && doc.exports.length > 0)) {
         return Response.json({ error: 'Original source is unavailable for this artifact' }, { status: 404 });
       }
