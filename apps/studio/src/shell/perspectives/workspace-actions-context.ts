@@ -39,6 +39,8 @@ export interface WorkspaceActions {
    * edits). Sourced by EditorPage in place of its former `onFilesChange` prop.
    */
   onFilesChange: (files: WorkspaceFile[]) => void;
+  /** Load original source for one selected curated namespace. */
+  loadCuratedSource: (bundleId: string, version: string, namespace: string, artifactKey?: string) => Promise<void>;
   /** Close the active workspace and return to the launcher (EditorPage topbar). */
   onClose: () => void;
   /**

@@ -60,6 +60,9 @@ export interface CuratedDocument {
   content: string;
   serializedModel: string;
   exports: Array<{ type: string; name: string; path: string }>;
+  /** Immutable manifest artifact identity, attached by the closure loader. */
+  artifactKey?: string;
+  namespace?: string;
 }
 
 export class CuratedBundleUnavailableError extends Error {

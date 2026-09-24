@@ -100,7 +100,7 @@ const NS_DOCS: Record<
   'cdm.trade': [
     {
       uri: 'cdm/trade/trade.rosetta',
-      content: '',
+      content: 'namespace cdm.trade\n',
       serializedModel: makeSM('cdm.trade', ['cdm.base.datetime']),
       exports: [{ type: 'Data', name: 'Trade', path: 'cdm.trade.Trade' }]
     }
@@ -141,10 +141,14 @@ type ParseResponse = {
   hydrationState: {
     documents: Array<{
       uri: string;
+      content: string;
+      sourceLoaded?: boolean;
       serializedModel: string;
       exports: Array<{ name: string }>;
+      artifactKey?: string;
     }>;
   };
+  requiredCuratedArtifacts?: Array<{ key: string; bundleId: string; namespace: string }>;
   dependencyGraph: Record<string, string[]>;
   errors: Record<string, string[]>;
 };
@@ -203,6 +207,10 @@ describe('POST /api/parse — manifest fast-path (v2), manifest required (no v1 
     expect(hydratedUris).toContain('cdm/base/datetime.rosetta');
     expect(hydratedUris).toContain('cdm/base/math.rosetta');
     expect(hydratedUris).not.toContain('cdm/other/other.rosetta');
+    expect(body.hydrationState.documents.find((doc) => doc.uri === 'cdm/trade/trade.rosetta')).toMatchObject({
+      content: '',
+      sourceLoaded: false
+    });
 
     // ── deferredExports: ALL four namespaces present (list-only for cdm.other) ──
     const deferredNs = body.deferredExports.map((d) => d.namespace);
@@ -352,5 +360,44 @@ describe('POST /api/parse — manifest fast-path (v2), manifest required (no v1 
     expect(hydratedUris).not.toContain('cdm/trade/trade.rosetta');
     expect(hydratedUris).not.toContain('cdm/base/datetime.rosetta');
     expect(hydratedUris).not.toContain('cdm/base/math.rosetta');
+  });
+
+  it('returns only unseen artifact JSON when the next namespace extends the closure', async () => {
+    const mod = await import('../../src/services/curated-fetch.js');
+    vi.spyOn(mod, 'fetchCuratedManifest').mockResolvedValue(MANIFEST as never);
+    const namespaces = vi.spyOn(mod, 'fetchCuratedNamespace').mockImplementation(async (_id, _version, artifactKey) => {
+      const ns = Object.keys(NS_DOCS).find((name) => artifactKey.includes(`/ns/${name}.json.gz`));
+      return ns ? NS_DOCS[ns] : [];
+    });
+    const request = (hydrateNamespaces: string[], knownCuratedArtifacts: string[] = []) =>
+      onRequestPost({
+        request: makeRequest({
+          files: [],
+          curatedBundles: [{ id: 'cdm', version: VERSION }],
+          hydrateNamespaces,
+          knownCuratedArtifacts
+        })
+      } as never);
+
+    const first = (await (await request(['cdm.base.math'])).json()) as ParseResponse;
+    const mathKey = first.requiredCuratedArtifacts?.[0]?.key;
+    expect(mathKey).toBe(JSON.stringify(['cdm', MANIFEST.namespaces['cdm.base.math'].artifact]));
+    expect(first.hydrationState.documents.map(({ uri }) => uri)).toEqual(['cdm/base/math.rosetta']);
+
+    namespaces.mockClear();
+    const second = (await (await request(['cdm.base.math', 'cdm.trade'], [mathKey!])).json()) as ParseResponse;
+    expect(namespaces.mock.calls.map(([, , artifact]) => artifact)).toEqual([
+      MANIFEST.namespaces['cdm.trade'].artifact,
+      MANIFEST.namespaces['cdm.base.datetime'].artifact
+    ]);
+    expect(second.hydrationState.documents.map(({ uri }) => uri)).toEqual([
+      'cdm/trade/trade.rosetta',
+      'cdm/base/datetime.rosetta'
+    ]);
+    expect(second.requiredCuratedArtifacts?.map(({ namespace }) => namespace)).toEqual([
+      'cdm.base.math',
+      'cdm.trade',
+      'cdm.base.datetime'
+    ]);
   });
 });

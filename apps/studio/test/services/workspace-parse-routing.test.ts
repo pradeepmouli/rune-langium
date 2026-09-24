@@ -2,7 +2,13 @@
 // Copyright (c) 2026 Pradeep Mouli
 
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
-import { PARSE_ROUTER_TIMEOUT_MS, parseWorkspaceViaRouter, parseWorkspaceFiles } from '../../src/services/workspace.js';
+import {
+  PARSE_ROUTER_TIMEOUT_MS,
+  parseWorkspaceViaRouter,
+  parseWorkspaceFiles,
+  resetCuratedDocumentCache,
+  loadCuratedNamespaceSource
+} from '../../src/services/workspace.js';
 import type { WorkspaceFile } from '../../src/services/workspace.js';
 
 describe('parseWorkspace routing', () => {
@@ -14,7 +20,273 @@ describe('parseWorkspace routing', () => {
 
   afterEach(() => {
     global.fetch = originalFetch;
+    resetCuratedDocumentCache();
     vi.useRealTimers();
+  });
+
+  it('reuses a browser-held curated artifact while preserving the worker document set', async () => {
+    const key = JSON.stringify(['cdm', 'cohort-1/cdm.base.math.json.gz']);
+    const document = {
+      uri: 'cdm/base/math.rosetta',
+      content: 'namespace cdm.base.math\n',
+      serializedModel: '{}',
+      exports: [{ type: 'Data', name: 'Number', path: '/elements@0' }],
+      bundleId: 'cdm',
+      artifactKey: key,
+      namespace: 'cdm.base.math'
+    };
+    const requiredCuratedArtifacts = [{ key, bundleId: 'cdm', namespace: 'cdm.base.math' }];
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValueOnce(
+        new Response(
+          JSON.stringify({
+            ok: true,
+            models: [],
+            errors: {},
+            dependencyGraph: {},
+            deferredExports: [
+              { filePath: document.uri, namespace: document.namespace, exports: [{ type: 'Data', name: 'Number' }] }
+            ],
+            hydrationState: { documents: [document] },
+            requiredCuratedArtifacts
+          })
+        )
+      )
+      .mockResolvedValueOnce(
+        new Response(
+          JSON.stringify({
+            ok: true,
+            models: [],
+            errors: {},
+            dependencyGraph: {},
+            deferredExports: [],
+            hydrationState: { documents: [] },
+            requiredCuratedArtifacts
+          })
+        )
+      );
+    global.fetch = fetchMock;
+    const options = { curatedBundles: [{ id: 'cdm', version: 'cohort-1' }], hydrateNamespaces: ['cdm.base.math'] };
+
+    await parseWorkspaceViaRouter([], options);
+    const warm = await parseWorkspaceViaRouter([], options);
+
+    const secondBody = JSON.parse((fetchMock.mock.calls[1]![1] as RequestInit).body as string) as {
+      knownCuratedArtifacts: string[];
+    };
+    expect(secondBody.knownCuratedArtifacts).toContain(key);
+    expect(warm.curatedRefOnlyFiles?.cdm?.[0]).toMatchObject({
+      path: 'base/math.rosetta',
+      content: document.content,
+      namespace: document.namespace
+    });
+    expect(warm.deferredExports).toContainEqual({
+      filePath: document.uri,
+      namespace: document.namespace,
+      exports: [{ type: 'Data', name: 'Number' }]
+    });
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+  });
+
+  it('sends the full browser-held artifact list when a new namespace is selected', async () => {
+    const firstKey = JSON.stringify(['cdm', 'artifacts/cohort-1/ns/cdm.first.json.gz']);
+    const secondKey = JSON.stringify(['cdm', 'artifacts/cohort-1/ns/cdm.second.json.gz']);
+    const first = { key: firstKey, bundleId: 'cdm', namespace: 'cdm.first' };
+    const second = { key: secondKey, bundleId: 'cdm', namespace: 'cdm.second' };
+    const doc = (artifact: typeof first, name: string) => ({
+      uri: `cdm/${name}.rosetta`,
+      content: '',
+      sourceLoaded: false,
+      serializedModel: '{}',
+      exports: [],
+      bundleId: 'cdm',
+      artifactKey: artifact.key,
+      namespace: artifact.namespace
+    });
+    const payload = (documents: unknown[], requiredCuratedArtifacts: unknown[]) =>
+      new Response(
+        JSON.stringify({
+          ok: true,
+          models: [],
+          errors: {},
+          deferredExports: [],
+          dependencyGraph: {},
+          hydrationState: { documents },
+          requiredCuratedArtifacts
+        })
+      );
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValueOnce(payload([doc(first, 'first')], [first]))
+      .mockResolvedValueOnce(payload([doc(second, 'second')], [second]))
+      .mockResolvedValueOnce(payload([], [first, second]));
+    global.fetch = fetchMock;
+    const curatedBundles = [{ id: 'cdm', version: 'cohort-1' }];
+
+    await parseWorkspaceViaRouter([], { curatedBundles, hydrateNamespaces: ['cdm.first'] });
+    await parseWorkspaceViaRouter([], { curatedBundles, hydrateNamespaces: ['cdm.second'] });
+    const combined = await parseWorkspaceViaRouter([], {
+      curatedBundles,
+      hydrateNamespaces: ['cdm.first', 'cdm.second']
+    });
+
+    const thirdBody = JSON.parse((fetchMock.mock.calls[2]![1] as RequestInit).body as string) as {
+      knownCuratedArtifacts: string[];
+    };
+    expect(thirdBody.knownCuratedArtifacts).toEqual([firstKey, secondKey]);
+    expect(combined.curatedRefOnlyFiles?.cdm?.map((file) => file.path)).toEqual(['first.rosetta', 'second.rosetta']);
+  });
+
+  it('remembers an intentionally empty artifact without retrying its JSON', async () => {
+    const key = JSON.stringify(['cdm', 'artifacts/cohort-1/ns/cdm.empty.json.gz']);
+    const response = new Response(
+      JSON.stringify({
+        ok: true,
+        models: [],
+        errors: {},
+        deferredExports: [],
+        dependencyGraph: {},
+        hydrationState: { documents: [] },
+        requiredCuratedArtifacts: [{ key, bundleId: 'cdm', namespace: 'cdm.empty', documentCount: 0 }]
+      })
+    );
+    const fetchMock = vi.fn().mockResolvedValueOnce(response).mockResolvedValueOnce(response.clone());
+    global.fetch = fetchMock;
+    const options = { curatedBundles: [{ id: 'cdm', version: 'cohort-1' }], hydrateNamespaces: ['cdm.empty'] };
+
+    await parseWorkspaceViaRouter([], options);
+    await parseWorkspaceViaRouter([], options);
+
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+    const secondBody = JSON.parse((fetchMock.mock.calls[1]![1] as RequestInit).body as string) as {
+      knownCuratedArtifacts: string[];
+    };
+    expect(secondBody.knownCuratedArtifacts).toEqual([key]);
+  });
+
+  it('retries without browser receipts if the server requires an uncached artifact', async () => {
+    const key = JSON.stringify(['cdm', 'cohort-2/cdm.base.math.json.gz']);
+    const artifact = { key, bundleId: 'cdm', namespace: 'cdm.base.math', documentCount: 1 };
+    const document = {
+      uri: 'cdm/base/math.rosetta',
+      content: 'namespace cdm.base.math\n',
+      serializedModel: '{}',
+      exports: [],
+      bundleId: 'cdm',
+      artifactKey: key,
+      namespace: 'cdm.base.math'
+    };
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValueOnce(
+        new Response(
+          JSON.stringify({
+            ok: true,
+            models: [],
+            errors: {},
+            deferredExports: [],
+            dependencyGraph: {},
+            hydrationState: { documents: [] },
+            requiredCuratedArtifacts: [artifact]
+          })
+        )
+      )
+      .mockResolvedValueOnce(
+        new Response(
+          JSON.stringify({
+            ok: true,
+            models: [],
+            errors: {},
+            deferredExports: [],
+            dependencyGraph: {},
+            hydrationState: { documents: [document] },
+            requiredCuratedArtifacts: [artifact]
+          })
+        )
+      );
+    global.fetch = fetchMock;
+
+    const result = await parseWorkspaceViaRouter([], {
+      curatedBundles: [{ id: 'cdm', version: 'cohort-2' }],
+      hydrateNamespaces: ['cdm.base.math']
+    });
+
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+    const retryBody = JSON.parse((fetchMock.mock.calls[1]![1] as RequestInit).body as string) as {
+      knownCuratedArtifacts: string[];
+    };
+    expect(retryBody.knownCuratedArtifacts).toEqual([]);
+    expect(result.curatedRefOnlyFiles?.cdm?.[0]?.content).toBe(document.content);
+  });
+
+  it('loads selected source separately and reuses it with cached model JSON', async () => {
+    const key = JSON.stringify(['cdm', 'artifacts/cohort-1/ns/cdm.base.math.json.gz']);
+    const artifact = { key, bundleId: 'cdm', namespace: 'cdm.base.math' };
+    const document = {
+      uri: 'cdm/base/math.rosetta',
+      content: '',
+      sourceLoaded: false,
+      serializedModel: '{}',
+      exports: [],
+      bundleId: 'cdm',
+      artifactKey: key,
+      namespace: 'cdm.base.math'
+    };
+    const source = 'namespace cdm.base.math\n';
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValueOnce(
+        new Response(
+          JSON.stringify({
+            ok: true,
+            models: [],
+            errors: {},
+            deferredExports: [],
+            dependencyGraph: {},
+            hydrationState: { documents: [document] },
+            requiredCuratedArtifacts: [artifact]
+          })
+        )
+      )
+      .mockResolvedValueOnce(
+        new Response(
+          JSON.stringify({
+            artifactKey: key,
+            documents: [{ uri: document.uri, content: source }]
+          })
+        )
+      )
+      .mockResolvedValueOnce(
+        new Response(
+          JSON.stringify({
+            ok: true,
+            models: [],
+            errors: {},
+            deferredExports: [],
+            dependencyGraph: {},
+            hydrationState: { documents: [] },
+            requiredCuratedArtifacts: [artifact]
+          })
+        )
+      );
+    global.fetch = fetchMock;
+    const options = { curatedBundles: [{ id: 'cdm', version: 'latest' }], hydrateNamespaces: ['cdm.base.math'] };
+
+    const first = await parseWorkspaceViaRouter([], options);
+    expect(first.curatedRefOnlyFiles?.cdm?.[0]).toMatchObject({ content: '', sourceLoaded: false });
+    expect(await loadCuratedNamespaceSource('cdm', 'latest', 'cdm.base.math', key)).toEqual({
+      artifactKey: key,
+      documents: [{ uri: document.uri, content: source }]
+    });
+    expect(await loadCuratedNamespaceSource('cdm', 'latest', 'cdm.base.math', key)).toEqual({
+      artifactKey: key,
+      documents: [{ uri: document.uri, content: source }]
+    });
+    const second = await parseWorkspaceViaRouter([], options);
+    expect(second.curatedRefOnlyFiles?.cdm?.[0]).toMatchObject({ content: source, sourceLoaded: true });
+    expect(fetchMock.mock.calls[1]![0] as string).toBe('/api/curated-source');
+    expect(fetchMock).toHaveBeenCalledTimes(3);
   });
 
   it('retries a timed-out curated hydration request once', async () => {

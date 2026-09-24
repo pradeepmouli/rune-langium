@@ -55,6 +55,9 @@ type ParseRequestBody = {
    *  (on-demand curated browsing). Unioned into the closure seeds; names not
    *  present in a loaded bundle's manifest are ignored. */
   hydrateNamespaces?: string[];
+  /** Exact immutable artifact keys held by this browser. Names are not enough
+   * because the same namespace can be republished in a newer cohort. */
+  knownCuratedArtifacts?: string[];
 };
 
 /**
@@ -157,6 +160,9 @@ const instrumentedOnRequestPost = withInstrumentation(
          * `${bundleId}/foo.rosetta`).
          */
         bundleId?: string;
+        artifactKey?: string;
+        namespace?: string;
+        sourceLoaded?: boolean;
       }> = [];
 
       // The deferredExports summary mirrors what handleParseWorkspace produces:
@@ -207,9 +213,16 @@ const instrumentedOnRequestPost = withInstrumentation(
       // Direct curated→curated edges per closure namespace, read from the
       // precomputed manifest graph (NO deserialize/link). Feeds buildDependencyGraph.
       const curatedDirectDeps = new Map<string, Set<string>>();
+      let requiredCuratedArtifacts: Array<{ key: string; bundleId: string; namespace: string }> = [];
       if (Array.isArray(body.curatedBundles) && body.curatedBundles.length > 0) {
         try {
-          const loaded = await loadCuratedWorkspace(body.curatedBundles, seeds, curatedFetcher);
+          const knownArtifacts = new Set(
+            Array.isArray(body.knownCuratedArtifacts)
+              ? body.knownCuratedArtifacts.filter((key): key is string => typeof key === 'string' && key.length < 1024)
+              : []
+          );
+          const loaded = await loadCuratedWorkspace(body.curatedBundles, seeds, curatedFetcher, false, knownArtifacts);
+          requiredCuratedArtifacts = loaded.artifacts;
           for (const ns of loaded.closure) {
             manifestClosureNamespaces.add(ns);
             const targets = new Set<string>();
@@ -220,7 +233,10 @@ const instrumentedOnRequestPost = withInstrumentation(
           }
           for (const bundle of loaded.bundles) {
             for (const doc of bundle.documents) {
-              documentsForHydration.push({ ...doc, bundleId: bundle.id });
+              // The parser worker consumes serializedModel and exports only.
+              // Original source is fetched separately for the namespace being
+              // viewed, so the closure does not carry all its source text.
+              documentsForHydration.push({ ...doc, content: '', sourceLoaded: false, bundleId: bundle.id });
               mergeCuratedDocIntoDeferredExports(doc, deferredExportsList);
             }
             for (const [ns, entry] of Object.entries(bundle.manifest.namespaces!)) {
@@ -242,7 +258,7 @@ const instrumentedOnRequestPost = withInstrumentation(
       // Build the cross-namespace dep graph from precomputed manifest edges +
       // user import declarations. No curated deserialize/link — see design
       // 2026-06-26-curated-dep-graph-no-link.
-      if (documentsForHydration.length > 0) {
+      if (documentsForHydration.length > 0 || manifestClosureNamespaces.size > 0) {
         const userModels: Array<{ namespace: string; imports: string[] }> = [];
         for (const entry of documentsForHydration) {
           if (entry.bundleId !== undefined) continue; // curated entries carry bundleId; user docs don't
@@ -283,6 +299,7 @@ const instrumentedOnRequestPost = withInstrumentation(
           })),
           errors,
           hydrationState: { documents: documentsForHydration },
+          requiredCuratedArtifacts,
           dependencyGraph
         }),
         {

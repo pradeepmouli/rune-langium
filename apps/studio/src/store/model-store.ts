@@ -331,6 +331,8 @@ export const useModelStore = create<ModelStore>((set, get) => ({
           next !== undefined &&
           f.path === next.path &&
           f.content === next.content &&
+          f.sourceLoaded === next.sourceLoaded &&
+          f.artifactKey === next.artifactKey &&
           f.serializedModelJson === next.serializedModelJson
         );
       })

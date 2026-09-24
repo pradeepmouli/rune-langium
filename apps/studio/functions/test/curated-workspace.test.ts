@@ -118,3 +118,20 @@ it('rejects incompatible pinned roots before fetching namespace documents', asyn
   ).rejects.toThrow(curated.CuratedBundleUnavailableError);
   expect(namespaces).not.toHaveBeenCalled();
 });
+
+it('skips only artifacts the browser holds for the exact cohort', async () => {
+  vi.spyOn(curated, 'fetchCuratedManifest').mockImplementation(async (id) => manifest(id as 'cdm' | 'fpml', newCohort));
+  const namespaces = vi.spyOn(curated, 'fetchCuratedNamespace').mockResolvedValue([]);
+  const oldKey = JSON.stringify(['cdm', `${oldCohort}/cdm.json.gz`]);
+  const currentKey = JSON.stringify(['cdm', `${newCohort}/cdm.json.gz`]);
+  const roots = [{ id: 'cdm', version: newCohort }];
+
+  const cold = await loadCuratedWorkspace(roots, new Set(['cdm']), undefined, false, new Set([oldKey]));
+  expect(namespaces.mock.calls.map(([id]) => id)).toEqual(['cdm', 'fpml']);
+  expect(cold.artifacts.map(({ key }) => key)).toContain(currentKey);
+
+  namespaces.mockClear();
+  const warm = await loadCuratedWorkspace(roots, new Set(['cdm']), undefined, false, new Set([currentKey]));
+  expect(namespaces.mock.calls.map(([id]) => id)).toEqual(['fpml']);
+  expect(warm.artifacts).toHaveLength(2);
+});

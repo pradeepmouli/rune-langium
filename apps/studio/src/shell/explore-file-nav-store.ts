@@ -58,7 +58,7 @@ export const useExploreFileNavStore = create<ExploreFileNavStore>((set) => ({
   }
 }));
 
-/** Resolve parser identities against editor files, waiting for curated source hydration. */
+/** Resolve parser identities against editor files, including deferred curated source. */
 export const resolveEditorFilePath = withInstrumentation(
   function resolveEditorFilePath(parserPath: string | undefined, files: readonly WorkspaceFile[]): string | undefined {
     if (!parserPath) return undefined;
@@ -69,7 +69,7 @@ export const resolveEditorFilePath = withInstrumentation(
         const prefix = `[${entry.bundleId}]/`;
         return entry.path.startsWith(prefix) && `${entry.bundleId}/${entry.path.slice(prefix.length)}` === parserPath;
       });
-    return file && (!file.refOnly || file.content.length > 0) ? file.path : undefined;
+    return file?.path;
   },
   { op: 'resolveEditorFilePath' }
 );

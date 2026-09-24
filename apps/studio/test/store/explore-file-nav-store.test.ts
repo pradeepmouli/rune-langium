@@ -72,7 +72,9 @@ describe('parser to source-editor file navigation', () => {
   });
 
   it('waits for source to arrive for the same selected parser identity', () => {
-    expect(resolveEditorFilePath('cdm/models/types.rosetta', [{ ...curated, content: '' }])).toBeUndefined();
+    expect(resolveEditorFilePath('cdm/models/types.rosetta', [{ ...curated, content: '', sourceLoaded: false }])).toBe(
+      curated.path
+    );
     expect(resolveEditorFilePath('cdm/models/types.rosetta', [curated])).toBe(curated.path);
   });
 

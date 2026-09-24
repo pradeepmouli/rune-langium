@@ -88,6 +88,11 @@ export interface HydrateRequest {
      * false-positives when a user file lives under `${bundleId}/...`.
      */
     bundleId?: string;
+    /** Immutable manifest artifact identity for browser-side delta hydration. */
+    artifactKey?: string;
+    namespace?: string;
+    /** Source text was loaded for read-only display; unrelated closure docs omit it. */
+    sourceLoaded?: boolean;
   }>;
 }
 

@@ -429,11 +429,14 @@ export const ExplorePerspective = withInstrumentation(
     // Workspace actions — formerly props, now from the actions context.
     // onClose/onSwitchWorkspace/onCreateWorkspace moved to AppHeader's
     // WorkspaceSwitcherTrigger (shared-perspective-chrome plan, Task 3).
-    const { onFilesChange } = useWorkspaceActions();
+    const { onFilesChange, loadCuratedSource } = useWorkspaceActions();
 
     const graphRef = useRef<RuneTypeGraphRef>(null);
     const graphContainerRef = useRef<HTMLDivElement>(null);
     const sourceEditorRef = useRef<SourceEditorRef>(null);
+    const pendingSourceRequestsRef = useRef(new Set<string>());
+    const pendingSourceNavigationRef = useRef<{ bundleId: string; namespace: string; path: string } | null>(null);
+    const [sourceLoadError, setSourceLoadError] = useState<{ path: string; message: string } | null>(null);
     // Export dialog open-state is shared with the header's Export code/Generate
     // buttons (moving into ExploreActions in Task 3) — lifted to a store rather
     // than local useState (export-dialog-store.ts; shared-perspective-chrome
@@ -995,7 +998,7 @@ export const ExplorePerspective = withInstrumentation(
       const map = new Map<string, string>();
       for (const [ns, filePath] of namespaceToFile) {
         const file = fileByPath.get(filePath);
-        if (file) map.set(ns, file.content);
+        if (file && (!file.refOnly || file.sourceLoaded || file.content.length > 0)) map.set(ns, file.content);
       }
       return map;
     }, [files, namespaceToFile]);
@@ -1060,6 +1063,51 @@ export const ExplorePerspective = withInstrumentation(
       selectedNodeData ? resolveNodeFile(selectedNodeData, selectedNodeMeta) : undefined,
       files
     );
+    useEffect(() => {
+      const sourcePath = activeEditorFile ?? selectedSourceFilePath;
+      const file = files.find((candidate) => candidate.path === sourcePath);
+      const namespace = file?.namespace ?? selectedNodeMeta?.namespace;
+      if (
+        !file?.refOnly ||
+        file.sourceLoaded ||
+        file.content.length > 0 ||
+        !file.bundleId ||
+        !file.bundleVersion ||
+        !namespace
+      ) {
+        return;
+      }
+      if (!file.artifactKey) {
+        pendingSourceNavigationRef.current = { bundleId: file.bundleId, namespace, path: file.path };
+        useEditorStore.getState().requestNamespaceHydration(namespace);
+      }
+      const key = `${file.bundleId}:${file.bundleVersion}:${namespace}:${file.artifactKey ?? ''}`;
+      if (pendingSourceRequestsRef.current.has(key)) return;
+      pendingSourceRequestsRef.current.add(key);
+      setSourceLoadError(null);
+      void loadCuratedSource(file.bundleId, file.bundleVersion, namespace, file.artifactKey)
+        .catch((error: unknown) => {
+          setSourceLoadError({
+            path: file.path,
+            message: error instanceof Error ? error.message : String(error)
+          });
+        })
+        .finally(() => pendingSourceRequestsRef.current.delete(key));
+    }, [files, activeEditorFile, selectedSourceFilePath, selectedNodeMeta?.namespace, loadCuratedSource]);
+    useEffect(() => {
+      const pending = pendingSourceNavigationRef.current;
+      if (!pending) return;
+      if (activeEditorFile !== pending.path && files.some((file) => file.path === pending.path)) {
+        pendingSourceNavigationRef.current = null;
+        return;
+      }
+      const hydratedFile = files.find(
+        (file) => file.bundleId === pending.bundleId && file.namespace === pending.namespace && file.artifactKey
+      );
+      if (!hydratedFile) return;
+      pendingSourceNavigationRef.current = null;
+      setActiveEditorFile(hydratedFile.path);
+    }, [files, activeEditorFile, setActiveEditorFile]);
     useEffect(() => {
       if (!selectedNodeId || !selectedNodeData || !selectedSourceFilePath) return;
       const filePath = selectedSourceFilePath;
@@ -1854,6 +1902,7 @@ export const ExplorePerspective = withInstrumentation(
 
     const renderSourcePane = useCallback(() => {
       const activeFile = sourceEditorFiles[0];
+      const sourcePending = Boolean(activeFile?.refOnly && !activeFile.sourceLoaded && activeFile.content.length === 0);
       const fileExt = activeFile?.name.includes('.') ? `.${activeFile.name.split('.').pop()}` : null;
       const lineEnding = activeFile?.content.includes('\r\n') ? 'CRLF' : 'LF';
       const lineCount = activeFile?.content.split('\n').length ?? 0;
@@ -1863,28 +1912,37 @@ export const ExplorePerspective = withInstrumentation(
             {fileExt && <span className="studio-source-meta__pill">{fileExt}</span>}
             <span className="studio-source-meta__path">{activeFile?.path ?? '—'}</span>
             <span className="studio-source-meta__spacer" />
-            {activeFile && (
+            {activeFile && !sourcePending && (
               <span className="studio-source-meta__stat">
                 UTF-8 · {lineEnding} · {lineCount} lines
               </span>
             )}
           </div>
-          <SourceEditor
-            ref={sourceEditorRef}
-            files={sourceEditorFiles}
-            activeFile={activeEditorFile}
-            lspClient={lspClient}
-            lspReady={lspReady}
-            onFileSelect={(path) => setActiveEditorFile(path)}
-            onContentChange={handleSourceChange}
-            onNavigateToNode={navigateToNode}
-            onEditorViewCreated={handleEditorViewCreated}
-            hideTabs
-          />
+          {sourcePending ? (
+            <div className="flex h-full items-center justify-center text-sm text-muted-foreground" role="status">
+              {sourceLoadError && sourceLoadError.path === activeFile?.path
+                ? `Source unavailable: ${sourceLoadError.message}`
+                : 'Loading source…'}
+            </div>
+          ) : (
+            <SourceEditor
+              ref={sourceEditorRef}
+              files={sourceEditorFiles}
+              activeFile={activeEditorFile}
+              lspClient={lspClient}
+              lspReady={lspReady}
+              onFileSelect={(path) => setActiveEditorFile(path)}
+              onContentChange={handleSourceChange}
+              onNavigateToNode={navigateToNode}
+              onEditorViewCreated={handleEditorViewCreated}
+              hideTabs
+            />
+          )}
         </div>
       );
     }, [
       sourceEditorFiles,
+      sourceLoadError,
       activeEditorFile,
       lspClient,
       lspReady,
