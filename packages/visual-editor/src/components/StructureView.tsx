@@ -546,6 +546,7 @@ function StructureFlowInner({
   // a ResizeObserver to bump `visibilityTick` when the container gains
   // real dimensions again so the measurement pass re-runs on reveal.
   const [visibilityTick, setVisibilityTick] = useState(0);
+  const [viewportTick, setViewportTick] = useState(0);
   useLayoutEffect(() => {
     const container = containerRef.current;
     if (!container || nodes.length === 0) return;
@@ -557,21 +558,39 @@ function StructureFlowInner({
     else setConvergedKey(layoutKey);
   }, [nodes, layoutKey, measuredWidths, visibilityTick]);
 
-  // Re-trigger measurement when the container transitions hidden → visible
-  // (display:none flips offsetWidth 0 → real). ResizeObserver fires on that
-  // transition; the tick only bumps on the 0 → >0 edge to avoid re-running
-  // measurement on ordinary panel resizes.
+  // Re-measure content only on reveal, but refit the camera after pane sizes
+  // settle. Opening a companion pane changes the viewport without changing
+  // any node geometry; retaining the old transform can leave the tree clipped.
   useEffect(() => {
     const container = containerRef.current;
     if (!container || typeof ResizeObserver === 'undefined') return;
-    let wasHidden = container.offsetWidth === 0 && container.offsetHeight === 0;
+    let width = container.offsetWidth;
+    let height = container.offsetHeight;
+    let resizeTimer: ReturnType<typeof setTimeout> | undefined;
+    let visibilityFrame: number | undefined;
     const ro = new ResizeObserver(() => {
-      const hidden = container.offsetWidth === 0 && container.offsetHeight === 0;
-      if (wasHidden && !hidden) setVisibilityTick((t) => t + 1);
-      wasHidden = hidden;
+      const nextWidth = container.offsetWidth;
+      const nextHeight = container.offsetHeight;
+      if (width === nextWidth && height === nextHeight) return;
+      const wasHidden = width === 0 || height === 0;
+      width = nextWidth;
+      height = nextHeight;
+      clearTimeout(resizeTimer);
+      if (width === 0 || height === 0) return;
+      if (wasHidden && visibilityFrame === undefined) {
+        visibilityFrame = window.requestAnimationFrame(() => {
+          visibilityFrame = undefined;
+          if (container.offsetWidth > 0 && container.offsetHeight > 0) setVisibilityTick((t) => t + 1);
+        });
+      }
+      resizeTimer = setTimeout(() => setViewportTick((t) => t + 1), 120);
     });
     ro.observe(container);
-    return () => ro.disconnect();
+    return () => {
+      clearTimeout(resizeTimer);
+      if (visibilityFrame !== undefined) window.cancelAnimationFrame(visibilityFrame);
+      ro.disconnect();
+    };
   }, []);
 
   // Auto-fit on focus or expansion change. User feedback: when nodes are
@@ -607,7 +626,7 @@ function StructureFlowInner({
     // positions without changing focus/expansion/count, so the refit must
     // follow the applied-measurement identity — but NOT raw `nodes`
     // reference churn (document edits would cause spurious camera moves).
-  }, [focusedTypeId, expansionSignature, nodes.length, measuredWidths, rf]);
+  }, [focusedTypeId, expansionSignature, nodes.length, measuredWidths, viewportTick, rf]);
 
   const navigationCtx = useMemo(
     () => ({
@@ -623,7 +642,7 @@ function StructureFlowInner({
       <div
         ref={containerRef}
         data-testid="structure-view-flow"
-        style={{ width: '100%', height: '100%', minHeight: 320, ...STRUCTURE_LAYOUT_CSS_VARS }}
+        style={{ width: '100%', height: '100%', minHeight: 0, ...STRUCTURE_LAYOUT_CSS_VARS }}
       >
         <ReactFlow
           nodes={nodes}
@@ -718,7 +737,7 @@ export function StructureView({
         data-testid="structure-empty-state"
         className="flex h-full items-center justify-center px-6 py-8 text-center text-sm text-muted-foreground"
       >
-        Select a type from the Namespace Explorer to view its structure.
+        Select a type from the Type explorer to view its structure.
       </div>
     );
   }

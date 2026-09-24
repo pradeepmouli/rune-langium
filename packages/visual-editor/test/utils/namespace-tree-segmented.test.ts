@@ -13,6 +13,7 @@ import { describe, it, expect } from 'vitest';
 import {
   buildSegmentedNamespaceTree,
   buildSegmentedNamespaceTreeFromOptions,
+  compactSegmentedNamespaceTree,
   flattenSegmentedTree,
   filterSegmentedTree,
   filterSegmentedTreeByKind,
@@ -379,6 +380,57 @@ describe('flattenSegmentedTree (no compression)', () => {
 // ---------------------------------------------------------------------------
 // flattenSegmentedTree — compressSingleChild
 // ---------------------------------------------------------------------------
+
+describe('compactSegmentedNamespaceTree', () => {
+  it('groups sibling math and model namespaces under their shared com.rosetta prefix', () => {
+    const compact = compactSegmentedNamespaceTree(
+      buildSegmentedNamespaceTree(repoOf([makeNode('com.rosetta.math', 'Sum'), makeNode('com.rosetta.model', 'Trade')]))
+    );
+    expect(compact).toHaveLength(1);
+    expect(compact[0]).toMatchObject({ segment: 'com.rosetta', fullPath: 'com.rosetta' });
+    expect(compact[0]!.children.map(({ segment, fullPath }) => ({ segment, fullPath }))).toEqual([
+      { segment: 'math', fullPath: 'com.rosetta.math' },
+      { segment: 'model', fullPath: 'com.rosetta.model' }
+    ]);
+  });
+
+  it('retains declarations and meaningful branches without mutating the original tree', () => {
+    const nodes = [
+      makeNode('com.rosetta', 'Root'),
+      makeNode('com.rosetta.model.deep', 'Trade'),
+      makeNode('com.rosetta.party.deep', 'Party')
+    ];
+    const roots = buildSegmentedNamespaceTree(repoOf(nodes));
+    const compact = compactSegmentedNamespaceTree(roots);
+    expect(compact[0]).toMatchObject({ fullPath: 'com.rosetta', segment: 'com.rosetta', totalCount: 3 });
+    expect(compact[0]!.types.map((type) => type.nodeId)).toEqual(['com.rosetta.Root']);
+    expect(compact[0]!.children.map((child) => child.fullPath)).toEqual([
+      'com.rosetta.model.deep',
+      'com.rosetta.party.deep'
+    ]);
+    expect(roots[0]!.fullPath).toBe('com');
+    expect(roots[0]!.children[0]!.children[0]!.fullPath).toBe('com.rosetta.model');
+    const expanded = new Set(collectSegmentSubtreePaths(compact, 'com.rosetta'));
+    expect(
+      flattenSegmentedTree(compact, expanded)
+        .filter((row) => row.kind === 'type')
+        .map((row) => row.nodeId)
+        .sort()
+    ).toEqual(nodes.map((node) => node.id).sort());
+  });
+
+  it('keeps the branch boundary after filtering one of its children out', () => {
+    const compact = compactSegmentedNamespaceTree(
+      buildSegmentedNamespaceTree(
+        repoOf([makeNode('com.rosetta.model', 'Trade'), makeNode('com.rosetta.party', 'Party')])
+      )
+    );
+    const filtered = filterSegmentedTree(compact, 'Trade');
+    expect(filtered[0]!.fullPath).toBe('com.rosetta');
+    expect(filtered[0]!.children.map((child) => child.fullPath)).toEqual(['com.rosetta.model']);
+    expect(ancestorPathsForMatches(filtered, 'Trade')).toEqual(new Set(['com.rosetta', 'com.rosetta.model']));
+  });
+});
 
 describe('flattenSegmentedTree (compressSingleChild: true)', () => {
   it('collapses "com > rosetta" into a single "com.rosetta" row when com has no direct types', () => {

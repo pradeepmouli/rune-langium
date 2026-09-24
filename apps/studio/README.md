@@ -10,6 +10,11 @@ Web-based visual editor for Rune DSL models with integrated LSP support.
 - **Dual Transport** — WebSocket to a local `rune-lsp-server` for development, or to the production `rune-lsp-worker` (Cloudflare Worker + Durable Object hosting langium server-side)
 - **Diagnostics Bridge** — LSP errors appear as inline editor underlines _and_ as badges on graph nodes
 - **Multi-file Support** — Tab bar for switching between `.rosetta` files with per-file LSP document lifecycle
+- **Search** — Click Search or press ⌘K / Ctrl+K to open declarations, workspace files, or a Studio destination. Use arrow keys and Enter to choose a result; Escape closes search.
+- **Type explorer** — Click a declaration name or its arrow to navigate. Drag its row into a type field to change an association. Export checkboxes control inclusion independently of navigation; the count shows available declarations.
+- **Compact namespaces** — Shared prefixes form branches: `com.rosetta.math` and `com.rosetta.model` appear beneath `com.rosetta`. Unbranched paths use a single dotted label; namespaces with their own declarations remain expandable boundaries. Labels retain the full path and truncate from the beginning when narrow, with the complete path available on hover.
+- **Companion panes** — Graph and Structure choose the main view; the wider gap in the pane selector separates Source and Inspector, which toggle alongside it. Structure fits again when its pane resizes.
+- **Export workspace** — Selection has room to browse before generation. Generated output starts compact and expands for the first artifact unless its layout was restored or manually rearranged.
 - **Workspaces** — IDE-style dockable panels with persistent layouts. Three workspace kinds:
   - *Browser-only* — files live in OPFS only; no roundtrips
   - *Folder-backed* — files mirrored to a local directory via the File System Access API

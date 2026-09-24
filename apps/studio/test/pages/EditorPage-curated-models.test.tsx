@@ -40,6 +40,9 @@ const { editorStoreState, useEditorStore } = vi.hoisted(() => {
     get nodesById() {
       return new Map(this.nodes.map((n) => [n.id, n]));
     },
+    getVisibleNodes() {
+      return this.nodes;
+    },
     edges: [] as Array<{ source: string; target: string }>,
     selectedNodeId: undefined as string | undefined,
     detailPanelOpen: false,

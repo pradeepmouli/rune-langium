@@ -13,8 +13,6 @@
 
 import { useState, useMemo, useCallback, useEffect, useRef, memo } from 'react';
 import type { JSX, DragEvent, MouseEvent, KeyboardEvent } from 'react';
-// KeyboardEvent stays imported — the nav button still needs handleNavKeyDown
-// to stop Enter/Space from bubbling. Only the row-level keydown was dropped.
 import { ArrowUpRight, ChevronRight, ChevronDown, PlusSquare, MinusSquare, Link, Search } from 'lucide-react';
 import { Input } from '@rune-langium/design-system/ui/input';
 import { Button } from '@rune-langium/design-system/ui/button';
@@ -34,6 +32,7 @@ import { NODE_TYPE_TO_AST_TYPE } from '../../adapters/model-helpers.js';
 import type { AnyDomain } from '@rune-langium/core';
 import {
   buildSegmentedNamespaceTree,
+  compactSegmentedNamespaceTree,
   flattenSegmentedTree,
   filterSegmentedTree,
   filterSegmentedTreeByKind,
@@ -69,7 +68,7 @@ export interface NamespaceExplorerPanelProps {
   onExpandAll: () => void;
   /** Collapse all namespaces. */
   onCollapseAll: () => void;
-  /** Called when the navigation button on a type row is clicked to select it in the graph. */
+  /** Called when the type name or navigation arrow is activated to select it in the graph. */
   onSelectNode?: (nodeId: string) => void;
   /** Currently selected node ID (for highlighting). */
   selectedNodeId?: string | null;
@@ -83,9 +82,8 @@ export interface NamespaceExplorerPanelProps {
    */
   dragSourceId?: string;
   /**
-   * Called when the user single-clicks the row body (or presses Enter/Space on it)
-   * to mark this type as the active drag source. The row body is single-purpose:
-   * drag-source mark only. Navigation is handled exclusively by the nav button.
+   * Legacy drag-source marking callback, retained for caller compatibility.
+   * Rows now use native dragging; the name and arrow handle navigation.
    */
   onSetDragSource?: (payload: TypeRefPayload) => void;
   /**
@@ -214,8 +212,10 @@ export const NamespaceExplorerPanel = memo(function NamespaceExplorerPanel({
     });
   }, []);
 
-  // Build the segmented namespace tree.
-  const segmentedRootsRaw = useMemo(() => buildSegmentedNamespaceTree(nodeRepository), [nodeRepository]);
+  // Compact the authoritative tree before filtering, so search never changes
+  // which declarations a namespace checkbox represents.
+  const uncompressedRoots = useMemo(() => buildSegmentedNamespaceTree(nodeRepository), [nodeRepository]);
+  const segmentedRootsRaw = useMemo(() => compactSegmentedNamespaceTree(uncompressedRoots), [uncompressedRoots]);
 
   // Apply the local kind filter FIRST so search + ancestor-expansion operate on
   // the kind-pruned tree. Only the pill-controlled kinds (data/choice/enum/func)
@@ -235,9 +235,8 @@ export const NamespaceExplorerPanel = memo(function NamespaceExplorerPanel({
   // Default expansion: expand all depth-0 and depth-1 segments so the tree is
   // usable on first render without collapsing all the way to bare root segments.
   const [treeExpanded, setTreeExpanded] = useState<Set<string>>(() => {
-    const roots = buildSegmentedNamespaceTree(nodeRepository);
     const initial = new Set<string>();
-    for (const root of roots) {
+    for (const root of uncompressedRoots) {
       initial.add(root.fullPath);
       for (const child of root.children) {
         initial.add(child.fullPath);
@@ -265,6 +264,9 @@ export const NamespaceExplorerPanel = memo(function NamespaceExplorerPanel({
     const rows = flattenSegmentedTree(filteredRoots, effectiveTreeExpanded);
     // Re-apply hidden flag to type rows (flattenSegmentedTree always sets hidden=false).
     return rows.map((row) => {
+      // The explorer omits per-namespace kind summaries. Clear the display
+      // metadata too so virtualization reserves only the header's height.
+      if (row.kind === 'segment') return { ...row, kindCounts: {} };
       if (row.kind === 'type' && hiddenNodeIds.has(row.nodeId)) {
         return { ...row, hidden: true };
       }
@@ -370,9 +372,6 @@ export const NamespaceExplorerPanel = memo(function NamespaceExplorerPanel({
 
   const allNodes = nodeRepository.all();
   const totalTypes = allNodes.length;
-  const visibleCount = allNodes.filter(
-    (n) => expandedNamespaces.has(n.meta.namespace) && !hiddenNodeIds.has(n.id)
-  ).length;
 
   // Per-kind counts for the filter-pill badges — derived directly from the
   // repository's byType index so they reflect the full node set regardless of
@@ -392,14 +391,14 @@ export const NamespaceExplorerPanel = memo(function NamespaceExplorerPanel({
     <TooltipProvider delayDuration={0}>
       <div className={`flex flex-col h-full bg-card ${className ?? ''}`} data-testid="namespace-explorer">
         {/* Header */}
-        <div className="flex items-center justify-between px-3 py-2 border-b">
-          <div className="min-w-0">
+        <div className="px-3 py-2 border-b">
+          <div className="flex flex-wrap items-center justify-between gap-x-2 gap-y-1">
             <span className="text-sm font-semibold">Type explorer</span>
-            <p className="text-2xs text-muted-foreground">Browse namespaces and types in the active source.</p>
+            <NumberChiclet data-testid="namespace-explorer-count">{totalTypes} available</NumberChiclet>
           </div>
-          <NumberChiclet data-testid="namespace-explorer-count">
-            {visibleCount}/{totalTypes}
-          </NumberChiclet>
+          <p className="mt-1 text-2xs text-muted-foreground">
+            Click name or arrow to open. Drag a row to a type field.
+          </p>
         </div>
 
         {/* Toolbar */}
@@ -409,6 +408,7 @@ export const NamespaceExplorerPanel = memo(function NamespaceExplorerPanel({
             <Input
               type="text"
               placeholder="Filter types or namespaces..."
+              aria-label="Filter types or namespaces"
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
               className="h-7 border-border/70 bg-background/55 pl-8 pr-2 text-2xs shadow-none placeholder:text-muted-foreground/70"
@@ -684,9 +684,9 @@ function SegmentHeaderRow({
     <NamespaceSegmentHeaderRow
       data-testid={`ns-seg-${row.fullPath}`}
       fullPath={row.fullPath}
+      truncateFrom="start"
       expanded={row.expanded}
       count={row.totalCount}
-      kindCounts={row.kindCounts}
       depth={row.depth}
       onToggle={onToggleTreeExpand}
       indentPx={TREE_INDENT_BASE}
@@ -735,8 +735,8 @@ function TypeItemRow({
   // isGraphVisible / isDragSource / onSetDragSource intentionally
   // unused: the dim "hidden in graph" treatment and click-to-mark-as-
   // drag-source feature were removed by user iteration so the only
-  // operations in the explorer are drag (HTML5 native) or click the
-  // navigate arrow. The props stay on TypeItemRowProps so parent
+  // operations in the explorer are drag (HTML5 native) or activate the
+  // type name / navigate arrow. The props stay on TypeItemRowProps so parent
   // wiring (EditorPage / tests) doesn't have to change.
   isGraphVisible: _isGraphVisible,
   isSelected,
@@ -770,17 +770,7 @@ function TypeItemRow({
     e.dataTransfer.effectAllowed = 'link';
   };
 
-  // P2 a11y review (PR #210): the row body no longer advertises button
-  // semantics. The previous `role="button"` + `tabIndex={0}` + Enter/Space
-  // handler combination announced the row as an interactive control to AT,
-  // but the mouse-click path had been intentionally removed (drag-source-
-  // mark gone; navigation is now the nav-arrow button's sole responsibility).
-  // Keeping the keyboard activation alive while removing mouse activation
-  // produced inconsistent affordances across input modalities. The row is
-  // now a plain `<div>` — the embedded nav-arrow `<button>` is the only
-  // interactive element, and it is independently keyboard-focusable
-  // (tabIndex=0, descriptive aria-label).
-
+  // Row dragging and inclusion are independent of name/arrow navigation.
   // Nav-click triggers selection AND flashes the row briefly so the user
   // gets confirmation that the navigate fired — without it the explorer
   // and other panes update silently and you can't tell if your click was
@@ -827,15 +817,6 @@ function TypeItemRow({
       }${justNavigated ? ' studio-type-row--just-navigated' : ''}`}
       style={{ paddingLeft: `${TREE_INDENT_BASE + TREE_TYPE_INDENT}px` }}
       data-testid={`ns-type-${row.nodeId}`}
-      // Row is a drag source only — click no longer marks anything; the
-      // only operation is dragging (visual cursor: grab signals it) or
-      // clicking the navigate arrow on the right edge. The dim "hidden
-      // in graph" treatment was removed per user feedback ("doesn't
-      // accomplish anything and is confusing") so every row looks the
-      // same regardless of graph visibility state.
-      //
-      // P2 a11y (PR #210): no role/tabIndex/keydown — the row is not a
-      // button semantically. The nav-arrow inside is the interactive element.
       draggable
       onDragStart={handleDragStart}
     >
@@ -868,16 +849,16 @@ function TypeItemRow({
 
       <KindBadge kind={row.typeKind} shape="glyph" />
 
-      {/* Plain span — no click handler, no hover underline. The only
-          link-like affordance in the row is the nav arrow on the right.
-          Title text describes the only two operations: drag or click
-          the arrow. */}
-      <span
-        className="flex-1 truncate text-left"
-        title={`${row.name} [${KIND_LABEL[row.typeKind]}] — drag to add as a type ref, or click the arrow to open`}
+      <button
+        type="button"
+        className="min-w-0 flex-1 truncate text-left underline decoration-transparent underline-offset-2 hover:decoration-current focus-visible:outline-2 focus-visible:outline-ring"
+        title={`Open ${row.name} [${KIND_LABEL[row.typeKind]}] — drag the row to a type field`}
+        data-testid={`ns-type-link-${row.nodeId}`}
+        onClick={handleNavClick}
+        onKeyDown={handleNavKeyDown}
       >
         {row.name}
-      </span>
+      </button>
 
       {refCount > 0 && (
         <Tooltip>
@@ -893,17 +874,7 @@ function TypeItemRow({
         </Tooltip>
       )}
 
-      {/* Navigation button — the ONLY click-actionable element in the
-          row. Diagonal up-right arrow (ArrowUpRight) is the canonical
-          "open / navigate to" affordance; ChevronRight read as "expand
-          / next" which was misleading. Always visible at low opacity so
-          users see the affordance without hover-discovery.
-
-          DS `Button variant="ghost"` (same primitive the Show-all/Hide-all
-          toolbar uses) for the focus ring + hover + disabled semantics.
-          Sized up to size-6 (24px) with a border: the default icon-xs (16px)
-          was too small a hit target to click reliably. The opacity-fade
-          affordance is layered on via className. */}
+      {/* The arrow uses the same navigation action as the name. */}
       <Button
         type="button"
         variant="ghost"

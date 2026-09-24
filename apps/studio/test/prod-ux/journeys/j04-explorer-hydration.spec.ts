@@ -2,7 +2,7 @@
 // Copyright (c) 2026 Pradeep Mouli
 
 import { checkout as test, expect, loadCdm } from '../fixtures.js';
-import { typeNavigationButton } from '../../helpers/type-navigation.js';
+import { typeNameButton, typeNavigationButton } from '../../helpers/type-navigation.js';
 import { expectPopulatedAttributes, expectSourceReadOnly } from '../readiness.js';
 
 import {
@@ -30,7 +30,7 @@ test.describe('J04 — explorer navigation & on-demand hydration', () => {
     await typeNavigationButton(page, ENUM_NODE_ID, 'RosettaEnumeration').click();
 
     await namespaceSearch.fill('BusinessCenters');
-    await typeNavigationButton(page, DATA_NODE_ID).click();
+    await typeNameButton(page, DATA_NODE_ID).click();
 
     await page.getByRole('button', { name: 'Structure' }).click();
     await expect(page.getByTestId('structure-view-flow')).toBeVisible();

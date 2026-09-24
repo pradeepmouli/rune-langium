@@ -55,6 +55,7 @@ import { UtilityTrayContext, type UtilityGroupApi } from './utility-tray-context
 import { UtilityHeaderActionsContext, UtilityHeaderActionsProvider } from './utility-header-actions-context.js';
 import { PerspectiveHeading } from './perspectives/PerspectiveHeading.js';
 import { CenterPanesContext, type CenterPane } from './center-panes-context.js';
+import { useExploreFileNavStore } from './explore-file-nav-store.js';
 import { useStudioToast } from '../components/StudioToastProvider.js';
 import { useOutputStore, fmtLine } from '../store/output-store.js';
 import { withInstrumentation } from '../services/instrumentation/core.js';
@@ -226,6 +227,12 @@ export const DockShell = withInstrumentation(
       layout.dockview && layout.dockview.shape === 'factory' ? (layout.dockview.preset ?? 'edit') : 'edit'
     );
     const [activePanes, setActivePanes] = useState<Set<CenterPane>>(() => new Set<CenterPane>(['structure']));
+    const requestedSourceFile = useExploreFileNavStore((state) => state.requestedSourceFile);
+    useEffect(() => {
+      if (requestedSourceFile === undefined) return;
+      setActivePanes((previous) => new Set([...previous, 'source']));
+      useExploreFileNavStore.getState().clearSourceRequest();
+    }, [requestedSourceFile]);
     const toggleCenterPane = useCallback((pane: CenterPane) => {
       setActivePanes((prev) => {
         const next = new Set(prev);

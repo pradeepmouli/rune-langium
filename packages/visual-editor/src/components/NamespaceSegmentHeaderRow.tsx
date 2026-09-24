@@ -49,6 +49,8 @@ export interface NamespaceSegmentHeaderRowProps {
   leading?: ReactNode;
   /** Aggregated full dotted path shown as the label (e.g. "cdm.base.datetime"). */
   fullPath: string;
+  /** Preserve the specific namespace suffix when a narrow explorer clips the label. */
+  truncateFrom?: 'start' | 'end';
   /** Whether this segment is expanded (controls the chevron + collapse state). */
   expanded: boolean;
   /** Total count shown in the trailing chiclet (types in this subtree). */
@@ -77,6 +79,7 @@ export interface NamespaceSegmentHeaderRowProps {
 export function NamespaceSegmentHeaderRow({
   leading,
   fullPath,
+  truncateFrom = 'end',
   expanded,
   count,
   kindCounts,
@@ -127,10 +130,13 @@ export function NamespaceSegmentHeaderRow({
             Enter/Space and assistive tech announces it as interactive. */}
         <button
           type="button"
-          className="flex-1 truncate text-xs font-normal cursor-pointer bg-transparent border-0 p-0 text-left text-inherit hover:text-inherit focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
+          className="min-w-0 flex-1 text-xs font-normal cursor-pointer bg-transparent border-0 p-0 text-left text-inherit hover:text-inherit focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
           onClick={onToggle}
+          title={fullPath || '(default)'}
         >
-          {fullPath || '(default)'}
+          <span className="block truncate" dir={truncateFrom === 'start' ? 'rtl' : 'ltr'}>
+            <bdi dir="ltr">{fullPath || '(default)'}</bdi>
+          </span>
         </button>
 
         <NumberChiclet>{count}</NumberChiclet>

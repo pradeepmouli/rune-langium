@@ -22,11 +22,15 @@ import type { WorkspaceFile } from '../services/workspace.js';
 import type { SyncStatus } from '@rune-langium/git-sync-engine';
 
 interface ExploreFileNavState {
+  requestedSourceFile: string | undefined;
   activeEditorFile: string | undefined;
   syncStatus: SyncStatus | null;
 }
 
 interface ExploreFileNavActions {
+  /** Open a searched file and reveal the companion Source pane. */
+  requestSourceFile(filePath: string): void;
+  clearSourceRequest(): void;
   setActiveEditorFile(file: string | undefined | ((prev: string | undefined) => string | undefined)): void;
   /** Opens `filePath` in the source editor. Kept as a named action (not just
    *  `setActiveEditorFile`) because it is the primitive every navigation call
@@ -41,6 +45,14 @@ type ExploreFileNavStore = ExploreFileNavState & ExploreFileNavActions;
 
 export const useExploreFileNavStore = create<ExploreFileNavStore>((set) => ({
   activeEditorFile: undefined,
+  requestedSourceFile: undefined,
+
+  requestSourceFile(filePath) {
+    set({ activeEditorFile: filePath, requestedSourceFile: filePath });
+  },
+  clearSourceRequest() {
+    set({ requestedSourceFile: undefined });
+  },
   syncStatus: null,
 
   setActiveEditorFile(file) {
