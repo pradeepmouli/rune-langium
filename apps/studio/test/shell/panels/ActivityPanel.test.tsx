@@ -56,4 +56,21 @@ describe('ActivityPanel namespace filter', () => {
     fireEvent.change(screen.getByTestId('activity-namespace-filter'), { target: { value: 'git' } });
     expect(screen.getByText('No activity matches this filter.')).toBeInTheDocument();
   });
+
+  it('shows local diagnostic metadata when hovering an activity entry', () => {
+    useActivityStore.getState().addActivity('lsp', false, 'Connection failed', {
+      op: 'mintSessionToken',
+      durationMs: 123.6,
+      signature: 'TypeError:abc123',
+      opId: 42
+    });
+    renderActivityPanel();
+
+    const tooltip = screen.getByText('Connection failed').parentElement?.getAttribute('title');
+    expect(tooltip).toContain('Message: Connection failed');
+    expect(tooltip).toContain('Operation: mintSessionToken');
+    expect(tooltip).toContain('Duration: 124 ms');
+    expect(tooltip).toContain('Signature: TypeError:abc123');
+    expect(tooltip).toContain('Correlation ID: 42');
+  });
 });

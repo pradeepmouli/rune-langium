@@ -352,7 +352,14 @@ export default {
             op: span.op,
             level: span.level,
             durationMs: span.durationMs,
-            signature: span.signature
+            signature: span.signature,
+            subject:
+              span.op === 'modelLoad' && span.subject && CuratedModelIdSchema.safeParse(span.subject).success
+                ? span.subject
+                : undefined,
+            opId: span.opId,
+            studioVersion: event.studio_version,
+            uaClass: event.ua_class
           });
         }
       }

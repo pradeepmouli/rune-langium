@@ -121,6 +121,12 @@ J04b records `curatedNamespaceHydration` from Counterparty selection through
 populated Inspector attributes, even when an assertion fails; compare that
 wall-clock duration with the Pages Function spans for the same run.
 
+Hover an Activity or Output entry in Studio to inspect its local message,
+operation, duration, signature, and correlation ID when present. Cloudflare
+telemetry span logs carry the operation, level, duration, signature, Studio
+version, browser class, and correlation ID; only validated curated model IDs
+may appear as subjects. Raw messages and workspace paths remain local to Studio.
+
 Inspector hydration checks share `test/prod-ux/readiness.ts` and require a
 populated **Attributes (N)** group. Accessibility sweeps use the same module
 to wait for finite entrance animations before scanning and taking checkpoints; perpetual spinners

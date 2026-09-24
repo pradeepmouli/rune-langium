@@ -43,6 +43,10 @@ export interface TelemetrySpanLogEntry {
   level: 'info' | 'warn' | 'error';
   durationMs?: number;
   signature?: string;
+  subject?: string;
+  opId?: number;
+  studioVersion: string;
+  uaClass: string;
 }
 
 export const logger: Logger = createWorkerLogger();
@@ -71,8 +75,12 @@ export function logSpan(entry: TelemetrySpanLogEntry): void {
       ip_hash: entry.ipHash,
       op: entry.op,
       level: entry.level,
+      studio_version: entry.studioVersion,
+      ua_class: entry.uaClass,
       ...(entry.durationMs !== undefined ? { duration_ms: entry.durationMs } : {}),
-      ...(entry.signature ? { signature: entry.signature } : {})
+      ...(entry.signature ? { signature: entry.signature } : {}),
+      ...(entry.subject ? { subject: entry.subject } : {}),
+      ...(entry.opId !== undefined ? { op_id: entry.opId } : {})
     },
     'telemetry.span'
   );
