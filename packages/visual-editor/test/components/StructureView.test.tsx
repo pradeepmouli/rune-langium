@@ -398,6 +398,44 @@ describe('StructureView — onlyRenderVisibleElements (Finding H)', () => {
     const flow = screen.getByTestId('mock-react-flow');
     expect(flow.getAttribute('data-only-render-visible')).toBe('false');
   });
+
+  it('measures a revealed pane on the next frame, outside the resize callback', () => {
+    let onResize: ResizeObserverCallback | undefined;
+    vi.stubGlobal(
+      'ResizeObserver',
+      class {
+        constructor(callback: ResizeObserverCallback) {
+          onResize = callback;
+        }
+        observe() {}
+        disconnect() {}
+      }
+    );
+    const view = render(<StructureView focusedTypeId="cdm.trade.Trade" adapterDoc={tradeDoc} />);
+    const container = screen.getByTestId('structure-view-flow');
+    let width = 0;
+    let height = 0;
+    Object.defineProperty(container, 'offsetWidth', { configurable: true, get: () => width });
+    Object.defineProperty(container, 'offsetHeight', { configurable: true, get: () => height });
+    const frames: FrameRequestCallback[] = [];
+    const requestFrame = vi.spyOn(window, 'requestAnimationFrame').mockImplementation((callback) => {
+      frames.push(callback);
+      return frames.length;
+    });
+    try {
+      width = 500;
+      height = 400;
+      act(() => onResize?.([], {} as ResizeObserver));
+      expect(frames).toHaveLength(1);
+      expect(screen.getByTestId('mock-react-flow').getAttribute('data-only-render-visible')).toBe('false');
+      act(() => frames.shift()?.(0));
+      expect(screen.getByTestId('mock-react-flow').getAttribute('data-only-render-visible')).toBe('true');
+    } finally {
+      view.unmount();
+      requestFrame.mockRestore();
+      vi.unstubAllGlobals();
+    }
+  });
 });
 
 describe('StructureView — fitting after pane resizing', () => {
