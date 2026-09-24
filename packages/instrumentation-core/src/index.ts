@@ -70,13 +70,13 @@ export function addInstrumentationSink(sink: Emit): () => void {
 }
 
 // Module scope in core.ts:
-// - Vite/rolldown builds (browser + both workers): production diagnostics
-//   are eliminated unless explicitly included in that build.
-// - Non-Vite runtimes (Pages Functions, Node): `import.meta.env` is
-//   undefined; the optional chain leaves the build gate disabled
-//   (their own gates — env binding / threshold — still apply).
+// - Vite/rolldown builds (browser + both workers) and pre-bundled Pages
+//   Functions: untagged calls use their original functions unless diagnostics
+//   were explicitly included in that build.
+// - Other non-Vite runtimes (Node): `import.meta.env` is undefined; the
+//   optional chain leaves the build gate disabled (runtime gates still apply).
 // - The cast keeps this type-checking under tsconfigs without vite/client.
-const BUILD_DISABLE_INSTRUMENTATION =
+export const BUILD_DISABLE_INSTRUMENTATION =
   (import.meta as { env?: { PROD?: boolean; VITE_ENABLE_INSTRUMENTATION?: string } }).env?.PROD === true &&
   (import.meta as { env?: { VITE_ENABLE_INSTRUMENTATION?: string } }).env?.VITE_ENABLE_INSTRUMENTATION !== 'true';
 

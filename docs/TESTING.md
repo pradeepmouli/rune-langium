@@ -114,6 +114,8 @@ build time, and browser records still require the Studio user opt-in. When
 diagnostics are omitted from a production Vite build, untagged calls retain
 their original function with no instrumentation wrapper. At runtime, a disabled
 or excluded call bypasses timing and capture.
+The default Pages build returns original untagged functions and route handlers;
+turning Pages diagnostics on or off therefore requires a rebuild and redeploy.
 Remove temporary diagnostic settings and rebuild/redeploy after the run.
 J04b records `curatedNamespaceHydration` from Counterparty selection through
 populated Inspector attributes, even when an assertion fails; compare that
