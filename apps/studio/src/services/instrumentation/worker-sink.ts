@@ -4,6 +4,7 @@
 
 import { configureInstrumentation, type TelemetryRecord } from './core.js';
 import { withInstrumentation, Capture } from './core.js';
+import { viteInstrumentationConfig } from './vite-config.js';
 
 // `post` here is registered as configureInstrumentation's emit callback
 // (an inline arrow, never itself instrumented), so — unlike
@@ -14,9 +15,13 @@ export const installInstrumentationWorkerSink = withInstrumentation(
   function installInstrumentationWorkerSink(
     post: (msg: { type: 'telemetry:record'; record: TelemetryRecord }) => void
   ): void {
-    configureInstrumentation((record: TelemetryRecord) => {
-      post({ type: 'telemetry:record', record });
-    });
+    configureInstrumentation(
+      (record: TelemetryRecord) => {
+        post({ type: 'telemetry:record', record });
+      },
+      undefined,
+      viteInstrumentationConfig
+    );
   },
   { op: 'installInstrumentationWorkerSink' }
 );

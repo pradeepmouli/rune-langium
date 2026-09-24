@@ -33,6 +33,7 @@ import { URI, type LangiumDocument, type LangiumSharedCoreServices, type Langium
 import { loadCuratedWorkspace, curatedWorkspaceErrorResponse } from '../../src/services/curated-workspace.js';
 import { buildDependencyGraph, expandWildcard } from '../lib/curated-closure.js';
 import { readSerializedModelMeta } from '../lib/serialized-model-meta.js';
+import { withEdgeInstrumentation } from '../lib/instrumentation-sink.js';
 import { withInstrumentation, Capture } from '../../src/services/instrumentation/core.js';
 
 /**
@@ -101,7 +102,7 @@ function toRosettaUri(name: string): URI {
 // `request`/`env`/the request body (raw user model files) and Response
 // outputs all carry raw user model content or may carry secret env
 // bindings — never captured.
-export const onRequestPost: PagesFunction<Env> = withInstrumentation(
+const instrumentedOnRequestPost = withInstrumentation(
   async ({ request, env }) => {
     let body: ParseRequestBody;
     try {
@@ -301,6 +302,8 @@ export const onRequestPost: PagesFunction<Env> = withInstrumentation(
   },
   { op: 'onRequestPost' }
 );
+
+export const onRequestPost: PagesFunction<Env> = withEdgeInstrumentation(instrumentedOnRequestPost);
 
 /**
  * Hydrate user-authored .rune files into a Langium workspace: parse via the

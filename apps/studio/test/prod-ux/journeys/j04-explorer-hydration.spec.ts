@@ -61,12 +61,13 @@ test.describe('J04 — explorer navigation & on-demand hydration', () => {
     const namespaceSearch = page.getByTestId('namespace-search');
     await namespaceSearch.fill('Counterparty');
 
-    await typeNavigationButton(page, COUNTERPARTY_NODE_ID).click();
-
-    await page.getByRole('button', { name: 'Inspector' }).click();
-    await expect(centerStack.getByRole('heading', { name: 'Counterparty' })).toBeVisible({ timeout: 10_000 });
-    await expect(centerStack.getByText('Reference Only', { exact: true })).toBeVisible();
-    await expectPopulatedAttributes(centerStack);
+    await evidence.measure('curatedNamespaceHydration', 'Counterparty', async () => {
+      await typeNavigationButton(page, COUNTERPARTY_NODE_ID).click();
+      await page.getByRole('button', { name: 'Inspector' }).click();
+      await expect(centerStack.getByRole('heading', { name: 'Counterparty' })).toBeVisible({ timeout: 10_000 });
+      await expect(centerStack.getByText('Reference Only', { exact: true })).toBeVisible();
+      await expectPopulatedAttributes(centerStack);
+    });
 
     await page.getByRole('button', { name: 'Source' }).click();
     await expect(page.getByLabel('Source file path')).toContainText('base-staticdata-party-type.rosetta');

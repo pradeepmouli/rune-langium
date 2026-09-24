@@ -6,6 +6,7 @@ import { useOutputStore, formatLine } from '../../store/output-store.js';
 import { useTelemetrySettingsStore } from '../../store/telemetry-settings.js';
 import { configureInstrumentation, type TelemetryRecord } from './core.js';
 import { withInstrumentation } from './core.js';
+import { viteInstrumentationConfig } from './vite-config.js';
 
 // This IS the currentEmit sink installed below (configureInstrumentation's
 // first arg): wrapping it in withInstrumentation would make every
@@ -39,7 +40,11 @@ export function routeTelemetryRecord(record: TelemetryRecord): void {
 
 export const installInstrumentationBrowserSink = withInstrumentation(
   function installInstrumentationBrowserSink(): void {
-    configureInstrumentation(routeTelemetryRecord, () => useTelemetrySettingsStore.getState().enabled);
+    configureInstrumentation(
+      routeTelemetryRecord,
+      () => useTelemetrySettingsStore.getState().enabled,
+      viteInstrumentationConfig
+    );
   },
   { op: 'installInstrumentationBrowserSink' }
 );

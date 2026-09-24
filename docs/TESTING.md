@@ -93,6 +93,28 @@ to `test:prod-ux`. Archive the current report first: each run resets its
 manifest, including a filtered run. Review screenshots and failure snapshots
 alongside assertions before attributing a timeout to product behavior.
 
+Pages Function diagnostic spans use the shared instrumentation wrapper and are
+off by default. Each independently bundled Pages route configures its own edge
+sink before running its instrumented handler. `INSTRUMENTATION_ENABLED=true` enables it;
+`INSTRUMENTATION_LEVEL=trace` includes nested fetch spans (the default threshold
+is `info`). For a focused curated-load investigation, set
+`INSTRUMENTATION_OPS=onRequestPost,loadCuratedWorkspace,fetchCuratedManifest,fetchCuratedNamespace`
+and `INSTRUMENTATION_TIMING_ONLY=true` in the Pages runtime environment. The
+timing-only format keeps operation names, elapsed milliseconds, error signatures,
+and timestamps without captured request or model payloads. These are Pages
+runtime settings, separate from Studio's `VITE_ENABLE_TELEMETRY` build flag and
+per-user telemetry opt-in. The same level, operation-list, and timing-only
+settings are shared by the Studio browser and workers with a `VITE_` prefix;
+production browser builds must also set `VITE_ENABLE_INSTRUMENTATION=true` at
+build time, and browser records still require the Studio user opt-in. When
+diagnostics are omitted from a production Vite build, untagged calls retain
+their original function with no instrumentation wrapper. At runtime, a disabled
+or excluded call bypasses timing and capture.
+Remove temporary diagnostic settings after the run.
+J04b records `curatedNamespaceHydration` from Counterparty selection through
+populated Inspector attributes, even when an assertion fails; compare that
+wall-clock duration with the Pages Function spans for the same run.
+
 Inspector hydration checks share `test/prod-ux/readiness.ts` and require a
 populated **Attributes (N)** group. Accessibility sweeps use the same module
 to wait for finite entrance animations before scanning and taking checkpoints; perpetual spinners
