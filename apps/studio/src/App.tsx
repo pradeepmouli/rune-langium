@@ -116,6 +116,23 @@ function curatedBindingsEqual(a: CuratedModelBinding[], b: CuratedModelBinding[]
   return true;
 }
 
+function sameLoadedModelSources(a: ReadonlyMap<string, LoadedModel>, b: ReadonlyMap<string, LoadedModel>): boolean {
+  if (a.size !== b.size) return false;
+  for (const [id, model] of b) {
+    const previous = a.get(id);
+    if (!previous) return false;
+    if (
+      previous.source !== model.source ||
+      previous.commitHash !== model.commitHash ||
+      previous.loadedAt !== model.loadedAt
+    ) {
+      return false;
+    }
+    if (!model.source.archiveUrl && previous.files !== model.files) return false;
+  }
+  return true;
+}
+
 function deriveWorkspaceName(files: readonly WorkspaceFile[]): string {
   const firstFile = files[0];
   if (!firstFile) {
@@ -165,6 +182,7 @@ function AppContent() {
   // Incremented before each model-merge parse; only the matching result is
   // applied, preventing stale async results from overwriting newer state.
   const modelParseTokenRef = useRef(0);
+  const lastModelMergeRef = useRef<ReadonlyMap<string, LoadedModel> | null>(null);
   // Tracks the latest files state so the model-loading effect can read it
   // synchronously without stale-closure issues. Starts as [] (matching the
   // `files` initial state) and is kept in sync via the effect below.
@@ -224,9 +242,16 @@ function AppContent() {
         // which docs belong to each curated bundle (the curated-loader stays
         // metadata-only by design — see model-store.buildArchiveLoader).
         if (result.curatedRefOnlyFiles) {
-          const setCuratedFiles = useModelStore.getState().setCuratedFiles;
+          const store = useModelStore.getState();
+          const previousModels = store.models;
           for (const [bundleId, files] of Object.entries(result.curatedRefOnlyFiles)) {
-            setCuratedFiles(bundleId, files);
+            store.setCuratedFiles(bundleId, files);
+          }
+          const currentModels = useModelStore.getState().models;
+          if (currentModels !== previousModels) {
+            setFiles((currentFiles) =>
+              mergeCuratedRefOnlyFiles(currentFiles, result.curatedRefOnlyFiles!, currentModels)
+            );
           }
         }
       }
@@ -264,17 +289,11 @@ function AppContent() {
       .then((result) => {
         if (cancelled) return;
         applyParseResult(result, { preserveSemanticModelOnErrors: true });
-        // Merge the freshly-hydrated curated content into `files` itself —
-        // not just `models`/`deferredExports` (which `applyParseResult`
-        // already updates) — see `mergeCuratedRefOnlyFiles`'s doc comment
-        // for the full root-cause rationale.
-        if (result.curatedRefOnlyFiles) {
-          const mergedFiles = mergeCuratedRefOnlyFiles(
-            filesRef.current,
-            result.curatedRefOnlyFiles,
-            useModelStore.getState().models
-          );
-          if (mergedFiles !== filesRef.current) setFiles(mergedFiles);
+        if (result.errors.size > 0) {
+          // The last valid semantic model is still in use. Keep this namespace
+          // retryable rather than claiming its new declarations were applied.
+          useEditorStore.getState().dequeuePendingHydration(pendingHydration);
+          return;
         }
         // Mark exactly the set sent in THIS parse (not whatever is pending when
         // the promise resolves) so a request arriving mid-flight isn't lost.
@@ -1072,6 +1091,14 @@ function AppContent() {
   // Merge reference model files into workspace when models change and re-parse
   // so the graph and explorer reflect the loaded reference types.
   useEffect(() => {
+    const previousModels = lastModelMergeRef.current;
+    lastModelMergeRef.current = loadedModels;
+    if (previousModels && sameLoadedModelSources(previousModels, loadedModels)) {
+      // setCuratedFiles publishes a result already applied by this App. A
+      // pending model-merge parse predates that result and must not overwrite it.
+      modelParseTokenRef.current += 1;
+      return;
+    }
     const prev = filesRef.current;
     const hadModelFiles = prev.some((f) => f.path.startsWith('['));
     // Skip the no-op case: no models loaded and none to clean up.
@@ -1093,6 +1120,7 @@ function AppContent() {
         applyParseResult(result, { preserveSemanticModelOnErrors: true });
       })
       .catch((err) => {
+        if (token !== modelParseTokenRef.current) return;
         reportWorkspaceError(
           'Failed to re-parse the workspace after loading reference models; keeping the last valid graph',
           err

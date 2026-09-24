@@ -32,6 +32,47 @@ function manifest(id: 'cdm' | 'fpml', cohort: string): CuratedManifest {
   };
 }
 
+function deferred<T>() {
+  let resolve!: (value: T) => void;
+  const promise = new Promise<T>((done) => {
+    resolve = done;
+  });
+  return { promise, resolve };
+}
+
+it('starts independent pinned manifests and namespace artifacts in the same wave', async () => {
+  const cohort = oldCohort;
+  const cdm = manifest('cdm', cohort);
+  cdm.dependencies = { fpml: cohort, 'rune-dsl': cohort };
+  cdm.namespaces!.cdm!.deps = ['fpml', 'rune-dsl'];
+  const fpml = manifest('fpml', cohort);
+  const rune = {
+    ...manifest('fpml', cohort),
+    modelId: 'rune-dsl',
+    dependencies: {},
+    namespaces: { 'rune-dsl': { deps: [], exports: [], artifact: `${cohort}/rune-dsl.json.gz` } }
+  } satisfies CuratedManifest;
+  const fpmlManifest = deferred<CuratedManifest>();
+  const runeManifest = deferred<CuratedManifest>();
+  const cdmNamespace = deferred<[]>();
+  const manifests = vi.spyOn(curated, 'fetchCuratedManifest').mockImplementation(async (id) => {
+    if (id === 'cdm') return cdm;
+    return id === 'fpml' ? fpmlManifest.promise : runeManifest.promise;
+  });
+  const namespaces = vi
+    .spyOn(curated, 'fetchCuratedNamespace')
+    .mockImplementation(async (id) => (id === 'cdm' ? cdmNamespace.promise : []));
+
+  const loading = loadCuratedWorkspace([{ id: 'cdm', version: cohort }], new Set(['cdm']));
+  await vi.waitFor(() => expect(manifests.mock.calls.map(([id]) => id)).toEqual(['cdm', 'fpml', 'rune-dsl']));
+  fpmlManifest.resolve(fpml);
+  runeManifest.resolve(rune);
+  await vi.waitFor(() => expect(namespaces.mock.calls.map(([id]) => id)).toEqual(['cdm', 'fpml', 'rune-dsl']));
+  cdmNamespace.resolve([]);
+  const loaded = await loading;
+  expect(loaded.bundles.map(({ id }) => id)).toEqual(['cdm', 'fpml', 'rune-dsl']);
+});
+
 it.each([
   ['cdm', 'fpml'],
   ['fpml', 'cdm']
