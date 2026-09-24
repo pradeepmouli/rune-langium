@@ -59,7 +59,7 @@ export const buildDefaultValue = withInstrumentation(
       case 'boolean':
         return false;
       case 'enum':
-        return field.required ? (field.enumValues?.[0]?.value ?? '') : '';
+        return field.required ? (field.enumValues?.[0]?.value ?? '') : undefined;
       case 'object':
         return field.required
           ? buildDefaultFieldsObject(field.children ?? [], field.choiceArmPaths, fieldLeafKey)
@@ -83,6 +83,8 @@ export const buildDefaultObjectValue = withInstrumentation(
 
 export const buildArmValue = withInstrumentation(
   function buildArmValue(arm: PreviewField): unknown {
+    // Choice arms are optional as fields, but the selected arm needs a value.
+    if (arm.kind === 'enum') return arm.enumValues?.[0]?.value ?? '';
     return arm.kind === 'object' ? buildDefaultObjectValue(arm) : buildDefaultValue(arm);
   },
   { op: 'buildArmValue' }

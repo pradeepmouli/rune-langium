@@ -353,9 +353,9 @@ describe('SourceEditor', () => {
     // (registered for non-readOnly files) no-ops on this synthetic update
     // since `docChanged` is left undefined, so invoking every captured
     // listener is safe — no need to single out "the navigation one".
-    async function fireSelectionTransaction(userEvent: string, headPos: number) {
+    async function fireSelectionTransaction(userEvent: string, headPos: number, file = navFile) {
       const { EditorView } = vi.mocked(await import('@codemirror/view'));
-      const state = { doc: makeFakeDoc(navFile.content.split('\n')) };
+      const state = { doc: makeFakeDoc(file.content.split('\n')) };
       const update = {
         transactions: [{ isUserEvent: (e: string) => e === userEvent, newSelection: { main: { head: headPos } } }],
         state
@@ -384,6 +384,21 @@ describe('SourceEditor', () => {
       await fireSelectionTransaction('select.definition', headPos);
 
       expect(onNavigateToNode).toHaveBeenCalledWith('foo.bar.MyType');
+    });
+
+    it('keeps the declaration kind when selecting a function in source', async () => {
+      const functionFile = {
+        ...navFile,
+        content: ['namespace foo.bar', '', 'func UpdateAmount:'].join('\n')
+      };
+      const onNavigateToNode = vi.fn();
+      render(
+        <SourceEditor files={[functionFile]} activeFile={functionFile.path} onNavigateToNode={onNavigateToNode} />
+      );
+
+      await fireSelectionTransaction('select.pointer', functionFile.content.indexOf('UpdateAmount'), functionFile);
+
+      expect(onNavigateToNode).toHaveBeenCalledWith('foo.bar.UpdateAmount#RosettaFunction');
     });
 
     it('does not navigate on plain keyboard cursor movement (select.keyboard)', async () => {

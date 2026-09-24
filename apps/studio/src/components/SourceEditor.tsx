@@ -33,7 +33,7 @@ import { studioEditorExtensions } from '../lang/editor-theme.js';
 import type { LspClientService } from '../services/lsp-client.js';
 import { pathToUri } from '../utils/uri.js';
 import { cn } from '@rune-langium/design-system/utils';
-import { isTypeRefPayload, TYPE_REF_PAYLOAD_MIME } from '@rune-langium/visual-editor';
+import { isTypeRefPayload, makeNodeId, TYPE_REF_PAYLOAD_MIME } from '@rune-langium/visual-editor';
 import { withInstrumentation, Capture } from '../services/instrumentation/core.js';
 
 // Re-export pathToUri for backward compatibility
@@ -215,7 +215,7 @@ function extractNodeIdAtPosition(state: EditorState, pos: number): string | null
   // Find the type name on the current line or nearby lines.
   // Rosetta DSL patterns: `type <Name>:`, `enum <Name>:`, `func <Name>:`,
   // `choice <Name>:`, `typeAlias <Name>`, `metaType <Name>`
-  const typePattern = /\b(?:type|enum|func|choice|typeAlias|metaType)\s+(\w+)/;
+  const typePattern = /\b(type|enum|func|choice|typeAlias|metaType)\s+(\w+)/;
 
   // Check the line where the cursor landed
   let match = typePattern.exec(lineAt.text);
@@ -233,7 +233,7 @@ function extractNodeIdAtPosition(state: EditorState, pos: number): string | null
   }
 
   if (!match) return null;
-  const typeName = match[1];
+  const typeName = match[2]!;
 
   // Scan backwards from the cursor to find the `namespace` declaration
   const nsPattern = /^namespace\s+([\w.]+)/;
@@ -249,7 +249,7 @@ function extractNodeIdAtPosition(state: EditorState, pos: number): string | null
   // Skip graph navigation if namespace can't be determined
   if (!namespace) return null;
 
-  return `${namespace}.${typeName}`;
+  return makeNodeId(namespace, typeName, match[1] === 'func' ? 'RosettaFunction' : undefined);
 }
 
 // ────────────────────────────────────────────────────────────────────────────
