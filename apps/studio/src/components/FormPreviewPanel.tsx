@@ -722,6 +722,7 @@ function ChoiceFieldGroup({
                     onObjectToggle={onObjectToggle}
                     onArmSelect={onArmSelect}
                     arrayIndices={arrayIndices}
+                    isChoiceArm
                   />
                 </div>
               ) : null}
@@ -823,6 +824,7 @@ interface PreviewFieldControlProps {
   onObjectToggle: (field: PreviewField, present: boolean, arrayIndices?: number[]) => void;
   onArmSelect: (arms: PreviewField[], selected: PreviewField, arrayIndices?: number[]) => void;
   arrayIndices?: number[];
+  isChoiceArm?: boolean;
 }
 
 function PreviewFieldControl({
@@ -836,7 +838,8 @@ function PreviewFieldControl({
   onArrayRemove,
   onObjectToggle,
   onArmSelect,
-  arrayIndices
+  arrayIndices,
+  isChoiceArm = false
 }: PreviewFieldControlProps): ReactElement {
   const fieldPath = formatFieldPath(field.path, arrayIndices);
   const fieldError = sample?.validated ? sample.errors[fieldPath] : undefined;
@@ -1002,10 +1005,10 @@ function PreviewFieldControl({
           }}
         >
           <SelectTrigger size="sm" aria-label={fieldLabel} className="mt-0.5 w-full text-xs">
-            <SelectValue placeholder={field.required ? undefined : 'Select…'} />
+            <SelectValue placeholder={field.required || isChoiceArm ? undefined : 'Select…'} />
           </SelectTrigger>
           <SelectContent>
-            {!field.required ? (
+            {!field.required && !isChoiceArm ? (
               <SelectItem value={CLEAR_SENTINEL} className="text-xs text-muted-foreground">
                 Select…
               </SelectItem>

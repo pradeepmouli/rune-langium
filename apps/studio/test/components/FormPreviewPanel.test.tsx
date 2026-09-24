@@ -729,6 +729,44 @@ describe('FormPreviewPanel', () => {
   });
 
   describe('Choice-ancestor arm selection (issue #434)', () => {
+    it('seeds and retains a concrete value for an enum-backed Choice arm', async () => {
+      const schema: FormPreviewSchema = {
+        schemaVersion: 1,
+        targetId: 'test.preview.ChoiceWithEnum',
+        title: 'ChoiceWithEnum',
+        kind: 'choice',
+        status: 'ready',
+        fields: [
+          {
+            path: 'unit',
+            label: 'Unit',
+            kind: 'enum',
+            required: false,
+            enumValues: [
+              { value: 'Share', label: 'Share' },
+              { value: 'Weight', label: 'Weight' }
+            ]
+          },
+          { path: 'cash', label: 'Cash', kind: 'string', required: false }
+        ]
+      };
+      const user = userEvent.setup({ writeToClipboard: false });
+      render(<FormPreviewPanel schema={schema} status={{ state: 'ready', targetId: schema.targetId }} />);
+
+      expect(screen.getByRole('radio', { name: 'Unit' })).toBeChecked();
+      expect(usePreviewStore.getState().samples.get(schema.targetId)?.serialized).toBe('{\n  "unit": "Share"\n}');
+
+      await user.click(screen.getByRole('combobox', { name: 'Unit' }));
+      expect(screen.queryByRole('option', { name: 'Select…' })).not.toBeInTheDocument();
+      await user.click(await screen.findByRole('option', { name: 'Weight' }));
+      expect(usePreviewStore.getState().samples.get(schema.targetId)?.serialized).toBe('{\n  "unit": "Weight"\n}');
+
+      await user.click(screen.getByRole('radio', { name: 'Cash' }));
+      await user.click(screen.getByRole('radio', { name: 'Unit' }));
+      expect(screen.getByRole('radio', { name: 'Unit' })).toBeChecked();
+      expect(usePreviewStore.getState().samples.get(schema.targetId)?.serialized).toBe('{\n  "unit": "Share"\n}');
+    });
+
     // A Data-extends-Choice reference reached via a NESTED attribute
     // (`constituent`) — mirrors what buildDataSchema/objectField in
     // preview-schema.ts actually produce: one field per Choice option

@@ -477,6 +477,31 @@ describe('usePreviewStore', () => {
     expect(values).not.toHaveProperty('commodity');
   });
 
+  it('seeds an enum-backed first Choice arm with an actual enum value', () => {
+    usePreviewStore.getState().receivePreviewResult({
+      schemaVersion: 1,
+      targetId: 'alpha.UnitChoice',
+      title: 'UnitChoice',
+      kind: 'choice',
+      status: 'ready',
+      fields: [
+        {
+          path: 'unit',
+          label: 'Unit',
+          kind: 'enum',
+          required: false,
+          enumValues: [
+            { value: 'Share', label: 'Share' },
+            { value: 'Weight', label: 'Weight' }
+          ]
+        },
+        { path: 'cash', label: 'Cash', kind: 'string', required: false }
+      ]
+    });
+
+    expect(usePreviewStore.getState().samples.get('alpha.UnitChoice')?.serialized).toBe('{\n  "unit": "Share"\n}');
+  });
+
   it('clearHydrationRetriesRemaining removes an existing key and no-ops on a missing one', () => {
     usePreviewStore.getState().setHydrationRetriesRemaining('Scheme', 3);
     expect(usePreviewStore.getState().hydrationRetriesRemaining).toEqual({ Scheme: 3 });

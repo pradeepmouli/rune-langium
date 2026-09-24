@@ -83,6 +83,8 @@ export const buildDefaultObjectValue = withInstrumentation(
 
 export const buildArmValue = withInstrumentation(
   function buildArmValue(arm: PreviewField): unknown {
+    // Choice arms are optional as fields, but the selected arm needs a value.
+    if (arm.kind === 'enum') return arm.enumValues?.[0]?.value ?? '';
     return arm.kind === 'object' ? buildDefaultObjectValue(arm) : buildDefaultValue(arm);
   },
   { op: 'buildArmValue' }
