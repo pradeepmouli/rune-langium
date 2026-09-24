@@ -9,6 +9,7 @@ Use the pinned pnpm version and preserve overrides/patches in
 - The pre-commit hook runs `lint-staged`, formatting staged JS/TS/JSON-family files with oxfmt. The pre-push hook runs type checking. Prefer the existing `simple-git-hooks` / `lint-staged` setup for hook changes.
 - `SKIP_SIMPLE_GIT_HOOKS=1` bypasses hooks; report skipped verification when relevant.
 - After codegen render changes, run `pnpm --filter @rune-langium/codegen run build` so consumers receive updated dist output.
+- The Cloudflare combined build rebuilds `@rune-langium/instrumentation-core` and `@rune-langium/core` before bundling Studio and Pages Functions; both consumers resolve those packages through their compiled exports.
 
 ## Generated Sources
 
