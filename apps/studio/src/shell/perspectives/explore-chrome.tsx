@@ -17,7 +17,7 @@ import { useMemo } from 'react';
 import { Check, Download, Share2, Wand2, Plus, X } from 'lucide-react';
 import { Button } from '@rune-langium/design-system/ui/button';
 import type { WorkspaceFile } from '../../services/workspace.js';
-import { createBlankWorkspaceFile } from '../../services/workspace.js';
+import { createBlankWorkspaceFile, isUserWorkspaceFile } from '../../services/workspace.js';
 import { useWorkspace } from '../providers/workspace-context.js';
 import { useWorkspaceActions } from './workspace-actions-context.js';
 import { useDiagnosticsStore } from '../../store/diagnostics-store.js';
@@ -87,7 +87,7 @@ function FileTabStrip({
   onDeleteFile: (path: string) => void;
   fileDiagnostics: ReadonlyMap<string, readonly LspDiagnostic[]>;
 }) {
-  const userFiles = files.filter((f) => !f.readOnly);
+  const userFiles = files.filter(isUserWorkspaceFile);
 
   return (
     <div className="studio-topbar__tabs">

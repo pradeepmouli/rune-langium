@@ -27,6 +27,7 @@ import { usePerspectiveStore } from '../store/perspective-store.js';
 import { viewTypeInExplore, useExploreNavigationStore } from '../services/explore-navigation.js';
 import { useExploreFileNavStore } from './explore-file-nav-store.js';
 import { withInstrumentation } from '../services/instrumentation/core.js';
+import { isUserWorkspaceFile } from '../services/workspace.js';
 
 interface SearchAction {
   detail: string;
@@ -91,7 +92,7 @@ export const GlobalSearch = withInstrumentation(
         {
           id: 'files',
           items: (workspace?.files ?? [])
-            .filter((file) => !file.refOnly && matches(file.path))
+            .filter((file) => isUserWorkspaceFile(file) && matches(file.path))
             .slice(0, 20)
             .map((file) => ({
               label: file.name,

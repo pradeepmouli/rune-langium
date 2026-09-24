@@ -1089,6 +1089,12 @@ import type { LoadedModel } from '../types/model-types.js';
  */
 export const BUNDLE_MARKER_SUFFIX = '/.bundle-marker';
 
+/** Files available for workspace authoring controls such as tabs and search. */
+// oxlint-disable-next-line rune/no-uninstrumented-export -- Pure per-file render predicate; tracing every file would add noise.
+export function isUserWorkspaceFile(file: WorkspaceFile): boolean {
+  return !file.readOnly && !file.refOnly && !file.path.endsWith(BUNDLE_MARKER_SUFFIX);
+}
+
 export const mergeModelFiles = withInstrumentation(
   function mergeModelFiles(currentFiles: WorkspaceFile[], model: LoadedModel): WorkspaceFile[] {
     // Remove any previous files from this model source
