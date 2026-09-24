@@ -7,6 +7,7 @@ import { useEffect, useMemo, useRef } from 'react';
 import { useUtilityHeaderActions } from '../utility-header-actions-context.js';
 import { SEV, useOutputStore } from '../../store/output-store.js';
 import { withInstrumentation } from '../../services/instrumentation/core.js';
+import { formatTelemetryEntryDetails } from './telemetry-entry-details.js';
 
 const SEVERITY_CLASS: Record<string, string> = {
   error: 'text-destructive',
@@ -58,7 +59,19 @@ export const OutputPanel = withInstrumentation(
               const prefix = SEV[line.severity];
               const colorClass = SEVERITY_CLASS[line.severity] ?? 'text-muted-foreground/60';
               return (
-                <div key={line.id} className={`font-mono text-xs leading-5 ${colorClass}`}>
+                <div
+                  key={line.id}
+                  className={`font-mono text-xs leading-5 ${colorClass}`}
+                  title={formatTelemetryEntryDetails({
+                    message: line.text,
+                    status: line.severity,
+                    op: line.op,
+                    subject: line.subject,
+                    durationMs: line.durationMs,
+                    opId: line.opId,
+                    signature: line.signature
+                  })}
+                >
                   {prefix ? `${prefix} ${line.text}` : line.text}
                 </div>
               );

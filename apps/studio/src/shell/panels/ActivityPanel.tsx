@@ -7,6 +7,7 @@ import { useUtilityHeaderActions } from '../utility-header-actions-context.js';
 import { useActivityStore } from '../../store/activity-store.js';
 import { withInstrumentation } from '../../services/instrumentation/core.js';
 import type { InstrumentationNamespace } from '../../services/instrumentation/namespace.js';
+import { formatTelemetryEntryDetails } from './telemetry-entry-details.js';
 
 const NAMESPACE_FILTERS: Array<InstrumentationNamespace | 'all'> = [
   'all',
@@ -85,6 +86,16 @@ export const ActivityPanel = withInstrumentation(
               {filteredEntries.map((entry) => (
                 <div
                   key={entry.id}
+                  title={formatTelemetryEntryDetails({
+                    message: entry.msg,
+                    status: entry.ok ? 'Success' : 'Error',
+                    op: entry.op ?? entry.tag,
+                    time: entry.time,
+                    durationMs: entry.durationMs,
+                    signature: entry.signature,
+                    subject: entry.subject,
+                    opId: entry.opId
+                  })}
                   className="studio-fade-in grid items-center gap-2.5 rounded px-1.5 py-1 text-foreground/70 transition-colors hover:bg-accent"
                   style={{ gridTemplateColumns: '48px 80px 1fr' }}
                 >

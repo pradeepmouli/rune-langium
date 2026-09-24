@@ -528,8 +528,8 @@ describe('telemetry ingest contract', () => {
           makeReq({
             event: 'op_spans',
             spans: [
-              { op: 'cdmLoad', level: 'info', durationMs: 12_000 },
-              { op: 'clientError', level: 'error', signature: 'boom @ app.js:1' }
+              { op: 'modelLoad', level: 'info', durationMs: 12_000, subject: 'cdm', opId: 17 },
+              { op: 'clientError', level: 'error', signature: 'boom @ app.js:1', subject: 'private-model' }
             ],
             studio_version: '0.1.0',
             ua_class: 'chromium-desktop'
@@ -541,8 +541,17 @@ describe('telemetry ingest contract', () => {
       expect(logs).toHaveLength(3);
       const spanLogs = logs.filter((l) => (l as { op?: string }).op !== undefined);
       expect(spanLogs).toHaveLength(2);
-      expect(spanLogs[0]).toMatchObject({ op: 'cdmLoad', level: 'info', duration_ms: 12_000 });
+      expect(spanLogs[0]).toMatchObject({
+        op: 'modelLoad',
+        level: 'info',
+        duration_ms: 12_000,
+        subject: 'cdm',
+        op_id: 17,
+        studio_version: '0.1.0',
+        ua_class: 'chromium-desktop'
+      });
       expect(spanLogs[1]).toMatchObject({ op: 'clientError', level: 'error', signature: 'boom @ app.js:1' });
+      expect(spanLogs[1]).not.toHaveProperty('subject');
       const requestLog = logs.find((l) => (l as { event?: string }).event === 'op_spans');
       expect(requestLog).toMatchObject({ outcome: 'accepted' });
     });
