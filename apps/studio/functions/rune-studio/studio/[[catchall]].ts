@@ -26,6 +26,7 @@
  */
 
 import { withInstrumentation } from '../../../src/services/instrumentation/core.js';
+import { withEdgeInstrumentation } from '../../lib/instrumentation-sink.js';
 
 /** True if the request is a top-level browser navigation (document load). */
 function isNavigationRequest(request: Request): boolean {
@@ -42,7 +43,7 @@ function isNavigationRequest(request: Request): boolean {
 // Manually wrapped (Cloudflare Pages Function arrow export — codemod-blind).
 // `request`/`env`/the Response outputs are raw HTTP/static-asset objects —
 // not meaningful or safe to capture.
-export const onRequest: PagesFunction<{ ASSETS: Fetcher }> = withInstrumentation(
+const instrumentedOnRequest = withInstrumentation(
   async ({ request, env }) => {
     // First: attempt to serve the real static asset.
     const assetResponse = await env.ASSETS.fetch(request);
@@ -68,3 +69,5 @@ export const onRequest: PagesFunction<{ ASSETS: Fetcher }> = withInstrumentation
   },
   { op: 'onRequest' }
 );
+
+export const onRequest: PagesFunction<{ ASSETS: Fetcher }> = withEdgeInstrumentation(instrumentedOnRequest);

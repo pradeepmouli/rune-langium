@@ -159,6 +159,10 @@ function dispatchToSinks(sinks: Iterable<Emit>, record: TelemetryRecord): void {
 
 /** Public export — used both internally by withInstrumentation and directly by callers (e.g. InstrumentationErrorBoundary) that hand-build a TelemetryRecord outside the capture/sanitize wrapper machinery. */
 export function emitRecord(record: TelemetryRecord): void {
+  if (allowedOperations && !allowedOperations.has(record.op)) {
+    if (record.namespace) emitToAdditionalSinksOnly(record);
+    return;
+  }
   // Matches this module's own "telemetry must never throw into the app"
   // invariant (see configureInstrumentation) — isolated the same way
   // dispatchToSinks isolates each additional sink.

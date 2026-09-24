@@ -94,7 +94,8 @@ manifest, including a filtered run. Review screenshots and failure snapshots
 alongside assertions before attributing a timeout to product behavior.
 
 Pages Function diagnostic spans use the shared instrumentation wrapper and are
-off by default. `INSTRUMENTATION_ENABLED=true` enables its edge sink;
+off by default. Each independently bundled Pages route configures its own edge
+sink before running its instrumented handler. `INSTRUMENTATION_ENABLED=true` enables it;
 `INSTRUMENTATION_LEVEL=trace` includes nested fetch spans (the default threshold
 is `info`). For a focused curated-load investigation, set
 `INSTRUMENTATION_OPS=onRequestPost,loadCuratedWorkspace,fetchCuratedManifest,fetchCuratedNamespace`

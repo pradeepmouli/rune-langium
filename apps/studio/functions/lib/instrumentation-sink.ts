@@ -50,3 +50,14 @@ export const installInstrumentationEdgeSink = withInstrumentation(
   },
   { op: 'installInstrumentationEdgeSink' }
 );
+
+// Each Pages route is bundled independently, so middleware and route modules
+// do not share instrumentation-core's module state. Configure the route's own
+// sink before its instrumented handler begins.
+// oxlint-disable-next-line rune/no-uninstrumented-export -- configuration must run before the wrapped handler
+export function withEdgeInstrumentation<Env>(handler: PagesFunction<Env>): PagesFunction<Env> {
+  return (ctx) => {
+    installInstrumentationEdgeSink((ctx.env ?? {}) as EdgeInstrumentationEnv);
+    return handler(ctx);
+  };
+}

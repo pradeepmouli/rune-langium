@@ -4,6 +4,7 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import {
   Capture,
+  addInstrumentationSink,
   configureInstrumentation,
   emitRecord,
   instrumentationConfigFromEnv,
@@ -43,6 +44,20 @@ describe('instrumentation configuration', () => {
     expect(sanitize).not.toHaveBeenCalled();
     expect(emitted).toEqual([]);
     now.mockRestore();
+  });
+
+  it('filters direct records while retaining namespace notifications', () => {
+    const emitted: TelemetryRecord[] = [];
+    const notified: TelemetryRecord[] = [];
+    configureInstrumentation((record) => emitted.push(record), undefined, { operations: ['wanted'] });
+    addInstrumentationSink((record) => notified.push(record));
+
+    emitRecord({ op: 'other', level: 'error', captured: 0, ts: 1 });
+    emitRecord({ op: 'notification', level: 'info', captured: 0, namespace: 'studio', ts: 2 });
+    emitRecord({ op: 'wanted', level: 'info', captured: 0, ts: 3 });
+
+    expect(emitted.map((record) => record.op)).toEqual(['wanted']);
+    expect(notified.map((record) => record.op)).toEqual(['notification', 'wanted']);
   });
 
   it('skips timing when a runtime disables instrumentation', () => {
