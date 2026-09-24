@@ -8,14 +8,21 @@ import { createRuneDslServices, serializeRuneModel } from '@rune-langium/core';
 import { URI } from 'langium';
 import { gzip } from 'pako';
 import type { EditorView } from '@codemirror/view';
-import { onRequestPost } from '../../functions/api/parse.js';
-import { parseWorkspaceViaRouter, mergeModelFiles } from '../../src/services/workspace.js';
+import { onRequestPost as parsePost } from '../../functions/api/parse.js';
+import { onRequestPost as sourcePost } from '../../functions/api/curated-source.js';
+import {
+  parseWorkspaceViaRouter,
+  mergeModelFiles,
+  loadCuratedNamespaceSource,
+  resetCuratedDocumentCache
+} from '../../src/services/workspace.js';
 import { useModelStore } from '../../src/store/model-store.js';
 import { SourceEditor } from '../../src/components/SourceEditor.js';
 
 afterEach(() => {
   cleanup();
   vi.unstubAllGlobals();
+  resetCuratedDocumentCache();
   useModelStore.setState({ models: new Map() });
 });
 
@@ -34,7 +41,10 @@ it('loads original curated source on demand and displays it in a read-only edito
     'fetch',
     vi.fn(async (input: string, init?: RequestInit) => {
       if (input === '/api/parse') {
-        return onRequestPost({ request: new Request('https://studio.test/api/parse', init) } as never);
+        return parsePost({ request: new Request('https://studio.test/api/parse', init) } as never);
+      }
+      if (input === '/api/curated-source') {
+        return sourcePost({ request: new Request('https://studio.test/api/curated-source', init) } as never);
       }
       mirrorRequests.push(input);
       if (input.endsWith('/manifest.json')) {
@@ -84,8 +94,14 @@ it('loads original curated source on demand and displays it in a read-only edito
   expect(mirrorRequests).toEqual(['https://www.daikonic.dev/curated/cdm/manifest.json']);
 
   const result = await parseWorkspaceViaRouter([], { curatedBundles, hydrateNamespaces: ['curated.source'] });
-  const files = result.curatedRefOnlyFiles!.cdm!;
-  expect(files[0]).toMatchObject({ content, refOnly: true, serializedModelJson: modelJson });
+  expect(result.curatedRefOnlyFiles?.cdm?.[0]).toMatchObject({ content: '', sourceLoaded: false });
+  const artifactKey = result.curatedRefOnlyFiles!.cdm![0]!.artifactKey;
+  expect(await loadCuratedNamespaceSource('cdm', 'latest', 'curated.source', artifactKey)).toMatchObject({
+    documents: [{ uri: 'cdm/example.rosetta', content }]
+  });
+  const files = (await parseWorkspaceViaRouter([], { curatedBundles, hydrateNamespaces: ['curated.source'] }))
+    .curatedRefOnlyFiles!.cdm!;
+  expect(files[0]).toMatchObject({ content, sourceLoaded: true, refOnly: true, serializedModelJson: modelJson });
   expect(mirrorRequests.filter((url) => !url.endsWith('/manifest.json'))).toEqual([artifactPath]);
   const model = {
     source: { id: 'cdm', name: 'CDM', repoUrl: 'https://example.com/cdm.git', ref: 'master', paths: [] },

@@ -52,6 +52,10 @@ export interface CachedFile {
   path: string;
   /** Raw .rosetta file content */
   content: string;
+  /** Distinguishes deferred source from a real empty source file. */
+  sourceLoaded?: boolean;
+  /** Immutable namespace artifact identity for source/model cohort matching. */
+  artifactKey?: string;
   /** Extracted namespace from file */
   namespace: string;
   /** Optional precomputed serialized Langium model JSON for curated artifacts. */
@@ -63,13 +67,9 @@ export interface CachedFile {
    */
   exports?: Array<{ type: string; name: string; path: string }>;
   /**
-   * True when the file is a curated-bundle reference shipped without source
-   * content. Distinct from `readOnly` (which only forbids edits): a refOnly
-   * file's `content` is empty by design (the curated artifact pre-parses
-   * server-side, source text is not in the artifact today). UI surfaces:
-   * - SourceView ignores clicks on refOnly files (no source to switch to).
-   * - Inspector renders a "Reference Only" pill + disables form inputs.
-   * - ModelLoader counts include refOnly files toward the bundle total.
+   * True for a curated reference. Distinct from `readOnly`: it remains outside
+   * workspace authoring and local LSP sync, while its original source can be
+   * loaded separately for read-only browsing. Inspector inputs stay disabled.
    */
   refOnly?: boolean;
 }

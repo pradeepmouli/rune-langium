@@ -30,11 +30,87 @@ import { useCodegenStore } from '../store/codegen-store.js';
 import { useOutputStore, fmtLine } from '../store/output-store.js';
 import { routeTelemetryRecord } from './instrumentation/browser-sink.js';
 import { isTelemetryRecordMessage } from './instrumentation/worker-sink.js';
+import { withInstrumentation, Capture } from './instrumentation/core.js';
 
 /** Known curated bundle ids — guards deferredExports filePath prefixes so user
  *  files that happen to live under `${bundleId}/...` aren't mis-grouped. */
 const CURATED_BUNDLE_IDS = new Set<string>(CURATED_MODEL_IDS);
 export const PARSE_ROUTER_TIMEOUT_MS = 45_000;
+type HydrationDocument = HydrateRequest['documents'][number];
+
+// The worker replaces its document set on every parse. Keep immutable curated
+// artifacts here so a delta HTTP response can still supply a full worker set.
+const curatedDocumentCache = new Map<string, HydrationDocument[]>();
+const curatedSourceCache = new Map<string, Map<string, string>>();
+let curatedCacheEpoch = 0;
+
+export const resetCuratedDocumentCache = withInstrumentation(
+  function resetCuratedDocumentCache(): void {
+    curatedCacheEpoch += 1;
+    curatedDocumentCache.clear();
+    curatedSourceCache.clear();
+  },
+  { op: 'resetCuratedDocumentCache' }
+);
+
+export const loadCuratedNamespaceSource = withInstrumentation(
+  async function loadCuratedNamespaceSource(
+    bundleId: string,
+    version: string,
+    namespace: string,
+    expectedArtifactKey?: string
+  ): Promise<{ artifactKey: string; documents: Array<{ uri: string; content: string }> }> {
+    const cacheEpoch = curatedCacheEpoch;
+    if (expectedArtifactKey && curatedSourceCache.has(expectedArtifactKey)) {
+      return {
+        artifactKey: expectedArtifactKey,
+        documents: [...curatedSourceCache.get(expectedArtifactKey)!].map(([uri, content]) => ({ uri, content }))
+      };
+    }
+    const response = await withAbortTimeout(
+      (signal) =>
+        fetch('/api/curated-source', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ bundleId, version, namespace, expectedArtifactKey }),
+          signal
+        }),
+      PARSE_ROUTER_TIMEOUT_MS
+    );
+    if (!response.ok) {
+      const failure = (await response.json().catch(() => null)) as { error?: unknown } | null;
+      throw new Error(
+        typeof failure?.error === 'string' ? failure.error : `/api/curated-source HTTP ${response.status}`
+      );
+    }
+    const result = (await response.json()) as {
+      artifactKey: string;
+      documents: Array<{ uri: string; content: string }>;
+    };
+    if (
+      typeof result.artifactKey !== 'string' ||
+      (expectedArtifactKey && result.artifactKey !== expectedArtifactKey) ||
+      !Array.isArray(result.documents) ||
+      result.documents.some((doc) => typeof doc.uri !== 'string' || typeof doc.content !== 'string')
+    ) {
+      throw new Error('Invalid curated source response');
+    }
+    const sources = new Map(result.documents.map(({ uri, content }) => [uri, content]));
+    if (cacheEpoch !== curatedCacheEpoch) return result;
+    curatedSourceCache.set(result.artifactKey, sources);
+    const cachedDocuments = curatedDocumentCache.get(result.artifactKey);
+    if (cachedDocuments) {
+      curatedDocumentCache.set(
+        result.artifactKey,
+        cachedDocuments.map((doc) =>
+          sources.has(doc.uri) ? { ...doc, content: sources.get(doc.uri)!, sourceLoaded: true } : doc
+        )
+      );
+    }
+    return result;
+  },
+  { op: 'loadCuratedNamespaceSource' }
+);
 
 class ParseRouterHttpError extends Error {
   constructor(readonly status: number) {
@@ -46,6 +122,8 @@ export interface WorkspaceFile {
   name: string;
   path: string;
   content: string;
+  /** Curated source is fetched separately when this namespace is viewed. */
+  sourceLoaded?: boolean;
   dirty: boolean;
   /** When true, the file is a system/built-in file and cannot be edited. */
   readOnly?: boolean;
@@ -70,10 +148,14 @@ export interface WorkspaceFile {
    * Used alongside bundleId to form { id, version } entries for /api/parse.
    */
   bundleVersion?: string;
+  /** Curated namespace for per-namespace source loading. */
+  namespace?: string;
+  /** Immutable published artifact identity; source and model must match it. */
+  artifactKey?: string;
   /**
    * Curated reference file: excluded from workspace authoring and local LSP
-   * synchronization. Hydration supplies its original source for read-only
-   * display; catalog-only entries have empty content until then.
+   * synchronization. Source is loaded on demand for read-only display;
+   * catalog-only entries have empty content until then.
    */
   refOnly?: boolean;
 }
@@ -116,7 +198,8 @@ export interface ParseWorkspaceFilesResult {
    * When the routed parse path succeeds, this carries the curated docs
    * grouped by bundleId so callers can populate LoadedModel.files in the
    * model-store with reference-only entries (path + serialized model,
-   * empty content). Drives the studio file count + curated file picker.
+   * plus source content only when that namespace was viewed). Drives the
+   * studio file count + curated file picker.
    * Absent for main-thread fallback parses (curated source is unknown
    * client-side in that path).
    */
@@ -584,17 +667,17 @@ export const parseWorkspaceViaRouter = withInstrumentation(
       requireCuratedHydration?: boolean;
     } = {}
   ): Promise<ParseWorkspaceResponse> {
-    const body = JSON.stringify({
-      files,
-      curatedBundles: options.curatedBundles ?? [],
-      hydrateNamespaces: options.hydrateNamespaces ?? []
-    });
-    const requestParse = () =>
+    const requestParse = (knownCuratedArtifacts: string[]) =>
       withAbortTimeout(async (signal) => {
         const response = await fetch('/api/parse', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body,
+          body: JSON.stringify({
+            files,
+            curatedBundles: options.curatedBundles ?? [],
+            hydrateNamespaces: options.hydrateNamespaces ?? [],
+            knownCuratedArtifacts
+          }),
           signal
         });
         if (!response.ok) throw new ParseRouterHttpError(response.status);
@@ -606,21 +689,74 @@ export const parseWorkspaceViaRouter = withInstrumentation(
       deferredExports: ParseWorkspaceResponse['deferredExports'];
       errors: ParseWorkspaceResponse['errors'];
       hydrationState: { documents: HydrateRequest['documents'] };
+      requiredCuratedArtifacts?: Array<{ key: string; bundleId: string; namespace: string; documentCount?: number }>;
       dependencyGraph?: Record<string, string[]>;
     };
-    try {
-      data = (await requestParse()) as typeof data;
-    } catch (error) {
-      const transient =
-        error instanceof OperationTimeoutError || (error instanceof ParseRouterHttpError && error.status >= 500);
-      if (!transient || !options.requireCuratedHydration) throw error;
-      data = (await requestParse()) as typeof data;
-    }
+    const fetchParse = async (known: string[]): Promise<typeof data> => {
+      try {
+        return (await requestParse(known)) as typeof data;
+      } catch (error) {
+        const transient =
+          error instanceof OperationTimeoutError || (error instanceof ParseRouterHttpError && error.status >= 500);
+        if (!transient || !options.requireCuratedHydration) throw error;
+        return (await requestParse(known)) as typeof data;
+      }
+    };
+    data = await fetchParse([...curatedDocumentCache.keys()]);
 
     if (!data.ok) {
       // Same reason as above: bubble up to the outer fallback with the full
       // workspace inputs rather than reparsing only user files in-place.
       throw new Error('/api/parse returned ok:false');
+    }
+
+    const assembleDocuments = (result: typeof data): HydrationDocument[] | null => {
+      if (!result.requiredCuratedArtifacts) return result.hydrationState.documents;
+      const received = new Map<string, HydrationDocument[]>();
+      const userDocuments: HydrationDocument[] = [];
+      for (const doc of result.hydrationState.documents) {
+        if (!doc.bundleId || !doc.artifactKey) {
+          userDocuments.push(doc);
+          continue;
+        }
+        const group = received.get(doc.artifactKey) ?? [];
+        const source = curatedSourceCache.get(doc.artifactKey)?.get(doc.uri);
+        group.push(source === undefined ? doc : { ...doc, content: source, sourceLoaded: true });
+        received.set(doc.artifactKey, group);
+      }
+      const nextCache = new Map(curatedDocumentCache);
+      for (const [key, docs] of received) nextCache.set(key, docs);
+      const curatedDocuments: HydrationDocument[] = [];
+      for (const artifact of result.requiredCuratedArtifacts) {
+        const docs = nextCache.get(artifact.key) ?? (artifact.documentCount === 0 ? [] : undefined);
+        if (!docs || (artifact.documentCount !== undefined && docs.length !== artifact.documentCount)) return null;
+        if (!nextCache.has(artifact.key)) nextCache.set(artifact.key, docs);
+        curatedDocuments.push(...docs);
+      }
+      for (const artifact of result.requiredCuratedArtifacts) {
+        curatedDocumentCache.set(artifact.key, nextCache.get(artifact.key)!);
+      }
+      return [...userDocuments, ...curatedDocuments];
+    };
+    let hydrationDocuments = assembleDocuments(data);
+    if (!hydrationDocuments) {
+      // A stale/missing browser receipt must never produce a partly linked graph.
+      data = await fetchParse([]);
+      if (!data.ok) throw new Error('/api/parse returned ok:false');
+      hydrationDocuments = assembleDocuments(data);
+      if (!hydrationDocuments) throw new Error('/api/parse omitted required curated artifacts');
+    }
+
+    const deferredExports = [...(data.deferredExports ?? [])];
+    const deferredPaths = new Set(deferredExports.map((entry) => entry.filePath));
+    for (const doc of hydrationDocuments) {
+      if (!doc.bundleId || !doc.namespace || deferredPaths.has(doc.uri)) continue;
+      deferredExports.push({
+        filePath: doc.uri,
+        namespace: doc.namespace,
+        exports: doc.exports.map(({ type, name }) => ({ type, name }))
+      });
+      deferredPaths.add(doc.uri);
     }
 
     // Publish the cross-namespace dep graph (spec §5.2) into the codegen store
@@ -645,7 +781,7 @@ export const parseWorkspaceViaRouter = withInstrumentation(
     // an empty string (Copilot review: CachedFile.namespace is declared
     // non-optional). User-file entries are handled in the same loop.
     const namespaceByFilePath = new Map<string, string>();
-    for (const d of data.deferredExports ?? []) {
+    for (const d of deferredExports) {
       namespaceByFilePath.set(d.filePath, d.namespace);
     }
     // Collect curated docs as refOnly CachedFile entries grouped by bundleId.
@@ -655,7 +791,7 @@ export const parseWorkspaceViaRouter = withInstrumentation(
     // false-positive'd for user files under `${bundleId}/path` (Codex P2
     // review of PR #163).
     const curatedRefOnlyFiles: Record<string, CachedFile[]> = {};
-    for (const doc of data.hydrationState.documents) {
+    for (const doc of hydrationDocuments) {
       // doc.uri is the bare filePath emitted by /api/parse + curated-fetch
       // (no `file://` prefix). The legacy `file:///` strip is retained for
       // backwards compatibility with any in-flight payloads.
@@ -682,6 +818,8 @@ export const parseWorkspaceViaRouter = withInstrumentation(
       const entry: CachedFile = {
         path: pathInBundle,
         content: doc.content,
+        sourceLoaded: doc.sourceLoaded ?? Boolean(doc.content),
+        artifactKey: doc.artifactKey,
         namespace: namespaceByFilePath.get(filePath) ?? '',
         serializedModelJson: doc.serializedModel,
         exports: doc.exports,
@@ -703,7 +841,7 @@ export const parseWorkspaceViaRouter = withInstrumentation(
     for (const [bid, entries] of Object.entries(curatedRefOnlyFiles)) {
       seenPathByBundle.set(bid, new Set(entries.map((e) => e.path)));
     }
-    for (const d of data.deferredExports ?? []) {
+    for (const d of deferredExports) {
       const slash = d.filePath.indexOf('/');
       if (slash < 0) continue; // user-file entry: no bundle prefix
       const bundleId = d.filePath.slice(0, slash);
@@ -721,6 +859,7 @@ export const parseWorkspaceViaRouter = withInstrumentation(
       (curatedRefOnlyFiles[bundleId] ??= []).push({
         path: pathInBundle,
         content: '',
+        sourceLoaded: false,
         namespace: d.namespace,
         // CachedFile.exports needs {type,name,path}; deferredExports omits path
         // (no AST yet). Path is only used to locate a node once hydrated.
@@ -746,7 +885,7 @@ export const parseWorkspaceViaRouter = withInstrumentation(
       const hydrateResponse = await workerRequest({
         type: 'hydrate',
         id: `hydrate:${Date.now()}`,
-        documents: data.hydrationState.documents
+        documents: hydrationDocuments
       });
       if (hydrateResponse.type === 'hydrateResult' && !hydrateResponse.ok) {
         throw new Error(`worker hydration failed: ${hydrateResponse.error ?? 'unknown'}`);
@@ -766,7 +905,7 @@ export const parseWorkspaceViaRouter = withInstrumentation(
       id: `routed:${Date.now()}`,
       models,
       parsedModels,
-      deferredExports: data.deferredExports,
+      deferredExports,
       errors: data.errors,
       curatedRefOnlyFiles
     };
@@ -933,7 +1072,6 @@ export const createBlankWorkspaceFile = withInstrumentation(
 // ---------------------------------------------------------------------------
 
 import type { LoadedModel } from '../types/model-types.js';
-import { withInstrumentation, Capture } from './instrumentation/core.js';
 
 /**
  * Merge loaded model files into the workspace as read-only entries.
@@ -970,7 +1108,10 @@ export const mergeModelFiles = withInstrumentation(
       exports: f.exports,
       bundleId: model.source.id,
       bundleVersion: model.commitHash,
-      refOnly: f.refOnly
+      namespace: f.namespace,
+      artifactKey: f.artifactKey,
+      refOnly: f.refOnly,
+      sourceLoaded: f.sourceLoaded
     }));
 
     // 019 Phase 0: when no files were extracted (server-side parse path),

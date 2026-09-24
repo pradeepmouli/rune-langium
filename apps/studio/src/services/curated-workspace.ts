@@ -14,10 +14,18 @@ import { withInstrumentation } from './instrumentation/core.js';
 
 class CuratedManifestMissingError extends CuratedBundleUnavailableError {}
 
+export const curatedArtifactKey = withInstrumentation(
+  function curatedArtifactKey(bundleId: string, artifact: string): string {
+    return JSON.stringify([bundleId, artifact]);
+  },
+  { op: 'curatedArtifactKey' }
+);
+
 interface CuratedWorkspace {
   bundles: Array<{ id: string; manifest: CuratedManifest; documents: CuratedDocument[] }>;
   closure: Set<string>;
   graph: NonNullable<CuratedManifest['namespaces']>;
+  artifacts: Array<{ key: string; bundleId: string; namespace: string; documentCount?: number }>;
 }
 
 /** Load one cross-bundle namespace closure before any document is hydrated. */
@@ -26,7 +34,8 @@ export const loadCuratedWorkspace = withInstrumentation(
     requestedBundles: ReadonlyArray<{ id: string; version: string }>,
     seeds: ReadonlySet<string>,
     fetcher?: CuratedFetcher,
-    includeAllWhenUnseeded = false
+    includeAllWhenUnseeded = false,
+    knownArtifacts: ReadonlySet<string> = new Set()
   ): Promise<CuratedWorkspace> {
     const bundles = new Map(requestedBundles.map((bundle) => [bundle.id, bundle]));
     const manifests = new Map<string, CuratedManifest>();
@@ -66,7 +75,8 @@ export const loadCuratedWorkspace = withInstrumentation(
             requestedBundles.map((root) => ({ id: root.id, version: manifest.cohort! })),
             seeds,
             fetcher,
-            includeAllWhenUnseeded
+            includeAllWhenUnseeded,
+            knownArtifacts
           );
         }
         manifests.set(bundle.id, manifest);
@@ -97,28 +107,41 @@ export const loadCuratedWorkspace = withInstrumentation(
       manifest,
       documents: []
     }));
-    const jobs: Array<{ bundle: (typeof loaded)[number]; namespace: string }> = [];
+    const artifacts: CuratedWorkspace['artifacts'] = [];
+    const jobs: Array<{
+      bundle: (typeof loaded)[number];
+      namespace: string;
+      artifact: string;
+      key: string;
+      reference: CuratedWorkspace['artifacts'][number];
+    }> = [];
     for (const bundle of loaded) {
       for (const namespace of closure) {
-        if (bundle.manifest.namespaces?.[namespace]) jobs.push({ bundle, namespace });
+        const artifact = bundle.manifest.namespaces?.[namespace]?.artifact;
+        if (!artifact) continue;
+        const key = curatedArtifactKey(bundle.id, artifact);
+        const reference = { key, bundleId: bundle.id, namespace };
+        artifacts.push(reference);
+        if (!knownArtifacts.has(key)) jobs.push({ bundle, namespace, artifact, key, reference });
       }
     }
     for (let i = 0; i < jobs.length; i += 8) {
       const fetched = await Promise.all(
         jobs
           .slice(i, i + 8)
-          .map(({ bundle, namespace }) =>
-            fetchCuratedNamespace(
-              bundle.id,
-              bundles.get(bundle.id)!.version,
-              bundle.manifest.namespaces![namespace]!.artifact,
-              fetcher
-            )
+          .map(({ bundle, artifact }) =>
+            fetchCuratedNamespace(bundle.id, bundles.get(bundle.id)!.version, artifact, fetcher)
           )
       );
-      for (let j = 0; j < fetched.length; j++) jobs[i + j]!.bundle.documents.push(...fetched[j]!);
+      for (let j = 0; j < fetched.length; j++) {
+        const job = jobs[i + j]!;
+        job.reference.documentCount = fetched[j]!.length;
+        job.bundle.documents.push(
+          ...fetched[j]!.map((doc) => ({ ...doc, artifactKey: job.key, namespace: job.namespace }))
+        );
+      }
     }
-    return { bundles: loaded, closure, graph };
+    return { bundles: loaded, closure, graph, artifacts };
   },
   { op: 'loadCuratedWorkspace' }
 );

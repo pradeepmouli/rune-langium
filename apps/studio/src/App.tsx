@@ -15,7 +15,12 @@ import '@rune-langium/visual-editor/styles.css';
 import type { RosettaModel } from '@rune-langium/core';
 import { Spinner } from '@rune-langium/design-system/ui/spinner';
 import type { WorkspaceFile } from './services/workspace.js';
-import { parseWorkspaceFiles, mergeModelFiles, mergeCuratedRefOnlyFiles } from './services/workspace.js';
+import {
+  parseWorkspaceFiles,
+  mergeModelFiles,
+  mergeCuratedRefOnlyFiles,
+  loadCuratedNamespaceSource
+} from './services/workspace.js';
 import { useModelStore } from './store/model-store.js';
 import { getModelSource } from './services/model-registry.js';
 import type { LoadedModel } from './types/model-types.js';
@@ -187,6 +192,7 @@ function AppContent() {
   // synchronously without stale-closure issues. Starts as [] (matching the
   // `files` initial state) and is kept in sync via the effect below.
   const filesRef = useRef<WorkspaceFile[]>([]);
+  const workspaceEpochRef = useRef(0);
   // Tracks the latest loaded reference models so syncWorkspaceToEditor can
   // preserve them without calling useModelStore.getState() (which is not
   // available in the test mock of useModelStore).
@@ -244,14 +250,26 @@ function AppContent() {
         if (result.curatedRefOnlyFiles) {
           const store = useModelStore.getState();
           const previousModels = store.models;
-          for (const [bundleId, files] of Object.entries(result.curatedRefOnlyFiles)) {
-            store.setCuratedFiles(bundleId, files);
+          const curatedFilesWithSource = Object.fromEntries(
+            Object.entries(result.curatedRefOnlyFiles).map(([bundleId, files]) => {
+              const priorByPath = new Map(previousModels.get(bundleId)?.files.map((file) => [file.path, file]));
+              return [
+                bundleId,
+                files.map((file) => {
+                  const prior = priorByPath.get(file.path);
+                  return !file.sourceLoaded && prior?.sourceLoaded && prior.artifactKey === file.artifactKey
+                    ? { ...file, content: prior.content, sourceLoaded: true }
+                    : file;
+                })
+              ];
+            })
+          );
+          for (const [bundleId, curatedFiles] of Object.entries(curatedFilesWithSource)) {
+            store.setCuratedFiles(bundleId, curatedFiles);
           }
           const currentModels = useModelStore.getState().models;
           if (currentModels !== previousModels) {
-            setFiles((currentFiles) =>
-              mergeCuratedRefOnlyFiles(currentFiles, result.curatedRefOnlyFiles!, currentModels)
-            );
+            setFiles((currentFiles) => mergeCuratedRefOnlyFiles(currentFiles, curatedFilesWithSource, currentModels));
           }
         }
       }
@@ -321,6 +339,7 @@ function AppContent() {
   const syncWorkspaceToEditor = useCallback(
     async (workspaceFiles: WorkspaceFile[]) => {
       setLoading(true);
+      workspaceEpochRef.current += 1;
       // Reset hydration state so a new workspace doesn't inherit the previous
       // workspace's browsed-namespace set. Without this, switching workspaces
       // leaves stale hydratedNamespaces entries that the on-demand effect won't
@@ -837,6 +856,7 @@ function AppContent() {
   );
 
   const handleReset = useCallback(() => {
+    workspaceEpochRef.current += 1;
     if (restoredWorkspace) {
       void saveWorkspaceFiles(restoredWorkspace.id, []).catch((err) => {
         reportWorkspaceError('Failed to persist the cleared workspace state to browser storage', err);
@@ -1132,6 +1152,55 @@ function AppContent() {
   const hasWorkspace = userFiles.length > 0;
   const hasExploreContent = hasWorkspace || loadedModels.size > 0;
 
+  const loadCuratedSource = useCallback(
+    async (bundleId: string, version: string, namespace: string, expectedArtifactKey?: string) => {
+      const epoch = workspaceEpochRef.current;
+      const { artifactKey, documents } = await loadCuratedNamespaceSource(
+        bundleId,
+        version,
+        namespace,
+        expectedArtifactKey
+      );
+      if (epoch !== workspaceEpochRef.current) return;
+      if (documents.length === 0) throw new Error('No source files are available for this namespace');
+      const sourceByPath = new Map(
+        documents
+          .filter((doc) => doc.uri.startsWith(`${bundleId}/`))
+          .map((doc) => [`[${bundleId}]/${doc.uri.slice(bundleId.length + 1)}`, doc.content])
+      );
+      if (sourceByPath.size === 0) return;
+      const store = useModelStore.getState();
+      const model = store.models.get(bundleId);
+      if (model) {
+        store.setCuratedFiles(
+          bundleId,
+          model.files.map((file) => {
+            const content = sourceByPath.get(`[${bundleId}]/${file.path}`);
+            return content === undefined || (file.artifactKey && file.artifactKey !== artifactKey)
+              ? file
+              : { ...file, content, sourceLoaded: true };
+          })
+        );
+      }
+      setFiles((current) => {
+        let changed = false;
+        const updated = current.map((file) => {
+          const content = sourceByPath.get(file.path);
+          if (
+            content === undefined ||
+            (file.artifactKey && file.artifactKey !== artifactKey) ||
+            (file.content === content && file.sourceLoaded)
+          )
+            return file;
+          changed = true;
+          return { ...file, content, sourceLoaded: true };
+        });
+        return changed ? updated : current;
+      });
+    },
+    []
+  );
+
   // Build the WorkspaceActionsContext value from App's handlers so
   // WorkspacesPerspective (and any future perspective) can call them
   // without prop-drilling through PerspectiveHost.
@@ -1147,6 +1216,7 @@ function AppContent() {
       // EditorPage-facing actions (formerly EditorPage props), now sourced
       // from context so App no longer threads them through <EditorPage>.
       onFilesChange: handleFilesChange,
+      loadCuratedSource,
       onClose: handleReset,
       onSwitchWorkspace: handleSwitchWorkspace
     }),
@@ -1159,6 +1229,7 @@ function AppContent() {
       handleCreateWorkspace,
       handleDeleteWorkspace,
       handleFilesChange,
+      loadCuratedSource,
       handleReset
     ]
   );
