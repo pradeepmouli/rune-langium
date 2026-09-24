@@ -7,6 +7,8 @@ import type { ReactNode } from 'react';
 import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
 
 import { App } from '../../src/App.js';
+import { getModelSource } from '../../src/services/model-registry.js';
+import { useModelStore } from '../../src/store/model-store.js';
 import { saveWorkspace, _resetForTests, type WorkspaceRecord } from '../../src/workspace/persistence.js';
 import { createOpfsRoot, type OpfsRoot } from '../setup/opfs-mock.js';
 import { saveWorkspaceFiles, setWorkspaceFilesDeps } from '../../src/workspace/workspace-files.js';
@@ -41,6 +43,9 @@ vi.mock('../../src/shell/ExplorePerspective.js', async () => {
           <span data-testid="model-count">{models.length}</span>
           <span data-testid="parsed-count">{parsedModels.length}</span>
           <span data-testid="error-count">{parseErrors.size}</span>
+          <span data-testid="curated-read-only-count">
+            {files.filter((file) => file.bundleId === 'cdm' && file.refOnly).length}
+          </span>
           <button
             type="button"
             onClick={() =>
@@ -138,6 +143,7 @@ beforeEach(async () => {
   parseWorkspaceFilesMock.mockReset();
   showToastSpy.mockReset();
   setCuratedFilesSpy.mockReset();
+  useModelStore.getState().models.clear();
   vi.stubGlobal('Worker', MockWorker);
   const opfsRoot: OpfsRoot = createOpfsRoot();
   setWorkspaceFilesDeps({
@@ -292,5 +298,65 @@ describe('App parse recovery', () => {
     expect(screen.getByTestId('model-count').textContent).toBe('1');
     expect(screen.getByTestId('parsed-count').textContent).toBe('1');
     expect(screen.getByTestId('error-count').textContent).toBe('0');
+  });
+});
+
+describe('App curated parse projection', () => {
+  it('puts initially hydrated curated files into the read-only workspace view', async () => {
+    const source = getModelSource('cdm');
+    expect(source).toBeDefined();
+    useModelStore
+      .getState()
+      .models.set('cdm', { source: source!, commitHash: 'latest', files: [], loadedAt: Date.now() });
+    setCuratedFilesSpy.mockImplementation(
+      (id: string, files: Array<{ path: string; content: string; serializedModelJson?: string }>) => {
+        const state = useModelStore.getState();
+        const existing = state.models.get(id);
+        if (!existing) return;
+        if (
+          existing.files.length === files.length &&
+          existing.files.every(
+            (file, index) =>
+              file.path === files[index]?.path &&
+              file.content === files[index]?.content &&
+              file.serializedModelJson === files[index]?.serializedModelJson
+          )
+        )
+          return;
+        state.models = new Map(state.models);
+        state.models.set(id, { ...existing, files });
+      }
+    );
+    parseWorkspaceFilesMock.mockResolvedValue({
+      models: [],
+      parsedModels: [],
+      errors: new Map(),
+      parseMode: 'router',
+      curatedRefOnlyFiles: {
+        cdm: [
+          {
+            path: 'base-staticdata-party-type.rosetta',
+            content: 'namespace cdm.base.staticdata.party\n',
+            namespace: 'cdm.base.staticdata.party',
+            serializedModelJson: '{}',
+            exports: [],
+            refOnly: true
+          }
+        ]
+      }
+    });
+    await saveWorkspace(makeWorkspace('ws-curated-import', 'Curated Import'));
+    await saveWorkspaceFiles('ws-curated-import', [
+      {
+        name: 'starter.rosetta',
+        path: 'starter.rosetta',
+        content: 'namespace example\n',
+        dirty: false
+      }
+    ]);
+
+    render(<App />);
+    await waitFor(() => expect(screen.getByTestId('curated-read-only-count').textContent).toBe('1'));
+    expect(setCuratedFilesSpy).toHaveBeenCalled();
   });
 });

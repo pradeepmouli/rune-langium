@@ -242,9 +242,16 @@ function AppContent() {
         // which docs belong to each curated bundle (the curated-loader stays
         // metadata-only by design — see model-store.buildArchiveLoader).
         if (result.curatedRefOnlyFiles) {
-          const setCuratedFiles = useModelStore.getState().setCuratedFiles;
+          const store = useModelStore.getState();
+          const previousModels = store.models;
           for (const [bundleId, files] of Object.entries(result.curatedRefOnlyFiles)) {
-            setCuratedFiles(bundleId, files);
+            store.setCuratedFiles(bundleId, files);
+          }
+          const currentModels = useModelStore.getState().models;
+          if (currentModels !== previousModels) {
+            setFiles((currentFiles) =>
+              mergeCuratedRefOnlyFiles(currentFiles, result.curatedRefOnlyFiles!, currentModels)
+            );
           }
         }
       }
@@ -282,18 +289,6 @@ function AppContent() {
       .then((result) => {
         if (cancelled) return;
         applyParseResult(result, { preserveSemanticModelOnErrors: true });
-        // Merge the freshly-hydrated curated content into `files` itself —
-        // not just `models`/`deferredExports` (which `applyParseResult`
-        // already updates) — see `mergeCuratedRefOnlyFiles`'s doc comment
-        // for the full root-cause rationale.
-        if (result.curatedRefOnlyFiles) {
-          const mergedFiles = mergeCuratedRefOnlyFiles(
-            filesRef.current,
-            result.curatedRefOnlyFiles,
-            useModelStore.getState().models
-          );
-          if (mergedFiles !== filesRef.current) setFiles(mergedFiles);
-        }
         // Mark exactly the set sent in THIS parse (not whatever is pending when
         // the promise resolves) so a request arriving mid-flight isn't lost.
         useEditorStore.getState().markNamespacesHydrated(pendingHydration);
