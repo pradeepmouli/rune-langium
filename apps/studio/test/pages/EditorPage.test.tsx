@@ -16,6 +16,7 @@ const {
   useDiagnosticsStore,
   runeTypeGraphMockState,
   resizeObserverMockState,
+  centerStackMockState,
   namespaceExplorerMockState,
   structureViewMockState,
   showToastSpy
@@ -112,7 +113,12 @@ const {
     instances: [] as Array<{
       callback: ResizeObserverCallback;
       targets: Element[];
+      disconnected: boolean;
     }>
+  };
+  const centerStackMockState = {
+    showGraph: true,
+    setShowGraph: undefined as ((value: boolean) => void) | undefined
   };
 
   const namespaceExplorerMockState = {
@@ -163,11 +169,32 @@ const {
     useDiagnosticsStore,
     runeTypeGraphMockState,
     resizeObserverMockState,
+    centerStackMockState,
     namespaceExplorerMockState,
     structureViewMockState,
     showToastSpy
   };
 });
+
+function stubResizeObserver(): void {
+  vi.stubGlobal(
+    'ResizeObserver',
+    class MockResizeObserver {
+      private instance: { callback: ResizeObserverCallback; targets: Element[]; disconnected: boolean };
+      constructor(callback: ResizeObserverCallback) {
+        this.instance = { callback, targets: [], disconnected: false };
+        resizeObserverMockState.instances.push(this.instance);
+      }
+      observe(target: Element) {
+        this.instance.targets.push(target);
+      }
+      disconnect() {
+        this.instance.disconnected = true;
+      }
+      unobserve() {}
+    }
+  );
+}
 
 const { sourceEditorMockState, dockShellMockState, diagnosticsPanelMockState } = vi.hoisted(() => ({
   sourceEditorMockState: {
@@ -476,14 +503,14 @@ vi.mock('../../src/shell/DockShell.js', () => ({
 }));
 
 vi.mock('../../src/shell/panels/CenterStackPanel.js', () => ({
-  // Simplified stub: renders all four panes unconditionally so that
+  // Simplified stub: renders all four panes by default so that
   // StructureView is always mounted when VisualPreviewPanelMounted renders.
   // This surfaces the cellComponents wiring in EditorPage — an earlier
   // regression had cell editors built but never passed to StructureView
   // (same class as the Phase 7 integration miss fixed by PR #185).
   // renderSource is included so SourceEditor (inside renderSourcePane) is
   // still mounted — other tests rely on SourceEditor being rendered.
-  CenterStackPanel: ({
+  CenterStackPanel: function CenterStackPanelMock({
     renderStructure,
     renderGraph,
     renderSource,
@@ -493,15 +520,18 @@ vi.mock('../../src/shell/panels/CenterStackPanel.js', () => ({
     renderSource?: () => React.ReactElement | null;
     renderInspector?: () => React.ReactElement | null;
     renderStructure?: () => React.ReactElement | null;
-  }) =>
-    React.createElement(
+  }) {
+    const [showGraph, setShowGraph] = React.useState(centerStackMockState.showGraph);
+    centerStackMockState.setShowGraph = setShowGraph;
+    return React.createElement(
       'div',
       { 'data-testid': 'center-stack-mock' },
-      renderGraph?.() ?? null,
+      showGraph ? (renderGraph?.() ?? null) : null,
       renderSource?.() ?? null,
       renderInspector?.() ?? null,
       renderStructure?.() ?? null
-    )
+    );
+  }
 }));
 
 vi.mock('../../src/hooks/useLspDiagnosticsBridge.js', () => ({
@@ -553,21 +583,7 @@ function modelWithType(typeName: string) {
 describe('EditorPage preview target identity', () => {
   beforeEach(() => {
     vi.stubGlobal('Worker', MockWorker);
-    vi.stubGlobal(
-      'ResizeObserver',
-      class MockResizeObserver {
-        private instance: { callback: ResizeObserverCallback; targets: Element[] };
-        constructor(callback: ResizeObserverCallback) {
-          this.instance = { callback, targets: [] };
-          resizeObserverMockState.instances.push(this.instance);
-        }
-        observe(target: Element) {
-          this.instance.targets.push(target);
-        }
-        disconnect() {}
-        unobserve() {}
-      }
-    );
+    stubResizeObserver();
     MockWorker.instances = [];
     setRuneStudioTestApi(() => undefined);
     usePreviewStore.getState().resetPreviewState();
@@ -583,6 +599,8 @@ describe('EditorPage preview target identity', () => {
     runeTypeGraphMockState.fitView = vi.fn();
     runeTypeGraphMockState.relayout = vi.fn();
     resizeObserverMockState.instances = [];
+    centerStackMockState.showGraph = true;
+    centerStackMockState.setShowGraph = undefined;
     namespaceExplorerMockState.latestProps = undefined;
     // EditorPage embeds PerspectiveHost; store defaults to 'workspaces' which
     // renders WorkspacesPerspective (requires context). These tests render a
@@ -1076,6 +1094,8 @@ describe('EditorPage preview target identity', () => {
 describe('EditorPage workspace chrome', () => {
   beforeEach(() => {
     vi.stubGlobal('Worker', MockWorker);
+    centerStackMockState.showGraph = true;
+    centerStackMockState.setShowGraph = undefined;
     MockWorker.instances = [];
     setRuneStudioTestApi(() => undefined);
     usePreviewStore.getState().resetPreviewState();
@@ -2105,6 +2125,74 @@ describe('EditorPage workspace chrome', () => {
     });
   });
 
+  it('reattaches the graph observer after a pane switch and defers relayout beyond its callback', () => {
+    stubResizeObserver();
+    resizeObserverMockState.instances = [];
+    centerStackMockState.showGraph = false;
+    const props = {
+      models: [],
+      files: [{ name: 'trade.rosetta', path: 'trade.rosetta', content: 'namespace test', dirty: false }]
+    };
+    renderEditorPage(props);
+    expect(screen.getByTestId('center-stack-mock')).toBeInTheDocument();
+    expect(centerStackMockState.setShowGraph).toBeDefined();
+    expect(document.querySelector('.studio-graph-canvas')).toBeNull();
+
+    const frames = new Map<number, FrameRequestCallback>();
+    let nextFrame = 1;
+    const requestFrame = vi.spyOn(window, 'requestAnimationFrame').mockImplementation((callback) => {
+      const id = nextFrame++;
+      frames.set(id, callback);
+      return id;
+    });
+    const cancelFrame = vi.spyOn(window, 'cancelAnimationFrame').mockImplementation((id) => {
+      frames.delete(id);
+    });
+    try {
+      centerStackMockState.showGraph = true;
+      act(() => centerStackMockState.setShowGraph?.(true));
+      const firstCanvas = document.querySelector('.studio-graph-canvas') as HTMLDivElement;
+      expect(firstCanvas).not.toBeNull();
+      const firstObserver = resizeObserverMockState.instances.find((instance) =>
+        instance.targets.includes(firstCanvas)
+      );
+      expect(firstObserver).toBeDefined();
+
+      // Flush the first mount's empty jsdom measurement before exercising a resize.
+      act(() => {
+        for (const [id, callback] of frames) {
+          frames.delete(id);
+          callback(0);
+        }
+      });
+      vi.spyOn(firstCanvas, 'getBoundingClientRect').mockReturnValue({ width: 800, height: 820 } as DOMRect);
+      runeTypeGraphMockState.relayout.mockClear();
+      act(() => firstObserver?.callback([], {} as ResizeObserver));
+      expect(runeTypeGraphMockState.relayout).not.toHaveBeenCalled();
+      expect(frames.size).toBe(1);
+      act(() => {
+        const [id, callback] = [...frames][0]!;
+        frames.delete(id);
+        callback(0);
+      });
+      expect(runeTypeGraphMockState.relayout).toHaveBeenCalledWith({
+        engine: 'dagre',
+        direction: 'TB',
+        groupByInheritance: false
+      });
+
+      act(() => centerStackMockState.setShowGraph?.(false));
+      expect(firstObserver?.disconnected).toBe(true);
+      act(() => centerStackMockState.setShowGraph?.(true));
+      const secondCanvas = document.querySelector('.studio-graph-canvas') as HTMLDivElement;
+      expect(secondCanvas).not.toBe(firstCanvas);
+      expect(resizeObserverMockState.instances.some((instance) => instance.targets.includes(secondCanvas))).toBe(true);
+    } finally {
+      requestFrame.mockRestore();
+      cancelFrame.mockRestore();
+    }
+  });
+
   it('fits the graph view when the graph pane resizes without changing orientation', async () => {
     renderEditorPage({
       models: [],
@@ -2210,21 +2298,7 @@ describe('EditorPage workspace chrome', () => {
 describe('EditorPage StructureView cell-editor wiring (Phase 5/8 regression guard)', () => {
   beforeEach(() => {
     vi.stubGlobal('Worker', MockWorker);
-    vi.stubGlobal(
-      'ResizeObserver',
-      class MockResizeObserver {
-        private instance: { callback: ResizeObserverCallback; targets: Element[] };
-        constructor(callback: ResizeObserverCallback) {
-          this.instance = { callback, targets: [] };
-          resizeObserverMockState.instances.push(this.instance);
-        }
-        observe(target: Element) {
-          this.instance.targets.push(target);
-        }
-        disconnect() {}
-        unobserve() {}
-      }
-    );
+    stubResizeObserver();
     MockWorker.instances = [];
     setRuneStudioTestApi(() => undefined);
     usePreviewStore.getState().resetPreviewState();
@@ -2234,6 +2308,8 @@ describe('EditorPage StructureView cell-editor wiring (Phase 5/8 regression guar
     vi.clearAllMocks();
     structureViewMockState.latestProps = undefined;
     resizeObserverMockState.instances = [];
+    centerStackMockState.showGraph = true;
+    centerStackMockState.setShowGraph = undefined;
     // EditorPage embeds PerspectiveHost; store defaults to 'workspaces' which
     // renders WorkspacesPerspective (requires context). These tests render a
     // loaded workspace — reset to 'explore' so DockShell is shown.

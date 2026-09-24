@@ -593,26 +593,33 @@ export const ExplorePerspective = withInstrumentation(
       graphRef.current?.fitView();
     }, [updateGraphLayoutDirection]);
 
-    useEffect(() => {
-      const el = graphContainerRef.current;
-      if (!el) return;
-      const frameId = window.requestAnimationFrame(() => {
-        syncResponsiveGraphLayout();
-      });
-      const observer = new ResizeObserver(() => {
-        syncResponsiveGraphLayout();
-      });
-      const handleWindowResize = () => {
-        syncResponsiveGraphLayout();
-      };
-      observer.observe(el);
-      window.addEventListener('resize', handleWindowResize);
-      return () => {
-        window.cancelAnimationFrame(frameId);
-        observer.disconnect();
-        window.removeEventListener('resize', handleWindowResize);
-      };
-    }, [syncResponsiveGraphLayout]);
+    const setGraphContainerRef = useCallback(
+      (el: HTMLDivElement | null) => {
+        graphContainerRef.current = el;
+        if (!el) return;
+        let frameId: number | undefined;
+        const scheduleLayout = () => {
+          if (frameId !== undefined) return;
+          frameId = window.requestAnimationFrame(() => {
+            frameId = undefined;
+            if (!el.isConnected) return;
+            const { width, height } = el.getBoundingClientRect();
+            if (width > 0 && height > 0) syncResponsiveGraphLayout();
+          });
+        };
+        scheduleLayout();
+        const observer = new ResizeObserver(scheduleLayout);
+        observer.observe(el);
+        window.addEventListener('resize', scheduleLayout);
+        return () => {
+          if (graphContainerRef.current === el) graphContainerRef.current = null;
+          if (frameId !== undefined) window.cancelAnimationFrame(frameId);
+          observer.disconnect();
+          window.removeEventListener('resize', scheduleLayout);
+        };
+      },
+      [syncResponsiveGraphLayout]
+    );
 
     useEffect(() => {
       if (!selectedNodeId) return;
@@ -1846,7 +1853,7 @@ export const ExplorePerspective = withInstrumentation(
               Grouped
             </Button>
           </div>
-          <div ref={graphContainerRef} className="min-h-0 flex-1 relative studio-graph-canvas">
+          <div ref={setGraphContainerRef} className="min-h-0 flex-1 relative studio-graph-canvas">
             <RuneTypeGraph
               ref={graphRef}
               config={{
@@ -1902,7 +1909,8 @@ export const ExplorePerspective = withInstrumentation(
         handleToggleGroupedLayout,
         navigateToNode,
         storeLayoutEngine,
-        storeSetLayoutEngine
+        storeSetLayoutEngine,
+        setGraphContainerRef
       ]
     );
 

@@ -567,6 +567,7 @@ function StructureFlowInner({
     let width = container.offsetWidth;
     let height = container.offsetHeight;
     let resizeTimer: ReturnType<typeof setTimeout> | undefined;
+    let visibilityFrame: number | undefined;
     const ro = new ResizeObserver(() => {
       const nextWidth = container.offsetWidth;
       const nextHeight = container.offsetHeight;
@@ -576,12 +577,18 @@ function StructureFlowInner({
       height = nextHeight;
       clearTimeout(resizeTimer);
       if (width === 0 || height === 0) return;
-      if (wasHidden) setVisibilityTick((t) => t + 1);
+      if (wasHidden && visibilityFrame === undefined) {
+        visibilityFrame = window.requestAnimationFrame(() => {
+          visibilityFrame = undefined;
+          if (container.offsetWidth > 0 && container.offsetHeight > 0) setVisibilityTick((t) => t + 1);
+        });
+      }
       resizeTimer = setTimeout(() => setViewportTick((t) => t + 1), 120);
     });
     ro.observe(container);
     return () => {
       clearTimeout(resizeTimer);
+      if (visibilityFrame !== undefined) window.cancelAnimationFrame(visibilityFrame);
       ro.disconnect();
     };
   }, []);
