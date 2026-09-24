@@ -285,6 +285,7 @@ describe('FormPreviewPanel', () => {
     const trigger = screen.getByLabelText('side');
     // Initially unset for an optional enum -> placeholder visible.
     expect(trigger).toHaveTextContent('Select…');
+    expect(usePreviewStore.getState().samples.get(optionalEnumSchema.targetId)?.serialized).toBe('{}');
 
     // `writeToClipboard: false` keeps userEvent from installing a non-writable
     // clipboard mock, which otherwise breaks the per-test `navigator.clipboard`
@@ -293,11 +294,15 @@ describe('FormPreviewPanel', () => {
     await user.click(trigger);
     await user.click(await screen.findByRole('option', { name: 'Sell' }));
     expect(trigger).toHaveTextContent('Sell');
+    expect(usePreviewStore.getState().samples.get(optionalEnumSchema.targetId)?.serialized).toBe(
+      '{\n  "side": "Sell"\n}'
+    );
 
     // Clearing back to unset must round-trip through the sentinel "Select…" item.
     await user.click(trigger);
     await user.click(await screen.findByRole('option', { name: 'Select…' }));
     expect(trigger).toHaveTextContent('Select…');
+    expect(usePreviewStore.getState().samples.get(optionalEnumSchema.targetId)?.serialized).toBe('{}');
   });
 
   it('shows unsupported preview messaging without presenting the sample as valid', () => {

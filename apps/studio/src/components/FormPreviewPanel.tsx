@@ -265,14 +265,14 @@ export const FormPreviewPanel = withInstrumentation(
     }, [activeSample, applyValidation, schema]);
 
     const handleFieldChange = useCallback(
-      (fieldPath: string, value: unknown, arrayIndices?: number[]) => {
+      (fieldPath: string, value: unknown, arrayIndices?: number[], validate = false) => {
         if (!schema || !activeSample) return;
         const nextValues = setValueAtPath(
           activeSample.values,
           pathToSegments(fieldPath, arrayIndices),
           value
         ) as Record<string, unknown>;
-        applyValidation(nextValues, activeSample.validated);
+        applyValidation(nextValues, validate || activeSample.validated);
       },
       [activeSample, applyValidation, schema]
     );
@@ -627,7 +627,7 @@ interface ChoiceFieldGroupProps {
   lookupFieldSource: (fieldPath: string) => PreviewSourceMapEntry | undefined;
   isResolvingReferences: boolean;
   onFieldBlur: () => void;
-  onFieldChange: (fieldPath: string, value: unknown, arrayIndices?: number[]) => void;
+  onFieldChange: (fieldPath: string, value: unknown, arrayIndices?: number[], validate?: boolean) => void;
   onArrayAdd: (field: PreviewField, arrayIndices?: number[]) => void;
   onArrayRemove: (field: PreviewField, index: number, arrayIndices?: number[]) => void;
   onObjectToggle: (field: PreviewField, present: boolean, arrayIndices?: number[]) => void;
@@ -739,7 +739,7 @@ interface ChoiceArmChildrenProps {
   lookupFieldSource: (fieldPath: string) => PreviewSourceMapEntry | undefined;
   isResolvingReferences: boolean;
   onFieldBlur: () => void;
-  onFieldChange: (fieldPath: string, value: unknown, arrayIndices?: number[]) => void;
+  onFieldChange: (fieldPath: string, value: unknown, arrayIndices?: number[], validate?: boolean) => void;
   onArrayAdd: (field: PreviewField, arrayIndices?: number[]) => void;
   onArrayRemove: (field: PreviewField, index: number, arrayIndices?: number[]) => void;
   onObjectToggle: (field: PreviewField, present: boolean, arrayIndices?: number[]) => void;
@@ -817,7 +817,7 @@ interface PreviewFieldControlProps {
   lookupFieldSource: (fieldPath: string) => PreviewSourceMapEntry | undefined;
   isResolvingReferences: boolean;
   onFieldBlur: () => void;
-  onFieldChange: (fieldPath: string, value: unknown, arrayIndices?: number[]) => void;
+  onFieldChange: (fieldPath: string, value: unknown, arrayIndices?: number[], validate?: boolean) => void;
   onArrayAdd: (field: PreviewField, arrayIndices?: number[]) => void;
   onArrayRemove: (field: PreviewField, index: number, arrayIndices?: number[]) => void;
   onObjectToggle: (field: PreviewField, present: boolean, arrayIndices?: number[]) => void;
@@ -989,9 +989,8 @@ function PreviewFieldControl({
     const value = getValueAtPath(sample?.values ?? {}, pathToSegments(field.path, arrayIndices));
     const stringValue = typeof value === 'string' && value !== '' ? value : undefined;
     const fieldLabel = resolvedFieldLabel(field, arrayIndices);
-    // Radix Select disallows empty-string item values, so optional enums use a
-    // sentinel item that maps back to '' on selection — restoring the native
-    // "Select…/clear" behaviour the prior <option value=""> provided.
+    // Select items need non-empty values. Keep the clear option separate from
+    // the sample value so an unset optional enum remains absent for Zod.
     const CLEAR_SENTINEL = '__rune_enum_unset__';
     return (
       <div className="block text-xs font-medium">
@@ -999,8 +998,7 @@ function PreviewFieldControl({
         <Select
           value={stringValue}
           onValueChange={(next) => {
-            onFieldChange(field.path, next === CLEAR_SENTINEL ? '' : next, arrayIndices);
-            onFieldBlur();
+            onFieldChange(field.path, next === CLEAR_SENTINEL ? undefined : next, arrayIndices, true);
           }}
         >
           <SelectTrigger size="sm" aria-label={fieldLabel} className="mt-0.5 w-full text-xs">

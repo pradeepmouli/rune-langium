@@ -59,7 +59,7 @@ export const buildDefaultValue = withInstrumentation(
       case 'boolean':
         return false;
       case 'enum':
-        return field.required ? (field.enumValues?.[0]?.value ?? '') : '';
+        return field.required ? (field.enumValues?.[0]?.value ?? '') : undefined;
       case 'object':
         return field.required
           ? buildDefaultFieldsObject(field.children ?? [], field.choiceArmPaths, fieldLeafKey)
