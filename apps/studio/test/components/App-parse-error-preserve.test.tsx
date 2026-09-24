@@ -5,6 +5,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import 'fake-indexeddb/auto';
 import type { ReactNode } from 'react';
 import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { useEditorStore } from '@rune-langium/visual-editor';
 
 import { App } from '../../src/App.js';
 import { getModelSource } from '../../src/services/model-registry.js';
@@ -63,6 +64,12 @@ vi.mock('../../src/shell/ExplorePerspective.js', async () => {
             }
           >
             break
+          </button>
+          <button
+            type="button"
+            onClick={() => useEditorStore.getState().requestNamespaceHydration('cdm.base.staticdata.party')}
+          >
+            hydrate
           </button>
         </div>
       );
@@ -140,6 +147,7 @@ function deferred<T>() {
 }
 
 beforeEach(async () => {
+  useEditorStore.getState().resetHydration();
   parseWorkspaceFilesMock.mockReset();
   showToastSpy.mockReset();
   setCuratedFilesSpy.mockReset();
@@ -302,6 +310,56 @@ describe('App parse recovery', () => {
 });
 
 describe('App curated parse projection', () => {
+  it('keeps hydration retryable when the parse preserves the last valid graph', async () => {
+    parseWorkspaceFilesMock
+      .mockResolvedValueOnce({
+        models: [{ name: 'restored.project' }],
+        parsedModels: [{ filePath: 'trade.rosetta', model: { name: 'restored.project' } }],
+        errors: new Map(),
+        parseMode: 'router'
+      })
+      .mockResolvedValueOnce({
+        models: [],
+        parsedModels: [],
+        errors: new Map([['trade.rosetta', ['Expected ":" after type declaration']]]),
+        parseMode: 'router',
+        curatedRefOnlyFiles: {
+          cdm: [
+            {
+              path: 'base-staticdata-party-type.rosetta',
+              content: 'namespace cdm.base.staticdata.party\n',
+              namespace: 'cdm.base.staticdata.party',
+              serializedModelJson: '{}',
+              exports: [],
+              refOnly: true
+            }
+          ]
+        }
+      });
+    await saveWorkspace(makeWorkspace('ws-hydration-errors', 'Hydration Errors'));
+    await saveWorkspaceFiles('ws-hydration-errors', [
+      {
+        name: 'trade.rosetta',
+        path: 'trade.rosetta',
+        content: 'namespace restored.project\n\ntype Trade:\n  tradeDate date (1..1)\n',
+        dirty: false
+      }
+    ]);
+
+    render(<App />);
+    await waitFor(() => expect(screen.getByTestId('model-count').textContent).toBe('1'));
+    fireEvent.click(screen.getByRole('button', { name: 'hydrate' }));
+
+    await waitFor(() => {
+      expect(parseWorkspaceFilesMock).toHaveBeenCalledTimes(2);
+      expect(screen.getByTestId('error-count').textContent).toBe('1');
+      expect(useEditorStore.getState().pendingHydrationNamespaces).toEqual([]);
+    });
+    expect(useEditorStore.getState().hydratedNamespaces).not.toContain('cdm.base.staticdata.party');
+    expect(screen.getByTestId('model-count').textContent).toBe('1');
+    expect(screen.getByTestId('curated-read-only-count').textContent).toBe('0');
+  });
+
   it('puts initially hydrated curated files into the read-only workspace view', async () => {
     const source = getModelSource('cdm');
     expect(source).toBeDefined();

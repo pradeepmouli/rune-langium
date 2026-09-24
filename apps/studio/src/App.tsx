@@ -289,6 +289,12 @@ function AppContent() {
       .then((result) => {
         if (cancelled) return;
         applyParseResult(result, { preserveSemanticModelOnErrors: true });
+        if (result.errors.size > 0) {
+          // The last valid semantic model is still in use. Keep this namespace
+          // retryable rather than claiming its new declarations were applied.
+          useEditorStore.getState().dequeuePendingHydration(pendingHydration);
+          return;
+        }
         // Mark exactly the set sent in THIS parse (not whatever is pending when
         // the promise resolves) so a request arriving mid-flight isn't lost.
         useEditorStore.getState().markNamespacesHydrated(pendingHydration);
