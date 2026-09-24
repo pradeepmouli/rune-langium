@@ -99,7 +99,11 @@ sink before running its instrumented handler. `INSTRUMENTATION_ENABLED=true` ena
 `INSTRUMENTATION_LEVEL=trace` includes nested fetch spans (the default threshold
 is `info`). For a focused curated-load investigation, set
 `INSTRUMENTATION_OPS=onRequestPost,loadCuratedWorkspace,fetchCuratedManifest,fetchCuratedNamespace`
-and `INSTRUMENTATION_TIMING_ONLY=true` in the Pages runtime environment. The
+and `INSTRUMENTATION_TIMING_ONLY=true` in the Pages build environment before
+`pnpm run build:cloudflare`. The combined build copies these non-secret values
+into the generated root `wrangler.toml`, which supplies the Pages Function
+bindings for direct Wrangler uploads. Rebuild before deploying when changing
+them; dashboard-only changes may not reach the deployed Function. The
 timing-only format keeps operation names, elapsed milliseconds, error signatures,
 and timestamps without captured request or model payloads. These are Pages
 runtime settings, separate from Studio's `VITE_ENABLE_TELEMETRY` build flag and
@@ -110,7 +114,7 @@ build time, and browser records still require the Studio user opt-in. When
 diagnostics are omitted from a production Vite build, untagged calls retain
 their original function with no instrumentation wrapper. At runtime, a disabled
 or excluded call bypasses timing and capture.
-Remove temporary diagnostic settings after the run.
+Remove temporary diagnostic settings and rebuild/redeploy after the run.
 J04b records `curatedNamespaceHydration` from Counterparty selection through
 populated Inspector attributes, even when an assertion fails; compare that
 wall-clock duration with the Pages Function spans for the same run.
