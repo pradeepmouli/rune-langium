@@ -3,6 +3,7 @@
 // Copyright (c) 2026 Pradeep Mouli
 
 import {
+  BUILD_DISABLE_INSTRUMENTATION,
   configureInstrumentation,
   instrumentationConfigFromEnv,
   type InstrumentationEnvironment,
@@ -56,6 +57,7 @@ export const installInstrumentationEdgeSink = withInstrumentation(
 // sink before its instrumented handler begins.
 // oxlint-disable-next-line rune/no-uninstrumented-export -- configuration must run before the wrapped handler
 export function withEdgeInstrumentation<Env>(handler: PagesFunction<Env>): PagesFunction<Env> {
+  if (BUILD_DISABLE_INSTRUMENTATION) return handler;
   return (ctx) => {
     installInstrumentationEdgeSink((ctx.env ?? {}) as EdgeInstrumentationEnv);
     return handler(ctx);

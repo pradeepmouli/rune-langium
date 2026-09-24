@@ -50,6 +50,12 @@ function findRouteEntries(dir, entries = []) {
 
 const entries = findRouteEntries(FUNCTIONS_SRC);
 console.log(`[bundle-functions] found ${entries.length} route entries`);
+// Pages runtime diagnostics are enabled by the same build-time decision as
+// Studio's Vite bundle. The combined build also writes the corresponding
+// runtime binding to its generated wrangler.toml. Without the opt-in, esbuild
+// makes withInstrumentation return the original functions and the Pages route
+// adapter return the original handler when their modules initialize.
+const instrumentationBuildEnabled = process.env.INSTRUMENTATION_ENABLED === 'true';
 
 rmSync(outDir, { recursive: true, force: true });
 mkdirSync(outDir, { recursive: true });
@@ -72,6 +78,10 @@ for (const entry of entries) {
     // CF Pages Functions run in the Workers runtime — ES2022 + ESM.
     target: 'es2022',
     format: 'esm',
+    define: {
+      'import.meta.env.PROD': 'true',
+      'import.meta.env.VITE_ENABLE_INSTRUMENTATION': JSON.stringify(instrumentationBuildEnabled ? 'true' : 'false')
+    },
     outfile,
     external: [
       // Workers runtime built-ins; CF supplies these at runtime.
