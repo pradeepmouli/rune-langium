@@ -5,6 +5,7 @@ import { checkout as test, expect, loadCdm } from '../fixtures.js';
 import { declarationNodeId, typeNavigationButton } from '../../helpers/type-navigation.js';
 import { waitForHydratedNode } from '../readiness.js';
 import { ANCHOR_DATA } from '../anchors.js';
+import { expectContainedInPane } from '../../helpers/pane-geometry.js';
 
 test.describe('J06 — Structure view', () => {
   test.skip(!process.env.PLAYWRIGHT_PROD_SMOKE, 'set PLAYWRIGHT_PROD_SMOKE=1 to run against a deployed Studio');
@@ -26,6 +27,9 @@ test.describe('J06 — Structure view', () => {
     const node = page.getByTestId('structure-view-flow').locator('.react-flow__node').first();
     await expect(node).toBeVisible();
     await node.click();
+    await page.getByRole('button', { name: 'Source', exact: true }).click();
+    await expect(page.getByTestId('source-editor')).toBeVisible();
+    await expectContainedInPane(node, page.getByTestId('structure-view-flow'));
     await evidence.checkpoint('node-selected');
   });
 });

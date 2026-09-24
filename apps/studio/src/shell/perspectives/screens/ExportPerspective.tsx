@@ -5,6 +5,7 @@
 
 import type { ReactElement } from 'react';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import type { DockviewApi } from 'dockview-react';
 import type { ExportSelection } from '@rune-langium/codegen/export';
 import type { WorkbenchDefinition } from '../../workbench-types.js';
 import { WorkbenchHost } from '../../WorkbenchHost.js';
@@ -24,6 +25,24 @@ export interface ExportPerspectiveProps {
   workspaceId?: string;
 }
 
+const COMPACT_OUTPUT_HEIGHT = 128;
+const EXPANDED_OUTPUT_HEIGHT = 256;
+
+/** Constraints belong to dock groups, so restored layouts receive them too. */
+function reconcileExportLayout(api: DockviewApi): void {
+  const selection = api.getPanel('export.selection');
+  const settings = api.getPanel('export.settings');
+  const preview = api.getPanel('export.preview');
+  const height = api.height || 640;
+  selection?.group.api.setConstraints({ minimumHeight: Math.min(352, Math.floor(height * 0.55)) });
+  if (preview && preview.group !== selection?.group) {
+    preview.group.api.setConstraints({ minimumHeight: Math.min(96, Math.floor(height * 0.2)) });
+  }
+  if (settings && settings.group !== selection?.group && api.width >= 768) {
+    settings.group.api.setConstraints({ minimumWidth: 320 });
+  }
+}
+
 export const ExportPerspective = withInstrumentation(
   function ExportPerspective({ files, workspaceId }: ExportPerspectiveProps): ReactElement {
     const config = useExportWorkbenchStore((state) => state.config);
@@ -41,6 +60,32 @@ export const ExportPerspective = withInstrumentation(
     const [activationReady, setActivationReady] = useState(false);
     const sourceRevisionRef = useRef(sourceRevision);
     const activationRef = useRef<{ workspaceId: string; promise: Promise<void> } | undefined>(undefined);
+    const [workbenchApi, setWorkbenchApi] = useState<DockviewApi>();
+    const hasArtifact =
+      run.status === 'ready' ||
+      run.status === 'stale' ||
+      ((run.status === 'generating' || run.status === 'failed') && run.previous !== undefined);
+    const hadArtifact = useRef(hasArtifact);
+    const compactOutput = useRef<{ groupId: string; height: number } | undefined>(undefined);
+
+    useEffect(() => {
+      const arrived = hasArtifact && !hadArtifact.current;
+      hadArtifact.current = hasArtifact;
+      if (!arrived || !workbenchApi) return;
+      const initialOutput = compactOutput.current;
+      compactOutput.current = undefined;
+      const preview = workbenchApi.getPanel('export.preview');
+      // Only expand the untouched default. Restored, resized, or tabbed groups
+      // retain their arrangement, including deliberately compact output.
+      if (
+        preview &&
+        initialOutput?.groupId === preview.group.id &&
+        preview.group.panels.length === 1 &&
+        Math.abs(preview.group.api.height - initialOutput.height) <= 2
+      ) {
+        preview.group.api.setSize({ height: Math.min(EXPANDED_OUTPUT_HEIGHT, workbenchApi.height * 0.4) });
+      }
+    }, [hasArtifact, workbenchApi]);
     const requiredBy = useMemo(
       () =>
         new Map(
@@ -141,7 +186,7 @@ export const ExportPerspective = withInstrumentation(
             component: 'export.selection',
             title: 'Selection'
           });
-          const settings = api.addPanel({
+          api.addPanel({
             id: 'export.settings',
             component: 'export.settings',
             title: 'Settings',
@@ -156,12 +201,27 @@ export const ExportPerspective = withInstrumentation(
             title: 'Generated output',
             position: { referencePanel: selection.id, direction: 'below' }
           });
-          if (width >= 768) settings.group.api.setConstraints({ minimumWidth: 320 });
-          preview.group.api.setConstraints({ minimumHeight: 220 });
+          reconcileExportLayout(api);
+          preview.group.api.setSize({ height: hasArtifact ? EXPANDED_OUTPUT_HEIGHT : COMPACT_OUTPUT_HEIGHT });
+          compactOutput.current = hasArtifact
+            ? undefined
+            : { groupId: preview.group.id, height: preview.group.api.height };
           if (width < 768) selection.api.setActive();
-        }
+        },
+        reconcile: reconcileExportLayout
       }),
-      [activeFile, cancel, config, configure, handleGenerate, handleSelectionChange, requiredBy, run, setActiveFile]
+      [
+        activeFile,
+        cancel,
+        config,
+        configure,
+        handleGenerate,
+        handleSelectionChange,
+        hasArtifact,
+        requiredBy,
+        run,
+        setActiveFile
+      ]
     );
 
     return (
@@ -172,6 +232,7 @@ export const ExportPerspective = withInstrumentation(
               definition={definition}
               initialNativeLayout={nativeLayout}
               onNativeLayoutChange={setNativeLayout}
+              onReady={setWorkbenchApi}
               className="h-full min-w-0 w-full"
             />
           ) : (

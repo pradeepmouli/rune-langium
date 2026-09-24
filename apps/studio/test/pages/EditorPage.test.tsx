@@ -29,6 +29,10 @@ const {
     get nodesById() {
       return new Map(this.nodes.map((n) => [n.id, n]));
     },
+    getVisibleNodes() {
+      return this.nodes;
+    },
+    revealNeighbors: vi.fn(),
     edges: [] as Array<{ source: string; target: string }>,
     selectedNodeId: undefined as string | undefined,
     detailPanelOpen: false,

@@ -15,7 +15,7 @@
 
 import React from 'react';
 import { describe, it, expect, vi } from 'vitest';
-import { render, screen } from '@testing-library/react';
+import { render, screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { CenterPanesContext } from '../../../src/shell/center-panes-context.js';
 import type { CenterPanesContextValue } from '../../../src/shell/center-panes-context.js';
@@ -58,6 +58,18 @@ function renderWithPanes(activePanes: Set<string>, props?: Partial<React.Compone
 }
 
 describe('CenterStackPanel — Structure segment reachability (Phase 7.5 regression guard)', () => {
+  it('distinguishes the primary view from panes shown alongside it', () => {
+    renderWithPanes(new Set(['structure', 'source']));
+    const view = within(screen.getByRole('group', { name: 'View' }));
+    expect(view.getByRole('button', { name: 'Graph' })).toBeInTheDocument();
+    expect(view.getByRole('button', { name: 'Structure' })).toHaveAttribute('aria-pressed', 'true');
+    expect(view.queryByRole('button', { name: 'Source' })).not.toBeInTheDocument();
+    const companions = within(screen.getByRole('group', { name: 'Show alongside' }));
+    expect(companions.getByRole('button', { name: 'Source' })).toHaveAttribute('aria-pressed', 'true');
+    expect(companions.getByRole('button', { name: 'Inspector' })).toHaveAttribute('aria-pressed', 'false');
+    expect(screen.queryByText('View')).not.toBeInTheDocument();
+    expect(screen.queryByText('Show alongside')).not.toBeInTheDocument();
+  });
   it('renders a Structure segment button in the pane-switcher', () => {
     renderWithPanes(new Set(['graph']));
     expect(screen.getByRole('button', { name: /structure/i })).toBeInTheDocument();

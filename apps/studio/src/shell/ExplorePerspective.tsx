@@ -526,6 +526,7 @@ export const ExplorePerspective = withInstrumentation(
     const storePendingInversePatches = useEditorStore((s) => s.pendingInversePatches);
     const selectedNodeId = useEditorStore((s) => s.selectedNodeId);
     const visibility = useEditorStore((s) => s.visibility);
+    const visibleGraphCount = useEditorStore((s) => s.getVisibleNodes().length);
     const expandedNamespaces = visibility.expandedNamespaces;
     const hiddenNodeIds = visibility.hiddenNodeIds;
 
@@ -1138,7 +1139,7 @@ export const ExplorePerspective = withInstrumentation(
 
     // Owns the HydrationOrchestrator instance for this component's lifetime —
     // dedups (via waitingByNamespace) the three on-demand hydration triggers
-    // below (handleExplorerSelectNode, handleToggleNamespace, navigateToNode).
+    // below (handleToggleNamespace, navigateToNode).
     // Deliberately does NOT call beginRetryRound — these triggers are
     // user-driven (re-selecting/re-toggling), not auto-retried, so there is
     // no re-entrant loop to cap, and capping would strand a still-deferred
@@ -1172,37 +1173,6 @@ export const ExplorePerspective = withInstrumentation(
         orchestratorRef.current = null;
       };
     }, []);
-
-    const handleExplorerSelectNode = useCallback(
-      (nodeId: string) => {
-        storeSelectNode(nodeId, { reapplyFocusMode: true });
-        // On-demand curated hydration: only deferred (list-only, un-hydrated
-        // curated) nodes need a server round-trip; user types and already-
-        // hydrated curated types resolve locally.
-        const selectedNode = selectNodeRepository(useEditorStore.getState().nodesById).byId(nodeId);
-        const meta = selectedNode?.meta;
-        if (meta?.deferred && meta.namespace) {
-          orchestratorRef.current?.requestHydration(meta.namespace, {
-            retryFor: {
-              targetId: nodeId,
-              onRetry: () => {
-                // Re-selecting re-reads the AST node fresh. Per Task 4, the parser
-                // worker's hydrate handler already does a full-replacement relink on
-                // every hydrate round, so no separate relink trigger is needed here —
-                // only re-selecting to force a fresh render. No macrotask defer needed
-                // here (unlike Task 3's CodegenProvider case): App.tsx's existing
-                // hydrate effect calls applyParseResult(result, ...) BEFORE
-                // markNamespacesHydrated in the same synchronous .then() callback, so
-                // by the time this onRetry fires, the store already holds the fresh
-                // data — there's no separate worker round-trip to race against.
-                storeSelectNode(nodeId, { reapplyFocusMode: false });
-              }
-            }
-          });
-        }
-      },
-      [storeSelectNode]
-    );
 
     // Expanding a namespace header is an equally natural browse gesture that
     // should trigger hydration. Wrap the bare toggle action so we can also
@@ -1255,7 +1225,7 @@ export const ExplorePerspective = withInstrumentation(
     // Single choke point for "was this a new visit?" — subscribes directly
     // to useEditorStore's selectedNodeId rather than hooking every call
     // site that can change it. That list is bigger than just navigateToNode:
-    // handleExplorerSelectNode (Type Explorer clicks), StructureView's
+    // StructureView's
     // onNodeSelect/onNavigateToEnumType, and RuneTypeGraph's own internal
     // node-click selection (packages/visual-editor — not exposed to this
     // file as a callback at all) all call storeSelectNode directly. Patching
@@ -1366,15 +1336,19 @@ export const ExplorePerspective = withInstrumentation(
         }
         // History tracking (back-stack push + forward-stack invalidation) is
         // handled generically by the selectedNodeId subscription above.
+        // Explicit navigation reveals the target while preserving unrelated kind filters.
+        const editor = useEditorStore.getState();
+        const targetKind = targetNode?.type as import('@rune-langium/visual-editor').TypeKind;
+        if (targetKind && !editor.visibility.visibleNodeKinds.has(targetKind)) editor.toggleNodeKind(targetKind);
         storeSelectNode(resolvedNodeId, { reapplyFocusMode: true });
+        if (!focusMode) editor.revealNeighbors(resolvedNodeId);
         const targetMeta = targetNode?.meta;
         if (targetMeta?.deferred && targetMeta.namespace) {
           orchestratorRef.current?.requestHydration(targetMeta.namespace, {
             retryFor: {
               targetId: resolvedNodeId,
               onRetry: () => {
-                // See handleExplorerSelectNode above for why no macrotask defer
-                // is needed here (unlike Task 3's CodegenProvider case).
+                // Hydration has already replaced the graph before this retry.
                 storeSelectNode(resolvedNodeId, { reapplyFocusMode: false });
               }
             }
@@ -1740,7 +1714,7 @@ export const ExplorePerspective = withInstrumentation(
             onToggleNamespace={handleToggleNamespace}
             onExpandAll={storeExpandAllNamespaces}
             onCollapseAll={storeCollapseAllNamespaces}
-            onSelectNode={handleExplorerSelectNode}
+            onSelectNode={navigateToNode}
             dragSourceId={dragSource?.typeId}
             onSetDragSource={setDragSource}
             onClearDragSource={clearDragSource}
@@ -1755,7 +1729,7 @@ export const ExplorePerspective = withInstrumentation(
         handleToggleNamespace,
         storeExpandAllNamespaces,
         storeCollapseAllNamespaces,
-        handleExplorerSelectNode,
+        navigateToNode,
         dragSource,
         setDragSource,
         clearDragSource
@@ -1830,11 +1804,23 @@ export const ExplorePerspective = withInstrumentation(
             aria-label="Graph toolbar"
             className="glass-toolbar flex flex-wrap items-center gap-1 border-b border-border px-2 py-1"
           >
-            <Button variant="glass" size="xs" onClick={handleFitView} title="Fit to view">
+            <Button
+              variant="glass"
+              size="xs"
+              onClick={handleFitView}
+              title="Fit to view"
+              disabled={visibleGraphCount === 0}
+            >
               <Maximize2 />
               Fit View
             </Button>
-            <Button variant="glass" size="xs" onClick={handleRelayout} title="Re-run auto layout">
+            <Button
+              variant="glass"
+              size="xs"
+              onClick={handleRelayout}
+              title="Re-run auto layout"
+              disabled={visibleGraphCount === 0}
+            >
               <LayoutGrid />
               Re-layout
             </Button>
@@ -1871,7 +1857,7 @@ export const ExplorePerspective = withInstrumentation(
                   direction: graphLayoutDirection,
                   groupByInheritance: groupedLayout
                 },
-                showControls: true,
+                showControls: visibleGraphCount > 0,
                 showMinimap: false,
                 readOnly: false
               }}
@@ -1882,10 +1868,30 @@ export const ExplorePerspective = withInstrumentation(
                 onNavigateToType: navigateToNode
               }}
             />
+            {visibleGraphCount === 0 && (
+              <div
+                data-testid="graph-empty-state"
+                className="absolute inset-0 flex flex-col items-center justify-center gap-3 bg-background/95 p-4 text-center"
+              >
+                <p className="text-sm font-medium">No types are visible in Graph</p>
+                <p className="max-w-sm text-xs text-muted-foreground">
+                  Open a type by its name or arrow in Type explorer. Dragging a type changes an association without
+                  navigating.
+                </p>
+                {selectedNodeId && nodeRepository.byId(selectedNodeId) && (
+                  <Button variant="secondary" size="sm" onClick={() => navigateToNode(selectedNodeId)}>
+                    Show selected type
+                  </Button>
+                )}
+              </div>
+            )}
           </div>
         </section>
       ),
       [
+        visibleGraphCount,
+        selectedNodeId,
+        nodeRepository,
         focusMode,
         groupedLayout,
         graphLayoutDirection,

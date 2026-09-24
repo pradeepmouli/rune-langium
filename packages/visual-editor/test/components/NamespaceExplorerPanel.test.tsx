@@ -8,12 +8,11 @@
  * visibility toggles, node selection callbacks, and drag-source palette
  * behaviour.
  *
- * Phase 13 amend: row body is single-purpose (drag-source mark only);
- * navigation moved to a dedicated chevron-right nav button per finding 4.
+ * Type names and arrows navigate independently of native row dragging.
  */
 
 import { afterEach, describe, it, expect, vi } from 'vitest';
-import { render, screen, fireEvent } from '@testing-library/react';
+import { render, screen, fireEvent, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { NamespaceExplorerPanel } from '../../src/components/panels/NamespaceExplorerPanel.js';
 import type { TypeGraphNode, AnyGraphNode } from '../../src/types.js';
@@ -106,6 +105,57 @@ function renderPanel(overrides: Partial<React.ComponentProps<typeof NamespaceExp
 }
 
 describe('NamespaceExplorerPanel', () => {
+  it('compacts deep namespace chains while preserving expansion, navigation and drag identities', () => {
+    const nodes = [makeNode('com.rosetta.model', 'Trade'), makeNode('com.rosetta.model', 'Event')];
+    const { props } = renderPanel({ nodeRepository: repoFrom(nodes) });
+    const namespace = screen.getByTestId('ns-seg-com.rosetta.model');
+    expect(screen.queryByTestId('ns-seg-com')).not.toBeInTheDocument();
+    expect(screen.queryByTestId('ns-seg-com.rosetta')).not.toBeInTheDocument();
+    const toggle = within(namespace).getByRole('button', { name: 'com.rosetta.model', exact: true });
+    expect(toggle).toHaveAttribute('title', 'com.rosetta.model');
+    expect(toggle.querySelector('span')).toHaveAttribute('dir', 'rtl');
+    expect(toggle).toHaveTextContent('com.rosetta.model');
+    // Compression does not open previously collapsed deep namespaces.
+    expect(screen.queryByTestId('ns-type-com.rosetta.model.Trade')).not.toBeInTheDocument();
+    fireEvent.click(toggle);
+
+    fireEvent.click(screen.getByTestId('ns-type-link-com.rosetta.model.Trade'));
+    expect(props.onSelectNode).toHaveBeenCalledWith('com.rosetta.model.Trade');
+    const setData = vi.fn();
+    fireEvent.dragStart(screen.getByTestId('ns-type-com.rosetta.model.Trade'), {
+      dataTransfer: { setData, effectAllowed: '' }
+    });
+    expect(JSON.parse(setData.mock.calls.find(([mime]) => mime === TYPE_REF_PAYLOAD_MIME)![1])).toMatchObject({
+      typeId: 'com.rosetta.model.Trade',
+      kind: 'Data'
+    });
+
+    fireEvent.click(toggle);
+    expect(screen.queryByTestId('ns-type-com.rosetta.model.Trade')).not.toBeInTheDocument();
+    fireEvent.click(toggle);
+    expect(screen.getByTestId('ns-type-com.rosetta.model.Trade')).toBeInTheDocument();
+  });
+
+  it('keeps compacted branch selection whole when search hides a sibling namespace', () => {
+    const nodes = [makeNode('org.finance.trade', 'Trade'), makeNode('org.finance.party', 'Party')];
+    const onChange = vi.fn();
+    renderPanel({
+      nodeRepository: repoFrom(nodes),
+      selection: { explicit: new Set(), requiredBy: new Map(), onChange }
+    });
+    expect(screen.getByTestId('ns-seg-org.finance.trade')).toBeInTheDocument();
+    expect(screen.getByTestId('ns-seg-org.finance.party')).toBeInTheDocument();
+    expect(screen.queryByTestId('ns-seg-org')).not.toBeInTheDocument();
+
+    fireEvent.change(screen.getByTestId('namespace-search'), { target: { value: 'Trade' } });
+    expect(screen.queryByTestId('ns-seg-org.finance.party')).not.toBeInTheDocument();
+    fireEvent.click(screen.getByTestId('ns-seg-checkbox-org.finance'));
+    expect(onChange).toHaveBeenCalledWith(new Set(['org.finance.trade.Trade', 'org.finance.party.Party']), {
+      kind: 'namespace',
+      namespaces: ['org.finance.trade', 'org.finance.party'],
+      checked: true
+    });
+  });
   it('shows empty state when no nodes', () => {
     renderPanel({ nodeRepository: repoFrom([]) });
     expect(screen.getByText('No types loaded')).toBeTruthy();
@@ -124,17 +174,7 @@ describe('NamespaceExplorerPanel', () => {
   });
 
   // -------------------------------------------------------------------------
-  // Row click model (post-iteration): the only click-actionable element in
-  // the row is the navigate arrow on the right. The row body and the type
-  // name are NOT click targets — the only operations on the row are HTML5
-  // drag (to add the type as a ref) and Enter/Space (which delegates to the
-  // navigate action for keyboard parity with the arrow click). The earlier
-  // "click-to-mark-as-drag-source" semantic and the "click-on-name-to-
-  // navigate" semantic were both removed because the user reported them
-  // as confusing — every visual affordance in the row now points at "drag
-  // or click the arrow", nothing else.
-  // -------------------------------------------------------------------------
-
+  // Name/arrow navigation leaves row dragging and inclusion independent.
   it('single-click on the row body is a no-op (drag-source-mark removed)', () => {
     const onSetDragSource = vi.fn();
     const { props } = renderPanel({ onSetDragSource });
@@ -153,6 +193,21 @@ describe('NamespaceExplorerPanel', () => {
     fireEvent.click(navBtn);
 
     expect(props.onSelectNode).toHaveBeenCalledOnce();
+  });
+
+  it('navigates from the type name without changing inclusion', async () => {
+    const onChange = vi.fn();
+    const { props } = renderPanel({
+      selection: { explicit: new Set(), requiredBy: new Map(), getSelectionId: (node) => node.id, onChange }
+    });
+    const link = screen.getByTestId('ns-type-link-com.model.Trade');
+    await userEvent.click(link);
+    expect(props.onSelectNode).toHaveBeenCalledExactlyOnceWith('com.model.Trade');
+    expect(onChange).not.toHaveBeenCalled();
+    link.focus();
+    await userEvent.keyboard('{Enter}');
+    expect(props.onSelectNode).toHaveBeenCalledTimes(2);
+    expect(screen.getByTestId('ns-type-com.model.Trade')).toHaveAttribute('draggable', 'true');
   });
 
   it('positions virtual rows via top, not transform (WebKit drag fix #302)', () => {
@@ -323,6 +378,9 @@ describe('NamespaceExplorerPanel', () => {
       selection: { explicit: new Set(), requiredBy: new Map(), onChange }
     });
 
+    fireEvent.click(within(screen.getByTestId('ns-seg-org')).getByRole('button', { name: 'org', exact: true }));
+    expect(screen.queryByTestId('ns-type-org.a.deep.First')).not.toBeInTheDocument();
+
     fireEvent.click(screen.getByTestId('ns-seg-checkbox-org'));
 
     expect(onChange).toHaveBeenCalledWith(new Set(['org.a.deep.First', 'org.b.deep.Second']), {
@@ -385,20 +443,18 @@ describe('NamespaceExplorerPanel', () => {
     expect(typeRow.className).toContain('bg-accent');
   });
 
-  it('shows reduced visible count when namespaces hidden', () => {
+  it('labels the available catalog count independently of graph visibility', () => {
     // Only com.model is expanded, others hidden
     const expanded = new Set(['com.model']);
     renderPanel({ expandedNamespaces: expanded });
-    // 2 visible (Trade, Event in com.model) / 5 total (defaultNodes now has 5)
-    expect(screen.getByText('2/5')).toBeTruthy();
+    expect(screen.getByText('5 available')).toBeTruthy();
   });
 
-  it('shows reduced visible count when individual nodes hidden', () => {
+  it('keeps hidden graph nodes in the available catalog count', () => {
     const allNamespaces = new Set(defaultNodes.map((n) => n.meta.namespace));
     const hidden = new Set(['com.model.Trade']);
     renderPanel({ expandedNamespaces: allNamespaces, hiddenNodeIds: hidden });
-    // 4 visible / 5 total (com.model.Trade is hidden; cdm.trade.Trade is still visible)
-    expect(screen.getByText('4/5')).toBeTruthy();
+    expect(screen.getByText('5 available')).toBeTruthy();
   });
 
   it('kind filter pill shows byType count badge (data pill shows 4 for defaultNodes)', () => {
@@ -543,7 +599,7 @@ describe('NamespaceExplorerPanel', () => {
 });
 
 // ---------------------------------------------------------------------------
-// Gap 2: kind-count chips + kind filter pills
+// Kind filters remain available without a breakdown beneath each namespace.
 // ---------------------------------------------------------------------------
 
 describe('NamespaceExplorerPanel — kind filter pills', () => {
@@ -577,13 +633,11 @@ describe('NamespaceExplorerPanel — kind filter pills', () => {
     }
   });
 
-  it('renders the per-kind breakdown chips under the segment header', () => {
+  it('omits namespace breakdowns and their reserved virtual-row height', () => {
     renderMixed();
-    const chips = screen.getByTestId('ns-seg-pkg-kinds');
-    expect(chips.textContent).toContain('2');
-    expect(chips.textContent?.toLowerCase()).toContain('data');
-    expect(chips.textContent?.toLowerCase()).toContain('choice');
-    expect(chips.textContent?.toLowerCase()).toContain('enum');
+    expect(screen.queryByTestId('ns-seg-pkg-kinds')).not.toBeInTheDocument();
+    expect(screen.getByTestId('ns-seg-pkg').parentElement).toHaveStyle({ height: '32px' });
+    expect(screen.getByTestId('kind-filter-data')).toHaveTextContent('2');
   });
 
   it('hides types of a kind when its pill is toggled off', () => {

@@ -29,6 +29,12 @@ test.describe('J13 — Export perspective', () => {
       const settings = page.getByTestId('export-settings-panel');
       await expect(settings).toBeVisible();
       await expect(page.getByTestId('export-artifact-status')).toContainText('No export artifact yet');
+      await expect
+        .poll(
+          async () =>
+            (await page.getByTestId('export-selection').getByTestId('namespace-tree').boundingBox())?.height ?? 0
+        )
+        .toBeGreaterThan(120);
       await settings.getByLabel('Export target').selectOption('zod');
       await settings.getByLabel('Export layout').selectOption('per-namespace');
       await expect(settings.getByLabel('Export layout')).toHaveValue('per-namespace');

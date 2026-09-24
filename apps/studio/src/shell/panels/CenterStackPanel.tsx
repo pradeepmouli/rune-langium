@@ -9,7 +9,11 @@ import { GraphFilterMenu } from '../../components/GraphFilterMenu.js';
 import { useCenterPanes, type CenterPane } from '../center-panes-context.js';
 import { withInstrumentation } from '../../services/instrumentation/core.js';
 
-const PANE_ORDER: CenterPane[] = ['graph', 'structure', 'source', 'inspector'];
+const PANE_GROUPS: ReadonlyArray<{ label: string; panes: readonly CenterPane[] }> = [
+  { label: 'View', panes: ['graph', 'structure'] },
+  { label: 'Show alongside', panes: ['source', 'inspector'] }
+];
+const PANE_ORDER = PANE_GROUPS.flatMap(({ panes }) => panes);
 const PANE_LABELS: Record<CenterPane, string> = {
   graph: 'Graph',
   structure: 'Structure',
@@ -125,23 +129,27 @@ export const CenterStackPanel = withInstrumentation(
           aria-label="Center pane selector"
           data-testid="studio-paneswitch"
         >
-          <div className="studio-paneswitch" role="group">
-            {PANE_ORDER.map((pane) => {
-              const isActive = activePanes.has(pane);
-              const Icon = PANE_ICONS[pane];
-              return (
-                <button
-                  key={pane}
-                  type="button"
-                  aria-pressed={isActive}
-                  className={isActive ? 'studio-paneswitch__seg is-active' : 'studio-paneswitch__seg'}
-                  onClick={() => toggle(pane)}
-                >
-                  <Icon className="size-3.5" aria-hidden />
-                  {PANE_LABELS[pane]}
-                </button>
-              );
-            })}
+          <div className="studio-paneswitch gap-4">
+            {PANE_GROUPS.map(({ label, panes }) => (
+              <div key={label} className="flex h-full" role="group" aria-label={label}>
+                {panes.map((pane) => {
+                  const isActive = activePanes.has(pane);
+                  const Icon = PANE_ICONS[pane];
+                  return (
+                    <button
+                      key={pane}
+                      type="button"
+                      aria-pressed={isActive}
+                      className={isActive ? 'studio-paneswitch__seg is-active' : 'studio-paneswitch__seg'}
+                      onClick={() => toggle(pane)}
+                    >
+                      <Icon className="size-3.5" aria-hidden />
+                      {PANE_LABELS[pane]}
+                    </button>
+                  );
+                })}
+              </div>
+            ))}
           </div>
           <div className="flex-1" />
           <div className="studio-panel-actions" aria-label="Center stack actions">

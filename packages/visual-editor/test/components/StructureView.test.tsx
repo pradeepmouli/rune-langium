@@ -9,11 +9,13 @@
  * PR #182 Finding 2 — unsupported-root state for non-Data and stale selections.
  */
 
-import { describe, it, expect, vi } from 'vitest';
-import { render, screen } from '@testing-library/react';
+import { afterEach, beforeEach, describe, it, expect, vi } from 'vitest';
+import { act, render, screen } from '@testing-library/react';
 import { StructureView } from '../../src/components/StructureView.js';
 import type { AdapterDocument } from '../../src/adapters/structure-graph-adapter.js';
 import { expansionKey } from '../../src/types/structure-view.js';
+
+const { reactFlow } = vi.hoisted(() => ({ reactFlow: { fitView: vi.fn() } }));
 
 // -----------------------------------------------------------------------
 // Task 7.1 — empty-state
@@ -24,7 +26,7 @@ describe('StructureView — empty state', () => {
     render(<StructureView focusedTypeId={undefined} adapterDoc={undefined} />);
     expect(screen.getByTestId('structure-empty-state')).toBeInTheDocument();
     expect(screen.getByTestId('structure-empty-state')).toHaveTextContent(
-      'Select a type from the Namespace Explorer to view its structure.'
+      'Select a type from the Type explorer to view its structure.'
     );
   });
 
@@ -119,11 +121,7 @@ vi.mock('@xyflow/react', async (importOriginal) => {
       </div>
     ),
     ReactFlowProvider: ({ children }: { children: React.ReactNode }) => <>{children}</>,
-    // Auto-fit useEffect in StructureView calls useReactFlow().fitView().
-    // The passthrough ReactFlowProvider mock doesn't initialise the real
-    // zustand store, so the actual hook throws. Stub fitView as a no-op
-    // since these tests don't exercise viewport behaviour.
-    useReactFlow: () => ({ fitView: () => {} })
+    useReactFlow: () => reactFlow
   };
 });
 
@@ -399,5 +397,106 @@ describe('StructureView — onlyRenderVisibleElements (Finding H)', () => {
     expect(screen.queryByTestId('structure-empty-state')).toBeNull();
     const flow = screen.getByTestId('mock-react-flow');
     expect(flow.getAttribute('data-only-render-visible')).toBe('false');
+  });
+});
+
+describe('StructureView — fitting after pane resizing', () => {
+  let resize: () => void;
+  let width: number;
+  let height: number;
+  const disconnect = vi.fn();
+
+  beforeEach(() => {
+    vi.useFakeTimers();
+    width = 640;
+    height = 480;
+    reactFlow.fitView.mockClear();
+    disconnect.mockClear();
+    vi.spyOn(HTMLElement.prototype, 'offsetWidth', 'get').mockImplementation(function () {
+      return this.dataset.testid === 'structure-view-flow' ? width : 0;
+    });
+    vi.spyOn(HTMLElement.prototype, 'offsetHeight', 'get').mockImplementation(function () {
+      return this.dataset.testid === 'structure-view-flow' ? height : 0;
+    });
+    vi.stubGlobal(
+      'ResizeObserver',
+      class {
+        constructor(callback: () => void) {
+          resize = callback;
+        }
+        observe() {}
+        disconnect = disconnect;
+      }
+    );
+  });
+
+  afterEach(() => {
+    vi.useRealTimers();
+    vi.restoreAllMocks();
+    vi.unstubAllGlobals();
+  });
+
+  function renderFittedStructure() {
+    const result = render(<StructureView focusedTypeId="cdm.trade.Trade" adapterDoc={tradeDoc} />);
+    act(() => vi.advanceTimersByTime(32));
+    reactFlow.fitView.mockClear();
+    return result;
+  }
+
+  it('refits once after a series of nonzero pane-size changes settles', () => {
+    renderFittedStructure();
+    act(() => {
+      width = 420;
+      resize();
+    });
+    act(() => vi.advanceTimersByTime(80));
+    act(() => {
+      width = 320;
+      resize();
+    });
+    act(() => vi.advanceTimersByTime(100));
+    expect(reactFlow.fitView).not.toHaveBeenCalled();
+    act(() => vi.advanceTimersByTime(60));
+    act(() => vi.advanceTimersByTime(32));
+    expect(reactFlow.fitView).toHaveBeenCalledOnce();
+    expect(reactFlow.fitView).toHaveBeenCalledWith({ padding: 0.1, duration: 300 });
+    act(() => resize());
+    act(() => vi.advanceTimersByTime(200));
+    expect(reactFlow.fitView).toHaveBeenCalledOnce();
+  });
+
+  it('does not fit a hidden canvas and refits when it becomes visible again', () => {
+    renderFittedStructure();
+    act(() => {
+      width = 300;
+      resize();
+    });
+    act(() => {
+      width = 0;
+      height = 0;
+      resize();
+    });
+    act(() => vi.advanceTimersByTime(200));
+    expect(reactFlow.fitView).not.toHaveBeenCalled();
+    act(() => {
+      width = 300;
+      height = 280;
+      resize();
+    });
+    act(() => vi.advanceTimersByTime(160));
+    act(() => vi.advanceTimersByTime(32));
+    expect(reactFlow.fitView).toHaveBeenCalled();
+  });
+
+  it('cancels a pending resize fit when unmounted', () => {
+    const { unmount } = renderFittedStructure();
+    act(() => {
+      width = 320;
+      resize();
+    });
+    unmount();
+    act(() => vi.advanceTimersByTime(200));
+    expect(reactFlow.fitView).not.toHaveBeenCalled();
+    expect(disconnect).toHaveBeenCalledOnce();
   });
 });

@@ -553,6 +553,27 @@ export function collectSegmentSubtreePaths(roots: SegmentNode[], fullPath: strin
 }
 
 /**
+ * Join namespace chains that have no declarations or branching points.
+ * Canonical full paths, declaration identities and subtree totals are retained.
+ * Compact before filtering to keep namespace selection boundaries stable.
+ */
+export function compactSegmentedNamespaceTree(roots: readonly SegmentNode[]): SegmentNode[] {
+  return roots.map((node) => {
+    const labels = [node.segment];
+    let cursor = node;
+    while (cursor.types.length === 0 && cursor.children.length === 1) {
+      cursor = cursor.children[0]!;
+      labels.push(cursor.segment);
+    }
+    return {
+      ...cursor,
+      segment: labels.join('.'),
+      children: compactSegmentedNamespaceTree(cursor.children)
+    };
+  });
+}
+
+/**
  * Flatten a segmented namespace tree into rows suitable for virtualized rendering.
  *
  * Each `SegmentNode` emits a `'segment'` row. When the segment is expanded
@@ -565,7 +586,8 @@ export function collectSegmentSubtreePaths(roots: SegmentNode[], fullPath: strin
  * that child transitively — producing a single `'segment'` row whose `segment`
  * label is the joined path (e.g. `"com.rosetta"`) and whose `fullPath` is the
  * compressed-to node's `fullPath`. This mirrors JetBrains-style package
- * compression and is intended for picker UIs; pass `false` for the explorer.
+ * compression. Callers that filter afterward can instead compact the source
+ * tree first with `compactSegmentedNamespaceTree` to retain branch boundaries.
  *
  * The `expanded` set always uses `fullPath` keys (the uncompressed canonical
  * path), even when compression merges multiple segments into one row.
@@ -575,56 +597,10 @@ export function flattenSegmentedTree(
   expanded: Set<string>,
   opts?: { compressSingleChild?: boolean }
 ): FlatTreeRow[] {
-  const compress = opts?.compressSingleChild ?? false;
+  const visibleRoots = opts?.compressSingleChild ? compactSegmentedNamespaceTree(roots) : roots;
   const rows: FlatTreeRow[] = [];
 
   function visitNode(node: SegmentNode, depth: number): void {
-    // Path compression: if compress is on and this node has no direct types and
-    // exactly one child, merge segments transitively.
-    if (compress && node.types.length === 0 && node.children.length === 1) {
-      // Walk the chain collecting label segments until we hit a node that has
-      // types or more than one child (or is a leaf).
-      const labelParts: string[] = [node.segment];
-      let cursor = node.children[0]!;
-      while (compress && cursor.types.length === 0 && cursor.children.length === 1) {
-        labelParts.push(cursor.segment);
-        cursor = cursor.children[0]!;
-      }
-      // cursor is now the node we actually represent.
-      labelParts.push(cursor.segment);
-      const compressedLabel = labelParts.join('.');
-
-      const isExpanded = expanded.has(cursor.fullPath);
-      rows.push({
-        kind: 'segment',
-        segment: compressedLabel,
-        fullPath: cursor.fullPath,
-        typeCount: cursor.types.length,
-        childCount: cursor.children.length,
-        totalCount: cursor.totalCount,
-        kindCounts: countEntriesByKind(cursor.types),
-        expanded: isExpanded,
-        depth
-      });
-
-      if (isExpanded) {
-        for (const child of cursor.children) visitNode(child, depth + 1);
-        for (const type of cursor.types) {
-          rows.push({
-            kind: 'type',
-            nodeId: type.nodeId,
-            name: type.name,
-            typeKind: type.kind,
-            namespace: cursor.fullPath,
-            hidden: false,
-            depth: depth + 1
-          });
-        }
-      }
-      return;
-    }
-
-    // Normal (non-compressed) rendering.
     const isExpanded = expanded.has(node.fullPath);
     rows.push({
       kind: 'segment',
@@ -654,6 +630,6 @@ export function flattenSegmentedTree(
     }
   }
 
-  for (const root of roots) visitNode(root, 0);
+  for (const root of visibleRoots) visitNode(root, 0);
   return rows;
 }

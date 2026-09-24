@@ -7,13 +7,18 @@ import { useEditorStore, type ExplorerSelection, type ExplorerSelectionAction } 
 import { ExportSelectionPanel } from '../../../src/shell/panels/ExportSelectionPanel.js';
 
 let explorerSelection: ExplorerSelection | undefined;
+let navigateToType: ((id: string) => void) | undefined;
+const { viewTypeInExplore } = vi.hoisted(() => ({ viewTypeInExplore: vi.fn() }));
+
+vi.mock('../../../src/services/explore-navigation.js', () => ({ viewTypeInExplore }));
 
 vi.mock('@rune-langium/visual-editor', async (importOriginal) => {
   const actual = await importOriginal<typeof import('@rune-langium/visual-editor')>();
   return {
     ...actual,
-    NamespaceExplorerPanel: (props: { selection?: ExplorerSelection }) => {
+    NamespaceExplorerPanel: (props: { selection?: ExplorerSelection; onSelectNode?(id: string): void }) => {
       explorerSelection = props.selection;
+      navigateToType = props.onSelectNode;
       return <div data-testid="shared-type-explorer" />;
     }
   };
@@ -21,6 +26,8 @@ vi.mock('@rune-langium/visual-editor', async (importOriginal) => {
 
 afterEach(() => {
   explorerSelection = undefined;
+  navigateToType = undefined;
+  viewTypeInExplore.mockClear();
   useEditorStore.setState({ nodesById: new Map() } as never);
 });
 
@@ -32,6 +39,15 @@ function setNodes(): void {
   };
   useEditorStore.setState({ nodesById: new Map([[node.id, node]]) } as never);
 }
+
+it('navigates through Explore without changing export inclusion', () => {
+  setNodes();
+  const onChange = vi.fn();
+  render(<ExportSelectionPanel selection={{ namespaces: [], declarations: [] }} onChange={onChange} />);
+  act(() => navigateToType?.('test.Party'));
+  expect(viewTypeInExplore).toHaveBeenCalledWith('test.Party');
+  expect(onChange).not.toHaveBeenCalled();
+});
 
 it('converts shared explorer declaration selection into a codegen root', () => {
   setNodes();

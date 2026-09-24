@@ -13,6 +13,7 @@ import {
   exportSelectionToExplorerSet
 } from '../../services/export-explorer-selection.js';
 import { withInstrumentation } from '../../services/instrumentation/core.js';
+import { viewTypeInExplore } from '../../services/explore-navigation.js';
 
 export interface ExportSelectionPanelProps {
   selection: ExportSelection;
@@ -57,8 +58,8 @@ export const ExportSelectionPanel = withInstrumentation(
     );
 
     return (
-      <section data-testid="export-selection" className="flex h-full min-h-[22rem] flex-col">
-        <div className="border-b px-3 py-2">
+      <section data-testid="export-selection" className="flex h-full min-h-0 flex-col overflow-auto studio-scroll">
+        <div className="shrink-0 border-b px-3 py-2">
           <h2 className="text-sm font-semibold">Export selection</h2>
           <p className="text-xs text-muted-foreground">
             Select declarations or namespaces. Referenced declarations are included automatically when generated.
@@ -79,6 +80,7 @@ export const ExportSelectionPanel = withInstrumentation(
             onToggleNamespace={() => undefined}
             onExpandAll={() => setExpandedNamespaces(new Set(namespaces))}
             onCollapseAll={() => setExpandedNamespaces(new Set())}
+            onSelectNode={viewTypeInExplore}
             selection={{
               explicit,
               requiredBy: requiredBy ?? new Map(),

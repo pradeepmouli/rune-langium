@@ -10,16 +10,16 @@
  * Composition: left brand+switcher (degradable), the active perspective's
  * centerSlot or title, its actions slot, then global utilities.
  *
- * Left brand/switcher + global utilities (search stub, SyncStatusBadge,
+ * Left brand/switcher + global utilities (GlobalSearch, SyncStatusBadge,
  * FontScaleButton, Avatar) MOVED VERBATIM from ExplorePerspective's private
  * header (Task 3 of the shared-chrome plan). Reads workspace state through
  * the null-tolerant hooks so it renders without throwing when no workspace
  * is loaded (Settings, or the launcher before a workspace opens).
  */
 import { useCallback, useState } from 'react';
-import { ChevronDown, Plus, LogOut, Search } from 'lucide-react';
+import { ChevronDown, Plus, LogOut } from 'lucide-react';
 import { Popover, PopoverContent, PopoverTrigger } from '@rune-langium/design-system/ui/popover';
-import { Kbd } from '@rune-langium/design-system/ui/kbd';
+import { GlobalSearch } from './GlobalSearch.js';
 import { Avatar, AvatarFallback } from '@rune-langium/design-system/ui/avatar';
 import { usePerspectiveStore } from '../store/perspective-store.js';
 import { PERSPECTIVES, resolveEffectivePerspective } from './perspectives/perspective-registry.js';
@@ -185,11 +185,7 @@ export const AppHeader = withInstrumentation(
         {Center ? <Center /> : <div className="studio-topbar__title" aria-hidden="true" />}
         <div className="studio-topbar__right">
           {Actions ? <Actions /> : null}
-          <button type="button" className="studio-topbar__search" aria-label="Search">
-            <Search className="size-3.5" />
-            <span>Search types, files, commands…</span>
-            <Kbd>⌘K</Kbd>
-          </button>
+          <GlobalSearch hasWorkspace={hasWorkspace} hasExploreContent={hasExploreContent} />
           {workspace?.workspaceKind === 'git-backed' && syncStatus && (
             <SyncStatusBadge
               status={syncStatus}
