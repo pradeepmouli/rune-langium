@@ -39,7 +39,7 @@
   },
   "devDependencies": {
     "langium-cli": "^4.4.0",
-    "langium-zod": "0.12.0",
+    "langium-zod": "0.12.2",
     "tsx": "^4.23.15",
     "typescript": "^7.0.2"
   },
