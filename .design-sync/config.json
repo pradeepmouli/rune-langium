@@ -1,0 +1,200 @@
+{
+  "projectId": "b07ce73d-ec31-415e-b9f7-7aee076be951",
+  "shape": "package",
+  "pkg": "@rune-langium/design-system",
+  "globalName": "DaikonicDS",
+  "buildCmd": "pnpm -F \"@rune-langium/design-system...\" build && node .design-sync/build-css.mjs",
+  "cssEntry": "dist/ds-sync.css",
+  "tsconfig": "tsconfig.json",
+  "docsMap": {
+    "Alert": "../../.design-sync/groups/Display.md",
+    "AlertDescription": "../../.design-sync/groups/Display.md",
+    "AlertTitle": "../../.design-sync/groups/Display.md",
+    "AppSwitcher": "../../.design-sync/groups/Actions.md",
+    "Avatar": "../../.design-sync/groups/Display.md",
+    "AvatarFallback": "../../.design-sync/groups/Display.md",
+    "AvatarImage": "../../.design-sync/groups/Display.md",
+    "Badge": "../../.design-sync/groups/Display.md",
+    "Button": "../../.design-sync/groups/Actions.md",
+    "Checkbox": "../../.design-sync/groups/Forms.md",
+    "CodeBlock": "../../.design-sync/groups/Display.md",
+    "Collapsible": "../../.design-sync/groups/Layout.md",
+    "CollapsibleContent": "../../.design-sync/groups/Layout.md",
+    "CollapsibleTrigger": "../../.design-sync/groups/Layout.md",
+    "Command": "../../.design-sync/groups/Overlays.md",
+    "CommandEmpty": "../../.design-sync/groups/Overlays.md",
+    "CommandGroup": "../../.design-sync/groups/Overlays.md",
+    "CommandInput": "../../.design-sync/groups/Overlays.md",
+    "CommandItem": "../../.design-sync/groups/Overlays.md",
+    "CommandList": "../../.design-sync/groups/Overlays.md",
+    "CommandSeparator": "../../.design-sync/groups/Overlays.md",
+    "Dialog": "../../.design-sync/groups/Overlays.md",
+    "DialogClose": "../../.design-sync/groups/Overlays.md",
+    "DialogContent": "../../.design-sync/groups/Overlays.md",
+    "DialogDescription": "../../.design-sync/groups/Overlays.md",
+    "DialogFooter": "../../.design-sync/groups/Overlays.md",
+    "DialogHeader": "../../.design-sync/groups/Overlays.md",
+    "DialogOverlay": "../../.design-sync/groups/Overlays.md",
+    "DialogPortal": "../../.design-sync/groups/Overlays.md",
+    "DialogTitle": "../../.design-sync/groups/Overlays.md",
+    "DialogTrigger": "../../.design-sync/groups/Overlays.md",
+    "DropdownMenu": "../../.design-sync/groups/Overlays.md",
+    "DropdownMenuCheckboxItem": "../../.design-sync/groups/Overlays.md",
+    "DropdownMenuContent": "../../.design-sync/groups/Overlays.md",
+    "DropdownMenuGroup": "../../.design-sync/groups/Overlays.md",
+    "DropdownMenuItem": "../../.design-sync/groups/Overlays.md",
+    "DropdownMenuLabel": "../../.design-sync/groups/Overlays.md",
+    "DropdownMenuPortal": "../../.design-sync/groups/Overlays.md",
+    "DropdownMenuRadioGroup": "../../.design-sync/groups/Overlays.md",
+    "DropdownMenuRadioItem": "../../.design-sync/groups/Overlays.md",
+    "DropdownMenuSeparator": "../../.design-sync/groups/Overlays.md",
+    "DropdownMenuShortcut": "../../.design-sync/groups/Overlays.md",
+    "DropdownMenuSub": "../../.design-sync/groups/Overlays.md",
+    "DropdownMenuSubContent": "../../.design-sync/groups/Overlays.md",
+    "DropdownMenuSubTrigger": "../../.design-sync/groups/Overlays.md",
+    "DropdownMenuTrigger": "../../.design-sync/groups/Overlays.md",
+    "Field": "../../.design-sync/groups/Forms.md",
+    "FieldContent": "../../.design-sync/groups/Forms.md",
+    "FieldDescription": "../../.design-sync/groups/Forms.md",
+    "FieldError": "../../.design-sync/groups/Forms.md",
+    "FieldGroup": "../../.design-sync/groups/Forms.md",
+    "FieldLabel": "../../.design-sync/groups/Forms.md",
+    "FieldLegend": "../../.design-sync/groups/Forms.md",
+    "FieldSeparator": "../../.design-sync/groups/Forms.md",
+    "FieldSet": "../../.design-sync/groups/Forms.md",
+    "FieldTitle": "../../.design-sync/groups/Forms.md",
+    "Form": "../../.design-sync/groups/Forms.md",
+    "Heading": "../../.design-sync/groups/Display.md",
+    "IconButtonGroup": "../../.design-sync/groups/Actions.md",
+    "Input": "../../.design-sync/groups/Forms.md",
+    "InteractiveDialog": "../../.design-sync/groups/Overlays.md",
+    "Kbd": "../../.design-sync/groups/Actions.md",
+    "Label": "../../.design-sync/groups/Forms.md",
+    "NumberChiclet": "../../.design-sync/groups/Forms.md",
+    "Popover": "../../.design-sync/groups/Overlays.md",
+    "PopoverAnchor": "../../.design-sync/groups/Overlays.md",
+    "PopoverContent": "../../.design-sync/groups/Overlays.md",
+    "PopoverTrigger": "../../.design-sync/groups/Overlays.md",
+    "RadioGroup": "../../.design-sync/groups/Forms.md",
+    "RadioGroupItem": "../../.design-sync/groups/Forms.md",
+    "ResizableHandle": "../../.design-sync/groups/Layout.md",
+    "ResizablePanel": "../../.design-sync/groups/Layout.md",
+    "ResizablePanelGroup": "../../.design-sync/groups/Layout.md",
+    "RowGlyph": "../../.design-sync/groups/Display.md",
+    "ScrollArea": "../../.design-sync/groups/Layout.md",
+    "ScrollBar": "../../.design-sync/groups/Layout.md",
+    "Select": "../../.design-sync/groups/Forms.md",
+    "SelectContent": "../../.design-sync/groups/Forms.md",
+    "SelectGroup": "../../.design-sync/groups/Forms.md",
+    "SelectItem": "../../.design-sync/groups/Forms.md",
+    "SelectLabel": "../../.design-sync/groups/Forms.md",
+    "SelectScrollDownButton": "../../.design-sync/groups/Forms.md",
+    "SelectScrollUpButton": "../../.design-sync/groups/Forms.md",
+    "SelectSeparator": "../../.design-sync/groups/Forms.md",
+    "SelectTrigger": "../../.design-sync/groups/Forms.md",
+    "SelectValue": "../../.design-sync/groups/Forms.md",
+    "Separator": "../../.design-sync/groups/Layout.md",
+    "Spinner": "../../.design-sync/groups/Display.md",
+    "Tabs": "../../.design-sync/groups/Layout.md",
+    "TabsContent": "../../.design-sync/groups/Layout.md",
+    "TabsList": "../../.design-sync/groups/Layout.md",
+    "TabsTrigger": "../../.design-sync/groups/Layout.md",
+    "Textarea": "../../.design-sync/groups/Forms.md",
+    "Toast": "../../.design-sync/groups/Overlays.md",
+    "ToastClose": "../../.design-sync/groups/Overlays.md",
+    "ToastDescription": "../../.design-sync/groups/Overlays.md",
+    "ToastProvider": "../../.design-sync/groups/Overlays.md",
+    "ToastTitle": "../../.design-sync/groups/Overlays.md",
+    "ToastViewport": "../../.design-sync/groups/Overlays.md",
+    "Tooltip": "../../.design-sync/groups/Overlays.md",
+    "TooltipContent": "../../.design-sync/groups/Overlays.md",
+    "TooltipProvider": "../../.design-sync/groups/Overlays.md",
+    "TooltipTrigger": "../../.design-sync/groups/Overlays.md"
+  },
+  "overrides": {
+    "InteractiveDialog": {
+      "cardMode": "single",
+      "viewport": "900x640"
+    },
+    "Dialog": {
+      "cardMode": "single",
+      "viewport": "900x640"
+    },
+    "DropdownMenu": {
+      "cardMode": "single",
+      "viewport": "900x560"
+    },
+    "Popover": {
+      "cardMode": "single",
+      "viewport": "900x520"
+    },
+    "Tooltip": {
+      "cardMode": "single",
+      "viewport": "900x360"
+    },
+    "Select": {
+      "cardMode": "single",
+      "viewport": "900x520",
+      "primaryStory": "TargetPicker"
+    },
+    "Toast": {
+      "cardMode": "single",
+      "viewport": "900x420"
+    },
+    "Button": {
+      "cardMode": "column"
+    },
+    "Alert": {
+      "cardMode": "column"
+    },
+    "CodeBlock": {
+      "cardMode": "column"
+    },
+    "Field": {
+      "cardMode": "column"
+    },
+    "Form": {
+      "cardMode": "column"
+    },
+    "NumberChiclet": {
+      "cardMode": "column"
+    },
+    "Textarea": {
+      "cardMode": "column"
+    },
+    "Collapsible": {
+      "cardMode": "column"
+    },
+    "ResizablePanelGroup": {
+      "cardMode": "column"
+    },
+    "ScrollArea": {
+      "cardMode": "column"
+    },
+    "Tabs": {
+      "cardMode": "column"
+    },
+    "Command": {
+      "cardMode": "column"
+    },
+    "CardinalityPicker": {
+      "cardMode": "column"
+    }
+  },
+  "extraEntries": ["../../.design-sync/ve-entry.ts"],
+  "componentSrcMap": {
+    "KindBadge": "../visual-editor/src/components/KindBadge.tsx",
+    "NodeKindBadge": "../visual-editor/src/components/nodes/NodeKindBadge.tsx",
+    "GraphLegend": "../visual-editor/src/components/GraphLegend.tsx",
+    "CardinalityPicker": "../visual-editor/src/components/editors/CardinalityPicker.tsx",
+    "TypeSelector": "../visual-editor/src/components/editors/TypeSelector.tsx"
+  },
+  "dtsPropsFor": {
+    "KindBadge": "  /** Rune type kind \u2014 drives the kind color tokens (--color-data / -choice / -enum / -func; utilities bg-data, text-choice, \u2026). */\n  kind: \"data\" | \"choice\" | \"enum\" | \"func\" | \"record\" | \"typeAlias\" | \"basicType\" | \"annotation\";\n  /** 'label' = text pill (graph/inspector); 'glyph' = compact letter box (tree). */\n  shape?: \"label\" | \"glyph\";\n  className?: string;",
+    "NodeKindBadge": "  kind: \"data\" | \"choice\" | \"enum\" | \"func\" | \"record\" | \"typeAlias\" | \"basicType\" | \"annotation\";\n  className?: string;",
+    "GraphLegend": "  /** No props \u2014 renders the data/choice/enum/func swatches plus edge-style key. */",
+    "CardinalityPicker": "  /** Current cardinality value, e.g. \"(0..*)\". */\n  value: string;\n  onChange: (cardinality: string) => void;\n  disabled?: boolean;\n  /** 'default' compact mono box; 'chip' structure-view cell; 'pill' inspector field. */\n  variant?: \"default\" | \"chip\" | \"pill\";\n  wrapperClassName?: string;\n  triggerClassName?: string;\n  contentClassName?: string;\n  inputClassName?: string;",
+    "TypeSelector": "  /** Selected type value (node id or built-in type name). */\n  value: string | null;\n  /** Options grouped by namespace in the popover. */\n  options?: Array<{ value: string; label: string; kind: \"data\" | \"choice\" | \"enum\" | \"func\" | \"record\" | \"typeAlias\" | \"basicType\" | \"annotation\" | \"builtin\"; namespace?: string }>;\n  placeholder?: string;\n  onSelect: (value: string | null) => void;\n  disabled?: boolean;\n  allowClear?: boolean;\n  filterKinds?: Array<\"data\" | \"choice\" | \"enum\" | \"func\" | \"record\" | \"typeAlias\" | \"basicType\" | \"annotation\" | \"builtin\">;\n  triggerClassName?: string;\n  renderTrigger?: (props: unknown) => React.ReactNode;\n  renderPopover?: (props: unknown) => React.ReactNode;"
+  },
+  "readmeHeader": ".design-sync/conventions.md"
+}

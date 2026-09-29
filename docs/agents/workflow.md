@@ -47,6 +47,12 @@ SQL node types derive from the exactly pinned `@l1xnan/tree-sitter-sql` grammar.
 - Production smoke: `pnpm --filter @rune-langium/studio run test:prod-smoke`. Endpoint and fuller UX checks are documented in [TESTING.md](../TESTING.md).
 - Tailwind IntelliSense uses `.vscode/settings.json`: `tailwindCSS.experimental.configFile` maps `apps/studio/src/app.css` to Studio, design-system, and visual-editor source trees.
 
+## Claude Design Sync
+
+- `.design-sync/` holds the inputs for syncing `@rune-langium/design-system` (plus visual-editor presentational pieces) to the claude.ai/design project "Daikonic Studio Components" via the `/design-sync` skill: `config.json`, authored `previews/<Name>.tsx` (story source: the prod-ux journeys), the `conventions.md` header the design agent reads, and the Tailwind entry compiled by `build-css.mjs`.
+- Read `.design-sync/NOTES.md` before re-syncing — it records the build steps, composition gotchas, and re-sync risks. Staged converter scripts (`.ds-sync/`), build output (`ds-bundle/`), and grades (`.design-sync/.cache/`) are ignored.
+- When a design-system component's API, class vocabulary, or tokens change, re-sync so the design agent's `.d.ts`, previews, and conventions stay true.
+
 ## Shared Agent Configuration
 
 - Keep Claude plugin preferences in `.claude/settings.json`; do not copy Claude hook or permission syntax into Codex configuration. Preserve ignored local settings and machine-specific MCP registrations.
