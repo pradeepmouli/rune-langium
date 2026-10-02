@@ -1,5 +1,13 @@
 # Types & Enums
 
+## lsp-model.d
+
+### `LspModelUpdate`
+Incremental semantic documents followed by the complete current URI set.
+**Properties:**
+- `document: { uri: string; modelJson: string }` (optional)
+- `retain: string[]` (optional)
+
 ## LSP Server
 
 ### `RuneLspServer`

@@ -412,6 +412,17 @@ const curatedAdapter: { parse: any }
 
 ## serializer
 
+### `LSP_MODEL_SYNC_METHOD`
+```ts
+const LSP_MODEL_SYNC_METHOD: "rune/syncModels"
+```
+
+### `LSP_REQUEST_TIMEOUT_MS`
+Request budget includes reconstruction of dependency models after cold wake.
+```ts
+const LSP_REQUEST_TIMEOUT_MS: 30000
+```
+
 ### `RUNE_SERIALIZE_OPTIONS`
 The Langium serialize option triple for the canonical Rune wire form.
 ```ts

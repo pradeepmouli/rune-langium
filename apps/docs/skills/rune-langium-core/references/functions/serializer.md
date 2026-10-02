@@ -2,6 +2,24 @@
 
 ## serializer
 
+### `compactLspModelJson`
+Keep semantic AST data and declaration ranges, without dependency token spans.
+```ts
+compactLspModelJson(json: string): string
+```
+**Parameters:**
+- `json: string`
+**Returns:** `string`
+
+### `readLspModelMetadata`
+Read canonical import and resolved-reference edges, including function bodies.
+```ts
+readLspModelMetadata(json: string): { namespace?: string; sourceUri?: string; imports: string[]; references: string[] }
+```
+**Parameters:**
+- `json: string`
+**Returns:** `{ namespace?: string; sourceUri?: string; imports: string[]; references: string[] }`
+
 ### `runeBigIntReplacer`
 Canonical BigInt JSON replacer for Rune wire serialization: bigint → Number.
 Chosen so EVERY serialization path agrees on one policy (closing the historical

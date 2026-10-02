@@ -54,6 +54,13 @@ export { parsedAdapter } from './adapters/parsed-adapter.js';
 export { curatedAdapter } from './adapters/curated-adapter.js';
 
 // Serializer
+export {
+  compactLspModelJson,
+  readLspModelMetadata,
+  LSP_MODEL_SYNC_METHOD,
+  LSP_REQUEST_TIMEOUT_MS
+} from './serializer/lsp-model.js';
+export type { LspModelUpdate } from './serializer/lsp-model.js';
 export { RUNE_SERIALIZE_OPTIONS, runeBigIntReplacer, serializeRuneModel } from './serializer/rune-serialize.js';
 export { preserveCstText } from './serializer/preserve-cst-text.js';
 export {
