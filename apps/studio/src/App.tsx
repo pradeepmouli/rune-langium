@@ -475,17 +475,17 @@ function AppContent() {
   }, [restoredWorkspace]);
 
   const restoreWorkspace = useCallback(
-    async (workspace: WorkspaceRecord): Promise<boolean> => {
+    async (workspace: WorkspaceRecord): Promise<'restored' | 'empty' | 'superseded'> => {
       clearWorkspaceState();
       const activationEpoch = workspaceEpochRef.current;
       reconcileWorkspaceModels(workspace.curatedModels ?? []);
       const restoredFiles = await loadWorkspaceFiles(workspace.id);
-      if (activationEpoch !== workspaceEpochRef.current) return false;
+      if (activationEpoch !== workspaceEpochRef.current) return 'superseded';
       if (restoredFiles.length === 0) {
         reconcileWorkspaceModels([]);
         restoredWorkspaceRef.current = null;
         setRestoredWorkspace(null);
-        return false;
+        return 'empty';
       }
 
       const nextWorkspace = {
@@ -493,7 +493,7 @@ function AppContent() {
         lastOpenedAt: new Date().toISOString()
       };
       await persistence.saveWorkspace(nextWorkspace);
-      if (activationEpoch !== workspaceEpochRef.current) return false;
+      if (activationEpoch !== workspaceEpochRef.current) return 'superseded';
       // Mark curated-bindings sync as "pending for this workspace" BEFORE
       // updating restoredWorkspace, so the persist effect sees a non-matching
       // synced id on its first run after the switch and bails out. Without
@@ -506,7 +506,7 @@ function AppContent() {
       setRestoredWorkspace(nextWorkspace);
       try {
         await syncWorkspaceToEditor(restoredFiles);
-        if (restoredWorkspaceRef.current?.id !== nextWorkspace.id) return false;
+        if (restoredWorkspaceRef.current?.id !== nextWorkspace.id) return 'superseded';
 
         // Replay any curated bundles bound to this workspace (D1 fix). Without
         // this, refresh / switch-workspace would drop CDM/FpML/etc. because
@@ -552,7 +552,7 @@ function AppContent() {
           setCuratedSyncedWorkspaceId(nextWorkspace.id);
         }
       }
-      return restoredWorkspaceRef.current?.id === nextWorkspace.id;
+      return restoredWorkspaceRef.current?.id === nextWorkspace.id ? 'restored' : 'superseded';
     },
     [clearWorkspaceState, reconcileWorkspaceModels, syncWorkspaceToEditor]
   );
@@ -578,7 +578,8 @@ function AppContent() {
         }
         setBootState('restoring');
         const restored = await restoreWorkspace(ws);
-        if (!restored) {
+        if (cancelled || restored === 'superseded') return;
+        if (restored === 'empty') {
           // Restore yielded zero user files — show the no-workspace shell with
           // the Workspaces launcher rather than an empty Explore surface.
           setBootState('start');
@@ -586,7 +587,7 @@ function AppContent() {
           return;
         }
         setBootState('restored');
-        // restoreWorkspace returns true only when user files were loaded, so
+        // A restored workspace has user files, so
         // userFiles.length > 0 here — jump straight to the explore perspective.
         usePerspectiveStore.getState().setActivePerspective('explore');
       } catch (err) {
@@ -744,13 +745,23 @@ function AppContent() {
     async (loadedFiles: WorkspaceFile[], targetWorkspaceId?: string) => {
       clearWorkspaceState();
       const activationEpoch = workspaceEpochRef.current;
+      setBootState('start');
       setLoading(true);
       try {
         let workspace = targetWorkspaceId ? await persistence.loadWorkspace(targetWorkspaceId) : null;
+        if (activationEpoch !== workspaceEpochRef.current) return;
+        let createdWorkspace = false;
         if (!workspace) {
           workspace = await createWorkspaceRecord(deriveWorkspaceName(loadedFiles));
+          createdWorkspace = true;
         }
-        if (activationEpoch !== workspaceEpochRef.current) return;
+        if (activationEpoch !== workspaceEpochRef.current) {
+          if (createdWorkspace) {
+            await persistence.deleteWorkspace(workspace.id);
+            await deleteWorkspaceFiles(workspace.id);
+          }
+          return;
+        }
         reconcileWorkspaceModels(workspace.curatedModels ?? []);
         restoredWorkspaceRef.current = workspace;
         setRestoredWorkspace(workspace);
@@ -759,6 +770,7 @@ function AppContent() {
         await syncWorkspaceToEditor(loadedFiles);
         if (restoredWorkspaceRef.current?.id !== workspace.id) return;
         setCuratedSyncedWorkspaceId(workspace.id);
+        setBootState('restored');
         usePerspectiveStore.getState().setActivePerspective('explore');
       } catch (error) {
         if (activationEpoch === workspaceEpochRef.current) {
@@ -891,7 +903,8 @@ function AppContent() {
         }
         setBootState('restoring');
         const restored = await restoreWorkspace(ws);
-        if (!restored) {
+        if (restored === 'superseded') return;
+        if (restored === 'empty') {
           setBootState('start');
           setWorkspaceError(null);
           setWorkspaceNotice(null);

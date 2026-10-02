@@ -195,15 +195,11 @@ describe('NamespaceExplorerPanel', () => {
     expect(props.onSelectNode).toHaveBeenCalledOnce();
   });
 
-  it('navigates from the type name without changing inclusion', async () => {
-    const onChange = vi.fn();
-    const { props } = renderPanel({
-      selection: { explicit: new Set(), requiredBy: new Map(), getSelectionId: (node) => node.id, onChange }
-    });
+  it('navigates from the type name when inclusion mode is absent', async () => {
+    const { props } = renderPanel();
     const link = screen.getByTestId('ns-type-link-com.model.Trade');
     await userEvent.click(link);
     expect(props.onSelectNode).toHaveBeenCalledExactlyOnceWith('com.model.Trade');
-    expect(onChange).not.toHaveBeenCalled();
     link.focus();
     await userEvent.keyboard('{Enter}');
     expect(props.onSelectNode).toHaveBeenCalledTimes(2);
@@ -316,6 +312,31 @@ describe('NamespaceExplorerPanel', () => {
     expect(onChange).toHaveBeenCalledOnce();
   });
 
+  it('toggles controlled inclusion from the row and name without navigation highlighting', () => {
+    const onChange = vi.fn();
+    const { props, rerender } = renderPanel({
+      selectedNodeId: 'com.model.Trade',
+      selection: { explicit: new Set(), requiredBy: new Map(), onChange }
+    });
+    const row = screen.getByTestId('ns-type-com.model.Trade');
+    fireEvent.click(row);
+    expect(onChange).toHaveBeenLastCalledWith(new Set(['com.model.Trade']));
+    expect(row).not.toHaveClass('studio-type-row--selected');
+    rerender(
+      <NamespaceExplorerPanel
+        {...props}
+        selection={{ explicit: new Set(['com.model.Trade']), requiredBy: new Map(), onChange }}
+      />
+    );
+    fireEvent.click(screen.getByTestId('ns-type-link-com.model.Trade'));
+    expect(onChange).toHaveBeenLastCalledWith(new Set());
+    expect(props.onSelectNode).not.toHaveBeenCalled();
+    expect(row).not.toHaveClass('studio-type-row--just-navigated');
+    fireEvent.click(screen.getByTestId('ns-type-nav-com.model.Trade'));
+    expect(props.onSelectNode).toHaveBeenCalledOnce();
+    expect(row).not.toHaveClass('studio-type-row--just-navigated');
+  });
+
   it('keeps required items selected while allowing their explicit selection to be removed', () => {
     const onChange = vi.fn();
     renderPanel({
@@ -337,16 +358,20 @@ describe('NamespaceExplorerPanel', () => {
   });
 
   it('does not allow a required-only item to be removed', () => {
+    const onChange = vi.fn();
     renderPanel({
       selection: {
         explicit: new Set(),
         requiredBy: new Map([['com.model.Trade', ['com.model.Event']]]),
-        onChange: vi.fn()
+        onChange
       }
     });
 
     expect(screen.getByTestId('ns-type-checkbox-com.model.Trade')).toBeDisabled();
     expect(screen.getByLabelText('Required by com.model.Event')).toBeTruthy();
+    fireEvent.click(screen.getByTestId('ns-type-com.model.Trade'));
+    fireEvent.click(screen.getByTestId('ns-type-link-com.model.Trade'));
+    expect(onChange).not.toHaveBeenCalled();
   });
 
   it('selects the complete filtered result set while preserving hidden selections', () => {

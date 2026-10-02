@@ -92,7 +92,7 @@ export interface NamespaceExplorerPanelProps {
    * Retained on the interface for back-compat with EditorPage pass-through.
    */
   onClearDragSource?: () => void;
-  /** Optional controlled export-style selection; navigation remains independent. */
+  /** Optional controlled inclusion: row/name toggle it; the arrow navigates. */
   selection?: ExplorerSelection;
 }
 
@@ -397,7 +397,9 @@ export const NamespaceExplorerPanel = memo(function NamespaceExplorerPanel({
             <NumberChiclet data-testid="namespace-explorer-count">{totalTypes} available</NumberChiclet>
           </div>
           <p className="mt-1 text-2xs text-muted-foreground">
-            Click name or arrow to open. Drag a row to a type field.
+            {selection
+              ? 'Click a row to include or exclude it. Use the arrow to open.'
+              : 'Click name or arrow to open. Drag a row to a type field.'}
           </p>
         </div>
 
@@ -787,9 +789,9 @@ function TypeItemRow({
     (e: MouseEvent<HTMLButtonElement>) => {
       e.stopPropagation();
       onSelectNode();
-      setJustNavigated(true);
+      if (!selection) setJustNavigated(true);
     },
-    [onSelectNode]
+    [onSelectNode, selection]
   );
 
   // Keep the row's keydown from also firing when the nav button has focus
@@ -805,6 +807,12 @@ function TypeItemRow({
   const isRequired = requiredBy !== undefined && requiredBy.length > 0;
   const isExplicit = selectionId !== undefined && selection?.explicit.has(selectionId) === true;
   const isSelectionChecked = isExplicit || isRequired;
+  const setSelectionChecked = (checked: boolean) => {
+    if (!selection || selectionId === undefined || (isRequired && !isExplicit)) return;
+    selection.onChange(toggleVisible([selectionId], selection.explicit, checked));
+  };
+  const toggleSelection = () => setSelectionChecked(!isExplicit);
+  const highlight = selection === undefined && isSelected;
 
   // Flat layout: the tree carries `depth` for structure/expansion, but type
   // rows do NOT step right with depth. They get a single fixed membership
@@ -812,15 +820,16 @@ function TypeItemRow({
   // header above — independent of how deep that header sits in the hierarchy.
   return (
     <div
-      className={`studio-type-row group relative flex cursor-grab items-center gap-1.5 px-2 py-0.5 text-xs text-foreground hover:bg-accent/50${
-        isSelected ? ' studio-type-row--selected' : ''
-      }${justNavigated ? ' studio-type-row--just-navigated' : ''}`}
+      className={`studio-type-row group relative flex ${selection ? 'cursor-pointer' : 'cursor-grab'} items-center gap-1.5 px-2 py-0.5 text-xs text-foreground hover:bg-accent/50${
+        highlight ? ' studio-type-row--selected' : ''
+      }${!selection && justNavigated ? ' studio-type-row--just-navigated' : ''}`}
       style={{ paddingLeft: `${TREE_INDENT_BASE + TREE_TYPE_INDENT}px` }}
       data-testid={`ns-type-${row.nodeId}`}
       draggable
       onDragStart={handleDragStart}
+      onClick={selection ? toggleSelection : undefined}
     >
-      {isSelected && <span className="studio-type-pip" />}
+      {highlight && <span className="studio-type-pip" />}
 
       {selection !== undefined && selectionId !== undefined && (
         <>
@@ -829,9 +838,7 @@ function TypeItemRow({
             disabled={isRequired && !isExplicit}
             onClick={(event) => event.stopPropagation()}
             onKeyDown={(event) => event.stopPropagation()}
-            onCheckedChange={(checked) =>
-              selection.onChange(toggleVisible([selectionId], selection.explicit, checked === true))
-            }
+            onCheckedChange={(checked) => setSelectionChecked(checked === true)}
             aria-label={isRequired ? `${row.name}, required by ${requiredBy.join(', ')}` : `Select ${row.name}`}
             data-testid={`ns-type-checkbox-${row.nodeId}`}
           />
@@ -852,9 +859,20 @@ function TypeItemRow({
       <button
         type="button"
         className="min-w-0 flex-1 truncate text-left underline decoration-transparent underline-offset-2 hover:decoration-current focus-visible:outline-2 focus-visible:outline-ring"
-        title={`Open ${row.name} [${KIND_LABEL[row.typeKind]}] — drag the row to a type field`}
+        title={
+          selection
+            ? `Toggle ${row.name} inclusion`
+            : `Open ${row.name} [${KIND_LABEL[row.typeKind]}] — drag the row to a type field`
+        }
         data-testid={`ns-type-link-${row.nodeId}`}
-        onClick={handleNavClick}
+        onClick={
+          selection
+            ? (event) => {
+                event.stopPropagation();
+                toggleSelection();
+              }
+            : handleNavClick
+        }
         onKeyDown={handleNavKeyDown}
       >
         {row.name}
