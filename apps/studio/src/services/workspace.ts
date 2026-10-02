@@ -550,6 +550,16 @@ export const collectCuratedSourcesForCodegen = withInstrumentation(
   }
 );
 
+/** Raw source includes read-only system definitions; curated entries have their own transport. */
+export const collectRawWorkspaceSources = withInstrumentation(
+  function collectRawWorkspaceSources(files: readonly WorkspaceFile[]): Array<{ path: string; content: string }> {
+    return files
+      .filter((file) => !file.bundleId && !file.serializedModelJson && !file.refOnly)
+      .map(({ path, content }) => ({ path, content }));
+  },
+  { op: 'collectRawWorkspaceSources' }
+);
+
 export const parseWorkspaceFiles = withInstrumentation(
   async function parseWorkspaceFiles(
     files: WorkspaceFile[],
@@ -568,11 +578,7 @@ export const parseWorkspaceFiles = withInstrumentation(
     // through and got POSTed to /api/parse as bogus files named
     // `[bundleId]/<namespace>`, which Langium rejects with "no services for the
     // extension '.'" → 500, collapsing the curated catalog to the user closure.
-    const userFiles: Array<{ name: string; content: string }> = [];
-    for (const f of files) {
-      if (f.bundleId || f.serializedModelJson || f.refOnly) continue;
-      userFiles.push({ name: f.path, content: f.content });
-    }
+    const userFiles = collectRawWorkspaceSources(files).map(({ path, content }) => ({ name: path, content }));
     const curatedBundles = collectCuratedBundlesFromWorkspace(files);
 
     try {

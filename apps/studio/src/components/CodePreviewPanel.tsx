@@ -27,6 +27,7 @@ import {
   CodegenDownloadError,
   collectCuratedBundlesFromWorkspace,
   collectCuratedSourcesForCodegen,
+  collectRawWorkspaceSources,
   type WorkspaceFile
 } from '../services/workspace.js';
 import { CodegenTargetsTable } from './CodegenTargetsTable.js';
@@ -183,11 +184,7 @@ export const CodePreviewPanel = withInstrumentation(
         const newTarget = config.target;
         setDownloadModalTarget(undefined);
         const fileList = files ?? [];
-        const requestFiles: Array<{ path: string; content: string }> = [];
-        for (const f of fileList) {
-          if (f.readOnly) continue;
-          requestFiles.push({ path: f.path, content: f.content });
-        }
+        const requestFiles = collectRawWorkspaceSources(fileList);
         const { curatedBundles, curatedDocs } = collectCuratedSourcesForCodegen(fileList);
         // Merge layout + target-specific options (e.g. excel sheet toggles) into
         // the options bag. The order of spreading means explicit options from the

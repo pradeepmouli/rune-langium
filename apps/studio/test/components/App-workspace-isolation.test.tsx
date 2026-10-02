@@ -13,7 +13,9 @@ import { useCodegenStore } from '../../src/store/codegen-store.js';
 import { getModelSource } from '../../src/services/model-registry.js';
 import type { LoadedModel } from '../../src/types/model-types.js';
 import { _resetForTests, listRecents, loadWorkspace, saveWorkspace } from '../../src/workspace/persistence.js';
+import * as persistence from '../../src/workspace/persistence.js';
 import { loadWorkspaceFiles, saveWorkspaceFiles, setWorkspaceFilesDeps } from '../../src/workspace/workspace-files.js';
+import * as workspaceFiles from '../../src/workspace/workspace-files.js';
 import { createOpfsRoot } from '../setup/opfs-mock.js';
 
 const { parseMock } = vi.hoisted(() => ({ parseMock: vi.fn() }));
@@ -93,6 +95,7 @@ beforeEach(async () => {
 
 afterEach(() => {
   cleanup();
+  vi.restoreAllMocks();
   delete window.__runeStudioTestApi;
   useModelStore.setState({ models: new Map(), loading: new Map(), errors: new Map() });
   setWorkspaceFilesDeps({
@@ -191,6 +194,63 @@ describe('workspace isolation', () => {
     await waitFor(() => expect(screen.getByRole('button', { name: 'New blank workspace' })).toBeVisible());
     expect(screen.queryByRole('button', { name: /Workspace menu/ })).not.toBeInTheDocument();
     expect(useModelStore.getState().models.size).toBe(0);
+    expect(await loadWorkspaceFiles('ws-a')).toEqual(sourceFiles);
+  });
+
+  it('a superseded restore cannot hide the newer workspace', async () => {
+    await openSourceWorkspace();
+    const previous = (await loadWorkspace('ws-a'))!;
+    await saveWorkspace({ ...previous, id: 'ws-slow', name: 'Slow', curatedModels: [] });
+    await saveWorkspace({ ...previous, id: 'ws-new', name: 'New', curatedModels: [] });
+    await saveWorkspaceFiles('ws-new', blankFiles);
+    let finishRestore!: (files: typeof sourceFiles) => void;
+    vi.spyOn(workspaceFiles, 'loadWorkspaceFiles').mockImplementationOnce(
+      () =>
+        new Promise((resolve) => {
+          finishRestore = resolve;
+        })
+    );
+    let oldSwitch!: Promise<void>;
+    await act(async () => {
+      oldSwitch = window.__runeStudioTestApi!.switchWorkspace!('ws-slow');
+    });
+    await waitFor(() => expect(finishRestore).toBeTypeOf('function'));
+    await act(async () => window.__runeStudioTestApi!.switchWorkspace!('ws-new'));
+    await act(async () => {
+      finishRestore(sourceFiles);
+      await oldSwitch;
+    });
+    expect(screen.getByTestId('files')).toHaveTextContent('blank.rosetta');
+    expect(screen.getByRole('button', { name: 'Workspace menu — New' })).toBeVisible();
+    expect(screen.queryByRole('button', { name: 'New blank workspace' })).not.toBeInTheDocument();
+  });
+
+  it('removes an empty record created by a superseded launcher import', async () => {
+    await openSourceWorkspace();
+    const saveRecord = persistence.saveWorkspace;
+    let finishCreation!: () => void;
+    let abandonedId!: string;
+    vi.spyOn(persistence, 'saveWorkspace').mockImplementationOnce(async (workspace) => {
+      await saveRecord(workspace);
+      abandonedId = workspace.id;
+      await new Promise<void>((resolve) => {
+        finishCreation = resolve;
+      });
+    });
+    let oldImport!: Promise<void>;
+    await act(async () => {
+      oldImport = window.__runeStudioTestApi!.loadFiles!(sourceFiles);
+    });
+    await waitFor(() => expect(finishCreation).toBeTypeOf('function'));
+    await act(async () => window.__runeStudioTestApi!.loadFiles!(blankFiles));
+    await act(async () => {
+      finishCreation();
+      await oldImport;
+    });
+    expect(await loadWorkspace(abandonedId)).toBeUndefined();
+    expect(await loadWorkspaceFiles(abandonedId)).toEqual([]);
+    expect(await listRecents()).toHaveLength(2);
+    expect(screen.getByTestId('files')).toHaveTextContent('blank.rosetta');
     expect(await loadWorkspaceFiles('ws-a')).toEqual(sourceFiles);
   });
 
