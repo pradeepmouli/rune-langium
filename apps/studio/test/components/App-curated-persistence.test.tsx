@@ -52,7 +52,14 @@ vi.mock('../../src/store/model-store.js', () => {
   const useStore = ((selector: (s: { models: Map<string, unknown> }) => unknown) => {
     return selector({ models: modelsRef.current });
   }) as unknown as { (selector: unknown): unknown; getState: () => unknown };
-  useStore.getState = () => ({ load: loadSpy, models: modelsRef.current });
+  useStore.getState = () => ({
+    load: loadSpy,
+    models: modelsRef.current,
+    unload: (id: string) => {
+      modelsRef.current = new Map(modelsRef.current);
+      modelsRef.current.delete(id);
+    }
+  });
   return { useModelStore: useStore };
 });
 
@@ -174,9 +181,9 @@ describe('App curated-bundle persistence (D1 / workspace-state-pipeline)', () =>
       }
     ]);
 
-    // Pre-populate the mocked store with a curated LoadedModel so the
-    // initial selector subscription sees it. We then assert the
-    // App-level effect serializes it into IDB.
+    const view = render(<App />);
+    await waitFor(() => expect(document.body).toHaveAttribute('data-workspace-active', 'true'));
+
     modelsRef.current = new Map([
       [
         'cdm',
@@ -196,7 +203,7 @@ describe('App curated-bundle persistence (D1 / workspace-state-pipeline)', () =>
       ]
     ]);
 
-    render(<App />);
+    view.rerender(<App />);
 
     await waitFor(async () => {
       const ws = await loadWorkspace('ws-persist-curated');
