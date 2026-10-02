@@ -30,6 +30,7 @@ vi.mock('../../src/services/lsp-client.js', () => ({
   createLspClientService: () => ({
     connect: vi.fn().mockResolvedValue(undefined),
     syncWorkspaceFiles: vi.fn(),
+    syncWorkspaceModels: vi.fn().mockResolvedValue(undefined),
     dispose: vi.fn()
   })
 }));

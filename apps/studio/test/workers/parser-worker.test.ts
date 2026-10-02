@@ -39,6 +39,7 @@ vi.mock('@rune-langium/core', () => ({
   RuneDslIndexManager: class {},
   namespaceFromSource: (text: string) => text.match(/^\s*namespace\s+([\w.]+)/m)?.[1] ?? '',
   preserveCstText: () => {},
+  serializeRuneModel: (_serializer: unknown, model: unknown) => JSON.stringify(model),
   createRuneDslServices: () => ({
     RuneDsl: {
       serializer: {

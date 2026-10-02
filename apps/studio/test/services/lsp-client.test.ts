@@ -14,16 +14,25 @@ vi.mock('../../src/services/transport-provider.js', () => ({
 }));
 
 // Mock @codemirror/lsp-client to capture didOpen/didClose/notification calls
-const { mockDidOpen, mockDidClose, mockNotification, mockLspDisconnect, mockLspConnect, mockPlugin, mockGetFile } =
-  vi.hoisted(() => ({
-    mockDidOpen: vi.fn(),
-    mockDidClose: vi.fn(),
-    mockNotification: vi.fn(),
-    mockLspDisconnect: vi.fn(),
-    mockLspConnect: vi.fn(),
-    mockPlugin: vi.fn().mockReturnValue([]),
-    mockGetFile: vi.fn().mockReturnValue(null)
-  }));
+const {
+  mockDidOpen,
+  mockDidClose,
+  mockNotification,
+  mockLspDisconnect,
+  mockLspConnect,
+  mockPlugin,
+  mockGetFile,
+  mockRequest
+} = vi.hoisted(() => ({
+  mockRequest: vi.fn().mockResolvedValue(null),
+  mockDidOpen: vi.fn(),
+  mockDidClose: vi.fn(),
+  mockNotification: vi.fn(),
+  mockLspDisconnect: vi.fn(),
+  mockLspConnect: vi.fn(),
+  mockPlugin: vi.fn().mockReturnValue([]),
+  mockGetFile: vi.fn().mockReturnValue(null)
+}));
 
 vi.mock('@codemirror/lsp-client', () => {
   class MockWorkspace {
@@ -56,6 +65,8 @@ vi.mock('@codemirror/lsp-client', () => {
     notification = mockNotification;
     disconnect = mockLspDisconnect;
     connect = mockLspConnect;
+    initializing = Promise.resolve(null);
+    request = mockRequest;
     plugin = mockPlugin;
     workspace: MockWorkspace;
     constructor(opts: any) {
@@ -508,5 +519,45 @@ describe('syncWorkspaceFiles', () => {
     expect(mockDidOpen).toHaveBeenCalledOnce();
     const changeCalls = mockNotification.mock.calls.filter((c) => c[0] === 'textDocument/didChange');
     expect(changeCalls.some((c) => c[1].textDocument.uri === 'file:///workspace/a.rosetta')).toBe(false);
+  });
+});
+
+describe('semantic dependency synchronization', () => {
+  it('sends only changed models, prunes removed models and replays after reconnect', async () => {
+    const service = createLspClientService({ transportProvider: makeFakeProvider() });
+    mockRequest.mockClear();
+    await service.connect();
+    await service.syncWorkspaceModels([{ uri: 'file:///a.rosetta', modelJson: 'first' }]);
+    expect(mockRequest.mock.calls.map((call) => call[1])).toEqual([
+      { retain: [] },
+      { document: { uri: 'file:///a.rosetta', modelJson: 'first' } },
+      { retain: ['file:///a.rosetta'] }
+    ]);
+    mockRequest.mockClear();
+    await service.syncWorkspaceModels([{ uri: 'file:///a.rosetta', modelJson: 'first' }]);
+    expect(mockRequest).not.toHaveBeenCalled();
+    await service.reconnect();
+    expect(mockRequest.mock.calls.some((call) => call[1].document?.modelJson === 'first')).toBe(true);
+    mockRequest.mockClear();
+    await service.syncWorkspaceModels([]);
+    expect(mockRequest.mock.calls.map((call) => call[1])).toEqual([{ retain: [] }, { retain: [] }]);
+    service.dispose();
+  });
+});
+
+describe('LSP URI identity', () => {
+  it('canonicalizes curated brackets and spaces for source and model synchronization', async () => {
+    const service = createLspClientService({ transportProvider: makeFakeProvider() });
+    await service.connect();
+    mockRequest.mockClear();
+    mockDidOpen.mockClear();
+    await service.syncWorkspaceModels([{ uri: 'file:///[cdm]/a file.rosetta', modelJson: '{}' }]);
+    service.syncWorkspaceFiles([{ path: '[cdm]/a file.rosetta', content: 'namespace cdm' }]);
+    const uri = 'file:///%5Bcdm%5D/a%20file.rosetta';
+    expect(mockRequest.mock.calls.some((call) => call[1].document?.uri === uri)).toBe(true);
+    expect(mockDidOpen).toHaveBeenCalledWith(expect.objectContaining({ uri }));
+    service.getPlugin('file:///[cdm]/a file.rosetta');
+    expect(mockPlugin).toHaveBeenCalledWith(uri);
+    service.dispose();
   });
 });

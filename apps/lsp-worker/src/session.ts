@@ -37,6 +37,7 @@ import type { DurableObjectState } from '@cloudflare/workers-types';
 import { createRuneLspServer, DurableObjectWebSocketTransport, type RuneLspServer } from '@rune-langium/lsp-server';
 import { DocumentState } from 'langium';
 import { logger } from './log.js';
+import { persistLspModels, replayLspModels, purgeLspModels } from './model-storage.js';
 
 // ────────────────────────────────────────────────────────────────────────────
 // Storage shape (data-model §1)
@@ -480,6 +481,7 @@ export class RuneLspSession {
       const docs = await this.state.storage.list({ prefix: DOC_PREFIX });
       const keys = Array.from(docs.keys());
       if (keys.length > 0) await this.state.storage.delete(keys);
+      await purgeLspModels(this.state.storage);
       await this.state.storage.delete(INIT_PARAMS_KEY);
       await this.state.storage.delete(META_KEY);
     });
@@ -492,7 +494,14 @@ export class RuneLspSession {
     // method's own promise in `ensureLangiumPromise` and calls it exactly
     // once per DO instance, so a second invocation can't happen.
     try {
-      this.langium = createRuneLspServer();
+      this.langium = createRuneLspServer({
+        onModelUpdate: async (update) => {
+          if (this.closed) return;
+          await this.state.blockConcurrencyWhile(async () => {
+            if (!this.closed) await persistLspModels(this.state.storage, update);
+          });
+        }
+      });
       this.transport = new DurableObjectWebSocketTransport(this.wrapSocketForAckDetection(ws));
       // Does not await — listen() only resolves when the transport closes.
       void this.langium.listen(this.transport);
@@ -720,6 +729,7 @@ export class RuneLspSession {
       if (this.closed) return;
       void this.state.blockConcurrencyWhile(async () => {
         for (const doc of builtDocs) {
+          if (!doc.parseResult.value.$cstNode) continue;
           await this.state.storage.put(`${DOC_PREFIX}${doc.uri.toString()}`, doc.textDocument.getText());
         }
       });
@@ -769,11 +779,15 @@ export class RuneLspSession {
     this.awaitingSentinelInitializeReply = false;
     this.transport.receive(JSON.stringify({ jsonrpc: '2.0', method: 'initialized', params: {} }));
 
+    if (this.langium) await replayLspModels(this.state.storage, (update) => this.langium!.syncModels(update));
+
     const stored = await this.state.storage.list({ prefix: DOC_PREFIX });
     // A real replay happened above (the initialize/initialized handshake,
     // including the awaited round-trip) even with zero stored documents —
     // only the earlier `initParams === undefined` branch means no replay.
     if (stored.size === 0) return true;
+
+    const replaySettled = this.waitForDocumentUpdateSettle(RESPONSE_ACK_TIMEOUT_MS);
 
     for (const [key, value] of stored) {
       const uri = key.slice(DOC_PREFIX.length);
@@ -792,10 +806,10 @@ export class RuneLspSession {
     // so without this, the request that triggered this cold wake (hover,
     // completion, definition) would be forwarded and can run against an
     // empty or not-yet-linked index, returning an empty/stale result.
-    // `waitUntil` with no uri waits for the whole workspace — correct here
-    // since this DO's Langium instance holds only this connection's docs.
+    // Observe this source rebuild, not the completed dependency build that
+    // already advanced the builder's global state before didOpen replay.
     if (this.langium) {
-      await this.langium.shared.workspace.DocumentBuilder.waitUntil(DocumentState.Linked);
+      await replaySettled;
     }
     return true;
   }

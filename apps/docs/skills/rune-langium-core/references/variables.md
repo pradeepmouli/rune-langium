@@ -412,6 +412,11 @@ const curatedAdapter: { parse: any }
 
 ## serializer
 
+### `LSP_MODEL_SYNC_METHOD`
+```ts
+const LSP_MODEL_SYNC_METHOD: "rune/syncModels"
+```
+
 ### `RUNE_SERIALIZE_OPTIONS`
 The Langium serialize option triple for the canonical Rune wire form.
 ```ts

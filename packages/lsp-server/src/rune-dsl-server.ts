@@ -17,7 +17,7 @@
 
 import { LSPServer, type ServerCapabilities } from '@lspeasy/server';
 import type { Transport } from '@lspeasy/core';
-import { EmptyFileSystem, inject } from 'langium';
+import { EmptyFileSystem, DocumentState, URI, inject } from 'langium';
 import type { LangiumServices, LangiumSharedServices } from 'langium/lsp';
 import { createDefaultModule, createDefaultSharedModule, startLanguageServer } from 'langium/lsp';
 import {
@@ -25,11 +25,15 @@ import {
   RuneDslGeneratedSharedModule,
   RuneDslModule,
   RuneDslSharedModule,
-  RuneDslValidator
+  RuneDslValidator,
+  LSP_MODEL_SYNC_METHOD,
+  type LspModelUpdate
 } from '@rune-langium/core';
 
 import { createConnectionAdapter } from './connection-adapter.js';
 import { RuneDocumentUpdateHandler } from './document-update-handler.js';
+import { RuneModelIndex, RuneLspDocumentBuilder } from './model-index.js';
+import { RuneModelDefinitionProvider } from './model-definition-provider.js';
 
 // ────────────────────────────────────────────────────────────────────────────
 // Public API
@@ -66,6 +70,7 @@ export interface RuneLspServer {
   services: LangiumServices;
   /** Bind the server to a transport and start processing messages. */
   listen(transport: Transport): Promise<void>;
+  syncModels(update: LspModelUpdate): Promise<void>;
 }
 
 /**
@@ -121,7 +126,9 @@ export interface RuneLspServer {
  *
  * @category LSP Server
  */
-export function createRuneLspServer(): RuneLspServer {
+export function createRuneLspServer(
+  options: { onModelUpdate?: (update: LspModelUpdate) => Promise<void> } = {}
+): RuneLspServer {
   // 1. Create @lspeasy/server with broad capabilities.
   //    Langium's onInitialize returns the *actual* capabilities to the client.
   //    We just need non-strict mode (default) so handler registration isn't blocked.
@@ -164,11 +171,50 @@ export function createRuneLspServer(): RuneLspServer {
     RuneDslGeneratedSharedModule,
     RuneDslSharedModule,
     {
+      workspace: { DocumentBuilder: (services: LangiumSharedServices) => new RuneLspDocumentBuilder(services) },
       lsp: { DocumentUpdateHandler: (services: LangiumSharedServices) => new RuneDocumentUpdateHandler(services) }
     }
   );
 
-  const RuneDsl = inject(createDefaultModule({ shared }), RuneDslGeneratedModule, RuneDslModule);
+  const RuneDsl = inject(createDefaultModule({ shared }), RuneDslGeneratedModule, RuneDslModule, {
+    lsp: { DefinitionProvider: (services: LangiumServices) => new RuneModelDefinitionProvider(services) }
+  });
+  const models = new RuneModelIndex(shared, RuneDsl, options.onModelUpdate);
+  shared.workspace.DocumentBuilder.onBuildPhase(DocumentState.Validated, (docs) =>
+    models.captureSources(docs, options.onModelUpdate)
+  );
+  shared.workspace.DocumentBuilder.restoreModels = (uris) => models.restore(uris);
+  const syncModels = async (update: LspModelUpdate) => {
+    await shared.workspace.WorkspaceManager.ready;
+    // Use Langium's write lock for all changes to the shared symbol index.
+    await shared.workspace.WorkspaceLock.write(async () => {
+      await models.sync(update);
+    });
+  };
+  connection.onRequest(LSP_MODEL_SYNC_METHOD, async (update: LspModelUpdate) => {
+    if (
+      !update ||
+      (!update.document && !update.retain) ||
+      (update.document &&
+        (typeof update.document.uri !== 'string' ||
+          typeof update.document.modelJson !== 'string' ||
+          update.document.uri.length > 2048 ||
+          update.document.modelJson.length > 8 * 1024 * 1024)) ||
+      (update.retain &&
+        (!Array.isArray(update.retain) ||
+          update.retain.length > 2048 ||
+          update.retain.some((uri) => typeof uri !== 'string')))
+    ) {
+      throw new Error('Invalid model synchronization payload');
+    }
+    const canonical: LspModelUpdate = {
+      ...(update.document ? { document: { ...update.document, uri: URI.parse(update.document.uri).toString() } } : {}),
+      ...(update.retain ? { retain: update.retain.map((uri) => URI.parse(uri).toString()) } : {})
+    };
+    await syncModels(canonical);
+    await options.onModelUpdate?.(canonical);
+    return null;
+  });
 
   // 4. Register language + validation
   shared.ServiceRegistry.register(RuneDsl);
@@ -183,6 +229,7 @@ export function createRuneLspServer(): RuneLspServer {
     server,
     shared,
     services: RuneDsl,
+    syncModels,
     async listen(transport: Transport) {
       await server.listen(transport);
     }

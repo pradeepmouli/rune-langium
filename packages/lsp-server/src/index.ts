@@ -19,6 +19,9 @@
  * and @lspeasy/server.
  */
 
+export { LSP_MODEL_SYNC_METHOD } from '@rune-langium/core';
+export type { LspModelUpdate } from '@rune-langium/core';
+
 // Main server factory
 export { createRuneLspServer } from './rune-dsl-server.js';
 export type { RuneLspServer } from './rune-dsl-server.js';
