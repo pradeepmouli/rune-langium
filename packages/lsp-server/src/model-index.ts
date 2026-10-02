@@ -17,7 +17,7 @@ import {
 export class RuneModelIndex {
   private readonly capturedSources = new WeakMap<LangiumDocument, AstNode>();
   private dirty = false;
-  private readonly models = new Map<string, LangiumDocument>();
+  private readonly models = new Map<string, { document: LangiumDocument; modelJson: string }>();
   constructor(
     private readonly shared: LangiumSharedServices,
     private readonly services: LangiumServices,
@@ -58,7 +58,7 @@ export class RuneModelIndex {
           else (container[info.property] as unknown[])[info.index] = reference;
         }
       }
-      this.models.set(uri, document);
+      this.models.set(uri, { document, modelJson });
       this.dirty = true;
     }
     if (!update.retain) return;
@@ -71,7 +71,7 @@ export class RuneModelIndex {
         [],
         removed.filter((uri) => !this.shared.workspace.TextDocuments?.get(uri)).map((uri) => URI.parse(uri))
       );
-    for (const [uri, document] of this.models) {
+    for (const [uri, { document }] of this.models) {
       const current = LangiumDocuments.getDocument(URI.parse(uri));
       // The open editor owns its URI; semantic snapshots never replace live text.
       if (this.shared.workspace.TextDocuments?.get(uri)) continue;
@@ -92,6 +92,7 @@ export class RuneModelIndex {
       const uri = document.uri.toString();
       const model = document.parseResult.value;
       if (!this.models.has(uri) || !model.$cstNode || this.capturedSources.get(document) === model) continue;
+      if (document.parseResult.parserErrors.length || document.parseResult.lexerErrors.length) continue;
       const modelJson = compactLspModelJson(serializeRuneModel(this.services.serializer.JsonSerializer, model));
       const update = { document: { uri, modelJson } };
       await this.sync(update);
@@ -104,14 +105,21 @@ export class RuneModelIndex {
     const { LangiumDocuments } = this.shared.workspace;
     let restored = false;
     for (const uri of uris) {
-      let model = this.models.get(uri.toString());
-      if (!model || LangiumDocuments.hasDocument(uri)) continue;
+      let snapshot = this.models.get(uri.toString());
+      if (!snapshot || LangiumDocuments.hasDocument(uri)) continue;
       // didOpen can parse in-place over a snapshot; detach even if a rapid
       // close cancelled validation before the normal source-capture hook.
-      if (model.parseResult.value.$cstNode) {
-        await this.captureSources([model], this.persist);
-        model = this.models.get(uri.toString())!;
+      if (snapshot.document.parseResult.value.$cstNode) {
+        await this.captureSources([snapshot.document], this.persist);
+        snapshot = this.models.get(uri.toString())!;
+        // Invalid source may have been parsed in-place over the indexed snapshot.
+        // Rehydrate its saved valid JSON rather than retaining the partial AST.
+        if (snapshot.document.parseResult.value.$cstNode) {
+          await this.sync({ document: { uri: uri.toString(), modelJson: snapshot.modelJson } });
+          snapshot = this.models.get(uri.toString())!;
+        }
       }
+      const model = snapshot.document;
       // A previously registered snapshot may have been invalidated by deletion.
       this.services.references.Linker.unlink(model);
       model.state = DocumentState.Parsed;

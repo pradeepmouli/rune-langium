@@ -1024,6 +1024,48 @@ describe('RuneLspSession — dependency replay', () => {
       position: { line: 3, character: 9 }
     });
     expect(afterEdit).toBeNull();
+    const validGeneration = backing.get('model-meta:' + canonicalDependencyUri);
+    await session.webSocketMessage(
+      ws,
+      JSON.stringify({
+        jsonrpc: '2.0',
+        method: 'textDocument/didOpen',
+        params: {
+          textDocument: {
+            uri: canonicalDependencyUri,
+            languageId: 'rosetta',
+            version: 2,
+            text: 'namespace example\n\ntype Party:\n bad (1..1)\n'
+          }
+        }
+      })
+    );
+    await vi.waitFor(() =>
+      expect(
+        ws.sent.some(
+          (message: any) =>
+            message.method === 'textDocument/publishDiagnostics' &&
+            message.params.uri === canonicalDependencyUri &&
+            message.params.diagnostics.some((diagnostic: any) => diagnostic.severity === 1)
+        )
+      ).toBe(true)
+    );
+    await session.webSocketMessage(
+      ws,
+      JSON.stringify({
+        jsonrpc: '2.0',
+        method: 'textDocument/didClose',
+        params: { textDocument: { uri: canonicalDependencyUri } }
+      })
+    );
+    await vi.waitFor(() => expect(backing.has('docs:' + canonicalDependencyUri)).toBe(false));
+    session = new RuneLspSession(makeState(backing));
+    const afterInvalidEdit = await request(6, 'textDocument/definition', {
+      textDocument: { uri },
+      position: { line: 3, character: 9 }
+    });
+    expect(afterInvalidEdit).toBeNull();
+    expect(backing.get('model-meta:' + canonicalDependencyUri)).toEqual(validGeneration);
     await session.webSocketClose(ws, 1000, 'test finished', true);
     expect([...backing.keys()].some((key) => key.startsWith('models:') || key.startsWith('model-meta:'))).toBe(false);
   });

@@ -26,7 +26,7 @@ into the same server lifecycle.
 - Creating multiple servers in the same process — each server maintains its own Langium workspace index; sharing a workspace across servers requires custom `ServiceRegistry` wiring. (`createRuneLspServer`)
 - Normal usage — prefer `createRuneLspServer()` which calls this internally. (`createConnectionAdapter`)
 
-API surface: 2 functions, 2 classes, 2 types, 1 constants
+API surface: 2 functions, 2 classes, 2 types, 2 constants
 
 ## Quick Reference
 
@@ -35,7 +35,7 @@ API surface: 2 functions, 2 classes, 2 types, 1 constants
 **cf-durable-object-transport:** `DurableObjectWebSocketTransport`
 **document-update-handler:** `RuneDocumentUpdateHandler`
 **lsp-model.d:** `LspModelUpdate` (Incremental semantic documents followed by the complete current URI set), `LSP_MODEL_SYNC_METHOD` (@rune-langium/lsp-server — LSP server for Rune DSL powered by Langium
-and @lspeasy/server)
+and @lspeasy/server), `LSP_REQUEST_TIMEOUT_MS` (Request budget includes reconstruction of dependency models after cold wake)
 
 ## References
 

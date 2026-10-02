@@ -20,6 +20,7 @@ boxes alone are not evidence that its code is missing.
   editors use canonical AST schemas with `useZodForm`/`useExternalSync`.
 - #492's no-op global search description is obsolete: `AppHeader` mounts
   `GlobalSearch`, with click and Cmd/Ctrl-K activation and four passing tests.
+  Closed the stale issue after verifying the implementation from PR #549.
 - The May 22 manifest-closure deferral is implemented by the shared curated
   workspace loader and namespace graph, including cross-bundle closure.
 - The old TypeScript erasure follow-up is implemented with Sucrase in the

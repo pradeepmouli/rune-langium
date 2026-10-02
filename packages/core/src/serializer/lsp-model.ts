@@ -10,6 +10,9 @@ export interface LspModelUpdate {
 
 export const LSP_MODEL_SYNC_METHOD = 'rune/syncModels';
 
+/** Request budget includes reconstruction of dependency models after cold wake. */
+export const LSP_REQUEST_TIMEOUT_MS = 30_000;
+
 /** Keep semantic AST data and declaration ranges, without dependency token spans. */
 export function compactLspModelJson(json: string): string {
   return JSON.stringify(JSON.parse(json), function (key, value) {

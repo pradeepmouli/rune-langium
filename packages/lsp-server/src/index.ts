@@ -19,7 +19,7 @@
  * and @lspeasy/server.
  */
 
-export { LSP_MODEL_SYNC_METHOD } from '@rune-langium/core';
+export { LSP_MODEL_SYNC_METHOD, LSP_REQUEST_TIMEOUT_MS } from '@rune-langium/core';
 export type { LspModelUpdate } from '@rune-langium/core';
 
 // Main server factory

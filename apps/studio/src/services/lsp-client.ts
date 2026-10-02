@@ -26,7 +26,7 @@ import {
 import type { LspDiagnostic } from '../types/diagnostics.js';
 import { URI } from 'langium';
 import { pathToUri } from '../utils/uri.js';
-import { LSP_MODEL_SYNC_METHOD } from '@rune-langium/core';
+import { LSP_MODEL_SYNC_METHOD, LSP_REQUEST_TIMEOUT_MS } from '@rune-langium/core';
 import { withInstrumentation } from './instrumentation/core.js';
 
 export type { LspDiagnostic } from '../types/diagnostics.js';
@@ -209,6 +209,8 @@ export const createLspClientService = withInstrumentation(
     const openedUris = new Set<string>();
     let modelSyncQueue = Promise.resolve();
     let modelGeneration = 0;
+    let modelSyncPending = false;
+    let pendingWorkspaceFiles: Array<{ path: string; content: string }> | null = null;
     let _pendingRefreshId: ReturnType<typeof setTimeout> | null = null;
 
     const diagnosticHandlers: ((uri: string, diagnostics: LspDiagnostic[]) => void)[] = [];
@@ -226,6 +228,7 @@ export const createLspClientService = withInstrumentation(
     function syncModels(): Promise<void> {
       const generation = ++modelGeneration;
       const target = client;
+      modelSyncPending = true;
       modelSyncQueue = modelSyncQueue
         .catch(() => {})
         .then(async () => {
@@ -253,6 +256,16 @@ export const createLspClientService = withInstrumentation(
           await target.request(LSP_MODEL_SYNC_METHOD, { retain: [...modelSnapshot.keys()] });
           if (target !== client) return;
           for (const uri of sentModels.keys()) if (!modelSnapshot.has(uri)) sentModels.delete(uri);
+        })
+        .then(() => {
+          if (target !== client || generation !== modelGeneration) return;
+          modelSyncPending = false;
+          if (pendingWorkspaceFiles) service.syncWorkspaceFiles(pendingWorkspaceFiles);
+        })
+        .catch((error) => {
+          // A failed final retain may leave acknowledged uploads unpublished.
+          if (target === client) sentModels.clear();
+          throw error;
         });
       return modelSyncQueue;
     }
@@ -260,6 +273,8 @@ export const createLspClientService = withInstrumentation(
     function buildClient(): LSPClient {
       return new LSPClient({
         rootUri: 'file:///workspace',
+        // Cold wake can restore a large semantic closure before any request runs.
+        timeout: LSP_REQUEST_TIMEOUT_MS,
         workspace: (lspClient) => {
           const ws = new StudioWorkspace(lspClient);
           ws.displayFileHandler = displayFileHandler;
@@ -288,7 +303,7 @@ export const createLspClientService = withInstrumentation(
       sentModels.clear();
       await syncModels();
 
-      if (target !== client || !initialized) return;
+      if (target !== client || !initialized || modelSyncPending) return;
       // Re-open files that were not already synchronized during model upload.
       for (const [uri, entry] of workspaceSnapshot) {
         if (openedUris.has(uri)) continue;
@@ -303,7 +318,7 @@ export const createLspClientService = withInstrumentation(
       }
     }
 
-    return {
+    const service: LspClientService = {
       async connect(): Promise<void> {
         if (client) {
           client.disconnect();
@@ -344,6 +359,17 @@ export const createLspClientService = withInstrumentation(
         return syncModels();
       },
       syncWorkspaceFiles(files: Array<{ path: string; content: string }>): void {
+        if (modelSyncPending) {
+          pendingWorkspaceFiles = files;
+          const desired = new Set(files.map((file) => URI.parse(pathToUri(file.path)).toString()));
+          for (const uri of workspaceSnapshot.keys()) {
+            if (desired.has(uri)) continue;
+            workspaceSnapshot.delete(uri);
+            if (openedUris.delete(uri)) client?.didClose(uri);
+          }
+          return;
+        }
+        pendingWorkspaceFiles = null;
         const nextUris = new Set<string>();
         const changedUris = new Set<string>();
         let addedCount = 0;
@@ -466,12 +492,14 @@ export const createLspClientService = withInstrumentation(
         }
         initialized = false;
         modelGeneration++;
+        pendingWorkspaceFiles = null;
         modelSnapshot.clear();
         sentModels.clear();
         provider.dispose();
         diagnosticHandlers.length = 0;
       }
     };
+    return service;
     // `opts.transportOptions` is already captured by createTransportProvider's
     // own instrumentation when this constructs the default provider; the
     // returned LspClientService is a function-bearing object.

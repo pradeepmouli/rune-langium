@@ -34,7 +34,12 @@
  */
 
 import type { DurableObjectState } from '@cloudflare/workers-types';
-import { createRuneLspServer, DurableObjectWebSocketTransport, type RuneLspServer } from '@rune-langium/lsp-server';
+import {
+  createRuneLspServer,
+  DurableObjectWebSocketTransport,
+  LSP_REQUEST_TIMEOUT_MS as RESPONSE_ACK_TIMEOUT_MS,
+  type RuneLspServer
+} from '@rune-langium/lsp-server';
 import { DocumentState } from 'langium';
 import { logger } from './log.js';
 import { persistLspModels, replayLspModels, purgeLspModels } from './model-storage.js';
@@ -57,21 +62,6 @@ const META_KEY = 'meta';
 const INIT_PARAMS_KEY = 'meta:initializeParams';
 /** Dummy id on the replayed `initialize` — never seen by the real client. */
 const SENTINEL_INITIALIZE_ID = '__replay_initialize__';
-/**
- * Safety-net ceiling used in three places: {@link RuneLspSession.waitForResponse}
- * while awaiting the replayed `initialize`'s real ack; a real request's
- * `state.waitUntil` response-ack registration in
- * {@link RuneLspSession.webSocketMessage}; and that same method's
- * document-build-settle wait, which bounds a delete-only rebuild round
- * that never fires the event it would otherwise wait on. Generous on
- * purpose: it only fires if something is genuinely wrong (a bug, a hung
- * handler, or — for the build wait — an empty rebuild set), in which case
- * letting the event end anyway is better than hanging the DO forever, but
- * 20ms-style short guesses are exactly what raced a slower real init in
- * production.
- */
-const RESPONSE_ACK_TIMEOUT_MS = 5000;
-
 /** Minimal CF WebSocket surface `DurableObjectWebSocketTransport` needs. */
 interface CfSocketLike {
   readonly readyState: number;

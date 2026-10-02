@@ -523,6 +523,47 @@ describe('syncWorkspaceFiles', () => {
 });
 
 describe('semantic dependency synchronization', () => {
+  it('opens only the latest requested source after its closure finishes uploading', async () => {
+    const service = createLspClientService({ transportProvider: makeFakeProvider() });
+    await service.connect();
+    mockDidOpen.mockClear();
+    let release!: (value: null) => void;
+    mockRequest.mockImplementationOnce(
+      () =>
+        new Promise((resolve) => {
+          release = resolve;
+        })
+    );
+    const sync = service.syncWorkspaceModels([{ uri: 'file:///workspace/next.rosetta', modelJson: '{}' }]);
+    await vi.waitFor(() => expect(release).toBeDefined());
+    service.syncWorkspaceFiles([{ path: 'next.rosetta', content: 'namespace original' }]);
+    service.syncWorkspaceFiles([{ path: 'next.rosetta', content: 'namespace latest' }]);
+    expect(mockDidOpen).not.toHaveBeenCalled();
+    release(null);
+    await sync;
+    expect(mockDidOpen).toHaveBeenCalledTimes(1);
+    expect(mockDidOpen.mock.lastCall?.[0].doc.toString()).toBe('namespace latest');
+    service.dispose();
+  });
+  it('retries an unpublished closure before opening source after a failed retain', async () => {
+    const service = createLspClientService({ transportProvider: makeFakeProvider() });
+    await service.connect();
+    mockDidOpen.mockClear();
+    mockRequest.mockClear();
+    mockRequest
+      .mockResolvedValueOnce(null)
+      .mockResolvedValueOnce(null)
+      .mockRejectedValueOnce(new Error('retain failed'));
+    const models = [{ uri: 'file:///workspace/next.rosetta', modelJson: '{}' }];
+    const sync = service.syncWorkspaceModels(models);
+    service.syncWorkspaceFiles([{ path: 'next.rosetta', content: 'namespace next' }]);
+    await expect(sync).rejects.toThrow('retain failed');
+    expect(mockDidOpen).not.toHaveBeenCalled();
+    await service.syncWorkspaceModels(models);
+    expect(mockDidOpen).toHaveBeenCalledTimes(1);
+    expect(mockRequest).toHaveBeenCalledTimes(6);
+    service.dispose();
+  });
   it('sends only changed models, prunes removed models and replays after reconnect', async () => {
     const service = createLspClientService({ transportProvider: makeFakeProvider() });
     mockRequest.mockClear();

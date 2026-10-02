@@ -24,3 +24,7 @@ gets diagnostics. Other LSP clients can continue using ordinary `didOpen` and
 Embedded hosts may call `syncModels(update)` for replay. The factory's optional
 `onModelUpdate` callback persists client updates and parsed live edits; replay does not
 rewrite unchanged persisted models. Hosts must restore models before replaying open source.
+
+Live syntax errors preserve the last valid dependency snapshot. Studio opens the
+next source after its dependency upload completes, and both client requests and
+the hosted event lifetime use the shared 30-second reconstruction budget.
