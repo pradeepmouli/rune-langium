@@ -225,6 +225,33 @@ describe('workspace isolation', () => {
     expect(screen.queryByRole('button', { name: 'New blank workspace' })).not.toBeInTheDocument();
   });
 
+  it('an import that supersedes a restore leaves the restoring screen', async () => {
+    await openSourceWorkspace();
+    const previous = (await loadWorkspace('ws-a'))!;
+    await saveWorkspace({ ...previous, id: 'ws-slow', name: 'Slow', curatedModels: [] });
+    let finishRestore!: (files: typeof sourceFiles) => void;
+    vi.spyOn(workspaceFiles, 'loadWorkspaceFiles').mockImplementationOnce(
+      () =>
+        new Promise((resolve) => {
+          finishRestore = resolve;
+        })
+    );
+    let oldSwitch!: Promise<void>;
+    await act(async () => {
+      oldSwitch = window.__runeStudioTestApi!.switchWorkspace!('ws-slow');
+    });
+    await waitFor(() => expect(screen.getByText('Restoring workspace…')).toBeVisible());
+    await act(async () => window.__runeStudioTestApi!.loadFiles!(blankFiles));
+    expect(screen.getByTestId('files')).toHaveTextContent('blank.rosetta');
+    expect(screen.queryByText('Restoring workspace…')).not.toBeInTheDocument();
+    await act(async () => {
+      finishRestore(sourceFiles);
+      await oldSwitch;
+    });
+    expect(screen.getByTestId('files')).toHaveTextContent('blank.rosetta');
+    expect(screen.queryByText('Restoring workspace…')).not.toBeInTheDocument();
+  });
+
   it('removes an empty record created by a superseded launcher import', async () => {
     await openSourceWorkspace();
     const saveRecord = persistence.saveWorkspace;

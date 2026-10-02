@@ -745,6 +745,7 @@ function AppContent() {
     async (loadedFiles: WorkspaceFile[], targetWorkspaceId?: string) => {
       clearWorkspaceState();
       const activationEpoch = workspaceEpochRef.current;
+      setBootState('start');
       setLoading(true);
       try {
         let workspace = targetWorkspaceId ? await persistence.loadWorkspace(targetWorkspaceId) : null;
@@ -769,6 +770,7 @@ function AppContent() {
         await syncWorkspaceToEditor(loadedFiles);
         if (restoredWorkspaceRef.current?.id !== workspace.id) return;
         setCuratedSyncedWorkspaceId(workspace.id);
+        setBootState('restored');
         usePerspectiveStore.getState().setActivePerspective('explore');
       } catch (error) {
         if (activationEpoch === workspaceEpochRef.current) {
