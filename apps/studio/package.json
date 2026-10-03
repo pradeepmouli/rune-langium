@@ -34,7 +34,7 @@
     "@codemirror/lint": "^6.9.7",
     "@codemirror/lsp-client": "^6.3.0",
     "@codemirror/state": "^6.7.5",
-    "@codemirror/view": "^6.43.12",
+    "@codemirror/view": "^6.43.13",
     "@hookform/resolvers": "^5.9.1",
     "@js-temporal/polyfill": "^0.5.1",
     "@l1xnan/tree-sitter-sql": "0.4.7",
