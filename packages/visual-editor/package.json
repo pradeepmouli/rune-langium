@@ -38,7 +38,7 @@
     "@rune-langium/core": "workspace:*",
     "@rune-langium/design-system": "workspace:*",
     "@tanstack/react-virtual": "^3.14.13",
-    "@xyflow/react": "^12.11.6",
+    "@xyflow/react": "^12.12.0",
     "@zod-to-form/core": "0.11.3",
     "@zod-to-form/react": "0.11.2",
     "elkjs": "^0.12.0",
