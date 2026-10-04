@@ -10,6 +10,7 @@ import { createLspClientService, type LspClientService } from '../../services/ls
 import { createTransportProvider, type TransportState } from '../../services/transport-provider.js';
 import { getLspSessionId } from '../../services/lsp-session.js';
 import { config } from '../../config.js';
+import { collectLspWorkspaceModels, type LspModelCacheEntry } from '../../services/lsp-workspace-models.js';
 import { BUNDLE_MARKER_SUFFIX } from '../../services/workspace.js';
 import { useStudioToast } from '../../components/StudioToastProvider.js';
 import { useOutputStore, fmtLine } from '../../store/output-store.js';
@@ -19,7 +20,13 @@ import { withInstrumentation } from '../../services/instrumentation/core.js';
 
 export const LspProvider = withInstrumentation(
   function LspProvider({ children }: { children: React.ReactNode }): React.ReactElement {
-    const { files } = useWorkspace();
+    const { files, parsedModels } = useWorkspace();
+    const activeEditorFile = useExploreFileNavStore((s) => s.activeEditorFile);
+    const modelCache = useRef(new Map<string, LspModelCacheEntry>());
+    const models = useMemo(
+      () => collectLspWorkspaceModels(files, parsedModels, modelCache.current, activeEditorFile),
+      [files, parsedModels, activeEditorFile]
+    );
     const lspClientRef = useRef<LspClientService | null>(null);
     const providerRef = useRef<ReturnType<typeof createTransportProvider> | null>(null);
     const [transportState, setTransportState] = useState<TransportState>({
@@ -92,13 +99,17 @@ export const LspProvider = withInstrumentation(
       };
     }, []);
 
-    const activeEditorFile = useExploreFileNavStore((s) => s.activeEditorFile);
+    useEffect(() => {
+      lspClientRef.current?.syncWorkspaceModels(models).catch((err) => {
+        const msg = err instanceof Error ? err.message : String(err);
+        useOutputStore.getState().addLine(fmtLine('lsp', 'dependency sync failed', msg), 'error');
+      });
+    }, [models]);
 
-    // Bound the server index to the active document. References into other
-    // workspace files will not resolve through this LSP session.
+    // Keep full syntax trees only for the active source document.
     useEffect(() => {
       const active = files.filter(
-        (f) => f.path === activeEditorFile && !f.path.endsWith(BUNDLE_MARKER_SUFFIX) && !f.refOnly
+        (f) => f.path === activeEditorFile && !f.path.endsWith(BUNDLE_MARKER_SUFFIX) && (!f.refOnly || f.sourceLoaded)
       );
       lspClientRef.current?.syncWorkspaceFiles(active);
     }, [files, activeEditorFile]);

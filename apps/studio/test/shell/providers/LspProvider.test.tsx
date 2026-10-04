@@ -22,9 +22,10 @@ const reconnect = vi.fn().mockImplementation(async () => {
   transportStateCb?.({ mode: 'direct', status: 'connected' });
 });
 const syncWorkspaceFiles = vi.fn();
+const syncWorkspaceModels = vi.fn().mockResolvedValue(undefined);
 const dispose = vi.fn();
 vi.mock('../../../src/services/lsp-client.js', () => ({
-  createLspClientService: () => ({ connect, reconnect, syncWorkspaceFiles, dispose })
+  createLspClientService: () => ({ connect, reconnect, syncWorkspaceFiles, syncWorkspaceModels, dispose })
 }));
 vi.mock('../../../src/services/transport-provider.js', () => ({
   createTransportProvider: () => ({

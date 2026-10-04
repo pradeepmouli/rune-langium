@@ -7,7 +7,13 @@
  * and cross-file resolution for the studio app (T083, T098, T100, T102).
  */
 
-import { parse, parseWorkspace, createRuneDslServices, type RosettaModel } from '@rune-langium/core';
+import {
+  parse,
+  parseWorkspace,
+  createRuneDslServices,
+  serializeRuneModel,
+  type RosettaModel
+} from '@rune-langium/core';
 import type { ExportSelection } from '@rune-langium/codegen/export';
 import { requestCodegenDownload } from './codegen-download-client.js';
 import { sanitizeDownloadFilename } from './export.js';
@@ -177,6 +183,7 @@ export interface WorkspaceState {
 export interface ParsedWorkspaceModel {
   filePath: string;
   model: RosettaModel;
+  serializedModelJson?: string;
 }
 
 export type ParseMode = 'worker' | 'router' | 'main-thread-fallback';
@@ -262,6 +269,7 @@ async function parseWorkspaceFilesOnMainThread(
   );
   const models: RosettaModel[] = [];
   const parsedModels: ParsedWorkspaceModel[] = [];
+  const serializer = createRuneDslServices(EmptyFileSystem).RuneDsl.serializer.JsonSerializer;
   const errors = new Map<string, string[]>();
 
   // Index results against `parseable` (NOT the original `files`) so indices align.
@@ -270,7 +278,11 @@ async function parseWorkspaceFilesOnMainThread(
     const file = parseable[i]!;
     if (result.value) {
       models.push(result.value);
-      parsedModels.push({ filePath: file.path, model: result.value });
+      parsedModels.push({
+        filePath: file.path,
+        model: result.value,
+        serializedModelJson: serializeRuneModel(serializer, result.value)
+      });
     }
     const fileErrors = result.parserErrors.map((err) => err.message);
     if (fileErrors.length > 0) {
@@ -781,7 +793,7 @@ export const parseWorkspaceViaRouter = withInstrumentation(
     const userFileNames = new Set(files.map((f) => f.name));
     const services = createRuneDslServices(EmptyFileSystem).RuneDsl;
     const models: RosettaModel[] = [];
-    const parsedModels: Array<{ filePath: string; model: RosettaModel }> = [];
+    const parsedModels: ParsedWorkspaceModel[] = [];
     // Build a quick lookup: filePath → namespace from the response's
     // deferredExports so curated entries get a real namespace rather than
     // an empty string (Copilot review: CachedFile.namespace is declared
@@ -806,7 +818,7 @@ export const parseWorkspaceViaRouter = withInstrumentation(
         try {
           const model = services.serializer.JsonSerializer.deserialize<RosettaModel>(doc.serializedModel);
           models.push(model);
-          parsedModels.push({ filePath, model });
+          parsedModels.push({ filePath, model, serializedModelJson: doc.serializedModel });
         } catch (err) {
           console.warn('[workspace] failed to deserialize hydration model for', doc.uri, err);
         }

@@ -26,7 +26,7 @@ into the same server lifecycle.
 - Creating multiple servers in the same process — each server maintains its own Langium workspace index; sharing a workspace across servers requires custom `ServiceRegistry` wiring. (`createRuneLspServer`)
 - Normal usage — prefer `createRuneLspServer()` which calls this internally. (`createConnectionAdapter`)
 
-API surface: 2 functions, 2 classes, 1 types
+API surface: 2 functions, 2 classes, 2 types, 2 constants
 
 ## Quick Reference
 
@@ -34,6 +34,8 @@ API surface: 2 functions, 2 classes, 1 types
 `@lspeasy/server` `LSPServer`), `RuneLspServer` (A fully-wired Rune DSL LSP server instance)
 **cf-durable-object-transport:** `DurableObjectWebSocketTransport`
 **document-update-handler:** `RuneDocumentUpdateHandler`
+**lsp-model.d:** `LspModelUpdate` (Incremental semantic documents followed by the complete current URI set), `LSP_MODEL_SYNC_METHOD` (@rune-langium/lsp-server — LSP server for Rune DSL powered by Langium
+and @lspeasy/server), `LSP_REQUEST_TIMEOUT_MS` (Request budget includes reconstruction of dependency models after cold wake)
 
 ## References
 
@@ -42,6 +44,7 @@ Load these on demand — do NOT read all at once:
 - When calling any function → read `references/functions.md` for full signatures, parameters, and return types
 - When using a class → read `references/classes.md` for properties, methods, and inheritance
 - When defining typed variables or function parameters → read `references/types.md`
+- When using exported constants → read `references/variables.md`
 
 ## Links
 

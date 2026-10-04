@@ -15,6 +15,7 @@ import {
   RuneDslIndexManager,
   namespaceFromSource,
   preserveCstText,
+  serializeRuneModel,
   hydrateModelDocument,
   type DeferredModelProvider,
   type RosettaModel
@@ -122,7 +123,7 @@ export interface ParseWorkspaceResponse {
   type: 'parseWorkspaceResult';
   id: string;
   models: RosettaModel[];
-  parsedModels: Array<{ filePath: string; model: RosettaModel }>;
+  parsedModels: Array<{ filePath: string; model: RosettaModel; serializedModelJson?: string }>;
   errors: Record<string, string[]>;
   deferredExports: DeferredExportEntry[];
   /**
@@ -297,7 +298,7 @@ const handleParseWorkspace = withInstrumentation(
       const langiumDocs = RuneDsl.shared.workspace.LangiumDocuments;
       const userDocs: LangiumDocument<AstNode>[] = [];
       const models: RosettaModel[] = [];
-      const parsedModels: Array<{ filePath: string; model: RosettaModel }> = [];
+      const parsedModels: Array<{ filePath: string; model: RosettaModel; serializedModelJson?: string }> = [];
       const deferredExports: DeferredExportEntry[] = [];
 
       // Drop all corpus JSON from the previous workspace load.
@@ -378,7 +379,12 @@ const handleParseWorkspace = withInstrumentation(
           preserveCstText(model);
           models.push(model);
           const fileName = uriToFileName.get(document.uri?.toString() ?? '');
-          if (fileName) parsedModels.push({ filePath: fileName, model });
+          if (fileName)
+            parsedModels.push({
+              filePath: fileName,
+              model,
+              serializedModelJson: serializeRuneModel(RuneDsl.serializer.JsonSerializer, model)
+            });
         }
         if (document.parseResult.parserErrors.length > 0) {
           const docUri = document.uri?.toString() ?? '';
