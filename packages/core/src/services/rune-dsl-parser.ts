@@ -1,12 +1,11 @@
 // SPDX-License-Identifier: MIT
 // Copyright (c) 2026 Pradeep Mouli
 
-import type { AstNode, LangiumCoreServices } from 'langium';
-import type { ParseResult, ParserOptions } from 'langium';
+import type { LangiumCoreServices, Lexer } from 'langium';
 import { LangiumParser, createParser } from 'langium';
 
 /**
- * Custom Langium parser for the Rune DSL that pre-processes input text to insert
+ * Custom Langium parser for the Rune DSL that normalizes lexer input to insert
  * implicit `[` and `]` brackets around bare expressions after `extract`,
  * `filter`, and `reduce` operators.
  *
@@ -18,10 +17,12 @@ import { LangiumParser, createParser } from 'langium';
  * both alternatives causes the parser builder to hang indefinitely during
  * FIRST(k) set computation.
  *
- * This class works around the limitation by transforming the input text before
- * parsing via {@link insertImplicitBrackets}: bare expressions after
+ * This class works around the limitation by transforming lexer input using the
+ * same scanner as {@link insertImplicitBrackets}: bare expressions after
  * `extract`/`filter`/`reduce` are wrapped in `[` and `]` so the standard
- * `InlineFunction` grammar rule handles them transparently.
+ * `InlineFunction` grammar rule handles them transparently. Lexer locations are
+ * mapped back before parsing, so the CST and all downstream source regions use
+ * the original text. Synthetic brackets have empty images and zero-width CST ranges.
  *
  * @pitfalls
  * - The text pre-processor is regex-based and operates on raw source text before
@@ -45,14 +46,72 @@ import { LangiumParser, createParser } from 'langium';
  * @see {@link insertImplicitBrackets}
  */
 export class RuneDslParser extends LangiumParser {
+  protected override readonly lexer: Lexer;
+
   constructor(services: LangiumCoreServices) {
     super(services);
+    this.lexer = sourceMappedLexer(services);
   }
+}
 
-  override parse<T extends AstNode = AstNode>(input: string, options?: ParserOptions): ParseResult<T> {
-    const transformed = insertImplicitBrackets(input);
-    return super.parse<T>(transformed, options);
-  }
+/** Map lexer locations before Langium creates CST nodes, references or diagnostics. */
+function sourceMappedLexer(services: LangiumCoreServices): Lexer {
+  const lexer = services.parser.Lexer;
+  return {
+    definition: lexer.definition,
+    tokenize(input, options) {
+      const transformed = transformImplicitBrackets(input);
+      const result = lexer.tokenize(transformed.text, options);
+      if (transformed.insertedOffsets.length === 0) return result;
+
+      // Offsets and columns use UTF-16 code units, just like JS strings and LSP.
+      // Every inserted character maps to its zero-width boundary in the source.
+      const sourceOffset = (offset: number): number => {
+        let low = 0;
+        let high = transformed.insertedOffsets.length;
+        while (low < high) {
+          const mid = Math.floor((low + high) / 2);
+          if (transformed.insertedOffsets[mid]! < offset) low = mid + 1;
+          else high = mid;
+        }
+        return offset - low;
+      };
+
+      for (const token of [...result.tokens, ...result.hidden]) {
+        if (token.startOffset < 0 || !Number.isFinite(token.startOffset)) continue;
+        const start = sourceOffset(token.startOffset);
+        const end = sourceOffset(token.endOffset! + 1);
+        // Brackets never add lines; remap each column relative to its line start.
+        token.startColumn = start - sourceOffset(token.startOffset - token.startColumn! + 1) + 1;
+        token.endColumn = end - sourceOffset(token.endOffset! + 1 - token.endColumn!);
+        token.startOffset = start;
+        token.endOffset = Math.max(start, end - 1);
+        // Chevrotain matches token types, so virtual brackets need no image.
+        // Langium requires endOffset >= startOffset for diagnostic anchors;
+        // the empty image and equal LSP positions give the CST zero width.
+        // Use source text for any token spanning an insertion, including hidden
+        // tokens, because Langium derives leaf lengths from images, not offsets.
+        if (token.image.length !== end - start) token.image = input.slice(start, end);
+      }
+      for (const error of result.errors) {
+        const offset = sourceOffset(error.offset);
+        const end = sourceOffset(error.offset + error.length);
+        if (error.column !== undefined) {
+          error.column = offset - sourceOffset(error.offset - error.column + 1) + 1;
+        }
+        error.offset = offset;
+        error.length = end - offset;
+        error.message = services.parser.LexerErrorMessageProvider.buildUnexpectedCharactersMessage(
+          input,
+          offset,
+          error.length,
+          error.line,
+          error.column
+        );
+      }
+      return result;
+    }
+  };
 }
 
 /**
@@ -237,12 +296,17 @@ function isWordChar(ch: string | undefined): boolean {
  * @category Core
  */
 export function insertImplicitBrackets(text: string): string {
+  return transformImplicitBrackets(text).text;
+}
+
+/** The authoritative transformation, including generated offsets of inserted brackets. */
+function transformImplicitBrackets(text: string): { text: string; insertedOffsets: number[] } {
   const insertions: Array<{ pos: number; ch: string }> = [];
 
   let i = 0;
   while (i < text.length) {
     // Skip string literals
-    if (text[i] === '"') {
+    if (text[i] === '"' || text[i] === "'") {
       i = skipString(text, i);
       continue;
     }
@@ -330,20 +394,19 @@ export function insertImplicitBrackets(text: string): string {
     i++;
   }
 
-  if (insertions.length === 0) {
-    return text;
+  // Reverse the stable descending order to preserve the original insertion
+  // order at shared boundaries (nested expressions can close at the same point).
+  insertions.sort((a, b) => b.pos - a.pos).reverse();
+  const parts: string[] = [];
+  const insertedOffsets: number[] = [];
+  let previous = 0;
+  for (const insertion of insertions) {
+    parts.push(text.substring(previous, insertion.pos), insertion.ch);
+    insertedOffsets.push(insertion.pos + insertedOffsets.length);
+    previous = insertion.pos;
   }
-
-  // Sort by position descending so earlier insertions don't shift later ones
-  insertions.sort((a, b) => b.pos - a.pos);
-
-  // Apply insertions from end to start to preserve positions
-  let result = text;
-  for (const ins of insertions) {
-    result = result.substring(0, ins.pos) + ins.ch + result.substring(ins.pos);
-  }
-
-  return result;
+  parts.push(text.substring(previous));
+  return { text: parts.join(''), insertedOffsets };
 }
 
 /**
@@ -414,7 +477,7 @@ function findExpressionEnd(text: string, start: number): number {
     const ch = text[i];
 
     // Skip string literals
-    if (ch === '"') {
+    if (ch === '"' || ch === "'") {
       i = skipString(text, i);
       continue;
     }
@@ -596,7 +659,7 @@ function findExpressionEnd(text: string, start: number): number {
     i++;
   }
 
-  return i; // EOF
+  return preCommentEnd >= 0 ? preCommentEnd : i; // EOF
 }
 
 // ═══════════════════════════════════════════════════════════════════
@@ -604,14 +667,15 @@ function findExpressionEnd(text: string, start: number): number {
 // ═══════════════════════════════════════════════════════════════════
 
 function skipString(text: string, start: number): number {
-  let i = start + 1; // skip opening "
+  const quote = text[start];
+  let i = start + 1; // skip the opening quote
   while (i < text.length) {
     if (text[i] === '\\') {
-      i += 2; // skip escape
+      i = Math.min(i + 2, text.length); // skip escape without moving beyond EOF
       continue;
     }
-    if (text[i] === '"') {
-      return i + 1; // skip closing "
+    if (text[i] === quote) {
+      return i + 1; // skip the closing quote
     }
     i++;
   }
@@ -665,7 +729,7 @@ function skipWhitespaceAndNewlines(text: string, start: number): number {
 }
 
 /**
- * Skips whitespace, newlines, AND comments (both // and /* *​/ forms).
+ * Skips whitespace, newlines, AND comments (both // and block-comment forms).
  * Used to find the actual expression body after a functional op keyword.
  */
 function skipWhitespaceAndComments(text: string, start: number): number {

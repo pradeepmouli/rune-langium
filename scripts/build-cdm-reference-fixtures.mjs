@@ -50,8 +50,8 @@ const files = [];
 for (const doc of selection.documents) {
   const model = doc.parseResult.value;
   if (!isRosettaModel(model)) throw new Error('Expected Rune model');
-  // RuneDslParser inserts optional brackets around bare functional expressions.
-  // CST offsets address that normalized text, not the unmodified archive text.
+  // Parser source ranges and root text both address the original input,
+  // including bare functional expressions; no bracket normalization is emitted.
   const original = model.$cstNode.root.fullText;
   const first = documents.find((document) => document.uri.toString() === doc.uri.toString()).parseResult.value
     .elements[0].$cstNode.offset;
@@ -75,8 +75,7 @@ await writeFile(
       pins,
       files,
       declarations,
-      normalization:
-        'RuneDslParser optional implicit-functional brackets; declaration bodies otherwise retained from upstream CST'
+      normalization: 'Declaration bodies retained from original upstream source via source-mapped CST ranges'
     },
     null,
     2
