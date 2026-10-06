@@ -133,3 +133,19 @@ declarations, reusing the same definitions as the bundled standard library.
 Upstream declarations and newer schema annotations are preserved; unknown names
 remain errors. Serialized annotation documents include this explicit dialect
 compatibility bridge; upstream archive bytes and their hashes remain unchanged.
+
+## Dependency Merge Readiness
+
+`auto-approve-deps.yml` approves eligible trusted-bot dependency updates; it does
+not request auto-merge while its own checks are pending. `Finalize Dependency
+Updates` runs after CI/approval workflows complete and reads only the trusted
+default-branch helper. It reloads the PR, verifies the same repository and commit,
+requires approval, no changes-requested reviews, successful core CI gates and all
+reported checks to finish successfully, then uses the ordinary merge API with an
+expected SHA. Major/security updates remain manual. Unknown API errors fail the
+workflow; pending checks simply wait for another completion event. The existing
+GitHub Actions version-pin job remains separate.
+
+Validate workflow changes with `node --test scripts/lib/dependency-automerge.test.mjs`
+and a workflow syntax checker. An old failed auto-approval run (such as #551) must
+be rerun after the workflow fix lands; the finalizer never ignores failed checks.
