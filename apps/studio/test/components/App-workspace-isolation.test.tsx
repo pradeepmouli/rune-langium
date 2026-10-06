@@ -142,6 +142,38 @@ async function openSourceWorkspace() {
 }
 
 describe('workspace isolation', () => {
+  it('carries launcher selections into a pre-created Git-backed target without creating a duplicate', async () => {
+    await persistence.deleteWorkspace('ws-a');
+    render(<App />);
+    await waitFor(() => expect(screen.getByRole('button', { name: 'New blank workspace' })).toBeVisible());
+    await act(async () => useModelStore.getState().load(getModelSource('rune-dsl')!));
+    const now = new Date().toISOString();
+    await saveWorkspace({
+      id: 'ws-git-created',
+      name: 'Git project',
+      kind: 'git-backed',
+      createdAt: now,
+      lastOpenedAt: now,
+      layout: { version: 1, writtenBy: 'test', dockview: null },
+      tabs: [],
+      activeTabPath: null,
+      curatedModels: [],
+      schemaVersion: 1,
+      gitBacking: {
+        repoUrl: 'https://example.com/project.git',
+        branch: 'main',
+        user: 'tester',
+        tokenPath: '/token',
+        syncState: 'clean',
+        lastSyncedSha: null
+      }
+    });
+    await act(async () => window.__runeStudioTestApi!.loadFiles!(blankFiles, 'ws-git-created'));
+    expect(useModelStore.getState().models.has('rune-dsl')).toBe(true);
+    expect((await loadWorkspace('ws-git-created'))?.curatedModels?.map((b) => b.modelId)).toContain('rune-dsl');
+    expect(await listRecents()).toHaveLength(1);
+    expect(await loadWorkspaceFiles('ws-git-created')).toEqual(blankFiles);
+  });
   it('adds a curated model loaded after creating a blank workspace to its catalog and saved bindings', async () => {
     render(<App />);
     await waitFor(() => expect(screen.getByTestId('files')).toHaveTextContent('trade.rosetta'));
