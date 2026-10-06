@@ -28,9 +28,9 @@ allowBuilds:
 
 minimumReleaseAgeExclude:
   - langium-zod@0.12.0
-  - '@zod-to-form/core@0.11.3'
-  - '@zod-to-form/react@0.11.2'
-  - '@zod-to-form/vite@0.4.7'
+  - '@zod-to-form/core@0.11.4'
+  - '@zod-to-form/react@0.12.0'
+  - '@zod-to-form/vite@0.4.8'
   # PR #353: @lspeasy/client 3.1.5 pulls in @lspeasy/core 2.6.0 as a new
   # transitive resolution; both were too freshly-published for the age gate,
   # which blocked `pnpm install` (not a real breaking change in the bump).
@@ -58,8 +58,8 @@ overrides:
   react-dom: 19.2.8
   langium-zod: 0.12.0
   x-to-zod: ^0.8.0
-  '@zod-to-form/core': 0.11.3
-  '@zod-to-form/react': 0.11.2
+  '@zod-to-form/core': 0.11.4
+  '@zod-to-form/react': 0.12.0
   codemirror: 6.0.2
   ws: '>=8.21.0'
   # GHSA-w5hq-g745-h8pq: force transitive uuid off the deprecated/vulnerable
@@ -79,6 +79,3 @@ overrides:
   # workspace's own >=22.13.0 floor (caught via PR #504 Copilot review). Purely
   # transitive (no first-party imports).
   'miniflare>undici': '7.29.0'
-
-patchedDependencies:
-  '@zod-to-form/react@0.11.2': patches/@zod-to-form__react@0.11.2.patch

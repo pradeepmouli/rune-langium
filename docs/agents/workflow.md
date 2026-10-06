@@ -12,9 +12,11 @@ Use the pinned pnpm version and preserve overrides/patches in
 - The Cloudflare combined build rebuilds `@rune-langium/instrumentation-core` and `@rune-langium/core` before bundling Studio and Pages Functions; both consumers resolve those packages through their compiled exports.
 - For temporary Pages diagnostics, set the non-secret `INSTRUMENTATION_*` values in the build environment. The combined build writes only those values to the generated root `wrangler.toml`; rebuild and redeploy to enable or remove them. Keep secrets in Cloudflare.
 
-## Temporary Dependency Backport
+## Form Dependencies
 
-The `@zod-to-form/react@0.11.2` patch exports the existing `SectionRenderer` for custom layouts. Its authored upstream change and public behavior test are in [zod-to-form PR #222](https://github.com/pradeepmouli/zod-to-form/pull/222). Remove the patch and patched dependency entry once consuming a release with that export. Recheck configured Inspector sections when upgrading.
+`@zod-to-form/react@0.12.0` exports the shared `SectionRenderer` used by custom Inspector layouts, from [zod-to-form PR #222](https://github.com/pradeepmouli/zod-to-form/pull/222). Use that public export directly. Keep exact core/React package declarations and workspace overrides aligned, and recheck configured Inspector sections when upgrading.
+
+Keep `@zod-to-form/vite` exactly pinned to `0.4.8` in Studio and visual-editor. Version `0.4.9` upgrades to Babel 8, whose Node requirement excludes the workspace’s supported Node 22.13–22.17 versions. The plugin pin is independent of the React runtime release; reconsider it when deliberately updating the documented Node floor.
 
 ## Generated Sources
 
