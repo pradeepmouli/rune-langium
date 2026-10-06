@@ -89,11 +89,14 @@ function makeWorkspaceId(): string {
  * 4768-type explorer collapsed to the 22 built-in types because nothing
  * triggered a re-load.
  */
-function deriveCuratedBindings(loadedModels: Map<string, LoadedModel>): CuratedModelBinding[] {
-  const bindings: CuratedModelBinding[] = [];
+function deriveCuratedBindings(
+  loadedModels: Map<string, LoadedModel>,
+  retainedBindings: readonly CuratedModelBinding[] = []
+): CuratedModelBinding[] {
+  const bindings = new Map(retainedBindings.map((binding) => [binding.modelId, binding]));
   for (const model of loadedModels.values()) {
     if (!model.source.archiveUrl) continue;
-    bindings.push({
+    bindings.set(model.source.id, {
       modelId: model.source.id,
       loadedVersion: model.commitHash || 'latest',
       loadedAt: new Date(model.loadedAt).toISOString(),
@@ -101,8 +104,7 @@ function deriveCuratedBindings(loadedModels: Map<string, LoadedModel>): CuratedM
     });
   }
   // Stable order so the equality check below doesn't flap on Map iteration order.
-  bindings.sort((a, b) => a.modelId.localeCompare(b.modelId));
-  return bindings;
+  return [...bindings.values()].sort((a, b) => a.modelId.localeCompare(b.modelId));
 }
 
 /**
@@ -199,6 +201,8 @@ function AppContent() {
   // preserve them without calling useModelStore.getState() (which is not
   // available in the test mock of useModelStore).
   const loadedModelsRef = useRef<Map<string, LoadedModel>>(new Map());
+  // Declared selections survive failed loads until the model is observed loaded.
+  const unavailableCuratedBindingsRef = useRef(new Map<string, CuratedModelBinding>());
   const { showToast, showLoadingToast, dismissToast } = useStudioToast();
 
   const reportWorkspaceError = useCallback((message: string, error: unknown) => {
@@ -352,6 +356,7 @@ function AppContent() {
   }, []);
 
   const reconcileWorkspaceModels = useCallback((bindings: readonly CuratedModelBinding[]) => {
+    unavailableCuratedBindingsRef.current = new Map(bindings.map((binding) => [binding.modelId, binding]));
     // Some component tests supply a hook-only store mock.
     const store = useModelStore.getState?.();
     if (!store) {
@@ -375,6 +380,7 @@ function AppContent() {
   }, []);
 
   const clearWorkspaceState = useCallback(() => {
+    unavailableCuratedBindingsRef.current.clear();
     invalidateWorkspaceParses();
     filesRef.current = [];
     setFiles([]);
@@ -481,7 +487,7 @@ function AppContent() {
       reconcileWorkspaceModels(workspace.curatedModels ?? []);
       const restoredFiles = await loadWorkspaceFiles(workspace.id);
       if (activationEpoch !== workspaceEpochRef.current) return 'superseded';
-      if (restoredFiles.length === 0) {
+      if (restoredFiles.length === 0 && (workspace.curatedModels?.length ?? 0) === 0) {
         reconcileWorkspaceModels([]);
         restoredWorkspaceRef.current = null;
         setRestoredWorkspace(null);
@@ -710,7 +716,10 @@ function AppContent() {
   useEffect(() => {
     if (!restoredWorkspace) return;
     if (curatedSyncedWorkspaceId !== restoredWorkspace.id) return;
-    const nextBindings = deriveCuratedBindings(loadedModels);
+    for (const model of loadedModels.values()) {
+      if (model.source.archiveUrl) unavailableCuratedBindingsRef.current.delete(model.source.id);
+    }
+    const nextBindings = deriveCuratedBindings(loadedModels, [...unavailableCuratedBindingsRef.current.values()]);
     const prevBindings = restoredWorkspace.curatedModels ?? [];
     if (curatedBindingsEqual(prevBindings, nextBindings)) return;
     const nextWorkspace = { ...restoredWorkspace, curatedModels: nextBindings };
@@ -743,6 +752,9 @@ function AppContent() {
 
   const handleFilesLoaded = useCallback(
     async (loadedFiles: WorkspaceFile[], targetWorkspaceId?: string) => {
+      // Reference models selected on the launcher seed a new workspace.
+      // An active workspace's bindings belong only to that workspace.
+      const launcherModels = restoredWorkspaceRef.current ? new Map<string, LoadedModel>() : loadedModelsRef.current;
       clearWorkspaceState();
       const activationEpoch = workspaceEpochRef.current;
       setBootState('start');
@@ -754,6 +766,10 @@ function AppContent() {
         if (!workspace) {
           workspace = await createWorkspaceRecord(deriveWorkspaceName(loadedFiles));
           createdWorkspace = true;
+        }
+        if (launcherModels.size > 0) {
+          workspace = { ...workspace, curatedModels: deriveCuratedBindings(launcherModels, workspace.curatedModels) };
+          await persistence.saveWorkspace(workspace);
         }
         if (activationEpoch !== workspaceEpochRef.current) {
           if (createdWorkspace) {

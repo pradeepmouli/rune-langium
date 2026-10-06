@@ -635,7 +635,7 @@ function buildTypeAliasSchema(
           targetId,
           title: alias.name,
           status: 'ready',
-          fields: [{ path: 'value', label: humanizeLabel(alias.name), kind: builtinKind, required: true }]
+          fields: [scalarField({ path: 'value', label: humanizeLabel(alias.name) }, builtinKind, basicTypeName)]
         };
       },
       // Enum alias (e.g. `typeAlias SideAlias: Side`) — new: buildTypeAliasSchema
@@ -888,7 +888,7 @@ function buildChoiceOptionField(
       onPrimitive: (basicTypeName) => {
         const builtinKind = BUILTIN_KIND_MAP[basicTypeName];
         if (builtinKind) {
-          return { path, label, kind: builtinKind, required: false };
+          return scalarField({ path, label }, builtinKind, basicTypeName, false);
         }
         // Unlike buildBaseField's onPrimitive, this function's ORIGINAL
         // builtin check had no distinct "resolved but unmapped" case of its
@@ -1134,7 +1134,7 @@ function buildBaseField(attr: Attribute, ctx: FieldContext): PreviewField {
         // behavior of the typeRef-resolved basic-type/record-type branches,
         // which returned `unsupportedField` directly without ever touching
         // `unsupportedFeatures`.
-        return builtinKind ? scalarField(ctx, builtinKind) : unsupportedField(ctx, basicTypeName);
+        return builtinKind ? scalarField(ctx, builtinKind, basicTypeName) : unsupportedField(ctx, basicTypeName);
       },
       onEnum: (node) => enumField(ctx, node),
       onData: (node, sourceUri) => objectField(ctx, node, sourceUri),
@@ -1173,14 +1173,17 @@ function unsupportedField(ctx: FieldContext, description?: string): PreviewField
 }
 
 function scalarField(
-  ctx: FieldContext,
-  kind: Extract<PreviewFieldKind, 'string' | 'number' | 'boolean'>
+  ctx: Pick<PreviewField, 'path' | 'label'>,
+  kind: Extract<PreviewFieldKind, 'string' | 'number' | 'boolean'>,
+  basicTypeName: string,
+  required = true
 ): PreviewField {
   return {
     path: ctx.path,
     label: ctx.label,
     kind,
-    required: true
+    required,
+    ...(basicTypeName === 'date' ? { format: 'date' as const } : {})
   };
 }
 

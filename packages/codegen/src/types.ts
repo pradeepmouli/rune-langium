@@ -274,6 +274,8 @@ export interface PreviewFieldBase {
 
 export interface PreviewScalarField extends PreviewFieldBase {
   kind: 'string' | 'number' | 'boolean';
+  /** ISO calendar date string, kept as YYYY-MM-DD throughout editing. */
+  format?: 'date';
 }
 
 export interface PreviewEnumField extends PreviewFieldBase {

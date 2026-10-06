@@ -105,6 +105,39 @@ function renderPanel(overrides: Partial<React.ComponentProps<typeof NamespaceExp
 }
 
 describe('NamespaceExplorerPanel', () => {
+  it('opens parent namespace rows without opening multiple child branches', () => {
+    renderPanel();
+    const toggle = within(screen.getByTestId('ns-seg-com')).getByRole('button', { name: 'com', exact: true });
+    fireEvent.click(toggle);
+    fireEvent.click(toggle);
+    expect(screen.getByTestId('ns-seg-com.model')).toBeInTheDocument();
+    expect(screen.getByTestId('ns-seg-com.lib')).toBeInTheDocument();
+    expect(screen.queryByTestId('ns-type-com.model.Trade')).not.toBeInTheDocument();
+    expect(screen.queryByTestId('ns-type-com.lib.Date')).not.toBeInTheDocument();
+    fireEvent.click(
+      within(screen.getByTestId('ns-seg-com.model')).getByRole('button', { name: 'com.model', exact: true })
+    );
+    expect(screen.getByTestId('ns-type-com.model.Trade')).toBeInTheDocument();
+    expect(screen.queryByTestId('ns-type-com.lib.Date')).not.toBeInTheDocument();
+  });
+
+  it('automatically opens a sole child namespace but stops when that child branches', () => {
+    renderPanel({
+      nodeRepository: repoFrom([
+        makeNode('root', 'Root'),
+        makeNode('root.child', 'Child'),
+        makeNode('root.child.left', 'Left'),
+        makeNode('root.child.right', 'Right')
+      ])
+    });
+    const toggle = within(screen.getByTestId('ns-seg-root')).getByRole('button', { name: 'root', exact: true });
+    fireEvent.click(toggle);
+    fireEvent.click(toggle);
+    expect(screen.getByTestId('ns-type-root.child.Child')).toBeInTheDocument();
+    expect(screen.getByTestId('ns-seg-root.child.left')).toBeInTheDocument();
+    expect(screen.queryByTestId('ns-type-root.child.left.Left')).not.toBeInTheDocument();
+    expect(screen.queryByTestId('ns-type-root.child.right.Right')).not.toBeInTheDocument();
+  });
   it('compacts deep namespace chains while preserving expansion, navigation and drag identities', () => {
     const nodes = [makeNode('com.rosetta.model', 'Trade'), makeNode('com.rosetta.model', 'Event')];
     const { props } = renderPanel({ nodeRepository: repoFrom(nodes) });

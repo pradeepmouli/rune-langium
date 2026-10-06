@@ -846,6 +846,20 @@ describe('nodes/options with a missing name', () => {
 // ---------------------------------------------------------------------------
 
 describe('collectSegmentSubtreePaths', () => {
+  it('follows only single-child chains for expansion and still collects the whole subtree for collapse', () => {
+    const roots = buildSegmentedNamespaceTree(
+      repoOf([
+        makeNode('root', 'Root', 'data'),
+        makeNode('root.child', 'Child', 'data'),
+        makeNode('root.child.left', 'Left', 'data'),
+        makeNode('root.child.right', 'Right', 'data')
+      ])
+    );
+    expect(collectSegmentSubtreePaths(roots, 'root', { singleChildOnly: true })).toEqual(['root', 'root.child']);
+    expect(new Set(collectSegmentSubtreePaths(roots, 'root'))).toEqual(
+      new Set(['root', 'root.child', 'root.child.left', 'root.child.right'])
+    );
+  });
   it('collects a namespace plus every descendant segment fullPath', () => {
     const roots = buildSegmentedNamespaceTree(repoOf(FIXTURE_NODES));
     // "com" subtree = com, com.rosetta, com.rosetta.model, com.rosetta.model.base,
