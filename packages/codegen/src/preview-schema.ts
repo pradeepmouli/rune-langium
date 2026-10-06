@@ -65,34 +65,7 @@ interface FieldContext {
   path: string;
   label: string;
   seenTypes: Set<string>;
-  /**
-   * Every type (namespace-qualified via `qualifiedTypeId`) that participates
-   * in a reference cycle ANYWHERE in the currently-generating document set —
-   * precomputed once per `generatePreviewSchemas` call via `cycle-detector.ts`
-   * (the SAME whole-graph Tarjan's-SCC mechanism `namespace-walker.ts` already
-   * shares with the real Zod/TS/JSON-Schema emitters, reused here instead of
-   * re-derived — DRY). `seenTypes` alone only catches a cycle if THIS
-   * particular top-down walk happens to revisit a type it already passed
-   * through; two types that reference each other but are each generated as
-   * their OWN top-level schema (e.g. Form Preview regenerating one target at
-   * a time) each start a FRESH `seenTypes`, so which side (if either) gets
-   * tagged as cyclic depends purely on walk order.
-   *
-   * `cyclicTypes` closes that gap for VISIBILITY only: every type it
-   * contains gets a `cyclic-type:<name>` entry in `unsupportedFeatures` the
-   * first time it's reached, regardless of walk order — but membership in
-   * `cyclicTypes` must NEVER also cut expansion (Codex PR #459 review,
-   * round 1): a cyclic type's first, still-safe-to-expand visit renders its
-   * own fields normally, same as `seenTypes`-only behavior always did.
-   * Expansion is cut, and the DISTINCT `recursive-reference:<name>` tag
-   * added, only on an ACTUAL path-local repeat (`seenTypes`) or the depth
-   * cap. `cyclic-type` is purely informational ("this type is part of a
-   * cycle somewhere"); only `recursive-reference` means "this specific
-   * occurrence was truncated" — Studio's `summarizeUnsupportedFeatures`
-   * (apps/studio/src/components/FormPreviewPanel.tsx) depends on that
-   * distinction to avoid reporting a fully-expanded field as "skipped"
-   * (Codex PR #459 review, round 2).
-   */
+  /** Whole-graph cycle membership is informational; path repeats use deferred definitions. */
   cyclicTypes: ReadonlySet<string>;
   /** Worker-derived assignability for function inputs and hydrated bundles. */
   assignableTypes?: ReadonlyMap<string, readonly string[]>;
@@ -187,6 +160,65 @@ export function generatePreviewSchemas(
     }
   }
 
+  const bodies = new Map<string, FormPreviewSchema>();
+  const declarations = new Map<string, { node: Data | Choice; sourceUri: string; namespace: NamespaceIndex }>(
+    namespaces.flatMap((namespace) => [
+      ...Array.from(
+        namespace.dataByName.values(),
+        (entry) => [qualifiedTypeId(entry.node), { ...entry, namespace }] as const
+      ),
+      ...Array.from(
+        namespace.choiceByName.values(),
+        (entry) => [qualifiedTypeId(entry.node), { ...entry, namespace }] as const
+      )
+    ])
+  );
+  const references = (fields: PreviewField[]): string[] =>
+    fields.flatMap((field) => [
+      ...(field.kind === 'object' && field.definitionId ? [field.definitionId] : []),
+      ...('children' in field ? references(field.children) : [])
+    ]);
+  for (const schema of schemas) {
+    const definitions: NonNullable<FormPreviewSchema['definitions']> = Object.create(null);
+    const pending = references(schema.fields);
+    const unsupported = new Set(schema.unsupportedFeatures);
+    for (let index = 0; index < pending.length; index++) {
+      const id = pending[index]!;
+      if (definitions[id] !== undefined) continue;
+      let body = bodies.get(id);
+      if (!body) {
+        const entry = declarations.get(id);
+        if (!entry) {
+          unsupported.add(`unresolved-reference:${id}`);
+          continue;
+        }
+        body = isData(entry.node)
+          ? buildDataSchema(entry.node, entry.sourceUri, entry.namespace, id, 0, cyclicTypes)
+          : buildChoiceSchema(entry.node, entry.sourceUri, entry.namespace, id, cyclicTypes, 0);
+        bodies.set(id, body);
+      }
+      for (const field of body.fields) {
+        if (field.kind === 'object' && field.referencedTypeFqn) {
+          field.assignableTypeFqns = [...(assignableTypes.get(field.referencedTypeFqn) ?? [])];
+        } else if (field.kind === 'array') {
+          const child = field.children[0];
+          if (child.kind === 'object' && child.referencedTypeFqn) {
+            child.assignableTypeFqns = [...(assignableTypes.get(child.referencedTypeFqn) ?? [])];
+          }
+        }
+      }
+      definitions[id] = {
+        fields: body.fields,
+        choiceArmPaths: body.kind === 'choice' ? body.fields.map((field) => field.path) : body.choiceArmPaths,
+        sourceMap: body.sourceMap
+      };
+      body.unsupportedFeatures?.forEach((feature) => unsupported.add(feature));
+      pending.push(...references(body.fields));
+    }
+    if (Object.keys(definitions).length) schema.definitions = definitions;
+    if (unsupported.size) schema.unsupportedFeatures = Array.from(unsupported).sort();
+    schema.status = hasReportableUnsupportedFeature(unsupported) ? 'unsupported' : 'ready';
+  }
   return schemas;
 }
 
@@ -305,7 +337,7 @@ function qualifiedTypeId(node: Data | Choice): string {
 
 /**
  * `unsupportedFeatures` mixes genuinely-truncated/unresolved markers
- * (`unresolved-reference:`, `recursive-reference:`, `duplicate-target:`,
+ * (`unresolved-reference:`, `duplicate-target:`,
  * `empty-choice:`, `choice-arm-collision:`) with the purely informational
  * `cyclic-type:` marker (a type participates in a cycle SOMEWHERE, even
  * when THIS occurrence rendered every field successfully — see
@@ -751,7 +783,8 @@ function buildChoiceSchema(
   sourceUri: string,
   namespace: NamespaceIndex,
   targetId: string,
-  cyclicTypes: ReadonlySet<string>
+  cyclicTypes: ReadonlySet<string>,
+  maxDepth = DEFAULT_MAX_DEPTH
 ): FormPreviewSchema {
   const unsupportedFeatures = new Set<string>();
   // Empty Choice (Codex review, PR #433 round 6): the Rune validator
@@ -781,7 +814,7 @@ function buildChoiceSchema(
       sourceUri,
       seenTypes: new Set([qualifiedTypeId(choice)]),
       depth: 0,
-      maxDepth: DEFAULT_MAX_DEPTH,
+      maxDepth,
       cyclicTypes
     })
   );
@@ -905,21 +938,18 @@ function buildChoiceOptionField(
       },
       onData: (node, sourceUri) => {
         const resolvedDataId = qualifiedTypeId(node);
-        // See objectField's identical split: tag cycle MEMBERSHIP with the
-        // distinct `cyclic-type` marker, but only CUT (and add the real
-        // `recursive-reference` tag) on an actual path-local repeat
-        // (seenTypes) or depth cap.
         if (ctx.cyclicTypes.has(resolvedDataId)) {
           ctx.unsupportedFeatures.add(`cyclic-type:${node.name}`);
         }
         if (ctx.seenTypes.has(resolvedDataId) || ctx.depth >= ctx.maxDepth) {
-          ctx.unsupportedFeatures.add(`recursive-reference:${node.name}`);
           return {
             path,
             label,
-            kind: 'unknown',
-            required: false,
-            description: `Recursive reference to ${node.name} is not expanded in form preview.`
+            kind: 'object',
+            definitionId: resolvedDataId,
+            referencedTypeFqn: resolvedDataId,
+            children: [],
+            required: false
           };
         }
         const nextSeen = new Set(ctx.seenTypes);
@@ -1169,25 +1199,20 @@ function enumField(ctx: FieldContext, enumNode: RosettaEnumeration): PreviewFiel
 
 function objectField(ctx: FieldContext, data: Data, sourceUri: string): PreviewField {
   const dataId = qualifiedTypeId(data);
-  // Tag the type as a cycle MEMBER on every encounter — even one that isn't
-  // cut below — so a mutually-recursive pair is tagged consistently
-  // regardless of which side is the top-level generation target (see
-  // FieldContext.cyclicTypes' doc comment). This is a DISTINCT tag from
-  // `recursive-reference` and must NOT also gate expansion: cutting on the
-  // type's mere cycle membership (rather than on `seenTypes`, an ACTUAL
-  // repeat within this walk) discarded legitimate sibling fields on a
-  // cyclic type's first, still-safe-to-expand visit (Codex PR #459 review).
+  // Cycle membership does not prevent the first occurrence from expanding.
   if (ctx.cyclicTypes.has(dataId)) {
     ctx.unsupportedFeatures.add(`cyclic-type:${data.name}`);
   }
   if (ctx.seenTypes.has(dataId) || ctx.depth >= ctx.maxDepth) {
-    ctx.unsupportedFeatures.add(`recursive-reference:${data.name}`);
     return {
       path: ctx.path,
       label: ctx.label,
-      kind: 'unknown',
-      required: true,
-      description: `Recursive reference to ${data.name} is not expanded in form preview.`
+      kind: 'object',
+      definitionId: dataId,
+      referencedTypeFqn: dataId,
+      ...(ctx.assignableTypes?.get(dataId) ? { assignableTypeFqns: [...ctx.assignableTypes.get(dataId)!] } : {}),
+      children: [],
+      required: true
     };
   }
 
@@ -1271,21 +1296,19 @@ function objectField(ctx: FieldContext, data: Data, sourceUri: string): PreviewF
  */
 function choiceField(ctx: FieldContext, choice: Choice, sourceUri: string): PreviewField {
   const choiceId = qualifiedTypeId(choice);
-  // See objectField's identical split: tag cycle MEMBERSHIP with the
-  // distinct `cyclic-type` marker, but only CUT (and add the real
-  // `recursive-reference` tag) on an actual path-local repeat (seenTypes)
-  // or depth cap.
   if (ctx.cyclicTypes.has(choiceId)) {
     ctx.unsupportedFeatures.add(`cyclic-type:${choice.name}`);
   }
   if (ctx.seenTypes.has(choiceId) || ctx.depth >= ctx.maxDepth) {
-    ctx.unsupportedFeatures.add(`recursive-reference:${choice.name}`);
     return {
       path: ctx.path,
       label: ctx.label,
-      kind: 'unknown',
-      required: true,
-      description: `Recursive reference to ${choice.name} is not expanded in form preview.`
+      kind: 'object',
+      definitionId: choiceId,
+      referencedTypeFqn: choiceId,
+      ...(ctx.assignableTypes?.get(choiceId) ? { assignableTypeFqns: [...ctx.assignableTypes.get(choiceId)!] } : {}),
+      children: [],
+      required: true
     };
   }
 
