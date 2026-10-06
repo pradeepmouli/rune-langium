@@ -260,6 +260,51 @@ test('stale completion does not merge a newer commit', async () => {
   assert.deepEqual(h.merges, []);
 });
 
+test('approval finishing after CI uses its PR snapshot rather than the base SHA', async () => {
+  const h = harness();
+  Object.assign(h.context.payload.workflow_run, {
+    event: 'pull_request_target',
+    head_sha: 'base-commit',
+    pull_requests: [{ number: 551, head: { sha } }]
+  });
+  h.github.paginate = () => {
+    throw new Error('must not look up PRs by the base SHA');
+  };
+  await finalizeDependencyUpdate(h);
+  assert.deepEqual(h.merges, [
+    { owner: 'pradeepmouli', repo: 'rune-langium', pull_number: 551, sha, merge_method: 'merge' }
+  ]);
+});
+
+test('stale approval snapshot cannot merge a new PR head', async () => {
+  const pr = ready();
+  pr.headRefOid = 'new-head';
+  const h = harness(pr);
+  Object.assign(h.context.payload.workflow_run, {
+    event: 'pull_request_target',
+    head_sha: 'base-commit',
+    pull_requests: [{ number: 551, head: { sha } }]
+  });
+  await finalizeDependencyUpdate(h);
+  assert.deepEqual(h.merges, []);
+});
+
+test('missing target PR snapshot or SHA never falls back to the base commit', async () => {
+  for (const pull_requests of [undefined, [], [{ number: 551 }]]) {
+    const h = harness();
+    Object.assign(h.context.payload.workflow_run, {
+      event: 'pull_request_target',
+      head_sha: 'base-commit',
+      pull_requests
+    });
+    h.github.paginate = h.github.graphql = () => {
+      throw new Error('must not look up a missing PR head');
+    };
+    await finalizeDependencyUpdate(h);
+    assert.deepEqual(h.merges, []);
+  }
+});
+
 test('push and fork completion events do not fetch or merge PRs', async () => {
   for (const change of [
     (run) => {

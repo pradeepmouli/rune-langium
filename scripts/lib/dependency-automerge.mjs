@@ -60,12 +60,18 @@ export async function finalizeDependencyUpdate({ github, context, core }) {
   if (!run || (run.event !== 'pull_request' && run.event !== 'pull_request_target')) return;
   const repository = `${context.repo.owner}/${context.repo.repo}`;
   if (run.head_repository?.full_name !== repository) return;
-  const pulls = await github.paginate(github.rest.repos.listPullRequestsAssociatedWithCommit, {
-    ...context.repo,
-    commit_sha: run.head_sha,
-    per_page: 100
-  });
+  // Target workflows may identify the base commit, so use their PR snapshot.
+  const pulls =
+    run.event === 'pull_request_target'
+      ? (run.pull_requests ?? [])
+      : await github.paginate(github.rest.repos.listPullRequestsAssociatedWithCommit, {
+          ...context.repo,
+          commit_sha: run.head_sha,
+          per_page: 100
+        });
   for (const pull of pulls) {
+    const expectedHead = run.event === 'pull_request_target' ? pull.head?.sha : run.head_sha;
+    if (!expectedHead) continue;
     const { repository: data } = await github.graphql(
       `
       query($owner: String!, $name: String!, $number: Int!) {
@@ -95,7 +101,7 @@ export async function finalizeDependencyUpdate({ github, context, core }) {
     if (!pr) continue;
     pr.incompleteLabels = pr.labels.pageInfo.hasNextPage;
     pr.labels = pr.labels.nodes;
-    const reason = mergeReadiness(pr, run.head_sha, repository);
+    const reason = mergeReadiness(pr, expectedHead, repository);
     if (reason) {
       core.info(`PR #${pull.number}: waiting (${reason})`);
       continue;
@@ -104,7 +110,7 @@ export async function finalizeDependencyUpdate({ github, context, core }) {
     const { data: merged } = await github.rest.pulls.merge({
       ...context.repo,
       pull_number: pull.number,
-      sha: run.head_sha,
+      sha: expectedHead,
       merge_method: 'merge'
     });
     if (!merged.merged) throw new Error(`PR #${pull.number}: ${merged.message}`);

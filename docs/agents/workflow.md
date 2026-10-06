@@ -142,7 +142,10 @@ Updates` runs after CI/approval workflows complete and reads only the trusted
 default-branch helper. It reloads the PR, verifies the same repository and commit,
 requires approval, no changes-requested reviews, successful core CI gates and all
 reported checks to finish successfully, then uses the ordinary merge API with an
-expected SHA. Major/security updates remain manual. Unknown API errors fail the
+expected SHA. Approval (`pull_request_target`) completions use the associated PR
+snapshot’s head SHA; their workflow SHA can identify the base commit. Missing
+snapshots and stale heads never fall back to that base commit. Major/security
+updates remain manual. Unknown API errors fail the
 workflow; pending checks simply wait for another completion event. The existing
 GitHub Actions version-pin job remains separate.
 
