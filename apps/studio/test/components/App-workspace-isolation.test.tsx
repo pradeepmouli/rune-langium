@@ -142,6 +142,44 @@ async function openSourceWorkspace() {
 }
 
 describe('workspace isolation', () => {
+  it('adds a curated model loaded after creating a blank workspace to its catalog and saved bindings', async () => {
+    render(<App />);
+    await waitFor(() => expect(screen.getByTestId('files')).toHaveTextContent('trade.rosetta'));
+    fireEvent.click(screen.getByRole('button', { name: 'Create workspace' }));
+    fireEvent.click(await screen.findByRole('button', { name: 'New blank workspace' }));
+    await waitFor(() => expect(screen.getByTestId('files')).toHaveTextContent('untitled.rosetta'));
+    parseMock.mockImplementation(async () => ({
+      ...emptyParse(),
+      deferredExports: [
+        {
+          filePath: '[cdm]/event.rosetta',
+          namespace: 'cdm.event.common',
+          exports: [{ type: 'Data', name: 'Event' }]
+        }
+      ]
+    }));
+    await act(async () => useModelStore.getState().load(getModelSource('cdm')!));
+    await waitFor(() => expect(screen.getByTestId('deferred')).toHaveTextContent('cdm.event.common'));
+    const workspace = (await listRecents())[0]!;
+    await waitFor(async () =>
+      expect((await loadWorkspace(workspace.id))?.curatedModels?.map((b) => b.modelId)).toContain('cdm')
+    );
+  });
+  it('keeps curated models selected on the launcher when creating a new blank workspace', async () => {
+    await _resetForTests();
+    await persistence.deleteWorkspace('ws-a');
+    render(<App />);
+    await waitFor(() => expect(screen.getByRole('button', { name: 'New blank workspace' })).toBeVisible());
+    await act(async () => useModelStore.getState().load(getModelSource('rune-dsl')!));
+    await waitFor(() => expect(useModelStore.getState().models.has('rune-dsl')).toBe(true));
+    fireEvent.click(screen.getByRole('button', { name: 'New blank workspace' }));
+    await waitFor(() => expect(screen.getByTestId('files')).toHaveTextContent('.rosetta'));
+    expect(useModelStore.getState().models.has('rune-dsl')).toBe(true);
+    const workspace = (await listRecents())[0]!;
+    await waitFor(async () =>
+      expect((await loadWorkspace(workspace.id))?.curatedModels?.map((b) => b.modelId)).toContain('rune-dsl')
+    );
+  });
   it('launcher loads only the new files and preserves the previous workspace on disk', async () => {
     await openSourceWorkspace();
     await act(async () => window.__runeStudioTestApi!.loadFiles!(blankFiles));

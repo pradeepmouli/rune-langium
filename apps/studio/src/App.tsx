@@ -481,7 +481,7 @@ function AppContent() {
       reconcileWorkspaceModels(workspace.curatedModels ?? []);
       const restoredFiles = await loadWorkspaceFiles(workspace.id);
       if (activationEpoch !== workspaceEpochRef.current) return 'superseded';
-      if (restoredFiles.length === 0) {
+      if (restoredFiles.length === 0 && (workspace.curatedModels?.length ?? 0) === 0) {
         reconcileWorkspaceModels([]);
         restoredWorkspaceRef.current = null;
         setRestoredWorkspace(null);
@@ -743,6 +743,9 @@ function AppContent() {
 
   const handleFilesLoaded = useCallback(
     async (loadedFiles: WorkspaceFile[], targetWorkspaceId?: string) => {
+      // Reference models selected on the launcher seed a new workspace.
+      // An active workspace's bindings belong only to that workspace.
+      const launcherBindings = restoredWorkspaceRef.current ? [] : deriveCuratedBindings(loadedModelsRef.current);
       clearWorkspaceState();
       const activationEpoch = workspaceEpochRef.current;
       setBootState('start');
@@ -754,6 +757,10 @@ function AppContent() {
         if (!workspace) {
           workspace = await createWorkspaceRecord(deriveWorkspaceName(loadedFiles));
           createdWorkspace = true;
+          if (launcherBindings.length > 0) {
+            workspace = { ...workspace, curatedModels: launcherBindings };
+            await persistence.saveWorkspace(workspace);
+          }
         }
         if (activationEpoch !== workspaceEpochRef.current) {
           if (createdWorkspace) {
