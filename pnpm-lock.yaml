@@ -10,16 +10,13 @@ overrides:
   react-dom: 19.2.8
   langium-zod: 0.12.0
   x-to-zod: ^0.8.0
-  '@zod-to-form/core': 0.11.3
-  '@zod-to-form/react': 0.11.2
+  '@zod-to-form/core': 0.11.4
+  '@zod-to-form/react': 0.12.0
   codemirror: 6.0.2
   ws: '>=8.21.0'
   uuid: '>=11.1.1'
   tmp: '>=0.2.6'
   miniflare>undici: 7.29.0
-
-patchedDependencies:
-  '@zod-to-form/react@0.11.2': 400b70f7e9b773edcd54b318770090756f02706675c0c8b712193136f19c9b72
 
 importers:
 
@@ -394,8 +391,8 @@ importers:
         specifier: ^6.1.1
         version: 6.1.1(vite@8.3.2(@types/node@26.6.2)(esbuild@0.28.2)(jiti@2.7.0)(tsx@4.23.15)(yaml@2.9.1))
       '@zod-to-form/core':
-        specifier: 0.11.3
-        version: 0.11.3(jiti@2.7.0)(zod@4.6.5)
+        specifier: 0.11.4
+        version: 0.11.4(jiti@2.7.0)(zod@4.6.5)
       '@zod-to-form/vite':
         specifier: ^0.4.7
         version: 0.4.7(@hookform/resolvers@5.9.1(ajv-formats@2.1.1(ajv@8.20.0))(ajv@8.20.0)(react-hook-form@7.88.0(react@19.2.8))(zod@4.6.5))(jiti@2.7.0)(react-hook-form@7.88.0(react@19.2.8))(react@19.2.8)(vite@8.3.2(@types/node@26.6.2)(esbuild@0.28.2)(jiti@2.7.0)(tsx@4.23.15)(yaml@2.9.1))(zod@4.6.5)
@@ -731,11 +728,11 @@ importers:
         specifier: ^12.11.6
         version: 12.11.6(@types/react-dom@19.3.0(@types/react@19.3.0))(@types/react@19.3.0)(react-dom@19.2.8(react@19.2.8))(react@19.2.8)
       '@zod-to-form/core':
-        specifier: 0.11.3
-        version: 0.11.3(jiti@2.7.0)(zod@4.6.5)
+        specifier: 0.11.4
+        version: 0.11.4(jiti@2.7.0)(zod@4.6.5)
       '@zod-to-form/react':
-        specifier: 0.11.2
-        version: 0.11.2(patch_hash=400b70f7e9b773edcd54b318770090756f02706675c0c8b712193136f19c9b72)(@hookform/resolvers@5.9.1(ajv-formats@2.1.1(ajv@8.20.0))(ajv@8.20.0)(react-hook-form@7.88.0(react@19.2.8))(zod@4.6.5))(jiti@2.7.0)(react-hook-form@7.88.0(react@19.2.8))(react@19.2.8)(zod@4.6.5)
+        specifier: 0.12.0
+        version: 0.12.0(@hookform/resolvers@5.9.1(ajv-formats@2.1.1(ajv@8.20.0))(ajv@8.20.0)(react-hook-form@7.88.0(react@19.2.8))(zod@4.6.5))(jiti@2.7.0)(react-hook-form@7.88.0(react@19.2.8))(react@19.2.8)(zod@4.6.5)
       elkjs:
         specifier: ^0.12.0
         version: 0.12.0
@@ -3583,8 +3580,8 @@ packages:
   '@zod-to-form/codegen@0.10.3':
     resolution: {integrity: sha512-YFnj1MaGTaBbVCsxjFoAkAQQ5TtfkAbIt6MljLppalppyc4YVhdzM9NVhmwzDqE6lMoBb8VfP99ixzjlrEk9CQ==}
 
-  '@zod-to-form/core@0.11.3':
-    resolution: {integrity: sha512-eU1J5Aj1m3jRRuI9Qh+71FDmQDI6UhQsMfSCR8Hr4U2VhxWXLig59KcrQs4E3xQO31dC/WgloS78sBsPf7IADg==}
+  '@zod-to-form/core@0.11.4':
+    resolution: {integrity: sha512-jKCvdR7HeVikOc7miH17mBpaR0tqOrjX1nG+i25TFw2gARMQOkSk0fYNHrBEWdwN07F+flbqxHb4c3FLQqtAgw==}
     peerDependencies:
       jiti: ^2.0.0
       zod: ^4.0.0
@@ -3592,8 +3589,8 @@ packages:
       jiti:
         optional: true
 
-  '@zod-to-form/react@0.11.2':
-    resolution: {integrity: sha512-iOTSrVahcBT+PcFE4FtJedIavqsms7wLkh4nGvuauowj6nNyCkP7RQN0SLT+XL+GBH0QDGp7NlCLFjRURgonng==}
+  '@zod-to-form/react@0.12.0':
+    resolution: {integrity: sha512-1xgXhvYzqaAY/ciUAZ5DS6p1TJEi6N+GDRwil5XqxV7Kg20vTlVCuTHeV1yQwOu2CZ4id9kN9R2xpCr0P6ZH4w==}
     peerDependencies:
       '@hookform/resolvers': ^5.0.0
       react: 19.2.8
@@ -9057,21 +9054,21 @@ snapshots:
 
   '@zod-to-form/codegen@0.10.3(jiti@2.7.0)(zod@4.6.5)':
     dependencies:
-      '@zod-to-form/core': 0.11.3(jiti@2.7.0)(zod@4.6.5)
+      '@zod-to-form/core': 0.11.4(jiti@2.7.0)(zod@4.6.5)
     transitivePeerDependencies:
       - jiti
       - zod
 
-  '@zod-to-form/core@0.11.3(jiti@2.7.0)(zod@4.6.5)':
+  '@zod-to-form/core@0.11.4(jiti@2.7.0)(zod@4.6.5)':
     dependencies:
       zod: 4.6.5
     optionalDependencies:
       jiti: 2.7.0
 
-  '@zod-to-form/react@0.11.2(patch_hash=400b70f7e9b773edcd54b318770090756f02706675c0c8b712193136f19c9b72)(@hookform/resolvers@5.9.1(ajv-formats@2.1.1(ajv@8.20.0))(ajv@8.20.0)(react-hook-form@7.88.0(react@19.2.8))(zod@4.6.5))(jiti@2.7.0)(react-hook-form@7.88.0(react@19.2.8))(react@19.2.8)(zod@4.6.5)':
+  '@zod-to-form/react@0.12.0(@hookform/resolvers@5.9.1(ajv-formats@2.1.1(ajv@8.20.0))(ajv@8.20.0)(react-hook-form@7.88.0(react@19.2.8))(zod@4.6.5))(jiti@2.7.0)(react-hook-form@7.88.0(react@19.2.8))(react@19.2.8)(zod@4.6.5)':
     dependencies:
       '@hookform/resolvers': 5.9.1(ajv-formats@2.1.1(ajv@8.20.0))(ajv@8.20.0)(react-hook-form@7.88.0(react@19.2.8))(zod@4.6.5)
-      '@zod-to-form/core': 0.11.3(jiti@2.7.0)(zod@4.6.5)
+      '@zod-to-form/core': 0.11.4(jiti@2.7.0)(zod@4.6.5)
       react: 19.2.8
       react-hook-form: 7.88.0(react@19.2.8)
       zod: 4.6.5
@@ -9085,7 +9082,7 @@ snapshots:
       '@babel/types': 7.29.8
       '@hookform/resolvers': 5.9.1(ajv-formats@2.1.1(ajv@8.20.0))(ajv@8.20.0)(react-hook-form@7.88.0(react@19.2.8))(zod@4.6.5)
       '@zod-to-form/codegen': 0.10.3(jiti@2.7.0)(zod@4.6.5)
-      '@zod-to-form/core': 0.11.3(jiti@2.7.0)(zod@4.6.5)
+      '@zod-to-form/core': 0.11.4(jiti@2.7.0)(zod@4.6.5)
       magic-string: 1.4.1
       pathe: 2.0.3
       react: 19.2.8
