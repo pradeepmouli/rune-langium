@@ -350,16 +350,15 @@ export const NamespaceExplorerPanel = memo(function NamespaceExplorerPanel({
 
   const virtualizer = useVirtualTree(flatRows, scrollRef);
 
-  // Toggle tree expansion (UI-only, not graph visibility). Expanding a
-  // namespace recursively reveals every sub-namespace below it (and collapsing
-  // hides the whole subtree) so one click opens an entire branch — the
-  // "opening a namespace opens all the subnamespaces below it" UX.
+  // Expand only single-child chains. Branches require their own click;
+  // collapsing clears descendants so reopening cannot reveal stale branches.
   const toggleTreeExpand = useCallback(
     (fullPath: string) => {
-      const subtree = collectSegmentSubtreePaths(segmentedRoots, fullPath);
       setTreeExpanded((prev) => {
         const next = new Set(prev);
-        if (next.has(fullPath)) {
+        const collapsing = next.has(fullPath);
+        const subtree = collectSegmentSubtreePaths(segmentedRoots, fullPath, { singleChildOnly: !collapsing });
+        if (collapsing) {
           for (const path of subtree) next.delete(path);
         } else {
           for (const path of subtree) next.add(path);
