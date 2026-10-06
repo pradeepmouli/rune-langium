@@ -16,6 +16,8 @@ Use the pinned pnpm version and preserve overrides/patches in
 
 `@zod-to-form/react@0.12.0` exports the shared `SectionRenderer` used by custom Inspector layouts, from [zod-to-form PR #222](https://github.com/pradeepmouli/zod-to-form/pull/222). Use that public export directly. Keep exact core/React package declarations and workspace overrides aligned, and recheck configured Inspector sections when upgrading.
 
+Keep `@zod-to-form/vite` exactly pinned to `0.4.8` in Studio and visual-editor. Version `0.4.9` upgrades to Babel 8, whose Node requirement excludes the workspace’s supported Node 22.13–22.17 versions. The plugin pin is independent of the React runtime release; reconsider it when deliberately updating the documented Node floor.
+
 ## Generated Sources
 
 Do not hand-edit generated AST, Zod, editable-domain, or conformance files.
