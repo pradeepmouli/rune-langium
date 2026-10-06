@@ -47,7 +47,6 @@ import { formValuesProjection } from './identity-projection.js';
 import type {
   AnyGraphNode,
   GraphNodeMeta,
-  EditorFormActions,
   TypeAliasFormActions,
   ExpressionEditorSlotProps,
   NavigateToNodeCallback,
@@ -200,18 +199,7 @@ function TypeAliasForm({
   const isReadOnly = Boolean(readOnlyProp || nodeMeta.isReadOnly);
 
   return (
-    <EditorActionsProvider
-      nodeId={nodeId}
-      // EditorActionsContextValue holds the unparameterized
-      // EditorFormActions (the full intersection) so any registered
-      // section can call any method without per-kind narrowing. The
-      // typeAlias surface only implements `CommonFormActions`; the
-      // upcast is safe because section components only call methods
-      // present on `CommonFormActions` (definition / comments /
-      // synonyms / annotations / conditions).
-      actions={actions as unknown as EditorFormActions}
-      readOnly={isReadOnly}
-    >
+    <EditorActionsProvider nodeId={nodeId} actions={actions} readOnly={isReadOnly}>
       <FormProvider {...form}>
         <div data-slot="type-alias-form" className="flex flex-col gap-4 p-4">
           {/* Header: Namespace + Name + Badge */}

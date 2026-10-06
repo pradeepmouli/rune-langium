@@ -19,16 +19,17 @@ export default defineConfig({
     baseURL: process.env.PLAYWRIGHT_BASE_URL || `http://localhost:${Number(process.env.STUDIO_DEV_PORT) || 5173}`,
     trace: 'on-first-retry'
   },
-  webServer: process.env.PLAYWRIGHT_BASE_URL
-    ? undefined
-    : {
-        // Must match apps/studio/vite.config.ts server.port. Both default to
-        // 5173 and honour STUDIO_DEV_PORT when set by scripts/check-env.mjs.
-        command: 'pnpm run dev',
-        port: Number(process.env.STUDIO_DEV_PORT) || 5173,
-        reuseExistingServer: true,
-        timeout: 60000
-      },
+  webServer:
+    process.env.PLAYWRIGHT_BASE_URL || process.env.PLAYWRIGHT_ISOLATED_SERVER === '1'
+      ? undefined
+      : {
+          // Must match apps/studio/vite.config.ts server.port. Both default to
+          // 5173 and honour STUDIO_DEV_PORT when set by scripts/check-env.mjs.
+          command: 'pnpm run dev',
+          port: Number(process.env.STUDIO_DEV_PORT) || 5173,
+          reuseExistingServer: true,
+          timeout: 60000
+        },
   projects: [
     {
       name: 'chromium',

@@ -10,6 +10,7 @@
  * — this file is the regression oracle for SC-004 / SC-007.
  */
 
+import { readFileSync } from 'node:fs';
 import type { Page } from '@playwright/test';
 
 /**
@@ -21,35 +22,10 @@ import type { Page } from '@playwright/test';
  * typeAlias node. If parsing of either of the latter fails locally, the
  * `NODES_BY_KIND` table can be reduced to the three confirmed kinds.
  */
-export const FORMS_BASELINE_ROSETTA = `namespace demo.forms
-version "1.0.0"
-
-type Person:
-  name string (1..1)
-  age int (0..1)
-
-type Employee extends Person:
-  employeeId string (1..1)
-  department string (0..1)
-
-enum RoleEnum:
-  Manager
-  Developer
-  Designer
-
-choice PersonOrRole:
-  Person
-  RoleEnum
-
-typeAlias EmployeeIdAlias:
-    string
-
-func ResolveEmployee:
-    inputs:
-        id string (1..1)
-    output:
-        result Employee (0..1)
-`;
+export const FORMS_BASELINE_ROSETTA = readFileSync(
+  new URL('../../../../packages/visual-editor/test/fixtures/forms-baseline.rosetta', import.meta.url),
+  'utf8'
+);
 
 /**
  * Map from a form-kind label to the node name it should select. Used by

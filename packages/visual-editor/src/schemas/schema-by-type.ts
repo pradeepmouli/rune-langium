@@ -19,28 +19,7 @@
  */
 
 import type { z } from 'zod';
-import {
-  SchemaSchema,
-  DataSchema,
-  AttributeSchema,
-  ChoiceSchema,
-  ChoiceOptionSchema,
-  RosettaEnumerationSchema,
-  RosettaEnumValueSchema,
-  ConditionSchema,
-  RosettaFunctionSchema,
-  OperationSchema,
-  ShortcutDeclarationSchema,
-  RosettaTypeAliasSchema,
-  TypeParameterSchema,
-  AnnotationRefSchema,
-  RosettaClassSynonymSchema,
-  RosettaSynonymSchema,
-  RosettaEnumSynonymSchema,
-  RosettaRecordTypeSchema,
-  RosettaBasicTypeSchema,
-  AnnotationSchema
-} from '../generated/zod-schemas.js';
+import * as generated from '../generated/zod-schemas.js';
 
 /** Every `$type` this map keys, in the order render-core's dispatcher checks them. */
 export const RENDERER_HANDLED_TYPES = [
@@ -63,26 +42,19 @@ export const RENDERER_HANDLED_TYPES = [
   'RosettaEnumSynonym'
 ] as const;
 
+const SCHEMA_TYPES = [...RENDERER_HANDLED_TYPES, 'RosettaRecordType', 'RosettaBasicType', 'Annotation'] as const;
+
+function schemasByType(schemas: typeof generated): Record<string, z.ZodTypeAny> {
+  return Object.fromEntries(SCHEMA_TYPES.map((type) => [type, schemas[`${type}Schema`]]));
+}
+
 /** `$type` → generated schema, covering every renderer-handled type and every top-level type. */
-export const SCHEMA_BY_TYPE: Record<string, z.ZodTypeAny> = {
-  Schema: SchemaSchema,
-  Data: DataSchema,
-  Attribute: AttributeSchema,
-  Choice: ChoiceSchema,
-  ChoiceOption: ChoiceOptionSchema,
-  RosettaEnumeration: RosettaEnumerationSchema,
-  RosettaEnumValue: RosettaEnumValueSchema,
-  Condition: ConditionSchema,
-  RosettaFunction: RosettaFunctionSchema,
-  Operation: OperationSchema,
-  ShortcutDeclaration: ShortcutDeclarationSchema,
-  RosettaTypeAlias: RosettaTypeAliasSchema,
-  TypeParameter: TypeParameterSchema,
-  AnnotationRef: AnnotationRefSchema,
-  RosettaClassSynonym: RosettaClassSynonymSchema,
-  RosettaSynonym: RosettaSynonymSchema,
-  RosettaEnumSynonym: RosettaEnumSynonymSchema,
-  RosettaRecordType: RosettaRecordTypeSchema,
-  RosettaBasicType: RosettaBasicTypeSchema,
-  Annotation: AnnotationSchema
-};
+export const SCHEMA_BY_TYPE = schemasByType(generated);
+
+// The render gate holds this registry by reference. Refresh its entries without
+// invalidating the source-sync and workspace state that consume it.
+if (import.meta.hot) {
+  import.meta.hot.accept('../generated/zod-schemas.js', (schemas) => {
+    if (schemas) Object.assign(SCHEMA_BY_TYPE, schemasByType(schemas as unknown as typeof generated));
+  });
+}

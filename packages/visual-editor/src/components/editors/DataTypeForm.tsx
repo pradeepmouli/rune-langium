@@ -31,17 +31,15 @@ import { Tabs, TabsList, TabsTrigger, TabsContent } from '@rune-langium/design-s
 import { AttributeRow } from './AttributeRow.js';
 import { InheritedAttributeRow } from './AttributeRow.js';
 import { TypeReferenceField } from './TypeReferenceField.js';
-import { MetadataSection } from './MetadataSection.js';
 import { useEffectiveMembers } from '../../hooks/useInheritedMembers.js';
-import { AnnotationSection } from './AnnotationSection.js';
-import { ConditionSection } from './ConditionSection.js';
-import { getRefText, parseCardinality, type ConditionDisplayInfo } from '../../adapters/model-helpers.js';
+import { getRefText, parseCardinality } from '../../adapters/model-helpers.js';
 import { useAutoSave } from '../../hooks/useAutoSave.js';
 import { useLatestRef } from '../../hooks/useLatestRef.js';
 import { useZodForm, useExternalSync } from '@zod-to-form/react';
 import { DataSchema } from '../../generated/zod-schemas.js';
 import { formRegistry } from '../forms/rows/index.js';
 import { formValuesProjection } from './identity-projection.js';
+import { EditorSections } from '../forms/sections/EditorSections.js';
 import { EditorActionsProvider } from '../forms/sections/EditorActionsContext.js';
 import type {
   AnyGraphNode,
@@ -257,82 +255,6 @@ function DataTypeForm({
     [nodeId, actions]
   );
 
-  // ---- Metadata callbacks --------------------------------------------------
-
-  const commitDefinition = useCallback(
-    (def: string) => {
-      actions.updateDefinition(nodeId, def);
-    },
-    [nodeId, actions]
-  );
-
-  const commitComments = useCallback(
-    (comments: string) => {
-      actions.updateComments(nodeId, comments);
-    },
-    [nodeId, actions]
-  );
-
-  const handleAddSynonym = useCallback(
-    (source: string, value?: string) => {
-      actions.addSynonym(nodeId, source, value);
-    },
-    [nodeId, actions]
-  );
-
-  const handleRemoveSynonym = useCallback(
-    (index: number) => {
-      actions.removeSynonym(nodeId, index);
-    },
-    [nodeId, actions]
-  );
-
-  // ---- Annotation callbacks ------------------------------------------------
-
-  const handleAddAnnotation = useCallback(
-    (annotationName: string) => {
-      actions.addAnnotation(nodeId, annotationName);
-    },
-    [nodeId, actions]
-  );
-
-  const handleRemoveAnnotation = useCallback(
-    (index: number) => {
-      actions.removeAnnotation(nodeId, index);
-    },
-    [nodeId, actions]
-  );
-
-  // ---- Condition callbacks -------------------------------------------------
-
-  const handleAddCondition = useCallback(
-    (condition: { name?: string; definition?: string; expressionText: string; isPostCondition?: boolean }) => {
-      actions.addCondition(nodeId, condition);
-    },
-    [nodeId, actions]
-  );
-
-  const handleRemoveCondition = useCallback(
-    (index: number) => {
-      actions.removeCondition(nodeId, index);
-    },
-    [nodeId, actions]
-  );
-
-  const handleUpdateCondition = useCallback(
-    (index: number, updates: Partial<ConditionDisplayInfo>) => {
-      actions.updateCondition(nodeId, index, updates);
-    },
-    [nodeId, actions]
-  );
-
-  const handleReorderCondition = useCallback(
-    (fromIndex: number, toIndex: number) => {
-      actions.reorderCondition(nodeId, fromIndex, toIndex);
-    },
-    [nodeId, actions]
-  );
-
   // ---- Resolve parent type option for display ------------------------------
 
   // ---- Effective members (local + inherited) via hook ----------------------
@@ -406,7 +328,13 @@ function DataTypeForm({
 
   return (
     <FormProvider {...form}>
-      <EditorActionsProvider nodeId={nodeId} actions={actions as unknown as EditorFormActions} readOnly={isReadOnly}>
+      <EditorActionsProvider
+        nodeId={nodeId}
+        actions={actions}
+        readOnly={isReadOnly}
+        synonymSourceOptions={synonymSourceOptions}
+        renderExpressionEditor={renderExpressionEditor}
+      >
         <div data-slot="data-type-form" className="flex flex-col min-h-0 h-full gap-4 p-4">
           {/* Header: Namespace + Name + Badge — always visible above tabs */}
           <TypeHeader
@@ -541,36 +469,17 @@ function DataTypeForm({
 
             {/* Conditions tab */}
             <TabsContent value="conditions" className="studio-scroll flex-1 overflow-y-auto p-4 mt-0">
-              <ConditionSection
-                label="Conditions"
-                conditions={d.conditions}
-                readOnly={isReadOnly}
-                onAdd={handleAddCondition}
-                onRemove={handleRemoveCondition}
-                onUpdate={handleUpdateCondition}
-                onReorder={handleReorderCondition}
-                renderExpressionEditor={renderExpressionEditor}
-              />
+              <EditorSections names={['ConditionSection']} />
             </TabsContent>
 
             {/* Doc tab — description, comments, synonyms */}
             <TabsContent value="doc" className="studio-scroll flex-1 overflow-y-auto p-4 mt-0">
-              <MetadataSection
-                synonymSourceOptions={synonymSourceOptions}
-                onDefinitionCommit={commitDefinition}
-                onCommentsCommit={commitComments}
-                onSynonymAdd={handleAddSynonym}
-                onSynonymRemove={handleRemoveSynonym}
-              />
+              <EditorSections names={['MetadataSection']} />
             </TabsContent>
 
             {/* Meta tab — annotations */}
             <TabsContent value="meta" className="studio-scroll flex-1 overflow-y-auto p-4 mt-0">
-              <AnnotationSection
-                annotations={d.annotations}
-                onAdd={handleAddAnnotation}
-                onRemove={handleRemoveAnnotation}
-              />
+              <EditorSections names={['AnnotationSection']} />
             </TabsContent>
           </Tabs>
         </div>
