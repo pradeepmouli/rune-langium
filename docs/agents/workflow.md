@@ -147,5 +147,6 @@ workflow; pending checks simply wait for another completion event. The existing
 GitHub Actions version-pin job remains separate.
 
 Validate workflow changes with `node --test scripts/lib/dependency-automerge.test.mjs`
-and a workflow syntax checker. An old failed auto-approval run (such as #551) must
-be rerun after the workflow fix lands; the finalizer never ignores failed checks.
+and a workflow syntax checker. An old failed auto-approval run (such as #551) needs a fresh PR event after
+the fix lands, for example a bot refresh/rebase. Rerunning the old run preserves
+its original workflow revision. The finalizer never ignores failed checks.
