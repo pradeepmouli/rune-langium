@@ -178,7 +178,7 @@ function EnumValueRow({
     ]);
     // Commit to graph
     if (editorCtx) {
-      editorCtx.actions.addEnumValueSynonym(editorCtx.nodeId, index, refText, pendingValue);
+      editorCtx.actions.addEnumValueSynonym?.(editorCtx.nodeId, index, refText, pendingValue);
     }
     setPendingSource(null);
     setPendingValue('');
@@ -192,7 +192,7 @@ function EnumValueRow({
         currentSyns.filter((_, i) => i !== synIndex)
       );
       if (editorCtx) {
-        editorCtx.actions.removeEnumValueSynonym(editorCtx.nodeId, index, synIndex);
+        editorCtx.actions.removeEnumValueSynonym?.(editorCtx.nodeId, index, synIndex);
       }
     },
     [editorCtx, prefix, getValues, setValue, index]

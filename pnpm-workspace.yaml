@@ -79,3 +79,6 @@ overrides:
   # workspace's own >=22.13.0 floor (caught via PR #504 Copilot review). Purely
   # transitive (no first-party imports).
   'miniflare>undici': '7.29.0'
+
+patchedDependencies:
+  '@zod-to-form/react@0.11.2': patches/@zod-to-form__react@0.11.2.patch

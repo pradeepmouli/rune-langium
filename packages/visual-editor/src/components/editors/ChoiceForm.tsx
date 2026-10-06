@@ -15,11 +15,7 @@
  * - External-data sync uses the upstream `useExternalSync` hook with an
  *   identity projection (R11) — the graph node IS the AST shape, so no
  *   transformation is required at the sync boundary.
- * - The host wraps the form tree with `<EditorActionsProvider>` so the
- *   declaratively-resolved section components (Phase 7 / US5) can derive
- *   their per-action callbacks from `EditorFormActions` + `nodeId`. The
- *   imperative `<MetadataSection ...>` JSX retains its callback-prop
- *   wiring; props take precedence over context per the section contract.
+ * - Configured sections share graph actions through EditorActionsProvider.
  *
  * Sections:
  * 1. Header: editable name + "Choice" amber badge
@@ -40,7 +36,7 @@ import { TypeHeader, INSPECTOR_FORM_HEADER_CLASS } from '../TypeHeader.js';
 import { ErrorsSection } from '../ErrorsSection.js';
 import { ChoiceOptionRow } from './ChoiceOptionRow.js';
 import { TypeSelector } from './TypeSelector.js';
-import { MetadataSection } from './MetadataSection.js';
+import { EditorSections } from '../forms/sections/EditorSections.js';
 import { EditorActionsProvider } from '../forms/sections/EditorActionsContext.js';
 import { useAutoSave } from '../../hooks/useAutoSave.js';
 import { useLatestRef } from '../../hooks/useLatestRef.js';
@@ -171,36 +167,6 @@ function ChoiceForm({
     [nodeId, actions, availableTypes]
   );
 
-  // ---- Metadata callbacks --------------------------------------------------
-
-  const commitDefinition = useCallback(
-    (def: string) => {
-      actions.updateDefinition(nodeId, def);
-    },
-    [nodeId, actions]
-  );
-
-  const commitComments = useCallback(
-    (comments: string) => {
-      actions.updateComments(nodeId, comments);
-    },
-    [nodeId, actions]
-  );
-
-  const handleAddSynonym = useCallback(
-    (source: string, value?: string) => {
-      actions.addSynonym(nodeId, source, value);
-    },
-    [nodeId, actions]
-  );
-
-  const handleRemoveSynonym = useCallback(
-    (index: number) => {
-      actions.removeSynonym(nodeId, index);
-    },
-    [nodeId, actions]
-  );
-
   // ---- Derived members from AST attributes ---------------------------------
 
   const members = (d.attributes ?? []).map((o: any) => ({
@@ -221,7 +187,12 @@ function ChoiceForm({
 
   return (
     <FormProvider {...form}>
-      <EditorActionsProvider nodeId={nodeId} actions={actions as unknown as EditorFormActions} readOnly={isReadOnly}>
+      <EditorActionsProvider
+        nodeId={nodeId}
+        actions={actions}
+        readOnly={isReadOnly}
+        synonymSourceOptions={synonymSourceOptions}
+      >
         <div data-slot="choice-form" className="flex flex-col gap-4 p-4">
           {/* Header: Namespace + Name + Badge */}
           <TypeHeader
@@ -277,13 +248,7 @@ function ChoiceForm({
           </FieldSet>
 
           {/* Metadata */}
-          <MetadataSection
-            synonymSourceOptions={synonymSourceOptions}
-            onDefinitionCommit={commitDefinition}
-            onCommentsCommit={commitComments}
-            onSynonymAdd={handleAddSynonym}
-            onSynonymRemove={handleRemoveSynonym}
-          />
+          <EditorSections names={['MetadataSection']} />
 
           {/* Domain/graph-level errors (mirrors OtherForm's Errors section;
               Codex review, PR #494) */}

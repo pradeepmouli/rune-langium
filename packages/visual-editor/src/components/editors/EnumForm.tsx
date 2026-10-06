@@ -24,7 +24,7 @@
  * 1. Header: editable name + "Enum" green badge
  * 2. Parent enum: TypeSelector (filtered to kind='enum', clearable)
  * 3. Enum values: EnumValueRow list + "Add Value" button
- * 4. Annotations + Metadata: rendered declaratively via `<ZodForm>` shell
+ * 4. Annotations + Metadata: resolved by the shared section layout
  *
  * @module
  */
@@ -47,8 +47,7 @@ import { RosettaEnumerationSchema } from '../../generated/zod-schemas.js';
 import { formRegistry } from '../forms/rows/index.js';
 import { formValuesProjection } from './identity-projection.js';
 import { getRefText } from '../../adapters/model-helpers.js';
-import { AnnotationSection } from './AnnotationSection.js';
-import { MetadataSection } from './MetadataSection.js';
+import { EditorSections } from '../forms/sections/EditorSections.js';
 import { EditorActionsProvider } from '../forms/sections/EditorActionsContext.js';
 import type {
   AnyGraphNode,
@@ -246,16 +245,11 @@ function EnumForm({
 
   const parentValue = parentName ? (availableTypes.find((opt) => opt.label === parentName)?.value ?? null) : null;
 
-  // ---- Editor actions context (Phase 7 / US5) ------------------------------
-  // Bridges declarative section components (Annotations, Metadata) to the
-  // host's `EditorFormActions` + `nodeId`. The intersection-typed context
-  // accepts the enum-kind action set without narrowing.
-
   const isReadOnly = Boolean(readOnlyProp || nodeMeta.isReadOnly);
 
   const editorActionsValue = useMemo(
-    () => ({ nodeId, actions: actions as unknown as EditorFormActions, readOnly: isReadOnly }),
-    [nodeId, actions, isReadOnly]
+    () => ({ nodeId, actions, readOnly: isReadOnly, synonymSourceOptions }),
+    [nodeId, actions, isReadOnly, synonymSourceOptions]
   );
 
   // ---- Render --------------------------------------------------------------
@@ -347,8 +341,8 @@ function EnumForm({
               Section components read field paths via useFormContext and pull
               callbacks from the EditorActionsProvider above. No imperative
               wiring needed at this site. */}
-          <AnnotationSection />
-          <MetadataSection synonymSourceOptions={synonymSourceOptions} />
+          <EditorSections names={['AnnotationSection']} />
+          <EditorSections names={['MetadataSection']} />
 
           {/* Domain/graph-level errors (mirrors OtherForm's Errors section;
               Codex review, PR #494) */}
