@@ -52,6 +52,40 @@ async function parseModels(sources: readonly string[]) {
 }
 
 describe('FormPreviewSchema generation', () => {
+  it('preserves ISO date controls through aliases, collections, Choices and deferred objects', async () => {
+    const doc = await parseModel(`namespace test.dates
+typeAlias CalendarDate:
+  date
+type Schedule:
+  day date (1..1)
+  aliasDay CalendarDate (0..1)
+  days CalendarDate (0..*)
+  timestamp dateTime (0..1)
+  next Schedule (0..1)
+choice DateChoice:
+  date
+  string
+`);
+    const schemas = generatePreviewSchemas(doc);
+    const schedule = schemas.find((schema) => schema.targetId === 'test.dates.Schedule')!;
+    expect(schedule.fields[0]).toMatchObject({ kind: 'string', format: 'date' });
+    expect(schedule.fields[1]).toMatchObject({ kind: 'string', format: 'date', required: false });
+    expect(schedule.fields[2]).toMatchObject({ kind: 'array', children: [{ kind: 'string', format: 'date' }] });
+    expect(schedule.fields[3]).not.toHaveProperty('format');
+    const nested = expandPreviewField(schedule.fields[4]!, schedule.definitions);
+    expect(nested.kind).toBe('object');
+    if (nested.kind !== 'object') throw new Error('Expected Schedule object');
+    expect(nested.children[0]).toMatchObject({ kind: 'string', format: 'date' });
+    expect(schemas.find((schema) => schema.targetId === 'test.dates.CalendarDate')?.fields[0]).toMatchObject({
+      kind: 'string',
+      format: 'date'
+    });
+    expect(schemas.find((schema) => schema.targetId === 'test.dates.DateChoice')?.fields[0]).toMatchObject({
+      kind: 'string',
+      format: 'date',
+      required: false
+    });
+  });
   it('expands serializable recursive definitions one level at a time without losing siblings', async () => {
     const doc = await parseModel(`namespace test.lazy
 type Node:
@@ -1894,7 +1928,7 @@ func Derived extends Base:
       const choice = schemas.find((s) => s.targetId === 'test.preview.Collateral')!;
 
       expect(choice.status).toBe('ready');
-      expect(choice.fields).toEqual([{ path: 'date', label: 'date', kind: 'string', required: false }]);
+      expect(choice.fields).toEqual([{ path: 'date', label: 'date', kind: 'string', format: 'date', required: false }]);
     }
   );
 
