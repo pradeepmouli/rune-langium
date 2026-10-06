@@ -2,8 +2,25 @@
 // SPDX-License-Identifier: FSL-1.1-ALv2
 // Copyright (c) 2026 Pradeep Mouli
 
-import { useCallback, useEffect, useId, useMemo, useRef, useState, type ChangeEvent, type ReactElement } from 'react';
-import type { FormPreviewSchema, PreviewField, PreviewSourceMapEntry } from '@rune-langium/codegen/export';
+import {
+  createContext,
+  useContext,
+  useCallback,
+  useEffect,
+  useId,
+  useMemo,
+  useRef,
+  useState,
+  type ChangeEvent,
+  type ReactElement
+} from 'react';
+import {
+  expandPreviewField,
+  type FormPreviewSchema,
+  type PreviewField,
+  type PreviewSourceMapEntry
+} from '@rune-langium/codegen/export';
+
 import { qualifiedNameFromNodeId } from '@rune-langium/visual-editor';
 import { Button } from '@rune-langium/design-system/ui/button';
 import { Checkbox } from '@rune-langium/design-system/ui/checkbox';
@@ -29,6 +46,8 @@ import {
   splitChoiceArmFields
 } from '../services/preview-validator.js';
 import { withInstrumentation } from '../services/instrumentation/core.js';
+
+const PreviewDefinitions = createContext<FormPreviewSchema['definitions']>(undefined);
 
 export interface PreviewPresentation {
   mode: 'scratch' | 'instance';
@@ -490,113 +509,115 @@ export const FormPreviewPanel = withInstrumentation(
             {activeSample.errors['']}
           </p>
         ) : null}
-        <form className="preview-panel__body studio-scroll space-y-3 overflow-auto p-3">
-          {schema.kind === 'choice' ? (
-            <ChoiceFieldGroup
-              fields={schema.fields}
-              sample={activeSample}
-              lookupFieldSource={lookupFieldSource}
-              isResolvingReferences={isResolvingReferences}
-              onFieldBlur={handleFieldBlur}
-              onFieldChange={handleFieldChange}
-              onArrayAdd={handleArrayAdd}
-              onArrayRemove={handleArrayRemove}
-              onObjectToggle={handleObjectToggle}
-              onArmSelect={handleArmSelect}
-            />
-          ) : (
-            <>
-              {rootArmFields.length > 0 ? (
-                <ChoiceFieldGroup
-                  fields={rootArmFields}
-                  sample={activeSample}
-                  lookupFieldSource={lookupFieldSource}
-                  isResolvingReferences={isResolvingReferences}
-                  onFieldBlur={handleFieldBlur}
-                  onFieldChange={handleFieldChange}
-                  onArrayAdd={handleArrayAdd}
-                  onArrayRemove={handleArrayRemove}
-                  onObjectToggle={handleObjectToggle}
-                  onArmSelect={handleArmSelect}
-                />
-              ) : null}
-              {rootOtherFields.map((field) => (
-                <PreviewFieldControl
-                  key={field.path}
-                  field={field}
-                  sample={activeSample}
-                  lookupFieldSource={lookupFieldSource}
-                  isResolvingReferences={isResolvingReferences}
-                  onFieldBlur={handleFieldBlur}
-                  onFieldChange={handleFieldChange}
-                  onArrayAdd={handleArrayAdd}
-                  onArrayRemove={handleArrayRemove}
-                  onObjectToggle={handleObjectToggle}
-                  onArmSelect={handleArmSelect}
-                />
-              ))}
-            </>
-          )}
-          {isResolvingReferences || unsupportedSummary ? (
-            isResolvingReferences ? (
-              <div role="status" className="flex items-center gap-1.5 text-xs text-muted-foreground">
-                <Spinner className="size-3 shrink-0" />
-                <span>
-                  Resolving reference… ({hydrationRetriesRemaining}{' '}
-                  {hydrationRetriesRemaining === 1 ? 'retry' : 'retries'} left)
-                </span>
-              </div>
+        <PreviewDefinitions value={schema.definitions}>
+          <form className="preview-panel__body studio-scroll space-y-3 overflow-auto p-3">
+            {schema.kind === 'choice' ? (
+              <ChoiceFieldGroup
+                fields={schema.fields}
+                sample={activeSample}
+                lookupFieldSource={lookupFieldSource}
+                isResolvingReferences={isResolvingReferences}
+                onFieldBlur={handleFieldBlur}
+                onFieldChange={handleFieldChange}
+                onArrayAdd={handleArrayAdd}
+                onArrayRemove={handleArrayRemove}
+                onObjectToggle={handleObjectToggle}
+                onArmSelect={handleArmSelect}
+              />
             ) : (
-              <div role="status" className="text-xs text-muted-foreground">
-                Unsupported preview features: {unsupportedSummary}
-              </div>
-            )
-          ) : null}
-          {schema.kind === 'function' ? (
-            <div className="preview-panel__function-controls border-t border-border pt-3">
-              <Button
-                type="button"
-                variant="ghost"
-                size="xs"
-                disabled={executionState === 'running'}
-                onClick={handleRun}
-              >
-                {executionState === 'running' ? 'Executing…' : 'Run'}
-              </Button>
-              {executionError ? (
-                <div className="execution-error mt-2 text-xs">
-                  <span className="text-xs font-medium text-destructive">Error:</span>{' '}
-                  <span className="text-xs text-destructive">{executionError}</span>
+              <>
+                {rootArmFields.length > 0 ? (
+                  <ChoiceFieldGroup
+                    fields={rootArmFields}
+                    sample={activeSample}
+                    lookupFieldSource={lookupFieldSource}
+                    isResolvingReferences={isResolvingReferences}
+                    onFieldBlur={handleFieldBlur}
+                    onFieldChange={handleFieldChange}
+                    onArrayAdd={handleArrayAdd}
+                    onArrayRemove={handleArrayRemove}
+                    onObjectToggle={handleObjectToggle}
+                    onArmSelect={handleArmSelect}
+                  />
+                ) : null}
+                {rootOtherFields.map((field) => (
+                  <PreviewFieldControl
+                    key={field.path}
+                    field={field}
+                    sample={activeSample}
+                    lookupFieldSource={lookupFieldSource}
+                    isResolvingReferences={isResolvingReferences}
+                    onFieldBlur={handleFieldBlur}
+                    onFieldChange={handleFieldChange}
+                    onArrayAdd={handleArrayAdd}
+                    onArrayRemove={handleArrayRemove}
+                    onObjectToggle={handleObjectToggle}
+                    onArmSelect={handleArmSelect}
+                  />
+                ))}
+              </>
+            )}
+            {isResolvingReferences || unsupportedSummary ? (
+              isResolvingReferences ? (
+                <div role="status" className="flex items-center gap-1.5 text-xs text-muted-foreground">
+                  <Spinner className="size-3 shrink-0" />
+                  <span>
+                    Resolving reference… ({hydrationRetriesRemaining}{' '}
+                    {hydrationRetriesRemaining === 1 ? 'retry' : 'retries'} left)
+                  </span>
                 </div>
-              ) : null}
-              {executionResult !== undefined ? (
-                <div className="execution-result mt-2">
-                  <span className="text-2xs font-medium text-muted-foreground">Output:</span>
-                  <pre className="preview-panel__sample-output studio-scroll mt-0.5 overflow-auto p-2 text-2xs leading-5 text-foreground">
-                    {JSON.stringify(executionResult, null, 2)}
-                  </pre>
+              ) : (
+                <div role="status" className="text-xs text-muted-foreground">
+                  Unsupported preview features: {unsupportedSummary}
                 </div>
-              ) : null}
-            </div>
-          ) : null}
-          {presentation.showPayload ? (
-            <details className="preview-panel__sample" data-testid="sample-data-view" open>
-              <summary className="cursor-pointer px-2 py-1 text-xs font-medium text-foreground">Sample data</summary>
-              <div className="space-y-2 border-t border-border p-2">
-                <pre
-                  aria-label="Sample data output"
-                  className="preview-panel__sample-output studio-scroll max-h-56 overflow-auto p-2 text-2xs leading-5 text-foreground"
-                  data-testid="sample-data-output"
+              )
+            ) : null}
+            {schema.kind === 'function' ? (
+              <div className="preview-panel__function-controls border-t border-border pt-3">
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="xs"
+                  disabled={executionState === 'running'}
+                  onClick={handleRun}
                 >
-                  {activeSample?.serialized ?? '{}'}
-                </pre>
-                <p role="status" aria-live="polite" className="text-2xs text-muted-foreground">
-                  {copyFeedback ?? 'Sample data stays in-memory until you explicitly copy it.'}
-                </p>
+                  {executionState === 'running' ? 'Executing…' : 'Run'}
+                </Button>
+                {executionError ? (
+                  <div className="execution-error mt-2 text-xs">
+                    <span className="text-xs font-medium text-destructive">Error:</span>{' '}
+                    <span className="text-xs text-destructive">{executionError}</span>
+                  </div>
+                ) : null}
+                {executionResult !== undefined ? (
+                  <div className="execution-result mt-2">
+                    <span className="text-2xs font-medium text-muted-foreground">Output:</span>
+                    <pre className="preview-panel__sample-output studio-scroll mt-0.5 overflow-auto p-2 text-2xs leading-5 text-foreground">
+                      {JSON.stringify(executionResult, null, 2)}
+                    </pre>
+                  </div>
+                ) : null}
               </div>
-            </details>
-          ) : null}
-        </form>
+            ) : null}
+            {presentation.showPayload ? (
+              <details className="preview-panel__sample" data-testid="sample-data-view" open>
+                <summary className="cursor-pointer px-2 py-1 text-xs font-medium text-foreground">Sample data</summary>
+                <div className="space-y-2 border-t border-border p-2">
+                  <pre
+                    aria-label="Sample data output"
+                    className="preview-panel__sample-output studio-scroll max-h-56 overflow-auto p-2 text-2xs leading-5 text-foreground"
+                    data-testid="sample-data-output"
+                  >
+                    {activeSample?.serialized ?? '{}'}
+                  </pre>
+                  <p role="status" aria-live="polite" className="text-2xs text-muted-foreground">
+                    {copyFeedback ?? 'Sample data stays in-memory until you explicitly copy it.'}
+                  </p>
+                </div>
+              </details>
+            ) : null}
+          </form>
+        </PreviewDefinitions>
       </section>
     );
   },
@@ -759,7 +780,7 @@ interface ChoiceArmChildrenProps {
 // multiple mutually-exclusive nested values be entered simultaneously
 // (Codex review round 2 on PR #444).
 function ChoiceArmChildren({
-  field,
+  field: inputField,
   sample,
   lookupFieldSource,
   isResolvingReferences,
@@ -771,6 +792,8 @@ function ChoiceArmChildren({
   onArmSelect,
   arrayIndices
 }: ChoiceArmChildrenProps): ReactElement | null {
+  const definitions = useContext(PreviewDefinitions);
+  const field = expandPreviewField(inputField, definitions);
   if (field.kind !== 'object' && field.kind !== 'array') return null;
   const choiceArmPaths = field.kind === 'object' ? field.choiceArmPaths : undefined;
   const { armFields, otherFields } = splitChoiceArmFields(field.children ?? [], choiceArmPaths);
@@ -828,7 +851,7 @@ interface PreviewFieldControlProps {
 }
 
 function PreviewFieldControl({
-  field,
+  field: inputField,
   sample,
   lookupFieldSource, // oxlint-disable-line only-used-in-recursion
   isResolvingReferences,
@@ -841,12 +864,15 @@ function PreviewFieldControl({
   arrayIndices,
   isChoiceArm = false
 }: PreviewFieldControlProps): ReactElement {
+  const definitions = useContext(PreviewDefinitions);
+  const field = expandPreviewField(inputField, definitions);
   const fieldPath = formatFieldPath(field.path, arrayIndices);
   const fieldError = sample?.validated ? sample.errors[fieldPath] : undefined;
 
   if (field.kind === 'object') {
     const value = getValueAtPath(sample?.values ?? {}, pathToSegments(field.path, arrayIndices));
     const isPresent = value !== undefined;
+    const renderChildren = field.definitionId ? isPresent : field.required || isPresent;
     const objectLabel = resolvedFieldLabel(field, arrayIndices);
     // A NESTED Data-extends-Choice reference (issue #434) — route its
     // Choice-ancestor-derived arm children through ChoiceFieldGroup's
@@ -867,7 +893,7 @@ function PreviewFieldControl({
               affordance that the section isn't populated. */}
           <span className="inline-flex items-center gap-1.5">
             {objectLabel}
-            {!field.required ? (
+            {!field.required || (field.definitionId && !isPresent) ? (
               <Button
                 type="button"
                 variant="ghost"
@@ -881,7 +907,7 @@ function PreviewFieldControl({
             ) : null}
           </span>
         </FieldLegend>
-        {(field.required || isPresent) && armFields.length > 0 ? (
+        {renderChildren && armFields.length > 0 ? (
           <ChoiceFieldGroup
             fields={armFields}
             sample={sample}
@@ -896,7 +922,7 @@ function PreviewFieldControl({
             arrayIndices={arrayIndices}
           />
         ) : null}
-        {(field.required || isPresent) &&
+        {renderChildren &&
           otherFields.map((child) => (
             <PreviewFieldControl
               key={`${child.path}-${arrayIndices?.join('-') ?? 'root'}`}
