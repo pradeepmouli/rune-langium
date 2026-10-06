@@ -2,8 +2,9 @@
 
 These fixtures retain selected upstream declarations from CDM 7.0.0 and its
 matched Rune 10.2.2 / FpML 3.2.0 dependency workspace. `sources.json` records
-commits, source paths and fixture SHA-256 digests. The parser inserts optional
-functional brackets before CST extraction; no function bodies are authored by
+commits, source paths and fixture SHA-256 digests. The checked-in fixtures were
+extracted with optional functional brackets. The source-mapped parser now retains
+original source text during regeneration; no function bodies are authored by
 the fixture builder. Upstream CDM/Rune sources retain their Apache-2.0 ownership
 and licensing; see the pinned repositories' LICENSE and NOTICE files.
 

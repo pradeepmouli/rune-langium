@@ -42,6 +42,8 @@ and CLI/codegen/LSP → core.
 
 ## Shared Semantics
 
+- Core normalizes bare functional expressions only at the parser lexer boundary. The bracket scanner is shared with `insertImplicitBrackets`; token offsets and columns map back to original UTF-16 source positions before CST construction. Synthetic brackets have empty images and zero-width CST ranges. CST text, diagnostics, reference locations and serialized text regions all address the original document.
+
 - Core `BASE_TYPE_FILES` owns the standard Rune types and annotations. Studio re-exports it; the shared `RuneWorkspaceManager` loads it during LSP initialization, including reconnects. Core and LSP factories install `RuneDslSharedModule`.
 - `hydrateModelDocuments` registers every parsed root before `RuneJsonSerializer` invokes Langium's reference revival. Keep one object graph: repeated deserialize rounds retain stale generations and cannot resolve arbitrary cycles. Batch tests must verify target identity across long chains and cycles.
 - Curated downloads use a disposable browser worker; user-file-only downloads use `/api/codegen`. Both call `src/services/codegen-download-handler.ts` for validation, namespace closure, generation, and packaging. Hydration closes the documents that may be resolved; `ExportSelection` then chooses dependency-closed declaration roots for emission; `generateSelected` returns that exact receipt with the outputs, including a kind-aware `requiredBy` provenance map. Artifact envelopes record the receipt, immutable curated manifest cohorts when available, and generated files, so Studio previews and downloads use the same captured ZIP. Preserve fatal diagnostics and terminate the browser worker on completion, error, or timeout.
