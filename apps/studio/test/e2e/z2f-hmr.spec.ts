@@ -14,6 +14,7 @@ let directory: string;
 let schemaPath: string;
 let original: string;
 let url: string;
+let updateDelay = 0;
 
 test.beforeAll(async () => {
   // Alias a disposable copy: never edit the user's generated schema or running server.
@@ -41,6 +42,11 @@ test.beforeAll(async () => {
     plugins: [
       {
         name: 'isolated-inspector-schema',
+        async transform(code, id) {
+          if (id.split('?')[0] === schemaPath && code.includes('HMR name constraint probe') && updateDelay) {
+            await new Promise((resolve) => setTimeout(resolve, updateDelay));
+          }
+        },
         enforce: 'pre',
         resolveId(id, importer) {
           if (
@@ -64,64 +70,79 @@ test.afterAll(async () => {
   if (directory) await rm(directory, { recursive: true, force: true });
 });
 
-test('canonical Inspector schema updates within two seconds without reloading the workspace', async ({ page }) => {
-  await page.route('**/api/parse', async (route) => {
-    const body = route.request().postDataJSON() as { files: unknown[] };
-    const request = new Request(route.request().url(), {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ files: body.files })
+for (const delay of [0, 1000]) {
+  test(`canonical Inspector schema updates within two seconds without reloading (delay=${delay}ms)`, async ({
+    page
+  }) => {
+    updateDelay = delay;
+    await page.route('**/api/parse', async (route) => {
+      const body = route.request().postDataJSON() as { files: unknown[] };
+      const request = new Request(route.request().url(), {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ files: body.files })
+      });
+      const response = await onRequestPost({ request, env: {}, waitUntil() {} } as never);
+      await route.fulfill({ status: response.status, contentType: 'application/json', body: await response.text() });
     });
-    const response = await onRequestPost({ request, env: {}, waitUntil() {} } as never);
-    await route.fulfill({ status: response.status, contentType: 'application/json', body: await response.text() });
-  });
-  await page.goto(url);
-  await page.locator('input[type="file"][accept=".rosetta"]').setInputFiles({
-    name: 'hmr.rosetta',
-    mimeType: 'text/plain',
-    buffer: Buffer.from('namespace hmr.test\nversion "1.0.0"\n\ntype Person:\n  name string (1..1)\n')
-  });
-  const inspector = page
-    .getByRole('toolbar', { name: 'Center pane selector' })
-    .getByRole('button', { name: 'Inspector' });
-  if ((await inspector.getAttribute('aria-pressed')) !== 'true') await inspector.click();
-  const name = page.getByLabel('Data type name', { exact: true });
-  await expect(async () => {
-    await page.getByRole('button', { name: 'Navigate to Person' }).click();
-    await expect(name).toHaveValue('Person', { timeout: 500 });
-  }).toPass({ timeout: 15000, intervals: [500] });
-  const token = await page.evaluate(() => {
-    const header = document.querySelector('[aria-label="Studio workspace header"]')!;
-    const token = crypto.randomUUID();
-    header.setAttribute('data-hmr-token', token);
-    return token;
-  });
-  let navigations = 0;
-  page.on('framenavigated', () => navigations++);
-  const probe = 'HMR name constraint probe';
-  const modified = original.replace(
-    /export const DataSchema = z.looseObject\(\{\s*\$type: z.literal\('Data'\),\s*name: ValidIDSchema,/,
-    (match) => match.replace('name: ValidIDSchema,', `name: z.string().min(30, '${probe}'),`)
-  );
-  expect(modified).not.toBe(original);
-  try {
-    const started = performance.now();
-    await writeFile(schemaPath, modified);
-    // Touch the existing field so the Inspector's afterTouched validation is observable.
+    await page.goto(url);
+    await page.locator('input[type="file"][accept=".rosetta"]').setInputFiles({
+      name: 'hmr.rosetta',
+      mimeType: 'text/plain',
+      buffer: Buffer.from('namespace hmr.test\nversion "1.0.0"\n\ntype Person:\n  name string (1..1)\n')
+    });
+    const inspector = page
+      .getByRole('toolbar', { name: 'Center pane selector' })
+      .getByRole('button', { name: 'Inspector' });
+    if ((await inspector.getAttribute('aria-pressed')) !== 'true') await inspector.click();
+    const name = page.getByLabel('Data type name', { exact: true });
     await expect(async () => {
+      await page.getByRole('button', { name: 'Navigate to Person' }).click();
+      await expect(name).toHaveValue('Person', { timeout: 500 });
+    }).toPass({ timeout: 15000, intervals: [500] });
+    const token = await page.evaluate(() => {
+      const header = document.querySelector('[aria-label="Studio workspace header"]')!;
+      const token = crypto.randomUUID();
+      header.setAttribute('data-hmr-token', token);
+      return token;
+    });
+    let navigations = 0;
+    page.on('framenavigated', () => navigations++);
+    const probe = 'HMR name constraint probe';
+    const modified = original.replace(
+      /export const DataSchema = z.looseObject\(\{\s*\$type: z.literal\('Data'\),\s*name: ValidIDSchema,/,
+      (match) => match.replace('name: ValidIDSchema,', `name: z.string().min(30, '${probe}'),`)
+    );
+    expect(modified).not.toBe(original);
+    await page.evaluate(async () => {
+      const clientPath = '/@vite/client';
+      const { createHotContext } = await import(clientPath);
+      createHotContext('/inspector-hmr-observer').on('vite:afterUpdate', () => {
+        document.documentElement.setAttribute('data-schema-hmr-complete', 'true');
+      });
+    });
+    try {
+      const started = performance.now();
+      await writeFile(schemaPath, modified);
+      await expect(page.locator('html')).toHaveAttribute('data-schema-hmr-complete', 'true', { timeout: 1800 });
+      // React Refresh schedules the component update after Vite's module update.
+      await page.evaluate(
+        () => new Promise<void>((resolve) => requestAnimationFrame(() => requestAnimationFrame(() => resolve())))
+      );
+      // Touch the existing field so the Inspector's afterTouched validation is observable.
       await name.press('End');
       await name.press('X');
-      await expect(page.getByText(probe, { exact: true })).toBeVisible({ timeout: 50 });
-    }).toPass({ timeout: 1800, intervals: [50] });
-    const elapsed = performance.now() - started;
-    expect(elapsed).toBeLessThan(2000);
-    console.log(`Inspector schema HMR: ${Math.round(elapsed)}ms, no document reload`);
-    expect(await page.getByRole('banner', { name: 'Studio workspace header' }).getAttribute('data-hmr-token')).toBe(
-      token
-    );
-    expect(navigations).toBe(0);
-    await expect(page.getByText('hmr.rosetta', { exact: true }).first()).toBeVisible();
-  } finally {
-    await writeFile(schemaPath, original);
-  }
-});
+      await expect(page.getByText(probe, { exact: true })).toBeVisible({ timeout: 1800 });
+      const elapsed = performance.now() - started;
+      expect(elapsed).toBeLessThan(2000);
+      console.log(`Inspector schema HMR: ${Math.round(elapsed)}ms, no document reload`);
+      expect(await page.getByRole('banner', { name: 'Studio workspace header' }).getAttribute('data-hmr-token')).toBe(
+        token
+      );
+      expect(navigations).toBe(0);
+      await expect(page.getByText('hmr.rosetta', { exact: true }).first()).toBeVisible();
+    } finally {
+      await writeFile(schemaPath, original);
+    }
+  });
+}
