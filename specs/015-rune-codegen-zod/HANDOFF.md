@@ -84,7 +84,7 @@ All four code-emission targets work end-to-end with TDD-discipline byte-identica
 
 2. **Phase 7 / Phase 8 conflict** — both modified `packages/codegen/src/generator.ts` to add a target dispatch case. Resolved at merge time by combining both branches (now all three target arms route from one switch). See merge commit `3b385a1`.
 
-3. **SC-009 fidelity matrix** — Phase 8b's task T129 calls for a 100-case CDM-func battery. The curated CDM fixtures (`packages/curated-schema/fixtures/cdm/`) contain **zero** Rune `func` declarations, so 96/100 cases are `.todo` with a coverage-gap comment. The 4 active cases (add-two / accumulator / alias-func / recursive) cover the implementation paths (`set`/`add`/`alias`/recursion). Closing SC-009 to 100 cases is **not** Phase 9 work — it's a fixture-curation task that needs CDM funcs to be added to `packages/curated-schema/fixtures/cdm/`. Document as a follow-up if you want the bar fully met.
+3. **SC-009 fidelity matrix** — The old missing-fixtures blocker is superseded by the pinned CDM reference battery added for #561. The codegen test strictly compiles the selected closure; Studio's worker test compares 117 cases across 12 functions (116 parity cases and one documented null-safe equality difference) with unmodified Python 7.0.0 bindings. See `packages/codegen/test/fixtures/cdm-reference/coverage.json` for supported features, known reference-generator exclusions and representation rules. The `.todo` is removed. This is representative case coverage; universal CDM and native-implementation parity remain unclaimed.
 
 4. **Phase 8b oxfmt drift risk** — the agent didn't get linter/formatter feedback on the new `ts-emitter.ts` func-emission path. If a fresh `pnpm --filter @rune-langium/codegen test` shows fixture-diff failures after a `pnpm install` triggers a lint pass, the fix is the same as Phase 3's: align the emitted output with oxfmt's `arrowParens: always`, `trailingComma: none`, `singleQuote: true`, `printWidth: 100`. No fixture inputs change; only the emitter's string templates.
 
@@ -104,8 +104,7 @@ When all 138 tasks are `[X]`:
 ```bash
 pnpm -r test                                     # ≥1416 baseline + ~360 codegen
 pnpm -r run type-check                           # exit 0
-pnpm --filter @rune-langium/codegen test         # all green; .todo only on
-                                                 # SC-009 fixture-coverage gap
+pnpm --filter @rune-langium/codegen test         # includes pinned strict compilation
 time pnpm rune-codegen packages/curated-schema/fixtures/cdm/ \
      --target zod -o /tmp/cdm-out/               # < 30s
 ```

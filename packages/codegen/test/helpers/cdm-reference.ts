@@ -1,0 +1,32 @@
+// SPDX-License-Identifier: MIT
+// Copyright (c) 2026 Pradeep Mouli
+
+import { createHash } from 'node:crypto';
+import { readFileSync } from 'node:fs';
+import { resolve } from 'node:path';
+
+export interface ReferenceCase {
+  id: string;
+  function: string;
+  inputs: Record<string, unknown>;
+  features: string[];
+  expected?: unknown;
+  knownDifference?: { expectedRune: unknown; reason: string; source: string };
+  expectedError?: string;
+  absoluteTolerance?: number;
+}
+
+const directory = resolve(import.meta.dirname, '../fixtures/cdm-reference');
+export const referenceCases: ReferenceCase[] = JSON.parse(readFileSync(resolve(directory, 'cases.json'), 'utf8'));
+const manifest: { files: { name: string; sha256: string }[] } = JSON.parse(
+  readFileSync(resolve(directory, 'sources.json'), 'utf8')
+);
+
+/** Read pinned upstream slices with their recorded integrity checks. */
+export function referenceFiles() {
+  return manifest.files.map(({ name, sha256 }) => {
+    const content = readFileSync(resolve(directory, name), 'utf8');
+    if (createHash('sha256').update(content).digest('hex') !== sha256) throw new Error(`CDM fixture changed: ${name}`);
+    return { uri: `file:///cdm-reference/${name}`, content };
+  });
+}

@@ -1519,6 +1519,23 @@ export function normalizePreviewInputs(
           const kind = fieldMetadataKind(attr);
           const normalizeItem = (item: unknown) => {
             if (item == null) return undefined;
+            // A primitive/enum cannot have an object payload. Its declared metadata
+            // wrapper can therefore be retained without guessing at data shapes.
+            if (kind && typeof item === 'object' && !Array.isArray(item) && 'value' in item) {
+              const primitive = resolveTypeCallTarget(
+                attr.typeCall,
+                typeIndex,
+                {
+                  onPrimitive: () => true,
+                  onEnum: () => true,
+                  onData: () => false,
+                  onChoice: () => false,
+                  onUnresolved: () => false
+                },
+                ''
+              );
+              if (primitive) return { ...item, value: normalizeType(attr.typeCall, item.value) };
+            }
             const normalized = normalizeType(attr.typeCall, item);
             return kind ? wrappers[kind](normalized) : normalized;
           };

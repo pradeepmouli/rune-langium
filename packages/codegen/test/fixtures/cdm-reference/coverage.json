@@ -1,0 +1,59 @@
+{
+  "oracle": {
+    "distribution": "finos-cdm",
+    "version": "7.0.0",
+    "runtime": "rune-runtime==2.2.1",
+    "python": "3.13",
+    "requirements": "scripts/fixtures/cdm-reference/requirements.txt"
+  },
+  "caseCount": 117,
+  "functionCount": 12,
+  "outputCases": 114,
+  "preconditionRejections": 3,
+  "features": [
+    "arithmetic",
+    "enum",
+    "conditional",
+    "calls",
+    "alias",
+    "optional",
+    "cardinality",
+    "metadata",
+    "collection",
+    "temporal",
+    "precondition"
+  ],
+  "comparison": {
+    "absentOptionalFields": "omitted in both bindings",
+    "emptyMetadata": "empty meta objects are omitted; nonempty metadata retained",
+    "decimal": "finite integer and binary-exact fractional fixtures converted to JSON numbers; arbitrary Decimal precision is not covered",
+    "sqrtAbsoluteTolerance": 1e-12,
+    "sourceNormalization": "authoritative RuneDslParser inserts optional functional brackets before extracting CST declarations"
+  },
+  "excludedReferenceDefects": [
+    {
+      "function": "cdm.base.math.VectorScalarOperation",
+      "reason": "Published Python module omits the ArithmeticOperation import; invoking nonempty left raises NameError."
+    },
+    {
+      "function": "cdm.base.math.UpdateDatedValue",
+      "reason": "Published Python module omits the UpdateAmount import."
+    },
+    {
+      "function": "cdm.base.math.UpdateAmount",
+      "reason": "Published enum-switch branches resolve enum members as attributes; all QuantityChangeDirectionEnum values return None."
+    },
+    {
+      "function": "cdm.base.math.InsertDatedValue",
+      "reason": "Depends on the defective UpdateAmount oracle; constructing the inserted DatedValue rejects None."
+    }
+  ],
+  "limits": [
+    "This is a representative 117-case battery across 12 functions, not 100 distinct functions or universal CDM coverage.",
+    "Native RoundToNearest coverage is limited to rejection of invalid nearest inputs before native dispatch. Native result parity is not claimed.",
+    "Python oracle code is unmodified; reference defects are not monkeypatched or accepted as correct TypeScript outputs.",
+    "StringEquals-07 tests the explicit Rune null-safe result alongside the differing Python golden; it is not counted as parity."
+  ],
+  "parityCases": 116,
+  "documentedSemanticDifferences": 1
+}
