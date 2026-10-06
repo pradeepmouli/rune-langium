@@ -1066,7 +1066,7 @@ function PreviewFieldControl({
   }
 
   const value = getValueAtPath(sample?.values ?? {}, pathToSegments(field.path, arrayIndices));
-  const inputType = field.kind === 'number' ? 'number' : 'text';
+  const inputType = field.kind === 'number' ? 'number' : field.format === 'date' ? 'date' : 'text';
 
   if (field.kind === 'boolean') {
     return (

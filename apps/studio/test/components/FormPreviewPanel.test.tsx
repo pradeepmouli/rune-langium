@@ -637,6 +637,43 @@ describe('FormPreviewPanel', () => {
   });
 
   describe('controlled mode (values/onValuesChange props)', () => {
+    it('uses a date picker and preserves ISO strings when choosing or clearing a day', () => {
+      const schema: FormPreviewSchema = {
+        schemaVersion: 1,
+        targetId: 'test.Schedule',
+        title: 'Schedule',
+        status: 'ready',
+        fields: [
+          { path: 'day', label: 'Day', kind: 'string', format: 'date', required: false },
+          { path: 'timestamp', label: 'Timestamp', kind: 'string', required: false }
+        ]
+      };
+      const onValuesChange = vi.fn();
+      const view = render(
+        <FormPreviewPanel
+          schema={schema}
+          status={{ state: 'ready' }}
+          values={{ day: '2026-10-06', timestamp: '' }}
+          onValuesChange={onValuesChange}
+        />
+      );
+      const input = screen.getByLabelText('Day');
+      expect(input).toHaveAttribute('type', 'date');
+      expect(input).toHaveValue('2026-10-06');
+      expect(screen.getByLabelText('Timestamp')).toHaveAttribute('type', 'text');
+      fireEvent.change(input, { target: { value: '2026-12-31' } });
+      expect(onValuesChange).toHaveBeenLastCalledWith({ day: '2026-12-31', timestamp: '' });
+      view.rerender(
+        <FormPreviewPanel
+          schema={schema}
+          status={{ state: 'ready' }}
+          values={{ day: '2026-12-31', timestamp: '' }}
+          onValuesChange={onValuesChange}
+        />
+      );
+      fireEvent.change(screen.getByLabelText('Day'), { target: { value: '' } });
+      expect(onValuesChange).toHaveBeenLastCalledWith({ day: '', timestamp: '' });
+    });
     const recursiveSchema: FormPreviewSchema = {
       schemaVersion: 1,
       targetId: 'test.Node',
