@@ -133,3 +133,5 @@ declarations, reusing the same definitions as the bundled standard library.
 Upstream declarations and newer schema annotations are preserved; unknown names
 remain errors. Serialized annotation documents include this explicit dialect
 compatibility bridge; upstream archive bytes and their hashes remain unchanged.
+
+The CDM reference battery uses checked-in sources and Python goldens, so normal tests need no Python or downloads. [Its fixture guide](../../packages/codegen/test/fixtures/cdm-reference/README.md) documents regeneration and explicit coverage limits. Run the codegen compilation matrix and Studio worker parity test together when changing function semantics or input adapters.

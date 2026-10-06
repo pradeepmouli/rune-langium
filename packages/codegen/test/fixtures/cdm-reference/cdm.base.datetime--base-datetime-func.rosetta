@@ -1,0 +1,14 @@
+namespace cdm.base.datetime: <"Basic date and time concepts: relative date, date range, offset, business centre etc.">
+version "${project.version}"
+
+import cdm.base.staticdata.codelist.*
+
+func AppendDateToList: <"Add a date to a list of dates.">
+    inputs:
+        origDates date (0..*) <"List of dates.">
+        newDate date (1..1) <"Date to add to the list.">
+    output:
+        newList date (0..*) <"The newly increased list.">
+
+    set newList: origDates
+    add newList: newDate

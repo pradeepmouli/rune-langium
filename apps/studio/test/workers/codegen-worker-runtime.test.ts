@@ -5,32 +5,7 @@ import { existsSync, readFileSync } from 'node:fs';
 import { BASE_TYPE_FILES } from '@rune-langium/core';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
-type WorkerScope = {
-  addEventListener: ReturnType<typeof vi.fn>;
-  postMessage: ReturnType<typeof vi.fn>;
-  importScripts: () => void;
-};
-
-async function loadRealWorker() {
-  let handler: ((event: MessageEvent<unknown>) => void) | undefined;
-  const scope: WorkerScope = {
-    addEventListener: vi.fn((type: string, listener: (event: MessageEvent<unknown>) => void) => {
-      if (type === 'message') handler = listener;
-    }),
-    postMessage: vi.fn(),
-    importScripts: () => undefined
-  };
-  vi.stubGlobal('self', scope);
-  vi.resetModules();
-  await import('../../src/workers/codegen-worker.ts');
-  return {
-    scope,
-    dispatch(data: unknown) {
-      if (!handler) throw new Error('worker message handler was not registered');
-      handler({ data } as MessageEvent<unknown>);
-    }
-  };
-}
+import { loadRealWorker, type WorkerScope } from './helpers/real-codegen-worker.js';
 
 async function waitForMessage(scope: WorkerScope, type: string): Promise<void> {
   await vi.waitFor(() => {

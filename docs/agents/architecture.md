@@ -64,6 +64,8 @@ and CLI/codegen/LSP → core.
 - TypeScript declaration names and callable bindings use `packages/codegen/src/emit/callable-names.ts` across imports, type signatures, expressions, and bundled exports. Resolve calls from declaration identity; preserve original Rune names in function metadata used by Studio and carry the actual export in `GeneratedFunc.exportName` when a function collides with a type.
 - Reuse `@rune-langium/worker-core/log` (`createWorkerLogger`, `REDACT_PATHS_BASELINE`) in Cloudflare Workers. Send raw structured objects to `console.log` for field indexing. The shared logger implements redaction explicitly because `pino/browser` does not apply its `redact` option. Pages Functions and the Node container are distinct runtime surfaces.
 
+- Primitive/enum metadata function inputs accept plain form values and already wrapped generated values through the shared preview adapter. Data object shapes are not inferred as wrappers. The pinned CDM battery covers this shared execution seam.
+
 ## Deployment and Verification
 
 `pnpm run build:cloudflare` combines the landing page, docs, and Studio under

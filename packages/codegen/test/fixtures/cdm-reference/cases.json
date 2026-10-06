@@ -1,0 +1,1345 @@
+[
+  {
+    "id": "CompareNumbers-01",
+    "function": "cdm.base.math.CompareNumbers",
+    "inputs": {
+      "n1": -3,
+      "op": "Equals",
+      "n2": 2
+    },
+    "features": ["enum", "comparison"],
+    "expected": false
+  },
+  {
+    "id": "CompareNumbers-02",
+    "function": "cdm.base.math.CompareNumbers",
+    "inputs": {
+      "n1": 2,
+      "op": "Equals",
+      "n2": 2
+    },
+    "features": ["enum", "comparison"],
+    "expected": true
+  },
+  {
+    "id": "CompareNumbers-03",
+    "function": "cdm.base.math.CompareNumbers",
+    "inputs": {
+      "n1": 3,
+      "op": "Equals",
+      "n2": -1
+    },
+    "features": ["enum", "comparison"],
+    "expected": false
+  },
+  {
+    "id": "CompareNumbers-04",
+    "function": "cdm.base.math.CompareNumbers",
+    "inputs": {
+      "n1": 0,
+      "op": "Equals",
+      "n2": 0
+    },
+    "features": ["enum", "comparison"],
+    "expected": true
+  },
+  {
+    "id": "CompareNumbers-05",
+    "function": "cdm.base.math.CompareNumbers",
+    "inputs": {
+      "n1": 1.5,
+      "op": "Equals",
+      "n2": 1.25
+    },
+    "features": ["enum", "comparison"],
+    "expected": false
+  },
+  {
+    "id": "CompareNumbers-06",
+    "function": "cdm.base.math.CompareNumbers",
+    "inputs": {
+      "n1": -3,
+      "op": "GreaterThan",
+      "n2": 2
+    },
+    "features": ["enum", "comparison"],
+    "expected": false
+  },
+  {
+    "id": "CompareNumbers-07",
+    "function": "cdm.base.math.CompareNumbers",
+    "inputs": {
+      "n1": 2,
+      "op": "GreaterThan",
+      "n2": 2
+    },
+    "features": ["enum", "comparison"],
+    "expected": false
+  },
+  {
+    "id": "CompareNumbers-08",
+    "function": "cdm.base.math.CompareNumbers",
+    "inputs": {
+      "n1": 3,
+      "op": "GreaterThan",
+      "n2": -1
+    },
+    "features": ["enum", "comparison"],
+    "expected": true
+  },
+  {
+    "id": "CompareNumbers-09",
+    "function": "cdm.base.math.CompareNumbers",
+    "inputs": {
+      "n1": 0,
+      "op": "GreaterThan",
+      "n2": 0
+    },
+    "features": ["enum", "comparison"],
+    "expected": false
+  },
+  {
+    "id": "CompareNumbers-10",
+    "function": "cdm.base.math.CompareNumbers",
+    "inputs": {
+      "n1": 1.5,
+      "op": "GreaterThan",
+      "n2": 1.25
+    },
+    "features": ["enum", "comparison"],
+    "expected": true
+  },
+  {
+    "id": "CompareNumbers-11",
+    "function": "cdm.base.math.CompareNumbers",
+    "inputs": {
+      "n1": -3,
+      "op": "GreaterThanOrEquals",
+      "n2": 2
+    },
+    "features": ["enum", "comparison"],
+    "expected": false
+  },
+  {
+    "id": "CompareNumbers-12",
+    "function": "cdm.base.math.CompareNumbers",
+    "inputs": {
+      "n1": 2,
+      "op": "GreaterThanOrEquals",
+      "n2": 2
+    },
+    "features": ["enum", "comparison"],
+    "expected": true
+  },
+  {
+    "id": "CompareNumbers-13",
+    "function": "cdm.base.math.CompareNumbers",
+    "inputs": {
+      "n1": 3,
+      "op": "GreaterThanOrEquals",
+      "n2": -1
+    },
+    "features": ["enum", "comparison"],
+    "expected": true
+  },
+  {
+    "id": "CompareNumbers-14",
+    "function": "cdm.base.math.CompareNumbers",
+    "inputs": {
+      "n1": 0,
+      "op": "GreaterThanOrEquals",
+      "n2": 0
+    },
+    "features": ["enum", "comparison"],
+    "expected": true
+  },
+  {
+    "id": "CompareNumbers-15",
+    "function": "cdm.base.math.CompareNumbers",
+    "inputs": {
+      "n1": 1.5,
+      "op": "GreaterThanOrEquals",
+      "n2": 1.25
+    },
+    "features": ["enum", "comparison"],
+    "expected": true
+  },
+  {
+    "id": "CompareNumbers-16",
+    "function": "cdm.base.math.CompareNumbers",
+    "inputs": {
+      "n1": -3,
+      "op": "LessThan",
+      "n2": 2
+    },
+    "features": ["enum", "comparison"],
+    "expected": true
+  },
+  {
+    "id": "CompareNumbers-17",
+    "function": "cdm.base.math.CompareNumbers",
+    "inputs": {
+      "n1": 2,
+      "op": "LessThan",
+      "n2": 2
+    },
+    "features": ["enum", "comparison"],
+    "expected": false
+  },
+  {
+    "id": "CompareNumbers-18",
+    "function": "cdm.base.math.CompareNumbers",
+    "inputs": {
+      "n1": 3,
+      "op": "LessThan",
+      "n2": -1
+    },
+    "features": ["enum", "comparison"],
+    "expected": false
+  },
+  {
+    "id": "CompareNumbers-19",
+    "function": "cdm.base.math.CompareNumbers",
+    "inputs": {
+      "n1": 0,
+      "op": "LessThan",
+      "n2": 0
+    },
+    "features": ["enum", "comparison"],
+    "expected": false
+  },
+  {
+    "id": "CompareNumbers-20",
+    "function": "cdm.base.math.CompareNumbers",
+    "inputs": {
+      "n1": 1.5,
+      "op": "LessThan",
+      "n2": 1.25
+    },
+    "features": ["enum", "comparison"],
+    "expected": false
+  },
+  {
+    "id": "CompareNumbers-21",
+    "function": "cdm.base.math.CompareNumbers",
+    "inputs": {
+      "n1": -3,
+      "op": "LessThanOrEquals",
+      "n2": 2
+    },
+    "features": ["enum", "comparison"],
+    "expected": true
+  },
+  {
+    "id": "CompareNumbers-22",
+    "function": "cdm.base.math.CompareNumbers",
+    "inputs": {
+      "n1": 2,
+      "op": "LessThanOrEquals",
+      "n2": 2
+    },
+    "features": ["enum", "comparison"],
+    "expected": true
+  },
+  {
+    "id": "CompareNumbers-23",
+    "function": "cdm.base.math.CompareNumbers",
+    "inputs": {
+      "n1": 3,
+      "op": "LessThanOrEquals",
+      "n2": -1
+    },
+    "features": ["enum", "comparison"],
+    "expected": false
+  },
+  {
+    "id": "CompareNumbers-24",
+    "function": "cdm.base.math.CompareNumbers",
+    "inputs": {
+      "n1": 0,
+      "op": "LessThanOrEquals",
+      "n2": 0
+    },
+    "features": ["enum", "comparison"],
+    "expected": true
+  },
+  {
+    "id": "CompareNumbers-25",
+    "function": "cdm.base.math.CompareNumbers",
+    "inputs": {
+      "n1": 1.5,
+      "op": "LessThanOrEquals",
+      "n2": 1.25
+    },
+    "features": ["enum", "comparison"],
+    "expected": false
+  },
+  {
+    "id": "ArithmeticOperation-01",
+    "function": "cdm.base.math.ArithmeticOperation",
+    "inputs": {
+      "n1": 0,
+      "op": "Add",
+      "n2": 2
+    },
+    "features": ["arithmetic", "calls"],
+    "expected": 2
+  },
+  {
+    "id": "ArithmeticOperation-02",
+    "function": "cdm.base.math.ArithmeticOperation",
+    "inputs": {
+      "n1": 6,
+      "op": "Add",
+      "n2": 3
+    },
+    "features": ["arithmetic", "calls"],
+    "expected": 9
+  },
+  {
+    "id": "ArithmeticOperation-03",
+    "function": "cdm.base.math.ArithmeticOperation",
+    "inputs": {
+      "n1": -6,
+      "op": "Add",
+      "n2": 3
+    },
+    "features": ["arithmetic", "calls"],
+    "expected": -3
+  },
+  {
+    "id": "ArithmeticOperation-04",
+    "function": "cdm.base.math.ArithmeticOperation",
+    "inputs": {
+      "n1": 1.5,
+      "op": "Add",
+      "n2": 0.5
+    },
+    "features": ["arithmetic", "calls"],
+    "expected": 2
+  },
+  {
+    "id": "ArithmeticOperation-05",
+    "function": "cdm.base.math.ArithmeticOperation",
+    "inputs": {
+      "n1": 0,
+      "op": "Subtract",
+      "n2": 2
+    },
+    "features": ["arithmetic", "calls"],
+    "expected": -2
+  },
+  {
+    "id": "ArithmeticOperation-06",
+    "function": "cdm.base.math.ArithmeticOperation",
+    "inputs": {
+      "n1": 6,
+      "op": "Subtract",
+      "n2": 3
+    },
+    "features": ["arithmetic", "calls"],
+    "expected": 3
+  },
+  {
+    "id": "ArithmeticOperation-07",
+    "function": "cdm.base.math.ArithmeticOperation",
+    "inputs": {
+      "n1": -6,
+      "op": "Subtract",
+      "n2": 3
+    },
+    "features": ["arithmetic", "calls"],
+    "expected": -9
+  },
+  {
+    "id": "ArithmeticOperation-08",
+    "function": "cdm.base.math.ArithmeticOperation",
+    "inputs": {
+      "n1": 1.5,
+      "op": "Subtract",
+      "n2": 0.5
+    },
+    "features": ["arithmetic", "calls"],
+    "expected": 1
+  },
+  {
+    "id": "ArithmeticOperation-09",
+    "function": "cdm.base.math.ArithmeticOperation",
+    "inputs": {
+      "n1": 0,
+      "op": "Multiply",
+      "n2": 2
+    },
+    "features": ["arithmetic", "calls"],
+    "expected": 0
+  },
+  {
+    "id": "ArithmeticOperation-10",
+    "function": "cdm.base.math.ArithmeticOperation",
+    "inputs": {
+      "n1": 6,
+      "op": "Multiply",
+      "n2": 3
+    },
+    "features": ["arithmetic", "calls"],
+    "expected": 18
+  },
+  {
+    "id": "ArithmeticOperation-11",
+    "function": "cdm.base.math.ArithmeticOperation",
+    "inputs": {
+      "n1": -6,
+      "op": "Multiply",
+      "n2": 3
+    },
+    "features": ["arithmetic", "calls"],
+    "expected": -18
+  },
+  {
+    "id": "ArithmeticOperation-12",
+    "function": "cdm.base.math.ArithmeticOperation",
+    "inputs": {
+      "n1": 1.5,
+      "op": "Multiply",
+      "n2": 0.5
+    },
+    "features": ["arithmetic", "calls"],
+    "expected": 0.75
+  },
+  {
+    "id": "ArithmeticOperation-13",
+    "function": "cdm.base.math.ArithmeticOperation",
+    "inputs": {
+      "n1": 0,
+      "op": "Divide",
+      "n2": 2
+    },
+    "features": ["arithmetic", "calls"],
+    "expected": 0
+  },
+  {
+    "id": "ArithmeticOperation-14",
+    "function": "cdm.base.math.ArithmeticOperation",
+    "inputs": {
+      "n1": 6,
+      "op": "Divide",
+      "n2": 3
+    },
+    "features": ["arithmetic", "calls"],
+    "expected": 2
+  },
+  {
+    "id": "ArithmeticOperation-15",
+    "function": "cdm.base.math.ArithmeticOperation",
+    "inputs": {
+      "n1": -6,
+      "op": "Divide",
+      "n2": 3
+    },
+    "features": ["arithmetic", "calls"],
+    "expected": -2
+  },
+  {
+    "id": "ArithmeticOperation-16",
+    "function": "cdm.base.math.ArithmeticOperation",
+    "inputs": {
+      "n1": 1.5,
+      "op": "Divide",
+      "n2": 0.5
+    },
+    "features": ["arithmetic", "calls"],
+    "expected": 3
+  },
+  {
+    "id": "ArithmeticOperation-17",
+    "function": "cdm.base.math.ArithmeticOperation",
+    "inputs": {
+      "n1": 0,
+      "op": "Max",
+      "n2": 2
+    },
+    "features": ["arithmetic", "calls"],
+    "expected": 2
+  },
+  {
+    "id": "ArithmeticOperation-18",
+    "function": "cdm.base.math.ArithmeticOperation",
+    "inputs": {
+      "n1": 6,
+      "op": "Max",
+      "n2": 3
+    },
+    "features": ["arithmetic", "calls"],
+    "expected": 6
+  },
+  {
+    "id": "ArithmeticOperation-19",
+    "function": "cdm.base.math.ArithmeticOperation",
+    "inputs": {
+      "n1": -6,
+      "op": "Max",
+      "n2": 3
+    },
+    "features": ["arithmetic", "calls"],
+    "expected": 3
+  },
+  {
+    "id": "ArithmeticOperation-20",
+    "function": "cdm.base.math.ArithmeticOperation",
+    "inputs": {
+      "n1": 1.5,
+      "op": "Max",
+      "n2": 0.5
+    },
+    "features": ["arithmetic", "calls"],
+    "expected": 1.5
+  },
+  {
+    "id": "ArithmeticOperation-21",
+    "function": "cdm.base.math.ArithmeticOperation",
+    "inputs": {
+      "n1": 0,
+      "op": "Min",
+      "n2": 2
+    },
+    "features": ["arithmetic", "calls"],
+    "expected": 0
+  },
+  {
+    "id": "ArithmeticOperation-22",
+    "function": "cdm.base.math.ArithmeticOperation",
+    "inputs": {
+      "n1": 6,
+      "op": "Min",
+      "n2": 3
+    },
+    "features": ["arithmetic", "calls"],
+    "expected": 3
+  },
+  {
+    "id": "ArithmeticOperation-23",
+    "function": "cdm.base.math.ArithmeticOperation",
+    "inputs": {
+      "n1": -6,
+      "op": "Min",
+      "n2": 3
+    },
+    "features": ["arithmetic", "calls"],
+    "expected": -6
+  },
+  {
+    "id": "ArithmeticOperation-24",
+    "function": "cdm.base.math.ArithmeticOperation",
+    "inputs": {
+      "n1": 1.5,
+      "op": "Min",
+      "n2": 0.5
+    },
+    "features": ["arithmetic", "calls"],
+    "expected": 0.5
+  },
+  {
+    "id": "Abs-01",
+    "function": "cdm.base.math.Abs",
+    "inputs": {
+      "arg": -10
+    },
+    "features": ["conditional"],
+    "expected": 10
+  },
+  {
+    "id": "Abs-02",
+    "function": "cdm.base.math.Abs",
+    "inputs": {
+      "arg": -1
+    },
+    "features": ["conditional"],
+    "expected": 1
+  },
+  {
+    "id": "Abs-03",
+    "function": "cdm.base.math.Abs",
+    "inputs": {
+      "arg": -0.5
+    },
+    "features": ["conditional"],
+    "expected": 0.5
+  },
+  {
+    "id": "Abs-04",
+    "function": "cdm.base.math.Abs",
+    "inputs": {
+      "arg": 0
+    },
+    "features": ["conditional"],
+    "expected": 0
+  },
+  {
+    "id": "Abs-05",
+    "function": "cdm.base.math.Abs",
+    "inputs": {
+      "arg": 0.5
+    },
+    "features": ["conditional"],
+    "expected": 0.5
+  },
+  {
+    "id": "Abs-06",
+    "function": "cdm.base.math.Abs",
+    "inputs": {
+      "arg": 1
+    },
+    "features": ["conditional"],
+    "expected": 1
+  },
+  {
+    "id": "Abs-07",
+    "function": "cdm.base.math.Abs",
+    "inputs": {
+      "arg": 10
+    },
+    "features": ["conditional"],
+    "expected": 10
+  },
+  {
+    "id": "Abs-08",
+    "function": "cdm.base.math.Abs",
+    "inputs": {
+      "arg": 100
+    },
+    "features": ["conditional"],
+    "expected": 100
+  },
+  {
+    "id": "Min-01",
+    "function": "cdm.base.math.Min",
+    "inputs": {
+      "a": -2,
+      "b": 1
+    },
+    "features": ["conditional"],
+    "expected": -2
+  },
+  {
+    "id": "Min-02",
+    "function": "cdm.base.math.Min",
+    "inputs": {
+      "a": 1,
+      "b": -2
+    },
+    "features": ["conditional"],
+    "expected": -2
+  },
+  {
+    "id": "Min-03",
+    "function": "cdm.base.math.Min",
+    "inputs": {
+      "a": 0,
+      "b": 0
+    },
+    "features": ["conditional"],
+    "expected": 0
+  },
+  {
+    "id": "Min-04",
+    "function": "cdm.base.math.Min",
+    "inputs": {
+      "a": 0,
+      "b": 4
+    },
+    "features": ["conditional"],
+    "expected": 0
+  },
+  {
+    "id": "Min-05",
+    "function": "cdm.base.math.Min",
+    "inputs": {
+      "a": 4,
+      "b": 0
+    },
+    "features": ["conditional"],
+    "expected": 0
+  },
+  {
+    "id": "Min-06",
+    "function": "cdm.base.math.Min",
+    "inputs": {
+      "a": 0.25,
+      "b": 0.5
+    },
+    "features": ["conditional"],
+    "expected": 0.25
+  },
+  {
+    "id": "Max-01",
+    "function": "cdm.base.math.Max",
+    "inputs": {
+      "a": -2,
+      "b": 1
+    },
+    "features": ["conditional"],
+    "expected": 1
+  },
+  {
+    "id": "Max-02",
+    "function": "cdm.base.math.Max",
+    "inputs": {
+      "a": 1,
+      "b": -2
+    },
+    "features": ["conditional"],
+    "expected": 1
+  },
+  {
+    "id": "Max-03",
+    "function": "cdm.base.math.Max",
+    "inputs": {
+      "a": 0,
+      "b": 0
+    },
+    "features": ["conditional"],
+    "expected": 0
+  },
+  {
+    "id": "Max-04",
+    "function": "cdm.base.math.Max",
+    "inputs": {
+      "a": 0,
+      "b": 4
+    },
+    "features": ["conditional"],
+    "expected": 4
+  },
+  {
+    "id": "Max-05",
+    "function": "cdm.base.math.Max",
+    "inputs": {
+      "a": 4,
+      "b": 0
+    },
+    "features": ["conditional"],
+    "expected": 4
+  },
+  {
+    "id": "Max-06",
+    "function": "cdm.base.math.Max",
+    "inputs": {
+      "a": 0.25,
+      "b": 0.5
+    },
+    "features": ["conditional"],
+    "expected": 0.5
+  },
+  {
+    "id": "StringEquals-01",
+    "function": "cdm.base.math.StringEquals",
+    "inputs": {
+      "s1": "",
+      "s2": ""
+    },
+    "features": ["optional", "cardinality"],
+    "expected": true
+  },
+  {
+    "id": "StringEquals-02",
+    "function": "cdm.base.math.StringEquals",
+    "inputs": {
+      "s1": "a",
+      "s2": "a"
+    },
+    "features": ["optional", "cardinality"],
+    "expected": true
+  },
+  {
+    "id": "StringEquals-03",
+    "function": "cdm.base.math.StringEquals",
+    "inputs": {
+      "s1": "a",
+      "s2": "b"
+    },
+    "features": ["optional", "cardinality"],
+    "expected": false
+  },
+  {
+    "id": "StringEquals-04",
+    "function": "cdm.base.math.StringEquals",
+    "inputs": {
+      "s1": "",
+      "s2": "a"
+    },
+    "features": ["optional", "cardinality"],
+    "expected": false
+  },
+  {
+    "id": "StringEquals-05",
+    "function": "cdm.base.math.StringEquals",
+    "inputs": {
+      "s1": "Ω",
+      "s2": "Ω"
+    },
+    "features": ["optional", "cardinality"],
+    "expected": true
+  },
+  {
+    "id": "StringEquals-06",
+    "function": "cdm.base.math.StringEquals",
+    "inputs": {
+      "s1": "Ω",
+      "s2": "ω"
+    },
+    "features": ["optional", "cardinality"],
+    "expected": false
+  },
+  {
+    "id": "StringEquals-07",
+    "function": "cdm.base.math.StringEquals",
+    "inputs": {
+      "s1": null,
+      "s2": null
+    },
+    "features": ["optional", "cardinality"],
+    "knownDifference": {
+      "expectedRune": true,
+      "reason": "The pinned null-safe Java runtime treats both empty operands as equal; the published Python binding uses legacy empty-operand equality and returns false.",
+      "source": "https://github.com/finos/rune-dsl/blob/38631eab97265f90ff14d7dd89635d4a133ebd6b/rune-runtime/src/main/java/com/rosetta/model/lib/expression/ExpressionEqualityUtilNullSafe.java#L76-L80"
+    },
+    "expected": false
+  },
+  {
+    "id": "StringEquals-08",
+    "function": "cdm.base.math.StringEquals",
+    "inputs": {
+      "s1": null,
+      "s2": "a"
+    },
+    "features": ["optional", "cardinality"],
+    "expected": false
+  },
+  {
+    "id": "StringEquals-09",
+    "function": "cdm.base.math.StringEquals",
+    "inputs": {
+      "s1": "a",
+      "s2": null
+    },
+    "features": ["optional", "cardinality"],
+    "expected": false
+  },
+  {
+    "id": "AppendToVector-01",
+    "function": "cdm.base.math.AppendToVector",
+    "inputs": {
+      "vector": [],
+      "value": 0
+    },
+    "features": ["collection", "add"],
+    "expected": [0]
+  },
+  {
+    "id": "AppendToVector-02",
+    "function": "cdm.base.math.AppendToVector",
+    "inputs": {
+      "vector": [],
+      "value": 4
+    },
+    "features": ["collection", "add"],
+    "expected": [4]
+  },
+  {
+    "id": "AppendToVector-03",
+    "function": "cdm.base.math.AppendToVector",
+    "inputs": {
+      "vector": [],
+      "value": -1.5
+    },
+    "features": ["collection", "add"],
+    "expected": [-1.5]
+  },
+  {
+    "id": "AppendToVector-04",
+    "function": "cdm.base.math.AppendToVector",
+    "inputs": {
+      "vector": [1],
+      "value": 0
+    },
+    "features": ["collection", "add"],
+    "expected": [1, 0]
+  },
+  {
+    "id": "AppendToVector-05",
+    "function": "cdm.base.math.AppendToVector",
+    "inputs": {
+      "vector": [1],
+      "value": 4
+    },
+    "features": ["collection", "add"],
+    "expected": [1, 4]
+  },
+  {
+    "id": "AppendToVector-06",
+    "function": "cdm.base.math.AppendToVector",
+    "inputs": {
+      "vector": [1],
+      "value": -1.5
+    },
+    "features": ["collection", "add"],
+    "expected": [1, -1.5]
+  },
+  {
+    "id": "AppendToVector-07",
+    "function": "cdm.base.math.AppendToVector",
+    "inputs": {
+      "vector": [0, -1, 2.5],
+      "value": 0
+    },
+    "features": ["collection", "add"],
+    "expected": [0, -1, 2.5, 0]
+  },
+  {
+    "id": "AppendToVector-08",
+    "function": "cdm.base.math.AppendToVector",
+    "inputs": {
+      "vector": [0, -1, 2.5],
+      "value": 4
+    },
+    "features": ["collection", "add"],
+    "expected": [0, -1, 2.5, 4]
+  },
+  {
+    "id": "AppendToVector-09",
+    "function": "cdm.base.math.AppendToVector",
+    "inputs": {
+      "vector": [0, -1, 2.5],
+      "value": -1.5
+    },
+    "features": ["collection", "add"],
+    "expected": [0, -1, 2.5, -1.5]
+  },
+  {
+    "id": "AppendToVector-10",
+    "function": "cdm.base.math.AppendToVector",
+    "inputs": {
+      "vector": [10, 20, 30],
+      "value": 0
+    },
+    "features": ["collection", "add"],
+    "expected": [10, 20, 30, 0]
+  },
+  {
+    "id": "AppendToVector-11",
+    "function": "cdm.base.math.AppendToVector",
+    "inputs": {
+      "vector": [10, 20, 30],
+      "value": 4
+    },
+    "features": ["collection", "add"],
+    "expected": [10, 20, 30, 4]
+  },
+  {
+    "id": "AppendToVector-12",
+    "function": "cdm.base.math.AppendToVector",
+    "inputs": {
+      "vector": [10, 20, 30],
+      "value": -1.5
+    },
+    "features": ["collection", "add"],
+    "expected": [10, 20, 30, -1.5]
+  },
+  {
+    "id": "UnitEquals-01",
+    "function": "cdm.base.math.UnitEquals",
+    "inputs": {
+      "u1": {
+        "currency": "USD"
+      },
+      "u2": {
+        "currency": "USD"
+      }
+    },
+    "features": ["metadata", "calls"],
+    "expected": true
+  },
+  {
+    "id": "UnitEquals-02",
+    "function": "cdm.base.math.UnitEquals",
+    "inputs": {
+      "u1": {
+        "currency": {
+          "value": "USD",
+          "meta": {
+            "scheme": "ISO"
+          }
+        }
+      },
+      "u2": {
+        "currency": {
+          "value": "USD",
+          "meta": {
+            "scheme": "other"
+          }
+        }
+      }
+    },
+    "features": ["metadata", "calls"],
+    "expected": true
+  },
+  {
+    "id": "UnitEquals-03",
+    "function": "cdm.base.math.UnitEquals",
+    "inputs": {
+      "u1": {
+        "currency": "USD"
+      },
+      "u2": {
+        "currency": "EUR"
+      }
+    },
+    "features": ["metadata", "calls"],
+    "expected": false
+  },
+  {
+    "id": "UnitEquals-04",
+    "function": "cdm.base.math.UnitEquals",
+    "inputs": {
+      "u1": {
+        "currency": {
+          "value": "USD",
+          "meta": {
+            "scheme": "ISO"
+          }
+        }
+      },
+      "u2": {
+        "currency": {
+          "value": "EUR",
+          "meta": {
+            "scheme": "other"
+          }
+        }
+      }
+    },
+    "features": ["metadata", "calls"],
+    "expected": false
+  },
+  {
+    "id": "UnitEquals-05",
+    "function": "cdm.base.math.UnitEquals",
+    "inputs": {
+      "u1": {
+        "currency": "EUR"
+      },
+      "u2": {
+        "currency": "EUR"
+      }
+    },
+    "features": ["metadata", "calls"],
+    "expected": true
+  },
+  {
+    "id": "UnitEquals-06",
+    "function": "cdm.base.math.UnitEquals",
+    "inputs": {
+      "u1": {
+        "currency": {
+          "value": "EUR",
+          "meta": {
+            "scheme": "ISO"
+          }
+        }
+      },
+      "u2": {
+        "currency": {
+          "value": "EUR",
+          "meta": {
+            "scheme": "other"
+          }
+        }
+      }
+    },
+    "features": ["metadata", "calls"],
+    "expected": true
+  },
+  {
+    "id": "FilterQuantityByCurrency-01",
+    "function": "cdm.base.math.FilterQuantityByCurrency",
+    "inputs": {
+      "quantities": [],
+      "currency": "USD"
+    },
+    "features": ["collection", "metadata"],
+    "expected": []
+  },
+  {
+    "id": "FilterQuantityByCurrency-02",
+    "function": "cdm.base.math.FilterQuantityByCurrency",
+    "inputs": {
+      "quantities": [],
+      "currency": "EUR"
+    },
+    "features": ["collection", "metadata"],
+    "expected": []
+  },
+  {
+    "id": "FilterQuantityByCurrency-03",
+    "function": "cdm.base.math.FilterQuantityByCurrency",
+    "inputs": {
+      "quantities": [
+        {
+          "value": 10,
+          "unit": {
+            "currency": "USD"
+          }
+        }
+      ],
+      "currency": "USD"
+    },
+    "features": ["collection", "metadata"],
+    "expected": [
+      {
+        "value": 10,
+        "unit": {
+          "currency": {
+            "value": "USD"
+          }
+        }
+      }
+    ]
+  },
+  {
+    "id": "FilterQuantityByCurrency-04",
+    "function": "cdm.base.math.FilterQuantityByCurrency",
+    "inputs": {
+      "quantities": [
+        {
+          "value": 10,
+          "unit": {
+            "currency": "USD"
+          }
+        }
+      ],
+      "currency": "EUR"
+    },
+    "features": ["collection", "metadata"],
+    "expected": []
+  },
+  {
+    "id": "FilterQuantityByCurrency-05",
+    "function": "cdm.base.math.FilterQuantityByCurrency",
+    "inputs": {
+      "quantities": [
+        {
+          "value": 10,
+          "unit": {
+            "currency": "USD"
+          }
+        },
+        {
+          "value": 2,
+          "unit": {
+            "currency": "EUR"
+          }
+        }
+      ],
+      "currency": "USD"
+    },
+    "features": ["collection", "metadata"],
+    "expected": [
+      {
+        "value": 10,
+        "unit": {
+          "currency": {
+            "value": "USD"
+          }
+        }
+      }
+    ]
+  },
+  {
+    "id": "FilterQuantityByCurrency-06",
+    "function": "cdm.base.math.FilterQuantityByCurrency",
+    "inputs": {
+      "quantities": [
+        {
+          "value": 10,
+          "unit": {
+            "currency": "USD"
+          }
+        },
+        {
+          "value": 2,
+          "unit": {
+            "currency": "EUR"
+          }
+        }
+      ],
+      "currency": "EUR"
+    },
+    "features": ["collection", "metadata"],
+    "expected": [
+      {
+        "value": 2,
+        "unit": {
+          "currency": {
+            "value": "EUR"
+          }
+        }
+      }
+    ]
+  },
+  {
+    "id": "AppendDateToList-01",
+    "function": "cdm.base.datetime.AppendDateToList",
+    "inputs": {
+      "origDates": [],
+      "newDate": "2024-02-29"
+    },
+    "features": ["temporal", "collection"],
+    "expected": ["2024-02-29"]
+  },
+  {
+    "id": "AppendDateToList-02",
+    "function": "cdm.base.datetime.AppendDateToList",
+    "inputs": {
+      "origDates": [],
+      "newDate": "2026-12-31"
+    },
+    "features": ["temporal", "collection"],
+    "expected": ["2026-12-31"]
+  },
+  {
+    "id": "AppendDateToList-03",
+    "function": "cdm.base.datetime.AppendDateToList",
+    "inputs": {
+      "origDates": ["2024-02-29"],
+      "newDate": "2024-02-29"
+    },
+    "features": ["temporal", "collection"],
+    "expected": ["2024-02-29", "2024-02-29"]
+  },
+  {
+    "id": "AppendDateToList-04",
+    "function": "cdm.base.datetime.AppendDateToList",
+    "inputs": {
+      "origDates": ["2024-02-29"],
+      "newDate": "2026-12-31"
+    },
+    "features": ["temporal", "collection"],
+    "expected": ["2024-02-29", "2026-12-31"]
+  },
+  {
+    "id": "AppendDateToList-05",
+    "function": "cdm.base.datetime.AppendDateToList",
+    "inputs": {
+      "origDates": ["2024-02-29", "2026-01-01"],
+      "newDate": "2024-02-29"
+    },
+    "features": ["temporal", "collection"],
+    "expected": ["2024-02-29", "2026-01-01", "2024-02-29"]
+  },
+  {
+    "id": "AppendDateToList-06",
+    "function": "cdm.base.datetime.AppendDateToList",
+    "inputs": {
+      "origDates": ["2024-02-29", "2026-01-01"],
+      "newDate": "2026-12-31"
+    },
+    "features": ["temporal", "collection"],
+    "expected": ["2024-02-29", "2026-01-01", "2026-12-31"]
+  },
+  {
+    "id": "RoundToNearest-01",
+    "function": "cdm.base.math.RoundToNearest",
+    "inputs": {
+      "value": 10,
+      "nearest": 0,
+      "roundingMode": "Up"
+    },
+    "features": ["precondition"],
+    "expectError": true,
+    "expectedError": "PositiveNearest"
+  },
+  {
+    "id": "RoundToNearest-02",
+    "function": "cdm.base.math.RoundToNearest",
+    "inputs": {
+      "value": 10,
+      "nearest": -1,
+      "roundingMode": "Up"
+    },
+    "features": ["precondition"],
+    "expectError": true,
+    "expectedError": "PositiveNearest"
+  },
+  {
+    "id": "RoundToNearest-03",
+    "function": "cdm.base.math.RoundToNearest",
+    "inputs": {
+      "value": 10,
+      "nearest": -10,
+      "roundingMode": "Up"
+    },
+    "features": ["precondition"],
+    "expectError": true,
+    "expectedError": "PositiveNearest"
+  },
+  {
+    "id": "Sqrt-00",
+    "function": "cdm.base.math.Sqrt",
+    "inputs": {
+      "x": 1
+    },
+    "features": ["alias", "arithmetic"],
+    "absoluteTolerance": 1e-12,
+    "expected": 1
+  },
+  {
+    "id": "Sqrt-01",
+    "function": "cdm.base.math.Sqrt",
+    "inputs": {
+      "x": 4
+    },
+    "features": ["alias", "arithmetic"],
+    "absoluteTolerance": 1e-12,
+    "expected": 2
+  },
+  {
+    "id": "Sqrt-02",
+    "function": "cdm.base.math.Sqrt",
+    "inputs": {
+      "x": 9
+    },
+    "features": ["alias", "arithmetic"],
+    "absoluteTolerance": 1e-12,
+    "expected": 3
+  },
+  {
+    "id": "Sqrt-03",
+    "function": "cdm.base.math.Sqrt",
+    "inputs": {
+      "x": 16
+    },
+    "features": ["alias", "arithmetic"],
+    "absoluteTolerance": 1e-12,
+    "expected": 4
+  },
+  {
+    "id": "Sqrt-04",
+    "function": "cdm.base.math.Sqrt",
+    "inputs": {
+      "x": 25
+    },
+    "features": ["alias", "arithmetic"],
+    "absoluteTolerance": 1e-12,
+    "expected": 5
+  },
+  {
+    "id": "Sqrt-05",
+    "function": "cdm.base.math.Sqrt",
+    "inputs": {
+      "x": 100
+    },
+    "features": ["alias", "arithmetic"],
+    "absoluteTolerance": 1e-12,
+    "expected": 10
+  }
+]
