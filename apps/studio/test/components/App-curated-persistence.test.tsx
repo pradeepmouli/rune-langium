@@ -136,6 +136,22 @@ afterEach(() => {
 });
 
 describe('App curated-bundle persistence (D1 / workspace-state-pipeline)', () => {
+  it('restores curated bindings even when a workspace has no source files', async () => {
+    await saveWorkspace(
+      makeWorkspace('ws-curated-only', 'Curated only', [
+        {
+          modelId: 'cdm',
+          loadedVersion: 'latest',
+          loadedAt: new Date().toISOString(),
+          updateAvailable: false
+        }
+      ])
+    );
+    await saveWorkspaceFiles('ws-curated-only', []);
+    render(<App />);
+    await waitFor(() => expect(loadSpy).toHaveBeenCalledWith(expect.objectContaining({ id: 'cdm' })));
+    await waitFor(() => expect(document.body).toHaveAttribute('data-workspace-active', 'true'));
+  });
   it('replays persisted curated bindings on workspace restore', async () => {
     await saveWorkspace(
       makeWorkspace('ws-restore-curated', 'Restored Curated', [
