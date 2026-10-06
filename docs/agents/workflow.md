@@ -12,6 +12,10 @@ Use the pinned pnpm version and preserve overrides/patches in
 - The Cloudflare combined build rebuilds `@rune-langium/instrumentation-core` and `@rune-langium/core` before bundling Studio and Pages Functions; both consumers resolve those packages through their compiled exports.
 - For temporary Pages diagnostics, set the non-secret `INSTRUMENTATION_*` values in the build environment. The combined build writes only those values to the generated root `wrangler.toml`; rebuild and redeploy to enable or remove them. Keep secrets in Cloudflare.
 
+## Temporary Dependency Backport
+
+The `@zod-to-form/react@0.11.2` patch exports the existing `SectionRenderer` for custom layouts. Its authored upstream change and public behavior test are in [zod-to-form PR #222](https://github.com/pradeepmouli/zod-to-form/pull/222). Remove the patch and patched dependency entry once consuming a release with that export. Recheck configured Inspector sections when upgrading.
+
 ## Generated Sources
 
 Do not hand-edit generated AST, Zod, editable-domain, or conformance files.
@@ -135,3 +139,23 @@ remain errors. Serialized annotation documents include this explicit dialect
 compatibility bridge; upstream archive bytes and their hashes remain unchanged.
 
 The CDM reference battery uses checked-in sources and Python goldens, so normal tests need no Python or downloads. [Its fixture guide](../../packages/codegen/test/fixtures/cdm-reference/README.md) documents regeneration and explicit coverage limits. Run the codegen compilation matrix and Studio worker parity test together when changing function semantics or input adapters.
+
+## Dependency Merge Readiness
+
+`auto-approve-deps.yml` approves eligible trusted-bot dependency updates; it does
+not request auto-merge while its own checks are pending. `Finalize Dependency
+Updates` runs after CI/approval workflows complete and reads only the trusted
+default-branch helper. It reloads the PR, verifies the same repository and commit,
+requires approval, no changes-requested reviews, successful core CI gates and all
+reported checks to finish successfully, then uses the ordinary merge API with an
+expected SHA. Approval (`pull_request_target`) completions use the associated PR
+snapshot’s head SHA; their workflow SHA can identify the base commit. Missing
+snapshots and stale heads never fall back to that base commit. Major/security
+updates remain manual. Unknown API errors fail the
+workflow; pending checks simply wait for another completion event. The existing
+GitHub Actions version-pin job remains separate.
+
+Validate workflow changes with `node --test scripts/lib/dependency-automerge.test.mjs`
+and a workflow syntax checker. An old failed auto-approval run (such as #551) needs a fresh PR event after
+the fix lands, for example a bot refresh/rebase. Rerunning the old run preserves
+its original workflow revision. The finalizer never ignores failed checks.

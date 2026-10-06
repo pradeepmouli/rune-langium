@@ -8,7 +8,9 @@
   "exports": {
     ".": "./src/index.ts",
     "./styles.css": "./src/styles.css",
-    "./components": "./src/components.ts"
+    "./components": "./src/components.ts",
+    "./model": "./src/model.ts",
+    "./identifiers": "./src/store/node-projection.ts"
   },
   "files": [
     "dist",
@@ -66,7 +68,8 @@
     "react-dom": "19.2.8",
     "stylelint": "^17.15.0",
     "stylelint-config-standard": "^40.0.0",
-    "typescript": "^7.0.2"
+    "typescript": "^7.0.2",
+    "vite": "^8.3.0"
   },
   "engines": {
     "node": ">=22.13.0"

@@ -73,7 +73,7 @@ jobs:
         continue-on-error: true
 
       - name: Test curated publication policy and ordering
-        run: node --test scripts/lib/curated-sources.test.mjs scripts/upload-serialized-artifacts.test.mjs
+        run: node --test scripts/lib/curated-sources.test.mjs scripts/upload-serialized-artifacts.test.mjs scripts/lib/dependency-automerge.test.mjs
 
       - name: Test
         run: pnpm run test
@@ -150,6 +150,9 @@ jobs:
         # routed through the pnpm-script `--` boundary (which made
         # playwright interpret "--grep" as a test-file path).
         run: pnpm --filter @rune-langium/studio exec playwright test --grep "Studio a11y"
+
+      - name: Verify Inspector schema hot reload
+        run: pnpm --filter @rune-langium/studio run test:z2f-hmr
 
       - name: Studio memory regression check (019 Phase 2)
         # Skipped at runtime when STUDIO_MEMORY_BASELINE_BYTES is unset

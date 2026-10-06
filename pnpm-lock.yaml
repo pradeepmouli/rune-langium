@@ -18,6 +18,9 @@ overrides:
   tmp: '>=0.2.6'
   miniflare>undici: 7.29.0
 
+patchedDependencies:
+  '@zod-to-form/react@0.11.2': 400b70f7e9b773edcd54b318770090756f02706675c0c8b712193136f19c9b72
+
 importers:
 
   .:
@@ -732,7 +735,7 @@ importers:
         version: 0.11.3(jiti@2.7.0)(zod@4.6.5)
       '@zod-to-form/react':
         specifier: 0.11.2
-        version: 0.11.2(@hookform/resolvers@5.9.1(ajv-formats@2.1.1(ajv@8.20.0))(ajv@8.20.0)(react-hook-form@7.88.0(react@19.2.8))(zod@4.6.5))(jiti@2.7.0)(react-hook-form@7.88.0(react@19.2.8))(react@19.2.8)(zod@4.6.5)
+        version: 0.11.2(patch_hash=400b70f7e9b773edcd54b318770090756f02706675c0c8b712193136f19c9b72)(@hookform/resolvers@5.9.1(ajv-formats@2.1.1(ajv@8.20.0))(ajv@8.20.0)(react-hook-form@7.88.0(react@19.2.8))(zod@4.6.5))(jiti@2.7.0)(react-hook-form@7.88.0(react@19.2.8))(react@19.2.8)(zod@4.6.5)
       elkjs:
         specifier: ^0.12.0
         version: 0.12.0
@@ -794,6 +797,9 @@ importers:
       typescript:
         specifier: ^7.0.2
         version: 7.0.2
+      vite:
+        specifier: ^8.3.0
+        version: 8.3.0(@types/node@26.6.2)(esbuild@0.28.2)(jiti@2.7.0)(tsx@4.23.15)(yaml@2.9.1)
 
   packages/worker-core:
     dependencies:
@@ -9015,7 +9021,7 @@ snapshots:
     optionalDependencies:
       jiti: 2.7.0
 
-  '@zod-to-form/react@0.11.2(@hookform/resolvers@5.9.1(ajv-formats@2.1.1(ajv@8.20.0))(ajv@8.20.0)(react-hook-form@7.88.0(react@19.2.8))(zod@4.6.5))(jiti@2.7.0)(react-hook-form@7.88.0(react@19.2.8))(react@19.2.8)(zod@4.6.5)':
+  '@zod-to-form/react@0.11.2(patch_hash=400b70f7e9b773edcd54b318770090756f02706675c0c8b712193136f19c9b72)(@hookform/resolvers@5.9.1(ajv-formats@2.1.1(ajv@8.20.0))(ajv@8.20.0)(react-hook-form@7.88.0(react@19.2.8))(zod@4.6.5))(jiti@2.7.0)(react-hook-form@7.88.0(react@19.2.8))(react@19.2.8)(zod@4.6.5)':
     dependencies:
       '@hookform/resolvers': 5.9.1(ajv-formats@2.1.1(ajv@8.20.0))(ajv@8.20.0)(react-hook-form@7.88.0(react@19.2.8))(zod@4.6.5)
       '@zod-to-form/core': 0.11.3(jiti@2.7.0)(zod@4.6.5)

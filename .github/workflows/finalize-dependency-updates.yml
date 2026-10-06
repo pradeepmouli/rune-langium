@@ -1,0 +1,33 @@
+name: Finalize Dependency Updates
+
+on:
+  workflow_run:
+    workflows: [CI, Auto-approve Dependency Updates, Fixture Diff Gate (SC-007), License Header Check]
+    types: [completed]
+
+permissions:
+  contents: write
+  pull-requests: write
+  actions: read
+  checks: read
+  statuses: read
+
+concurrency:
+  group: dependency-finalize-${{ github.event.workflow_run.head_branch }}
+  cancel-in-progress: false
+
+jobs:
+  finalize:
+    runs-on: ubuntu-latest
+    if: github.event.workflow_run.event == 'pull_request' || github.event.workflow_run.event == 'pull_request_target'
+    steps:
+      # workflow_run uses the trusted default-branch commit, never the PR head.
+      - uses: actions/checkout@v7
+        with:
+          ref: ${{ github.sha }}
+          persist-credentials: false
+      - uses: actions/github-script@v9
+        with:
+          script: |
+            const { finalizeDependencyUpdate } = await import(`${process.env.GITHUB_WORKSPACE}/scripts/lib/dependency-automerge.mjs`);
+            await finalizeDependencyUpdate({ github, context, core });

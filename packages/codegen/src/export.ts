@@ -37,6 +37,7 @@ import { resolveExportSelection, type ResolvedExportSelection } from './selectio
 
 export { IMPLEMENTED_TARGETS };
 export { normalizePreviewInputs } from './preview-schema.js';
+export { expandPreviewField } from './preview-references.js';
 export {
   declarationKey,
   resolveExportSelection,

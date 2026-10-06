@@ -1,0 +1,48 @@
+diff --git a/dist/ZodForm.d.ts b/dist/ZodForm.d.ts
+index 7c2d29810d00206fd6caaf4661f586967e6eab2e..af56ce363add6fcc9304cacf9191738c4b1997f0 100644
+--- a/dist/ZodForm.d.ts
++++ b/dist/ZodForm.d.ts
+@@ -73,3 +73,4 @@ type ZodFormProps<TSchema extends ZodObject> = {
+  */
+ export declare function ZodForm<TSchema extends ZodObject>(props: ZodFormProps<TSchema>): ReactNode;
+ //# sourceMappingURL=ZodForm.d.ts.map
++export declare function SectionRenderer({ sections, componentConfig }: { sections: ReadonlyMap<string, string[]>; componentConfig?: Pick<RuntimeComponentConfig, 'componentModule'>; }): ReactNode;
+diff --git a/dist/ZodForm.js b/dist/ZodForm.js
+index 27e4400e3a70a91df7b8b765f7f7e0240168fe8a..f154b2199568fbc826df0901734160fb411383c2 100644
+--- a/dist/ZodForm.js
++++ b/dist/ZodForm.js
+@@ -99,7 +99,7 @@ export function ZodForm(props) {
+  * and reads/writes its fields via useFormContext (FormProvider).
+  * Section components are resolved by name from `componentConfig.componentModule`.
+  */
+-function SectionRenderer({ sections, componentConfig }) {
++export function SectionRenderer({ sections, componentConfig }) {
+     const elements = [];
+     const mod = componentConfig?.componentModule;
+     if (!mod && sections.size > 0 && !_warnedKeys.has('__no_module__')) {
+diff --git a/dist/index.d.ts b/dist/index.d.ts
+index bc131e473589ecc24e6470a6b86ca4ba08f15cba..f28f31f430938b50e02b274070ee9a4042a4c33b 100644
+--- a/dist/index.d.ts
++++ b/dist/index.d.ts
+@@ -34,7 +34,7 @@
+  * @packageDocumentation
+  */
+ export type { FormField, FormFieldOption, FormFieldConstraints, FormMeta, FieldConfig, WalkOptions } from '@zod-to-form/core';
+-export { ZodForm } from './ZodForm.js';
++export { ZodForm, SectionRenderer } from './ZodForm.js';
+ export type { ZodFormComponents } from './ZodForm.js';
+ export { useZodForm } from './useZodForm.js';
+ export { useExternalSync } from './useExternalSync.js';
+diff --git a/dist/index.js b/dist/index.js
+index f99caf7b42b1fbbf165f96025833aca380fdd90c..6fbe8d2b2d3f12fa7ff28a426c4d3408636285f1 100644
+--- a/dist/index.js
++++ b/dist/index.js
+@@ -34,7 +34,7 @@
+  * @packageDocumentation
+  */
+ // Runtime renderer
+-export { ZodForm } from './ZodForm.js';
++export { ZodForm, SectionRenderer } from './ZodForm.js';
+ export { useZodForm } from './useZodForm.js';
+ export { useExternalSync } from './useExternalSync.js';
+ export { ZodFormSwitch } from './ZodFormSwitch.js';

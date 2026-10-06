@@ -1,0 +1,21 @@
+{
+  "baselineCommit": "d38d863",
+  "fixture": "forms-baseline.rosetta",
+  "cases": [
+    {
+      "name": "Person",
+      "renamed": "Individual",
+      "attributes": ["name", "age"],
+      "definition": "An individual",
+      "comments": "Editor notes for Person"
+    },
+    {
+      "name": "Employee",
+      "renamed": "StaffMember",
+      "attributes": ["employeeId", "department"],
+      "definition": "A member of staff",
+      "comments": "Editor notes for Employee",
+      "parent": "Person"
+    }
+  ]
+}

@@ -22,6 +22,71 @@ describe('usePreviewStore', () => {
     usePreviewStore.getState().resetPreviewState();
   });
 
+  it('reconciles populated recursive records and arrays through their definitions after regeneration', () => {
+    const recursive: FormPreviewSchema = {
+      ...schema('test.Node'),
+      fields: [
+        { path: 'node', label: 'Node', kind: 'object', required: true, definitionId: 'test.Node', children: [] }
+      ],
+      definitions: {
+        'test.Node': {
+          fields: [
+            { path: 'value', label: 'Value', kind: 'string', required: true },
+            { path: 'child', label: 'Child', kind: 'object', required: true, definitionId: 'test.Node', children: [] },
+            {
+              path: 'siblings',
+              label: 'Siblings',
+              kind: 'array',
+              required: false,
+              children: [
+                {
+                  path: 'siblings[]',
+                  label: 'Sibling',
+                  kind: 'object',
+                  required: true,
+                  definitionId: 'test.Node',
+                  children: []
+                }
+              ]
+            }
+          ]
+        }
+      }
+    };
+    usePreviewStore.getState().receivePreviewResult(recursive);
+    usePreviewStore.getState().setSampleValues(recursive.targetId, {
+      node: {
+        value: 'root',
+        removed: 'obsolete',
+        child: { value: 'child', child: { value: 'grandchild' } },
+        siblings: [{ value: 'sibling' }]
+      }
+    });
+    usePreviewStore.getState().receivePreviewResult(recursive);
+    const values = usePreviewStore.getState().samples.get(recursive.targetId)!.values;
+    expect(values).toEqual({
+      node: {
+        value: 'root',
+        child: { value: 'child', child: { value: 'grandchild', siblings: [] }, siblings: [] },
+        siblings: [{ value: 'sibling', siblings: [] }]
+      }
+    });
+    expect(usePreviewStore.getState().samples.get(recursive.targetId)!.serialized).toContain('grandchild');
+  });
+
+  it('preserves existing deferred values when their definition is temporarily missing', () => {
+    const deferred: FormPreviewSchema = {
+      ...schema('test.Node'),
+      fields: [
+        { path: 'child', label: 'Child', kind: 'object', required: false, definitionId: 'test.Node', children: [] }
+      ]
+    };
+    usePreviewStore.getState().receivePreviewResult(deferred);
+    usePreviewStore.getState().setSampleValues(deferred.targetId, { child: { value: 'authored' } });
+    usePreviewStore.getState().receivePreviewResult(deferred);
+    expect(usePreviewStore.getState().samples.get(deferred.targetId)!.values).toEqual({ child: { value: 'authored' } });
+  });
+
   it('selects duplicate display names by fully-qualified target id', () => {
     usePreviewStore.getState().setAvailableTargets([
       { id: 'alpha.Trade', namespace: 'alpha', name: 'Trade', kind: 'data' },

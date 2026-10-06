@@ -317,8 +317,8 @@ export function ConditionSection({
   onRemove,
   onUpdate,
   onReorder,
-  showPostConditionToggle = false,
-  renderExpressionEditor
+  showPostConditionToggle: postToggle,
+  renderExpressionEditor: expressionEditor
 }: ConditionSectionProps) {
   const [showAddForm, setShowAddForm] = useState(false);
 
@@ -328,6 +328,8 @@ export function ConditionSection({
   // declarative path and read them from form state. Callbacks similarly
   // fall back to the editor-actions context. Either path is no-op safe.
   const ctx = useEditorActionsContext();
+  const showPostConditionToggle = postToggle ?? ctx?.showPostConditionToggle ?? false;
+  const renderExpressionEditor = expressionEditor ?? ctx?.renderExpressionEditor;
   const formCtx = useFormContext();
 
   const conditionsFromForm =

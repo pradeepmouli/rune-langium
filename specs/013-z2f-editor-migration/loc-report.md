@@ -122,3 +122,23 @@ find packages/visual-editor/src/components/editors -name "*.tsx" \
 returns **zero changes**. The graph-action contract is byte-identical
 between the pre-migration baseline and the final 013 head. **FR-002
 satisfied.**
+
+## Follow-up measurement — 2026-10-06 (#562)
+
+The configured-section consolidation removes 148 lines from the current editor
+folder: **7,560 → 7,412**. Counting the same recursive `.tsx` folder against
+`d38d863` still yields **5,868 → 7,412 (+26.31%)**. SC-001's 25% reduction is
+**not met and not waived**; the folder has also gained features since the
+original migration measurement. No issue closure should imply that target passed.
+
+The Inspector now resolves section placement from one shared configuration and
+the upstream section renderer. Standalone callback props remain a public API;
+removing them would break component consumers, rather than remove duplicate
+Inspector wiring. Behavior coverage includes all existing form tests and a
+pinned Data form round-trip contract using the visual baseline fixture.
+
+The browser HMR check changes a canonical schema constraint, types into the
+Inspector and checks the resulting validation message within two seconds.
+It preserves the actual header DOM node and records zero document navigations.
+This exercises the authored Inspector layout's schema behavior instead of
+expecting an arbitrary new schema property to become an editor control.

@@ -637,6 +637,105 @@ describe('FormPreviewPanel', () => {
   });
 
   describe('controlled mode (values/onValuesChange props)', () => {
+    const recursiveSchema: FormPreviewSchema = {
+      schemaVersion: 1,
+      targetId: 'test.Node',
+      title: 'Node',
+      status: 'ready',
+      fields: [
+        { path: 'root', label: 'Root', kind: 'object', required: true, definitionId: 'test.Node', children: [] }
+      ],
+      definitions: {
+        'test.Node': {
+          fields: [
+            { path: 'name', label: 'Name', kind: 'string', required: true },
+            { path: 'child', label: 'Child', kind: 'object', required: false, definitionId: 'test.Node', children: [] },
+            {
+              path: 'children',
+              label: 'Children',
+              kind: 'array',
+              required: false,
+              children: [
+                {
+                  path: 'children[]',
+                  label: 'Node',
+                  kind: 'object',
+                  required: true,
+                  definitionId: 'test.Node',
+                  children: []
+                }
+              ]
+            }
+          ]
+        }
+      }
+    };
+
+    it('adds and removes a recursive child and edits its ordinary fields', () => {
+      const onValuesChange = vi.fn();
+      const view = (values: Record<string, unknown>) => (
+        <FormPreviewPanel
+          schema={recursiveSchema}
+          status={{ state: 'ready', targetId: recursiveSchema.targetId }}
+          values={values}
+          onValuesChange={onValuesChange}
+        />
+      );
+      const { rerender } = render(view({ root: { name: 'Parent' } }));
+      expect(screen.getAllByRole('textbox')).toHaveLength(1);
+      fireEvent.click(screen.getByRole('button', { name: 'Add Child' }));
+      const values = onValuesChange.mock.lastCall![0];
+      expect(values.root.child).toEqual({ name: '', children: [] });
+      rerender(view(values));
+      expect(screen.getAllByRole('textbox')).toHaveLength(2);
+      fireEvent.change(screen.getAllByRole('textbox')[1]!, { target: { value: 'Descendant' } });
+      expect(onValuesChange.mock.lastCall![0].root.child.name).toBe('Descendant');
+      fireEvent.click(screen.getByRole('button', { name: 'Remove Child' }));
+      expect(onValuesChange.mock.lastCall![0].root.child).toBeUndefined();
+    });
+
+    it('leaves an absent required deferred object collapsed until explicitly added', () => {
+      const onValuesChange = vi.fn();
+      render(
+        <FormPreviewPanel
+          schema={recursiveSchema}
+          status={{ state: 'ready', targetId: recursiveSchema.targetId }}
+          values={{}}
+          onValuesChange={onValuesChange}
+        />
+      );
+      expect(screen.queryByRole('textbox')).not.toBeInTheDocument();
+      fireEvent.click(screen.getByRole('button', { name: 'Add Root' }));
+      expect(onValuesChange).toHaveBeenCalledWith({ root: { name: '', children: [] } });
+    });
+
+    it('renders deep existing values and recursive array items without expanding absent children', () => {
+      const onValuesChange = vi.fn();
+      const root = {
+        name: 'Level 1',
+        child: { name: 'Level 2', child: { name: 'Level 3' } },
+        children: [{ name: 'Sibling' }]
+      };
+      render(
+        <FormPreviewPanel
+          schema={recursiveSchema}
+          status={{ state: 'ready', targetId: recursiveSchema.targetId }}
+          values={{ root }}
+          onValuesChange={onValuesChange}
+        />
+      );
+      expect(screen.getAllByRole('textbox').map((input) => (input as HTMLInputElement).value)).toEqual([
+        'Level 1',
+        'Level 2',
+        'Level 3',
+        'Sibling'
+      ]);
+      fireEvent.change(screen.getAllByRole('textbox')[3]!, { target: { value: 'Edited sibling' } });
+      expect(onValuesChange.mock.lastCall![0].root.children[0].name).toBe('Edited sibling');
+      fireEvent.click(document.querySelector('[data-field-path="root.children"] button')!);
+      expect(onValuesChange.mock.lastCall![0].root.children).toEqual([{ name: 'Sibling' }, {}]);
+    });
+
     it('renders using the given values prop instead of usePreviewStore state', () => {
       render(
         <FormPreviewPanel

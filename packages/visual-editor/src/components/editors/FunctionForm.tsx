@@ -47,10 +47,8 @@ import { ErrorsSection } from '../ErrorsSection.js';
 import { Plus } from 'lucide-react';
 import { TypeReferenceField } from './TypeReferenceField.js';
 import { AttributeRow } from './AttributeRow.js';
-import { MetadataSection } from './MetadataSection.js';
-import { AnnotationSection } from './AnnotationSection.js';
-import { ConditionSection } from './ConditionSection.js';
 import { InheritedMembersSection } from './InheritedMembersSection.js';
+import { EditorSections } from '../forms/sections/EditorSections.js';
 import { EditorActionsProvider } from '../forms/sections/EditorActionsContext.js';
 import {
   getTypeRefText,
@@ -371,7 +369,13 @@ function FunctionForm({
   const isReadOnly = Boolean(readOnlyProp || nodeMeta.isReadOnly);
 
   return (
-    <EditorActionsProvider nodeId={nodeId} actions={actions as EditorFormActions} readOnly={isReadOnly}>
+    <EditorActionsProvider
+      nodeId={nodeId}
+      actions={actions}
+      readOnly={isReadOnly}
+      renderExpressionEditor={renderExpressionEditor}
+      showPostConditionToggle
+    >
       <FormProvider {...form}>
         <div data-slot="function-form" className="flex flex-col gap-4 p-4">
           {/* Header: Namespace + Name + Badge */}
@@ -667,26 +671,15 @@ function FunctionForm({
             )}
           </FieldSet>
 
-          {/* Conditions / Annotations / Metadata — declaratively invoked.
-              Section components derive their callbacks from
-              <EditorActionsProvider> via useEditorActionsContext() and
-              read field values from the surrounding <FormProvider>.
-              Per R10, bespoke editor UX features (expression-builder
-              slot inside ConditionSection) continue to be threaded
-              through the renderExpressionEditor prop — that slot is
-              owned by the studio app and is not part of the migration. */}
-          <ConditionSection
-            label="Conditions"
-            showPostConditionToggle={true}
-            renderExpressionEditor={renderExpressionEditor}
-          />
+          {/* Configured sections share form state and host actions. */}
+          <EditorSections names={['ConditionSection']} />
 
-          <AnnotationSection />
+          <EditorSections names={['AnnotationSection']} />
 
           {/* Inherited members (from super-function, if applicable) */}
           <InheritedMembersSection groups={inheritedGroups} />
 
-          <MetadataSection />
+          <EditorSections names={['MetadataSection']} />
 
           {/* Domain/graph-level errors (mirrors OtherForm's Errors section;
               Codex review, PR #494) */}
