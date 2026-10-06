@@ -63,7 +63,7 @@
     "@types/react-dom": "^19.3.0",
     "@zod-to-form/vite": "0.4.8",
     "jsdom": "^30.1.0",
-    "langium-zod": "0.12.0",
+    "langium-zod": "0.12.2",
     "react": "19.2.8",
     "react-dom": "19.2.8",
     "stylelint": "^17.15.0",
