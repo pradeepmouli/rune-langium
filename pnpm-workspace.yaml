@@ -29,8 +29,9 @@ allowBuilds:
 minimumReleaseAgeExclude:
   - langium-zod@0.12.0
   - '@zod-to-form/core@0.12.0'
-  - '@zod-to-form/react@0.12.0'
+  - '@zod-to-form/react@0.13.0'
   - '@zod-to-form/vite@0.5.0'
+  - '@zod-to-form/codegen@0.11.0'
   # PR #353: @lspeasy/client 3.1.5 pulls in @lspeasy/core 2.6.0 as a new
   # transitive resolution; both were too freshly-published for the age gate,
   # which blocked `pnpm install` (not a real breaking change in the bump).
@@ -61,7 +62,7 @@ overrides:
   langium-zod: 0.12.0
   x-to-zod: ^0.8.0
   '@zod-to-form/core': 0.12.0
-  '@zod-to-form/react': 0.12.0
+  '@zod-to-form/react': 0.13.0
   codemirror: 6.0.2
   ws: '>=8.21.0'
   # GHSA-w5hq-g745-h8pq: force transitive uuid off the deprecated/vulnerable

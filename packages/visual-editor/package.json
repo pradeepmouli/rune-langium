@@ -42,7 +42,7 @@
     "@tanstack/react-virtual": "^3.14.13",
     "@xyflow/react": "^12.11.6",
     "@zod-to-form/core": "0.12.0",
-    "@zod-to-form/react": "0.12.0",
+    "@zod-to-form/react": "0.13.0",
     "elkjs": "^0.12.0",
     "lucide-react": "^1.47.0",
     "mutative": "^1.3.0",

@@ -172,9 +172,9 @@ its original workflow revision. The finalizer never ignores failed checks.
 
 ## Unified zod-to-form Migration Verification
 
-The migration targets forthcoming core/react **0.12.0**, codegen **0.11.0**, Vite **0.5.0**, and Zod **4.6.5**. These z2f releases are unpublished at migration time. The registry lockfile intentionally retains the prior release resolutions: refresh it with `pnpm install` after publication; a frozen install is not a delivery check for this pending migration.
+The migration uses published core **0.12.0**, React **0.13.0**, codegen **0.11.0**, Vite **0.5.0**, and Zod **4.6.5**. The registry lockfile is refreshed against those npm releases. `pnpm install --frozen-lockfile`, the six Studio config tests, 182 editor/section tests, Studio/editor type checks, and explicit config-file type checks passed against the published packages on 2026-10-07. Safe L2 adoption is tracked in [issue #574](https://github.com/pradeepmouli/rune-langium/issues/574); current hand-authored EditorForms have neither L1 nor L2 enabled.
 
-Local verification used `pnpm pack` on built z2f packages with the calculated release versions. Temporarily override core/react/codegen/Vite with the matching `file:<pack-directory>/zod-to-form-<package>-<version>.tgz` files in `pnpm-workspace.yaml`, and Zod with `4.6.5`, then run `pnpm install --no-frozen-lockfile`. Snapshot and restore workspace overrides and lockfile afterward; do not commit machine-specific tarball paths.
+Pre-publication verification used `pnpm pack` on built z2f packages with the calculated release versions. Temporarily override core/react/codegen/Vite with the matching `file:<pack-directory>/zod-to-form-<package>-<version>.tgz` files in `pnpm-workspace.yaml`, and Zod with `4.6.5`, then run `pnpm install --no-frozen-lockfile`. Snapshot and restore workspace overrides and lockfile afterward; do not commit machine-specific tarball paths.
 
 Verified against those artifacts:
 
