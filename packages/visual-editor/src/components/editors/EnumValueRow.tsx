@@ -24,7 +24,8 @@
  */
 
 import { useState, useCallback } from 'react';
-import { useFormContext, Controller, useWatch } from 'react-hook-form';
+import { useFormContext, useWatch } from 'react-hook-form';
+import { EditorController as Controller } from '../forms/EditorFormProvider.js';
 import { X } from 'lucide-react';
 import { Badge } from '@rune-langium/design-system/ui/badge';
 import { Button } from '@rune-langium/design-system/ui/button';

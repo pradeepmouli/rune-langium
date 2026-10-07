@@ -32,7 +32,8 @@
  */
 
 import { useState, useCallback } from 'react';
-import { useFormContext, Controller, useFieldArray } from 'react-hook-form';
+import { useFormContext, useFieldArray } from 'react-hook-form';
+import { EditorController as Controller } from '../forms/EditorFormProvider.js';
 import { Field, FieldLabel, FieldGroup } from '@rune-langium/design-system/ui/field';
 import { Input } from '@rune-langium/design-system/ui/input';
 import { useAutoSave } from '../../hooks/useAutoSave.js';

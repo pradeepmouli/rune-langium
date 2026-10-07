@@ -36,7 +36,7 @@
 
 import { useState, useCallback } from 'react';
 import type { ReactNode } from 'react';
-import { FormProvider, useFieldArray, Controller, type Control } from 'react-hook-form';
+import { useFieldArray, type Control } from 'react-hook-form';
 import { Field, FieldError, FieldGroup, FieldLegend, FieldSet } from '@rune-langium/design-system/ui/field';
 import { Input } from '@rune-langium/design-system/ui/input';
 import { Textarea } from '@rune-langium/design-system/ui/textarea';
@@ -61,6 +61,9 @@ import { useAutoSave } from '../../hooks/useAutoSave.js';
 import { useLatestRef } from '../../hooks/useLatestRef.js';
 import { useStableKey } from '../../hooks/useStableKey.js';
 import { useZodForm, useExternalSync } from '@zod-to-form/react';
+import { EditorFormProvider as FormProvider, EditorController as Controller } from '../forms/EditorFormProvider.js';
+import { editorOptimization } from '../forms/editor-optimization.js';
+
 import { functionFormRegistry } from '../forms/rows/index.js';
 import { RosettaFunctionSchema } from '../../generated/zod-schemas.js';
 import { useExpressionAutocomplete } from '../../hooks/useExpressionAutocomplete.js';
@@ -158,6 +161,7 @@ function FunctionForm({
   // so the graph node passes through unchanged — no projection layer).
 
   const { form } = useZodForm(RosettaFunctionSchema, {
+    optimization: editorOptimization,
     defaultValues: formValuesProjection<typeof RosettaFunctionSchema>(data, nodeMeta),
     mode: 'onChange',
     formRegistry: functionFormRegistry,
@@ -376,7 +380,7 @@ function FunctionForm({
       renderExpressionEditor={renderExpressionEditor}
       showPostConditionToggle
     >
-      <FormProvider {...form}>
+      <FormProvider {...form} schema={RosettaFunctionSchema}>
         <div data-slot="function-form" className="flex flex-col gap-4 p-4">
           {/* Header: Namespace + Name + Badge */}
           <TypeHeader

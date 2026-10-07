@@ -29,7 +29,6 @@
  */
 
 import { useCallback } from 'react';
-import { FormProvider } from 'react-hook-form';
 import { FieldGroup, FieldLegend, FieldSet } from '@rune-langium/design-system/ui/field';
 import { Badge } from '@rune-langium/design-system/ui/badge';
 import { TypeHeader, INSPECTOR_FORM_HEADER_CLASS } from '../TypeHeader.js';
@@ -41,6 +40,9 @@ import { EditorActionsProvider } from '../forms/sections/EditorActionsContext.js
 import { useAutoSave } from '../../hooks/useAutoSave.js';
 import { useLatestRef } from '../../hooks/useLatestRef.js';
 import { useZodForm, useExternalSync } from '@zod-to-form/react';
+import { EditorFormProvider as FormProvider } from '../forms/EditorFormProvider.js';
+import { editorOptimization } from '../forms/editor-optimization.js';
+
 import { ChoiceSchema } from '../../generated/zod-schemas.js';
 import { formRegistry } from '../forms/rows/index.js';
 import { formValuesProjection } from './identity-projection.js';
@@ -119,6 +121,7 @@ function ChoiceForm({
   // <ChoiceOptionRow> as a custom row renderer via formRegistry.
 
   const { form } = useZodForm(ChoiceSchema, {
+    optimization: editorOptimization,
     defaultValues: formValuesProjection<typeof ChoiceSchema>(data, nodeMeta),
     mode: 'onChange',
     formRegistry,
@@ -186,7 +189,7 @@ function ChoiceForm({
   const isReadOnly = Boolean(readOnlyProp || nodeMeta.isReadOnly);
 
   return (
-    <FormProvider {...form}>
+    <FormProvider {...form} schema={ChoiceSchema}>
       <EditorActionsProvider
         nodeId={nodeId}
         actions={actions}

@@ -46,6 +46,8 @@ Studio's `apps/studio/z2f.config.ts` is the authoritative canonical `@zod-to-for
 
 Visual-editor's typed `z2f.config.ts` preserves AST hidden fields, sections, schema overrides and array reorder. Its component adapters use `value`/`onChange`; its `FieldTemplate` composes shared design-system primitives. These adapters must override raw shadcn event contracts explicitly. Do not restore removed `fieldTypes`/`formPrimitives` config keys.
 
+The five hand-authored EditorForms use the shared `editorOptimization` policy with L1 enabled and Zod compilation disabled. `EditorFormProvider` supplies cached per-field validators to `EditorController`, resolving canonical AST schemas through object/array paths. This includes identifier unions skipped by the upstream L1 walker. All bespoke RHF Controllers must use that bridge; enabling the hook flag alone drops validation. Unknown loose-object fields (such as `expressionText`) retain their existing dedicated validation. Graph-level diagnostics remain in `ErrorsSection`. The generated-form configuration remains independently unoptimized; it does not install the runtime editor bridge.
+
 ## Shared Semantics
 
 - Core normalizes bare functional expressions only at the parser lexer boundary. The bracket scanner is shared with `insertImplicitBrackets`; token offsets and columns map back to original UTF-16 source positions before CST construction. Synthetic brackets have empty images and zero-width CST ranges. CST text, diagnostics, reference locations and serialized text regions all address the original document.
