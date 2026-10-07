@@ -3,10 +3,16 @@
 Project: "Daikonic Studio Components" (`projectId` in config.json). Package shape (no Storybook).
 
 ## Build
-- From the REPO ROOT (preview discovery resolves `.design-sync/previews` against cwd):
-  1. `pnpm -F "@rune-langium/design-system..." build` (tsc → `packages/design-system/dist/`)
-  2. `.ds-sync/node_modules/.bin/tailwindcss -i .design-sync/tailwind.css -o packages/design-system/dist/ds-sync.css`
-  3. `node .ds-sync/package-build.mjs --config .design-sync/config.json --node-modules packages/design-system/node_modules --entry ./packages/design-system/dist/ui/index.js --out ./ds-bundle`
+- From the repo root, run `node .design-sync/build.mjs`. The wrapper derives the visual-editor prop contracts from current TypeScript source into ignored `.design-sync/.cache/config.json`, then invokes the staged converter. Its `buildCmd` builds design-system and compiles the Tailwind entry.
+- Do not invoke the converter with the tracked `config.json`: it intentionally contains no handwritten `dtsPropsFor`. The generated config supplies those bodies before converter discovery.
+- Validation:
+  ```bash
+  pnpm exec tsc --project .design-sync/tsconfig.json
+  node --test .design-sync/prepare-config.test.mjs
+  pnpm --filter @rune-langium/visual-editor exec vitest run --config ../../.design-sync/vitest.config.ts
+  node .ds-sync/package-validate.mjs ./ds-bundle
+  ```
+  CI checks all authored previews, source/generated contract assignability in both directions, propagation of source API changes, and Command filtering/selection. Local bundle validation additionally renders the converter output in Chromium.
 - Converter deps live in `.ds-sync/` (npm, isolated): esbuild ts-morph @types/react `@tailwindcss/cli@4.3.3` `tailwindcss@4.3.3` tw-animate-css `playwright@1.63.0`.
   `.design-sync/node_modules` → `../.ds-sync/node_modules` symlink (gitignored, recreate per clone) so `@import 'tailwindcss'` in `.design-sync/tailwind.css` resolves.
 - playwright 1.63.0 pins chromium-1243 (the locally cached build); the repo's own playwright-core 1.62.1 pins 1234.
@@ -31,7 +37,7 @@ Project: "Daikonic Studio Components" (`projectId` in config.json). Package shap
 - `AlertDescription` is a CSS grid: wrap inline text + `<code>` in a `<p>` or each inline piece becomes a row.
 - `Form` = react-hook-form `FormProvider` only (no FormField/FormItem) — compose `useForm` + `Controller` + `Field*`.
 - `ToastViewport` is `fixed bottom-0`; previews pass `className="top-0 bottom-auto"`; toasts seeded via `useToastManager().add({timeout:0})` inside `ToastProvider`.
-- cmdk `CommandInput` ignores `defaultValue` (use `value`).
+- `Command` uses Base UI Combobox: supply grouped `items` and `onItemSelect`; `CommandGroup` takes an `id` and a render-function child, and `CommandItem.value` is the entry object. Static cmdk children are incompatible.
 - Never put `${...}` inside template-literal code samples in previews (ReferenceError at capture).
 - Select stories use default `item-aligned`; `position="popper"` sets the list to `h-(--anchor-height)` (only ~1 row visible) — DS bug, unfixed, needs base-ui investigation.
 
@@ -40,7 +46,7 @@ Project: "Daikonic Studio Components" (`projectId` in config.json). Package shap
 - `SelectItem` highlight: `text-primary-foreground` → `text-accent-foreground` (dark-on-dark contrast).
 
 ## Scope follow-ups
-- Next phase (user-approved): add `@rune-langium/visual-editor` presentational pieces (KindBadge, NodeKindBadge, TypeHeader, GraphLegend, CardinalityPicker, TypeSelector, graph nodes w/ sample data) to this same project via extraEntries + VE styles.css. Studio (FSL app) components stay out; its chrome only informs conventions.
+- The same project includes KindBadge, NodeKindBadge, GraphLegend, CardinalityPicker and TypeSelector through `extraEntries` plus visual-editor styles. Model-bound editor forms stay out of this presentational bundle. They consume Langium-generated Zod schemas and z2f's shared section renderer; Studio also uses `?z2f` for compile-time option forms. Additional standalone presentational exports remain a follow-up; Studio chrome only informs conventions.
 
 ## Known render warns
 - `[RENDER_THIN]` Dialog / InteractiveDialog: 0px measured height because content portals to body with fixed positioning — screenshots verified rendering correctly (benign).
@@ -50,8 +56,8 @@ Project: "Daikonic Studio Components" (`projectId` in config.json). Package shap
 - `[DOCS_UNMAPPED]` for the 5 VE components — prompt.md synthesized from dtsPropsFor + JSDoc + previews. Expected.
 
 ## Re-sync risks
-- The first sync (2026-09-29) was built from a branch where `Command` still wrapped cmdk; master has since migrated it to base-ui `Combobox` (65bb9f09). Same export names, but re-verify `previews/Command.tsx` (and its grade) on the next sync. The `CommandItem` `data-disabled` fix made during the sync is moot on master (base-ui only sets the attribute when disabled).
-- `cfg.dtsPropsFor` for the 5 VE components duplicates their source prop interfaces — re-diff against `packages/visual-editor/src/components/**` on every sync.
+- The first sync (2026-09-29) used cmdk; the current Command preview uses the Base UI API and has filtering/selection regression tests. Re-run the preview checks before re-syncing.
+- The five visual-editor prop bodies are generated by `prepare-config.mjs` using the component call signatures. Keep `componentSrcMap` pointed at their authoritative sources. Recursive contracts fail explicitly rather than emitting a placeholder; extend the generator and its contract checks if a new component needs that shape.
 - Google Fonts URL duplicated from `apps/studio/index.html` — keep in sync.
 - `.design-sync/tailwind.css` import order duplicates `apps/studio/src/app.css`'s DS layer — if Studio adds a DS-level stylesheet, add it here too.
 - Utility classes only exist if DS src / VE components / previews / the safelist use them; arbitrary values (`w-[480px]`) only if already used. conventions.md tells the agent this — re-validate its class list against `_ds_bundle.css` on every sync.

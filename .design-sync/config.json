@@ -189,12 +189,5 @@
     "CardinalityPicker": "../visual-editor/src/components/editors/CardinalityPicker.tsx",
     "TypeSelector": "../visual-editor/src/components/editors/TypeSelector.tsx"
   },
-  "dtsPropsFor": {
-    "KindBadge": "  /** Rune type kind \u2014 drives the kind color tokens (--color-data / -choice / -enum / -func; utilities bg-data, text-choice, \u2026). */\n  kind: \"data\" | \"choice\" | \"enum\" | \"func\" | \"record\" | \"typeAlias\" | \"basicType\" | \"annotation\";\n  /** 'label' = text pill (graph/inspector); 'glyph' = compact letter box (tree). */\n  shape?: \"label\" | \"glyph\";\n  className?: string;",
-    "NodeKindBadge": "  kind: \"data\" | \"choice\" | \"enum\" | \"func\" | \"record\" | \"typeAlias\" | \"basicType\" | \"annotation\";\n  className?: string;",
-    "GraphLegend": "  /** No props \u2014 renders the data/choice/enum/func swatches plus edge-style key. */",
-    "CardinalityPicker": "  /** Current cardinality value, e.g. \"(0..*)\". */\n  value: string;\n  onChange: (cardinality: string) => void;\n  disabled?: boolean;\n  /** 'default' compact mono box; 'chip' structure-view cell; 'pill' inspector field. */\n  variant?: \"default\" | \"chip\" | \"pill\";\n  wrapperClassName?: string;\n  triggerClassName?: string;\n  contentClassName?: string;\n  inputClassName?: string;",
-    "TypeSelector": "  /** Selected type value (node id or built-in type name). */\n  value: string | null;\n  /** Options grouped by namespace in the popover. */\n  options?: Array<{ value: string; label: string; kind: \"data\" | \"choice\" | \"enum\" | \"func\" | \"record\" | \"typeAlias\" | \"basicType\" | \"annotation\" | \"builtin\"; namespace?: string }>;\n  placeholder?: string;\n  onSelect: (value: string | null) => void;\n  disabled?: boolean;\n  allowClear?: boolean;\n  filterKinds?: Array<\"data\" | \"choice\" | \"enum\" | \"func\" | \"record\" | \"typeAlias\" | \"basicType\" | \"annotation\" | \"builtin\">;\n  triggerClassName?: string;\n  renderTrigger?: (props: unknown) => React.ReactNode;\n  renderPopover?: (props: unknown) => React.ReactNode;"
-  },
   "readmeHeader": ".design-sync/conventions.md"
 }

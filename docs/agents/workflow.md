@@ -57,6 +57,8 @@ SQL node types derive from the exactly pinned `@l1xnan/tree-sitter-sql` grammar.
 
 - `.design-sync/` holds the inputs for syncing `@rune-langium/design-system` (plus visual-editor presentational pieces) to the claude.ai/design project "Daikonic Studio Components" via the `/design-sync` skill: `config.json`, authored `previews/<Name>.tsx` (story source: the prod-ux journeys), the `conventions.md` header the design agent reads, and the Tailwind entry compiled by `build-css.mjs`.
 - Read `.design-sync/NOTES.md` before re-syncing — it records the build steps, composition gotchas, and re-sync risks. Staged converter scripts (`.ds-sync/`), build output (`ds-bundle/`), and grades (`.design-sync/.cache/`) are ignored.
+- Build from the repo root with `node .design-sync/build.mjs` after staging the converter. The wrapper derives visual-editor prop declarations from TypeScript component signatures into ignored `.design-sync/.cache/config.json` before invoking the converter. Do not maintain handwritten `dtsPropsFor` in the tracked configuration.
+- CI type-checks every authored preview and checks generated/source prop assignability plus Command filtering and selection. The commands in `.design-sync/NOTES.md` also cover local bundle rendering.
 - When a design-system component's API, class vocabulary, or tokens change, re-sync so the design agent's `.d.ts`, previews, and conventions stay true.
 
 ## Shared Agent Configuration

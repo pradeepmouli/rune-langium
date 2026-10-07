@@ -65,6 +65,12 @@ jobs:
       - name: Type check
         run: pnpm run type-check
 
+      - name: Validate design-sync previews and generated contracts
+        run: |
+          pnpm exec tsc --project .design-sync/tsconfig.json
+          node --test .design-sync/prepare-config.test.mjs
+          pnpm --filter @rune-langium/visual-editor exec vitest run --config ../../.design-sync/vitest.config.ts
+
       - name: Lint
         run: pnpm run lint
 
