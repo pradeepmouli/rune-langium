@@ -78,7 +78,7 @@ overrides:
   # Scoped to miniflare's own dependency, NOT a blanket `undici: '>=7.29.0'` override:
   # an unbounded override unifies every undici consumer (including jsdom/vitest, which
   # independently needs 8.x) onto one globally-resolved version, silently major-bumping
-  # undici to 8.10.1 under miniflare too — which requires Node >=22.19.0, above this
-  # workspace's own >=22.13.0 floor (caught via PR #504 Copilot review). Purely
+  # undici to 8.10.1 under miniflare too — which required Node >=22.19.0, above the
+  # then-supported workspace >=22.13.0 floor (caught via PR #504 Copilot review). Purely
   # transitive (no first-party imports).
   'miniflare>undici': '7.29.0'
