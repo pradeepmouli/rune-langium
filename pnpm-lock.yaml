@@ -22,6 +22,9 @@ overrides:
 
 packageExtensionsChecksum: sha256-tPitCNUFutwUwyNLYfr/kXx7HP/Rj2KZog+7pbgM8ws=
 
+patchedDependencies:
+  braces@3.0.3: 34eb31fe97613665c68c7d975f52a39cfe1a8be6064d9d12687b19ab626b4564
+
 importers:
 
   .:
@@ -9275,7 +9278,7 @@ snapshots:
     dependencies:
       balanced-match: 4.0.4
 
-  braces@3.0.3:
+  braces@3.0.3(patch_hash=34eb31fe97613665c68c7d975f52a39cfe1a8be6064d9d12687b19ab626b4564):
     dependencies:
       fill-range: 7.1.1
 
@@ -10802,7 +10805,7 @@ snapshots:
 
   micromatch@4.0.8:
     dependencies:
-      braces: 3.0.3
+      braces: 3.0.3(patch_hash=34eb31fe97613665c68c7d975f52a39cfe1a8be6064d9d12687b19ab626b4564)
       picomatch: 2.3.2
 
   mime-db@1.54.0: {}
