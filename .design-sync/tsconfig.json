@@ -1,0 +1,19 @@
+{
+  "extends": "../tsconfig.json",
+  "compilerOptions": {
+    "module": "ESNext",
+    "moduleResolution": "Bundler",
+    "jsx": "react-jsx",
+    "composite": false,
+    "incremental": false,
+    "noEmit": true,
+    "paths": {
+      "@rune-langium/design-system": ["./preview-entry.ts"],
+      "@/*": ["../packages/visual-editor/src/*"],
+      "react": ["../apps/studio/node_modules/@types/react/index.d.ts"],
+      "react/*": ["../apps/studio/node_modules/@types/react/*"],
+      "*": ["../apps/studio/node_modules/*", "../apps/studio/node_modules/@types/*"]
+    }
+  },
+  "include": ["previews/*.tsx", "preview-entry.ts"]
+}
