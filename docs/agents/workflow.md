@@ -169,3 +169,19 @@ Validate workflow changes with `node --test scripts/lib/dependency-automerge.tes
 and a workflow syntax checker. An old failed auto-approval run (such as #551) needs a fresh PR event after
 the fix lands, for example a bot refresh/rebase. Rerunning the old run preserves
 its original workflow revision. The finalizer never ignores failed checks.
+
+## Unified zod-to-form Migration Verification
+
+The migration targets forthcoming core/react **0.12.0**, codegen **0.11.0**, Vite **0.5.0**, and Zod **4.6.5**. These z2f releases are unpublished at migration time. The registry lockfile intentionally retains the prior release resolutions: refresh it with `pnpm install` after publication; a frozen install is not a delivery check for this pending migration.
+
+Local verification used `pnpm pack` on built z2f packages with the calculated release versions. Temporarily override core/react/codegen/Vite with the matching `file:<pack-directory>/zod-to-form-<package>-<version>.tgz` files in `pnpm-workspace.yaml`, and Zod with `4.6.5`, then run `pnpm install --no-frozen-lockfile`. Snapshot and restore workspace overrides and lockfile afterward; do not commit machine-specific tarball paths.
+
+Verified against those artifacts:
+
+- `pnpm --filter @rune-langium/studio exec vitest run test/codegen-forms/z2f-config.test.ts`: 6 tests, including real Excel defaults/rejection parity with compilation off/on.
+- `pnpm --filter @rune-langium/visual-editor exec vitest run test/sections test/editors`: 182 tests.
+- Studio and visual-editor `type-check`, after building core/design-system/codegen/legacy/LSP dependencies.
+- Explicit bundler-resolution TypeScript checks of both config files, which normal package tsconfigs omit.
+- Studio Vite production bundles with compile off/on. Its existing zero-delay forced-exit plugin interrupts Vite's success reporter (prints failure despite exit 0); a temporary verification config delayed that exit to 250 ms. Both verification builds reported success and exited 0. The production plugin was left unchanged; treat that normal-build reporting issue separately.
+
+No generated Rune source was edited or published. Compilation remains disabled in the committed configs; the off/on benchmark results favor opt-in for repeated whole-schema validation.

@@ -58,7 +58,7 @@ export { AnnotationSection, ConditionSection, MetadataSection } from './forms/se
 export const Input = DesignInput;
 export const Textarea = DesignTextarea;
 
-// Re-export field primitives (used by formPrimitives config)
+// Re-export field primitives for the shared field template.
 export {
   Field,
   FieldContent,
@@ -128,3 +128,5 @@ export function TypeSelector({ value, onChange, ..._rest }: ControlledProps) {
 export function CardinalitySelector({ value, onChange, ..._rest }: ControlledProps) {
   return <CardinalityPicker value={(value as string) ?? ''} onChange={onChange as (v: unknown) => void} />;
 }
+
+export { FieldTemplate } from './zod-field-template.js';

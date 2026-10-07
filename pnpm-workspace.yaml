@@ -28,9 +28,9 @@ allowBuilds:
 
 minimumReleaseAgeExclude:
   - langium-zod@0.12.0
-  - '@zod-to-form/core@0.11.4'
+  - '@zod-to-form/core@0.12.0'
   - '@zod-to-form/react@0.12.0'
-  - '@zod-to-form/vite@0.4.8'
+  - '@zod-to-form/vite@0.5.0'
   # PR #353: @lspeasy/client 3.1.5 pulls in @lspeasy/core 2.6.0 as a new
   # transitive resolution; both were too freshly-published for the age gate,
   # which blocked `pnpm install` (not a real breaking change in the bump).
@@ -41,6 +41,8 @@ minimumReleaseAgeExclude:
 # `pnpm` field, which they ignore). Migrated from package.json so the
 # lockfile's overrides match the running config under pnpm@11.x.
 overrides:
+  zod: 4.6.5
+  '@zod-to-form/vite': 0.5.0
   # Exact-pinned (not a caret range) like langium-zod/@zod-to-form below:
   # codegen's sql-node-types.ts is GENERATED from this exact version's
   # shipped src/node-types.json (spec 021 Phase 2c Addendum 2) — a silent
@@ -58,7 +60,7 @@ overrides:
   react-dom: 19.2.8
   langium-zod: 0.12.0
   x-to-zod: ^0.8.0
-  '@zod-to-form/core': 0.11.4
+  '@zod-to-form/core': 0.12.0
   '@zod-to-form/react': 0.12.0
   codemirror: 6.0.2
   ws: '>=8.21.0'
