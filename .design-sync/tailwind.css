@@ -3,7 +3,7 @@
 
 /* design-sync Tailwind entry — compiled into packages/design-system/dist/ds-sync.css
  * (cfg.cssEntry). Mirrors the Studio app.css import order for the design-system
- * layer: tailwind -> tw-animate -> design-system theme -> authoritative Studio palette. */
+ * layer, with the authoritative Studio palette applied after component defaults. */
 /* Brand fonts — same Google Fonts request as apps/studio/index.html:9 (keep in sync). */
 @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600&family=JetBrains+Mono:wght@400;500;600&family=Outfit:wght@300;400;500;600;700&display=swap');
 /* source(none): Tailwind's CLI otherwise auto-scans the whole repo (cwd) and ships
@@ -11,9 +11,9 @@
 @import 'tailwindcss' source(none);
 @import 'tw-animate-css';
 @import '../packages/design-system/src/theme.css';
-@import '../apps/studio/src/styles/daikonic.css';
 @import '../packages/design-system/src/dock-theme.css';
 @import '../packages/visual-editor/src/styles.css';
+@import '../apps/studio/src/styles/daikonic.css';
 
 @source '../packages/design-system/src';
 @source '../packages/visual-editor/src/components';

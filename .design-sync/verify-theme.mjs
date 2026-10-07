@@ -16,7 +16,15 @@ try {
   });
   await page.locator('[data-slot="command-group"]').first().waitFor();
   assert.equal(await page.locator('html').getAttribute('data-theme'), 'daikonic');
-  const keys = ['--primary', '--secondary', '--color-data', '--color-choice', '--color-enum', '--color-func'];
+  const keys = [
+    '--primary',
+    '--secondary',
+    '--color-data',
+    '--color-choice',
+    '--color-enum',
+    '--color-func',
+    '--color-error'
+  ];
   const colors = () =>
     page.evaluate(
       (keys) =>
@@ -33,7 +41,7 @@ try {
   const actual = await colors();
   await page.addStyleTag({ content: readFileSync(`${root}/apps/studio/src/styles/daikonic.css`, 'utf8') });
   assert.deepEqual(actual, await colors());
-  console.log('All six palette colors in the generated preview match the authoritative Studio overlay');
+  console.log('All seven palette colors in the generated preview match the authoritative Studio overlay');
   await page.locator('input').first().fill('typescript');
   await page.getByRole('option', { name: /Generate TypeScript/ }).click();
   assert.equal(

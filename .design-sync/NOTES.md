@@ -13,14 +13,14 @@ Project: "Daikonic Studio Components" (`projectId` in config.json). Package shap
   node .ds-sync/package-validate.mjs ./ds-bundle
   node .design-sync/verify-theme.mjs
   ```
-  CI checks all authored previews, source/generated contract assignability in both directions, propagation of source API changes, and Command filtering/selection. Local bundle validation additionally renders the converter output in Chromium. `verify-theme.mjs` checks the active selector and compares six computed colors against the authoritative Studio stylesheet, then exercises Command filtering and selection.
+  CI checks all authored previews, source/generated contract assignability in both directions, propagation of source API changes, and Command filtering/selection. Local bundle validation additionally renders the converter output in Chromium. `verify-theme.mjs` checks the active selector and compares seven computed colors (including the error accent) against the authoritative Studio stylesheet, then exercises Command filtering and selection.
 - Converter deps live in `.ds-sync/` (npm, isolated): esbuild ts-morph @types/react `@tailwindcss/cli@4.3.3` `tailwindcss@4.3.3` tw-animate-css `playwright@1.63.0`.
   `.design-sync/node_modules` → `../.ds-sync/node_modules` symlink (gitignored, recreate per clone) so `@import 'tailwindcss'` in `.design-sync/tailwind.css` resolves.
 - playwright 1.63.0 pins chromium-1243 (the locally cached build); the repo's own playwright-core 1.62.1 pins 1234.
 - Package needed `"types": "./dist/ui/index.d.ts"` (converter reads `types` to find the .d.ts barrel; `exports` still wins for TS so workspace resolution is unchanged) and the `ui/index` barrel was missing number-chiclet + row-glyph.
 
 ## Styling
-- Components are Tailwind v4 utility-class styled; the DS ships only source CSS (`theme.css` with `@theme inline`). `.design-sync/tailwind.css` mirrors `apps/studio/src/app.css`'s DS layer (tailwind → tw-animate-css → theme.css → Studio daikonic.css → dock-theme.css) and `@source`s the DS src + `.design-sync/previews` → compiled `dist/ds-sync.css` = `cfg.cssEntry` (must live inside the package dir).
+- Components are Tailwind v4 utility-class styled; the DS ships only source CSS (`theme.css` with `@theme inline`). `.design-sync/tailwind.css` uses Studio’s shared theme layers (tailwind → tw-animate-css → theme.css → dock-theme.css → visual-editor defaults → Studio daikonic.css) and `@source`s the DS src + `.design-sync/previews` → compiled `dist/ds-sync.css` = `cfg.cssEntry` (must live inside the package dir).
 - `@import 'tailwindcss' source(none)` — the CLI otherwise auto-scans the whole repo (cwd) and ships Studio/docs-only classes (was the source of stray `bg-[var(--color-brand-500)]`, `bg-gray-500`, …).
 - `@source inline(...)` safelist guarantees the design-agent vocabulary documented in `conventions.md` (layout/spacing/sizing/semantic-token colors). Keep the two in sync; the safelist color matrix is deliberately trimmed (full opacity×state cross product = +490KB).
 - The palette overlay is imported from Studio's source-available `apps/studio/src/styles/daikonic.css`; retain its FSL-1.1-ALv2 attribution. Components remain the design-system/visual-editor presentational exports. Set `data-theme="daikonic"` on `<html>` alongside `dark`, including when consuming the generated bundle.
