@@ -17,34 +17,34 @@ import type { CommandEntryGroup } from '@rune-langium/design-system';
 import { Box, FileCode, GitBranch, Settings } from 'lucide-react';
 import type { LucideIcon } from 'lucide-react';
 
-interface PaletteValue {
-  label: string;
-  icon: LucideIcon;
-  namespace?: string;
-  shortcut?: string;
-}
-
-const paletteGroups: CommandEntryGroup<PaletteValue>[] = [
-  {
-    id: 'types',
-    items: [
-      { label: 'Party', icon: Box, namespace: 'cdm.base.staticdata.party' },
-      { label: 'PartyRole', icon: Box, namespace: 'cdm.base.staticdata.party' },
-      { label: 'PartyIdentifier', icon: Box, namespace: 'cdm.base.staticdata.identifier' }
-    ].map((value) => ({ value, label: value.label, searchText: `${value.label} ${value.namespace}` }))
-  },
-  {
-    id: 'commands',
-    items: [
-      { label: 'Generate TypeScript', icon: FileCode, shortcut: 'Cmd+G' },
-      { label: 'Sync with GitHub', icon: GitBranch },
-      { label: 'Open settings', icon: Settings, shortcut: 'Cmd+,' }
-    ].map((value) => ({ value, label: value.label }))
-  }
-];
-
 // J05 inspector: command palette, jump to a type or run an action.
-export function Palette() {
+export const Palette = () => {
+  interface PaletteValue {
+    label: string;
+    icon: LucideIcon;
+    namespace?: string;
+    shortcut?: string;
+  }
+
+  const paletteGroups: CommandEntryGroup<PaletteValue>[] = [
+    {
+      id: 'types',
+      items: [
+        { label: 'Party', icon: Box, namespace: 'cdm.base.staticdata.party' },
+        { label: 'PartyRole', icon: Box, namespace: 'cdm.base.staticdata.party' },
+        { label: 'PartyIdentifier', icon: Box, namespace: 'cdm.base.staticdata.identifier' }
+      ].map((value) => ({ value, label: value.label, searchText: `${value.label} ${value.namespace}` }))
+    },
+    {
+      id: 'commands',
+      items: [
+        { label: 'Generate TypeScript', icon: FileCode, shortcut: 'Cmd+G' },
+        { label: 'Sync with GitHub', icon: GitBranch },
+        { label: 'Open settings', icon: Settings, shortcut: 'Cmd+,' }
+      ].map((value) => ({ value, label: value.label }))
+    }
+  ];
+
   const [selected, setSelected] = useState<string | null>(null);
   return (
     <div className="w-[520px] p-6">
@@ -86,15 +86,14 @@ export function Palette() {
       </p>
     </div>
   );
-}
-
-const typeGroups: CommandEntryGroup<string>[] = [
-  { id: 'builtin', items: ['string', 'int', 'date'].map((value) => ({ value, label: value })) },
-  { id: 'datetime', items: ['BusinessCenters', 'Period'].map((value) => ({ value, label: value })) }
-];
-
+};
 // J18 type closure: type picker for a field's type reference.
-export function TypePicker() {
+export const TypePicker = () => {
+  const typeGroups: CommandEntryGroup<string>[] = [
+    { id: 'builtin', items: ['string', 'int', 'date'].map((value) => ({ value, label: value })) },
+    { id: 'datetime', items: ['BusinessCenters', 'Period'].map((value) => ({ value, label: value })) }
+  ];
+
   const [selected, setSelected] = useState<string | null>(null);
   return (
     <div className="w-[360px] p-6">
@@ -122,4 +121,4 @@ export function TypePicker() {
       </p>
     </div>
   );
-}
+};
