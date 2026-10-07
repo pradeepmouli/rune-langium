@@ -1,8 +1,10 @@
 # Daikonic (Rune Studio) — build conventions
 
-**Setup.** Load `styles.css` and `_ds_bundle.js`; components live on `window.DaikonicDS`. Put `class="dark"` on `<html>` — Studio hardcodes it, `dark:` variants key off it, and dialogs/menus/toasts portal to `<body>`, so a wrapper `div` is not enough. The base layer already paints `body` with `bg-background text-foreground` in Inter (fonts load via `styles.css`). There is no provider component to wrap.
+**Setup.** Load `styles.css` and `_ds_bundle.js`; components live on `window.DaikonicDS`. Put `class="dark" data-theme="daikonic"` on `<html>` — Studio uses both, `dark:` variants and the Daikonic palette key off them, and dialogs/menus/toasts portal to `<body>`, so a wrapper `div` is not enough. The base layer already paints `body` with `bg-background text-foreground` in Inter (fonts load via `styles.css`). There is no provider component to wrap.
 
 **Palette.** Dark Daikonic is the only shipped palette (midnight-green surfaces, sandy-brown `primary`, keppel-teal `secondary`, vermilion `destructive`). A light theme is planned but not built — never invent one, and never write raw hex/oklch: use the semantic tokens below so a future palette re-skins everything.
+
+**Source attribution.** The component exports are MIT. The included Studio palette overlay (`apps/studio/src/styles/daikonic.css`) is source-available under FSL-1.1-ALv2, copyright (c) 2026 Pradeep Mouli.
 
 **Styling idiom: Tailwind v4 utilities over semantic tokens.** Only classes compiled into `_ds_bundle.css` exist — stick to these families:
 

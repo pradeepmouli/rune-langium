@@ -3,7 +3,7 @@
 
 /* design-sync Tailwind entry — compiled into packages/design-system/dist/ds-sync.css
  * (cfg.cssEntry). Mirrors the Studio app.css import order for the design-system
- * layer only: tailwind -> tw-animate -> design-system theme (tokens + @theme bridge). */
+ * layer: tailwind -> tw-animate -> design-system theme -> authoritative Studio palette. */
 /* Brand fonts — same Google Fonts request as apps/studio/index.html:9 (keep in sync). */
 @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600&family=JetBrains+Mono:wght@400;500;600&family=Outfit:wght@300;400;500;600;700&display=swap');
 /* source(none): Tailwind's CLI otherwise auto-scans the whole repo (cwd) and ships
@@ -11,6 +11,7 @@
 @import 'tailwindcss' source(none);
 @import 'tw-animate-css';
 @import '../packages/design-system/src/theme.css';
+@import '../apps/studio/src/styles/daikonic.css';
 @import '../packages/design-system/src/dock-theme.css';
 @import '../packages/visual-editor/src/styles.css';
 
@@ -36,4 +37,3 @@
 @source inline("{relative,absolute,fixed,sticky,inset-0,top-0,right-0,bottom-0,left-0,z-10,z-20,z-50,overflow-hidden,overflow-auto,overflow-x-auto,overflow-y-auto,truncate,whitespace-nowrap,break-words}");
 @source inline("text-{3xs,2xs,xs,sm,base,lg,xl,2xl,3xl,4xl} font-{sans,mono,display,light,normal,medium,semibold,bold} {uppercase,capitalize,tabular-nums,italic,underline,leading-none,leading-tight,leading-snug,leading-normal,leading-relaxed,tracking-tight,tracking-wide,text-left,text-center,text-right}");
 @source inline("{rounded,rounded-sm,rounded-md,rounded-lg,rounded-xl,rounded-full,border,border-0,border-2,border-t,border-b,border-l,border-r,border-dashed,divide-y,divide-x,divide-border,shadow-xs,shadow-sm,shadow-md,shadow-lg,ring-1,ring-2,opacity-50,opacity-70,backdrop-blur-sm}");
-
