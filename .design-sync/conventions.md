@@ -11,7 +11,7 @@
 | Surfaces | `bg-background` (app), `bg-card` (panels), `bg-popover`, `bg-muted`, `bg-accent` (hover/selected), `bg-sidebar`; opacity steps `/10 /20 /50 /80` |
 | Text | `text-foreground`, `text-muted-foreground`, `text-primary`, `text-destructive`, `text-accent-foreground` |
 | Lines | `border border-border`, `border-input`, `divide-y divide-border` |
-| Rune kinds | `bg-data text-data` · `bg-choice` · `bg-enum` · `bg-func` (teal / sandy / violet / blue) |
+| Rune kinds | Use `KindBadge` with its `kind` prop; it owns kind colors and readable background/foreground combinations. |
 | Type | `font-sans` (default), `font-mono` (identifiers, namespaces, code), `font-display` (brand only); `text-3xs … text-4xl`; `font-medium/semibold` |
 | Layout | `flex`, `grid grid-cols-{1..12}`, `gap-*`/`p-*`/`m-*` on the 0–24 scale, `w-/h-` scale + fractions, `max-w-{sm..7xl}`, `rounded-{sm,md,lg,xl}`, `shadow-{xs,sm,md}` |
 | Chrome | `studio-card` (12px radius + hairline + shadow elevated surface) |

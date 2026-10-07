@@ -32,7 +32,10 @@ function printType(type, at, active = new Set()) {
   if (type.isUnion())
     return type
       .getUnionTypes()
-      .map((t) => `(${printType(t, at, next)})`)
+      .map((t) => {
+        const text = printType(t, at, next);
+        return t.getCallSignatures().length === 1 ? `(${text})` : text;
+      })
       .join(' | ');
   if (type.isArray()) return `Array<${printType(type.getArrayElementTypeOrThrow(), at, next)}>`;
   const signatures = type.getCallSignatures();
@@ -58,7 +61,9 @@ function printProperties(type, at, active = new Set()) {
       const docs = (declaration.getJsDocs?.() ?? []).map((doc) => doc.getCommentText() ?? '').join(' ');
       const comment = docs ? `  /** ${docs.replaceAll('*/', '* /')} */\n` : '';
       const readonly = declaration.hasModifier?.(ts.SyntaxKind.ReadonlyKeyword) ? 'readonly ' : '';
-      return `${comment}  ${readonly}${JSON.stringify(property.getName())}${property.isOptional() ? '?' : ''}: ${printType(property.getTypeAtLocation(declaration), declaration, active)};`;
+      const name = property.getName();
+      const key = ts.isIdentifierText(name, ts.ScriptTarget.Latest) ? name : JSON.stringify(name);
+      return `${comment}  ${readonly}${key}${property.isOptional() ? '?' : ''}: ${printType(property.getTypeAtLocation(declaration), declaration, active)};`;
     })
     .join('\n');
 }

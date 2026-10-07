@@ -45,6 +45,6 @@ test('source API changes flow into the next converter config without copied decl
   );
   component.getInterfaceOrThrow('TypeSelectorTriggerProps').addProperty({ name: 'designSyncProbe', type: 'string' });
   const generated = prepareConfig(config, project);
-  assert.match(generated.dtsPropsFor.TypeSelector, /"designSyncProbe": string/);
+  assert.match(generated.dtsPropsFor.TypeSelector, /designSyncProbe: string/);
   assert.doesNotMatch(generated.dtsPropsFor.TypeSelector, /props: unknown/);
 });

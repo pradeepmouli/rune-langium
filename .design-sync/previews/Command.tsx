@@ -10,7 +10,6 @@ import {
   CommandInput,
   CommandItem,
   CommandList,
-  CommandSeparator,
   Kbd
 } from '@rune-langium/design-system';
 import type { CommandEntryGroup } from '@rune-langium/design-system';
@@ -56,9 +55,8 @@ export const Palette = () => {
         <CommandInput aria-label="Search types, files, commands" placeholder="Search types, files, commands..." />
         <CommandList>
           <CommandEmpty>No results found.</CommandEmpty>
-          {paletteGroups.map((group, index) => (
+          {paletteGroups.map((group) => (
             <div key={group.id}>
-              {index > 0 && <CommandSeparator />}
               <CommandGroup<PaletteValue> id={group.id} heading={group.id === 'types' ? 'Types' : 'Commands'}>
                 {(item) => {
                   const { icon: Icon, namespace, shortcut } = item.value;

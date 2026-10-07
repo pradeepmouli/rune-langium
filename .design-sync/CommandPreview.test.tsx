@@ -37,4 +37,14 @@ describe('design-sync Command previews', () => {
     expect(screen.queryAllByRole('option')).toHaveLength(0);
     expect(screen.getByText('No results found.')).not.toBeNull();
   });
+
+  it('does not leave orphan separators when only one group matches', async () => {
+    const user = userEvent.setup();
+    render(<Palette />);
+    await user.type(screen.getByRole('combobox'), 'typescript');
+    expect(document.querySelectorAll('[data-slot="command-separator"]')).toHaveLength(0);
+    await user.clear(screen.getByRole('combobox'));
+    await user.type(screen.getByRole('combobox'), 'Party');
+    expect(document.querySelectorAll('[data-slot="command-separator"]')).toHaveLength(0);
+  });
 });
