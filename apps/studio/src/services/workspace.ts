@@ -7,7 +7,13 @@
  * and cross-file resolution for the studio app (T083, T098, T100, T102).
  */
 
-import { parse, parseWorkspace, createRuneDslServices, type RosettaModel } from '@rune-langium/core';
+import {
+  parse,
+  parseWorkspace,
+  createRuneDslServices,
+  serializeRuneModel,
+  type RosettaModel
+} from '@rune-langium/core';
 import type { ExportSelection } from '@rune-langium/codegen/export';
 import { requestCodegenDownload } from './codegen-download-client.js';
 import { sanitizeDownloadFilename } from './export.js';
@@ -177,6 +183,7 @@ export interface WorkspaceState {
 export interface ParsedWorkspaceModel {
   filePath: string;
   model: RosettaModel;
+  serializedModelJson?: string;
 }
 
 export type ParseMode = 'worker' | 'router' | 'main-thread-fallback';
@@ -262,6 +269,7 @@ async function parseWorkspaceFilesOnMainThread(
   );
   const models: RosettaModel[] = [];
   const parsedModels: ParsedWorkspaceModel[] = [];
+  const serializer = createRuneDslServices(EmptyFileSystem).RuneDsl.serializer.JsonSerializer;
   const errors = new Map<string, string[]>();
 
   // Index results against `parseable` (NOT the original `files`) so indices align.
@@ -270,7 +278,11 @@ async function parseWorkspaceFilesOnMainThread(
     const file = parseable[i]!;
     if (result.value) {
       models.push(result.value);
-      parsedModels.push({ filePath: file.path, model: result.value });
+      parsedModels.push({
+        filePath: file.path,
+        model: result.value,
+        serializedModelJson: serializeRuneModel(serializer, result.value)
+      });
     }
     const fileErrors = result.parserErrors.map((err) => err.message);
     if (fileErrors.length > 0) {
@@ -550,6 +562,16 @@ export const collectCuratedSourcesForCodegen = withInstrumentation(
   }
 );
 
+/** Raw source includes read-only system definitions; curated entries have their own transport. */
+export const collectRawWorkspaceSources = withInstrumentation(
+  function collectRawWorkspaceSources(files: readonly WorkspaceFile[]): Array<{ path: string; content: string }> {
+    return files
+      .filter((file) => !file.bundleId && !file.serializedModelJson && !file.refOnly)
+      .map(({ path, content }) => ({ path, content }));
+  },
+  { op: 'collectRawWorkspaceSources' }
+);
+
 export const parseWorkspaceFiles = withInstrumentation(
   async function parseWorkspaceFiles(
     files: WorkspaceFile[],
@@ -568,11 +590,7 @@ export const parseWorkspaceFiles = withInstrumentation(
     // through and got POSTed to /api/parse as bogus files named
     // `[bundleId]/<namespace>`, which Langium rejects with "no services for the
     // extension '.'" → 500, collapsing the curated catalog to the user closure.
-    const userFiles: Array<{ name: string; content: string }> = [];
-    for (const f of files) {
-      if (f.bundleId || f.serializedModelJson || f.refOnly) continue;
-      userFiles.push({ name: f.path, content: f.content });
-    }
+    const userFiles = collectRawWorkspaceSources(files).map(({ path, content }) => ({ name: path, content }));
     const curatedBundles = collectCuratedBundlesFromWorkspace(files);
 
     try {
@@ -775,7 +793,7 @@ export const parseWorkspaceViaRouter = withInstrumentation(
     const userFileNames = new Set(files.map((f) => f.name));
     const services = createRuneDslServices(EmptyFileSystem).RuneDsl;
     const models: RosettaModel[] = [];
-    const parsedModels: Array<{ filePath: string; model: RosettaModel }> = [];
+    const parsedModels: ParsedWorkspaceModel[] = [];
     // Build a quick lookup: filePath → namespace from the response's
     // deferredExports so curated entries get a real namespace rather than
     // an empty string (Copilot review: CachedFile.namespace is declared
@@ -800,7 +818,7 @@ export const parseWorkspaceViaRouter = withInstrumentation(
         try {
           const model = services.serializer.JsonSerializer.deserialize<RosettaModel>(doc.serializedModel);
           models.push(model);
-          parsedModels.push({ filePath, model });
+          parsedModels.push({ filePath, model, serializedModelJson: doc.serializedModel });
         } catch (err) {
           console.warn('[workspace] failed to deserialize hydration model for', doc.uri, err);
         }

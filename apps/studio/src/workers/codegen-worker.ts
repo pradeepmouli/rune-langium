@@ -47,7 +47,7 @@ import {
 import type { Target, FormPreviewSchema, GeneratorOutput, GeneratorDiagnostic } from '@rune-langium/codegen/export';
 import { findDataNode, getActiveConditionPredicates } from '@rune-langium/codegen/instances';
 import type { ValidationDiagnostic } from '@rune-langium/codegen/instances';
-import { qualifiedNameFromNodeId } from '@rune-langium/visual-editor';
+import { qualifiedNameFromNodeId } from '@rune-langium/visual-editor/identifiers';
 import type { PreviewWorkerRequest } from '../services/codegen-service.js';
 import { z } from 'zod';
 import { isWorkerGlobalScope } from './runtime-guards.js';

@@ -6,7 +6,7 @@ import { existsSync } from 'node:fs';
 import { readFile } from 'node:fs/promises';
 import { createRuneDslServices } from '@rune-langium/core';
 import { URI } from 'langium';
-import { generatePreviewSchemas } from '../src/export.js';
+import { expandPreviewField, generatePreviewSchemas } from '../src/export.js';
 import type { PreviewField } from '../src/types.js';
 
 const skipIfNodeLt22 = it.skipIf(Number(process.versions.node.split('.')[0]) < 22);
@@ -52,6 +52,94 @@ async function parseModels(sources: readonly string[]) {
 }
 
 describe('FormPreviewSchema generation', () => {
+  it('preserves ISO date controls through aliases, collections, Choices and deferred objects', async () => {
+    const doc = await parseModel(`namespace test.dates
+typeAlias CalendarDate:
+  date
+type Schedule:
+  day date (1..1)
+  aliasDay CalendarDate (0..1)
+  days CalendarDate (0..*)
+  timestamp dateTime (0..1)
+  next Schedule (0..1)
+choice DateChoice:
+  date
+  string
+`);
+    const schemas = generatePreviewSchemas(doc);
+    const schedule = schemas.find((schema) => schema.targetId === 'test.dates.Schedule')!;
+    expect(schedule.fields[0]).toMatchObject({ kind: 'string', format: 'date' });
+    expect(schedule.fields[1]).toMatchObject({ kind: 'string', format: 'date', required: false });
+    expect(schedule.fields[2]).toMatchObject({ kind: 'array', children: [{ kind: 'string', format: 'date' }] });
+    expect(schedule.fields[3]).not.toHaveProperty('format');
+    const nested = expandPreviewField(schedule.fields[4]!, schedule.definitions);
+    expect(nested.kind).toBe('object');
+    if (nested.kind !== 'object') throw new Error('Expected Schedule object');
+    expect(nested.children[0]).toMatchObject({ kind: 'string', format: 'date' });
+    expect(schemas.find((schema) => schema.targetId === 'test.dates.CalendarDate')?.fields[0]).toMatchObject({
+      kind: 'string',
+      format: 'date'
+    });
+    expect(schemas.find((schema) => schema.targetId === 'test.dates.DateChoice')?.fields[0]).toMatchObject({
+      kind: 'string',
+      format: 'date',
+      required: false
+    });
+  });
+  it('expands serializable recursive definitions one level at a time without losing siblings', async () => {
+    const doc = await parseModel(`namespace test.lazy
+type Node:
+ name string (1..1)
+ child Node (0..1)
+ children Node (0..*)
+func Identity:
+ inputs: node Node (1..1)
+ output: result Node (1..1)
+ set result: node
+`);
+    const schemas = generatePreviewSchemas(doc);
+    for (const targetId of ['test.lazy.Node', 'test.lazy.Identity']) {
+      const schema = structuredClone(schemas.find((s) => s.targetId === targetId)!);
+      expect(schema.status).toBe('ready');
+      expect(Object.keys(schema.definitions!)).toEqual(['test.lazy.Node']);
+      let field = schema.fields.find((f) => f.path === 'child') ?? schema.fields[0]!;
+      for (let depth = 0; depth < 8; depth++) {
+        field = expandPreviewField(field, schema.definitions);
+        expect(field.kind).toBe('object');
+        if (field.kind !== 'object') throw new Error('Expected Node object');
+        expect(field.children.map((child) => child.label)).toEqual(['Name', 'Child', 'Children']);
+        const children = field.children[2]!;
+        expect(children.kind).toBe('array');
+        if (children.kind !== 'array') throw new Error('Expected Node collection');
+        const item = expandPreviewField(children.children[0], schema.definitions);
+        expect(item.kind === 'object' && item.children[0]?.path).toBe(`${field.path}.children[].name`);
+        field = field.children[1]!;
+      }
+      expect(JSON.stringify(schema).length).toBeLessThan(16000);
+    }
+  });
+
+  it('keeps nonrecursive objects beyond the eager depth cap available for expansion', async () => {
+    const doc = await parseModel(`namespace test.deep
+type A: b B (1..1)
+type B: c C (1..1)
+type C: d D (1..1)
+type D: next Fifth (1..1)
+type Fifth: f F (1..1)
+type F: value string (1..1)
+`);
+    const [schema] = generatePreviewSchemas(doc, { targetId: 'test.deep.A', maxDepth: 0 });
+    let field = schema!.fields[0]!;
+    for (const path of ['b', 'b.c', 'b.c.d', 'b.c.d.next', 'b.c.d.next.f']) {
+      expect(field.path).toBe(path);
+      field = expandPreviewField(field, schema!.definitions);
+      if (field.kind !== 'object') throw new Error('Expected nested object');
+      field = field.children[0]!;
+    }
+    expect(field).toMatchObject({ path: 'b.c.d.next.f.value', kind: 'string' });
+    expect(schema!.status).toBe('ready');
+  });
+
   it.each([false, true])(
     'uses inherited and dispatch signatures regardless of document order (reverse=%s)',
     async (reverse) => {
@@ -204,7 +292,7 @@ func Derived extends Base:
     ]);
   });
 
-  skipIfNodeLt22('marks recursive expansion as unsupported instead of expanding forever', async () => {
+  skipIfNodeLt22('preserves recursive objects as finite expandable references', async () => {
     const doc = await parseModel(`
       namespace "test.preview"
       version "1"
@@ -217,16 +305,19 @@ func Derived extends Base:
     const [node] = generatePreviewSchemas([doc], { maxDepth: 1 });
 
     expect(node?.targetId).toBe('test.preview.Node');
-    expect(node?.unsupportedFeatures).toContain('recursive-reference:Node');
+    expect(node?.status).toBe('ready');
+    expect(node?.definitions?.['test.preview.Node']?.fields).toHaveLength(2);
     expect(node?.fields).toEqual([
       { path: 'value', label: 'Value', kind: 'string', required: true },
       {
         path: 'child',
         label: 'Child',
-        kind: 'unknown',
+        kind: 'object',
+        definitionId: 'test.preview.Node',
+        referencedTypeFqn: 'test.preview.Node',
+        children: [],
         required: false,
-        cardinality: { min: 0, max: 1 },
-        description: 'Recursive reference to Node is not expanded in form preview.'
+        cardinality: { min: 0, max: 1 }
       }
     ]);
   });
@@ -326,10 +417,10 @@ func Derived extends Base:
       const bValueField = bChildren?.find((c) => c.path === 'b.bValue');
       expect(bValueField?.kind).toBe('string');
       const bAField = bChildren?.find((c) => c.path === 'b.a');
-      expect(bAField?.kind).toBe('unknown');
+      expect(bAField).toMatchObject({ kind: 'object', definitionId: 'test.cyclicexpansion.A' });
       expect(schema?.unsupportedFeatures).toContain('cyclic-type:B');
       expect(schema?.unsupportedFeatures).not.toContain('recursive-reference:B');
-      expect(schema?.unsupportedFeatures).toContain('recursive-reference:A');
+      expect(schema?.status).toBe('ready');
     }
   );
 
@@ -1837,7 +1928,7 @@ func Derived extends Base:
       const choice = schemas.find((s) => s.targetId === 'test.preview.Collateral')!;
 
       expect(choice.status).toBe('ready');
-      expect(choice.fields).toEqual([{ path: 'date', label: 'date', kind: 'string', required: false }]);
+      expect(choice.fields).toEqual([{ path: 'date', label: 'date', kind: 'string', format: 'date', required: false }]);
     }
   );
 
@@ -1897,8 +1988,10 @@ func Derived extends Base:
 
       // The call actually returns instead of stack-overflowing — a genuine
       // cycle through the new onChoice branch is cut, not infinitely walked.
-      expect(cycleA.status).toBe('unsupported');
-      expect(cycleA.unsupportedFeatures).toContain('recursive-reference:CycleA');
+      expect(cycleA.status).toBe('ready');
+      expect(Object.keys(cycleA.definitions ?? {})).toEqual(
+        expect.arrayContaining(['test.preview.CycleA', 'test.preview.CycleB'])
+      );
       expect(cycleA.unsupportedFeatures).toContain('cyclic-type:CycleA');
       expect(cycleA.unsupportedFeatures).toContain('cyclic-type:CycleB');
       expect(cycleA.unsupportedFeatures).not.toContain('recursive-reference:CycleB');
@@ -1913,9 +2006,11 @@ func Derived extends Base:
             {
               path: 'cycleB.cycleA',
               label: 'CycleA',
-              kind: 'unknown',
-              required: false,
-              description: 'Recursive reference to CycleA is not expanded in form preview.'
+              kind: 'object',
+              definitionId: 'test.preview.CycleA',
+              referencedTypeFqn: 'test.preview.CycleA',
+              children: [],
+              required: false
             }
           ],
           choiceArmPaths: ['cycleB.cycleA']

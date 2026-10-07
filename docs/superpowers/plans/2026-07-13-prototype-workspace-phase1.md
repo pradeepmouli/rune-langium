@@ -37,6 +37,8 @@
 > during Task 13's first pass — it is back to its originally reviewed shape,
 > plus the new schema-cache fields once Task 13 lands).
 
+**Follow-up status (2026-10-02):** unbounded-depth/recursive field authoring remains unimplemented after the correction below; the shared preview generator still truncates those fields. See [the follow-up audit](../../agents/follow-up-audit-2026-10-02.md).
+
 **Goal:** Ship a "Prototype" perspective in Rune Studio where a user creates, edits, imports, and exports named instances of Rune model types (data types and choices), with unbounded-depth field authoring, real validation (structure + conditions), and JSON/bundle import-export — the smallest slice of the Prototype Workspace spec that stands alone as working software.
 
 **Architecture:** MIT `@rune-langium/codegen` gains an `./instances` subpath: a lazy field resolver that extends the existing `preview-schema.ts` recursive walk instead of duplicating it, a condition-predicate extractor that reuses the existing expression transpiler, bundle/manifest types, and a plain-JSON import codec. FSL `apps/studio` gains a 6th perspective (`prototype`) with three panels backed by a new zustand `instance-store`, OPFS persistence under the already-reserved `.studio/` namespace, a new `createTarGz` (the codebase currently only has extraction), and a new `instance:validate` codegen-worker message that runs structural checks plus worker-executed condition predicates — never eval'ing a full generated Zod module.

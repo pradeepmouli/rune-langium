@@ -108,6 +108,7 @@ vi.mock('../../src/services/lsp-client.js', () => ({
     connect: vi.fn().mockResolvedValue(undefined),
     reconnect: vi.fn().mockResolvedValue(undefined),
     syncWorkspaceFiles: vi.fn(),
+    syncWorkspaceModels: vi.fn().mockResolvedValue(undefined),
     dispose: vi.fn()
   })
 }));
@@ -281,15 +282,10 @@ describe('App curated-bindings persist gate — switch-race (Codex P1 / PR #220)
     await saveWorkspaceFiles('ws-settled', [
       { name: 's.rosetta', path: 's.rosetta', content: 'namespace s\n\ntype S:\n  v string (1..1)\n', dirty: false }
     ]);
-
-    // The store reflects what we expect to settle for the active
-    // workspace (cdm). Since ws-settled.curatedModels = [], the gate
-    // flips immediately on restore — and the effect should then notice
-    // the [cdm] in loadedModels and write it to the IDB record.
+    const view = render(<App />);
+    await waitFor(() => expect(document.body).toHaveAttribute('data-workspace-active', 'true'));
     modelsRef.current = new Map<string, unknown>([['cdm', makeLoadedModel('cdm', 'https://example/cdm.tar.gz')]]);
-
-    render(<App />);
-
+    view.rerender(<App />);
     await waitFor(async () => {
       const ws = await loadWorkspace('ws-settled');
       expect(ws?.curatedModels?.map((b) => b.modelId)).toContain('cdm');

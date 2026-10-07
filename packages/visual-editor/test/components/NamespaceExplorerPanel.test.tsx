@@ -105,6 +105,39 @@ function renderPanel(overrides: Partial<React.ComponentProps<typeof NamespaceExp
 }
 
 describe('NamespaceExplorerPanel', () => {
+  it('opens parent namespace rows without opening multiple child branches', () => {
+    renderPanel();
+    const toggle = within(screen.getByTestId('ns-seg-com')).getByRole('button', { name: 'com', exact: true });
+    fireEvent.click(toggle);
+    fireEvent.click(toggle);
+    expect(screen.getByTestId('ns-seg-com.model')).toBeInTheDocument();
+    expect(screen.getByTestId('ns-seg-com.lib')).toBeInTheDocument();
+    expect(screen.queryByTestId('ns-type-com.model.Trade')).not.toBeInTheDocument();
+    expect(screen.queryByTestId('ns-type-com.lib.Date')).not.toBeInTheDocument();
+    fireEvent.click(
+      within(screen.getByTestId('ns-seg-com.model')).getByRole('button', { name: 'com.model', exact: true })
+    );
+    expect(screen.getByTestId('ns-type-com.model.Trade')).toBeInTheDocument();
+    expect(screen.queryByTestId('ns-type-com.lib.Date')).not.toBeInTheDocument();
+  });
+
+  it('automatically opens a sole child namespace but stops when that child branches', () => {
+    renderPanel({
+      nodeRepository: repoFrom([
+        makeNode('root', 'Root'),
+        makeNode('root.child', 'Child'),
+        makeNode('root.child.left', 'Left'),
+        makeNode('root.child.right', 'Right')
+      ])
+    });
+    const toggle = within(screen.getByTestId('ns-seg-root')).getByRole('button', { name: 'root', exact: true });
+    fireEvent.click(toggle);
+    fireEvent.click(toggle);
+    expect(screen.getByTestId('ns-type-root.child.Child')).toBeInTheDocument();
+    expect(screen.getByTestId('ns-seg-root.child.left')).toBeInTheDocument();
+    expect(screen.queryByTestId('ns-type-root.child.left.Left')).not.toBeInTheDocument();
+    expect(screen.queryByTestId('ns-type-root.child.right.Right')).not.toBeInTheDocument();
+  });
   it('compacts deep namespace chains while preserving expansion, navigation and drag identities', () => {
     const nodes = [makeNode('com.rosetta.model', 'Trade'), makeNode('com.rosetta.model', 'Event')];
     const { props } = renderPanel({ nodeRepository: repoFrom(nodes) });
@@ -195,15 +228,11 @@ describe('NamespaceExplorerPanel', () => {
     expect(props.onSelectNode).toHaveBeenCalledOnce();
   });
 
-  it('navigates from the type name without changing inclusion', async () => {
-    const onChange = vi.fn();
-    const { props } = renderPanel({
-      selection: { explicit: new Set(), requiredBy: new Map(), getSelectionId: (node) => node.id, onChange }
-    });
+  it('navigates from the type name when inclusion mode is absent', async () => {
+    const { props } = renderPanel();
     const link = screen.getByTestId('ns-type-link-com.model.Trade');
     await userEvent.click(link);
     expect(props.onSelectNode).toHaveBeenCalledExactlyOnceWith('com.model.Trade');
-    expect(onChange).not.toHaveBeenCalled();
     link.focus();
     await userEvent.keyboard('{Enter}');
     expect(props.onSelectNode).toHaveBeenCalledTimes(2);
@@ -316,6 +345,31 @@ describe('NamespaceExplorerPanel', () => {
     expect(onChange).toHaveBeenCalledOnce();
   });
 
+  it('toggles controlled inclusion from the row and name without navigation highlighting', () => {
+    const onChange = vi.fn();
+    const { props, rerender } = renderPanel({
+      selectedNodeId: 'com.model.Trade',
+      selection: { explicit: new Set(), requiredBy: new Map(), onChange }
+    });
+    const row = screen.getByTestId('ns-type-com.model.Trade');
+    fireEvent.click(row);
+    expect(onChange).toHaveBeenLastCalledWith(new Set(['com.model.Trade']));
+    expect(row).not.toHaveClass('studio-type-row--selected');
+    rerender(
+      <NamespaceExplorerPanel
+        {...props}
+        selection={{ explicit: new Set(['com.model.Trade']), requiredBy: new Map(), onChange }}
+      />
+    );
+    fireEvent.click(screen.getByTestId('ns-type-link-com.model.Trade'));
+    expect(onChange).toHaveBeenLastCalledWith(new Set());
+    expect(props.onSelectNode).not.toHaveBeenCalled();
+    expect(row).not.toHaveClass('studio-type-row--just-navigated');
+    fireEvent.click(screen.getByTestId('ns-type-nav-com.model.Trade'));
+    expect(props.onSelectNode).toHaveBeenCalledOnce();
+    expect(row).not.toHaveClass('studio-type-row--just-navigated');
+  });
+
   it('keeps required items selected while allowing their explicit selection to be removed', () => {
     const onChange = vi.fn();
     renderPanel({
@@ -337,16 +391,20 @@ describe('NamespaceExplorerPanel', () => {
   });
 
   it('does not allow a required-only item to be removed', () => {
+    const onChange = vi.fn();
     renderPanel({
       selection: {
         explicit: new Set(),
         requiredBy: new Map([['com.model.Trade', ['com.model.Event']]]),
-        onChange: vi.fn()
+        onChange
       }
     });
 
     expect(screen.getByTestId('ns-type-checkbox-com.model.Trade')).toBeDisabled();
     expect(screen.getByLabelText('Required by com.model.Event')).toBeTruthy();
+    fireEvent.click(screen.getByTestId('ns-type-com.model.Trade'));
+    fireEvent.click(screen.getByTestId('ns-type-link-com.model.Trade'));
+    expect(onChange).not.toHaveBeenCalled();
   });
 
   it('selects the complete filtered result set while preserving hidden selections', () => {

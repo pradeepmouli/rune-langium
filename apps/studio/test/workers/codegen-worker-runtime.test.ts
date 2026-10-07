@@ -5,32 +5,7 @@ import { existsSync, readFileSync } from 'node:fs';
 import { BASE_TYPE_FILES } from '@rune-langium/core';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
-type WorkerScope = {
-  addEventListener: ReturnType<typeof vi.fn>;
-  postMessage: ReturnType<typeof vi.fn>;
-  importScripts: () => void;
-};
-
-async function loadRealWorker() {
-  let handler: ((event: MessageEvent<unknown>) => void) | undefined;
-  const scope: WorkerScope = {
-    addEventListener: vi.fn((type: string, listener: (event: MessageEvent<unknown>) => void) => {
-      if (type === 'message') handler = listener;
-    }),
-    postMessage: vi.fn(),
-    importScripts: () => undefined
-  };
-  vi.stubGlobal('self', scope);
-  vi.resetModules();
-  await import('../../src/workers/codegen-worker.ts');
-  return {
-    scope,
-    dispatch(data: unknown) {
-      if (!handler) throw new Error('worker message handler was not registered');
-      handler({ data } as MessageEvent<unknown>);
-    }
-  };
-}
+import { loadRealWorker, type WorkerScope } from './helpers/real-codegen-worker.js';
 
 async function waitForMessage(scope: WorkerScope, type: string): Promise<void> {
   await vi.waitFor(() => {
@@ -42,6 +17,74 @@ describe('codegen-worker parsed/emitted function execution', () => {
   afterEach(() => {
     vi.unstubAllGlobals();
   });
+
+  it('validates deep recursive Data/Choice payloads and executes recursive function inputs', async () => {
+    const { scope, dispatch } = await loadRealWorker();
+    dispatch({
+      type: 'preview:setFiles',
+      filesRevision: 1,
+      files: [
+        {
+          uri: 'file:///recursive.rosetta',
+          content: `namespace recursive
+type Node:
+ value int (1..1)
+ next Node (0..1)
+ children Node (0..*)
+ content Content (0..1)
+choice Content:
+ Node
+ string
+func Identity:
+ inputs: node Node (1..1)
+ output: result Node (1..1)
+ set result: node
+`
+        }
+      ]
+    });
+    const tail = { value: 8, children: [] };
+    let data: Record<string, unknown> = tail;
+    for (let value = 7; value >= 0; value--) data = { value, next: data, children: [] };
+    data.content = { node: { value: 9, children: [] } };
+    data.children = [{ value: 10, children: [] }];
+    dispatch({ type: 'instance:validate', typeFqn: 'recursive.Node', data, requestId: 'deep:valid' });
+    await vi.waitFor(
+      () =>
+        expect(scope.postMessage).toHaveBeenCalledWith({
+          type: 'instance:validateResult',
+          requestId: 'deep:valid',
+          diagnostics: []
+        }),
+      { timeout: 15000 }
+    );
+    dispatch({
+      type: 'preview:execute',
+      funcName: 'recursive.Identity',
+      inputs: { node: data },
+      requestId: 'deep:execute'
+    });
+    await vi.waitFor(() =>
+      expect(scope.postMessage).toHaveBeenCalledWith({
+        type: 'preview:execute-result',
+        requestId: 'deep:execute',
+        funcName: 'recursive.Identity',
+        output: data
+      })
+    );
+    const invalid = structuredClone(data);
+    (invalid.content as { node: { value: unknown } }).node.value = 'invalid';
+    dispatch({ type: 'instance:validate', typeFqn: 'recursive.Node', data: invalid, requestId: 'deep:invalid' });
+    await vi.waitFor(() =>
+      expect(scope.postMessage).toHaveBeenCalledWith(
+        expect.objectContaining({
+          type: 'instance:validateResult',
+          requestId: 'deep:invalid',
+          diagnostics: expect.arrayContaining([expect.objectContaining({ path: 'content' })])
+        })
+      )
+    );
+  }, 20000);
 
   it.skipIf(!existsSync('../../.resources/cdm/base-math-func.rosetta'))(
     'executes StringEquals from the real CDM math namespace',

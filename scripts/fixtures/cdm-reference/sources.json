@@ -1,0 +1,23 @@
+[
+  {
+    "id": "cdm",
+    "owner": "finos",
+    "repo": "common-domain-model",
+    "ref": "7.0.0",
+    "commit": "a6ffe777bc12ef3d289579cb3a86d1cbffea63d2"
+  },
+  {
+    "id": "fpml",
+    "owner": "rosetta-models",
+    "repo": "rune-fpml",
+    "ref": "3.2.0",
+    "commit": "ce23df5562c077ec60e7d15e3d2df7e40fcca2f9"
+  },
+  {
+    "id": "rune-dsl",
+    "owner": "finos",
+    "repo": "rune-dsl",
+    "ref": "10.2.2",
+    "commit": "38631eab97265f90ff14d7dd89635d4a133ebd6b"
+  }
+]

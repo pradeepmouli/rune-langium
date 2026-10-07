@@ -519,18 +519,22 @@ export function ancestorPathsForMatches(roots: SegmentNode[], query: string): Se
 
 /**
  * Collect a segment's own `fullPath` plus every descendant segment `fullPath`
- * in its subtree. Used by the explorer to recursively expand (or collapse) a
- * namespace and ALL its sub-namespaces in a single toggle — "opening a
- * namespace opens all the subnamespaces below it".
+ * in its subtree. Collapse includes all descendants; expansion can follow
+ * only single-child namespace chains, stopping at each branching point.
  *
  * The requested `fullPath` is always included (even if not found in the tree)
  * so the caller degrades to a single-path toggle rather than a no-op.
  */
-export function collectSegmentSubtreePaths(roots: SegmentNode[], fullPath: string): string[] {
+export function collectSegmentSubtreePaths(
+  roots: SegmentNode[],
+  fullPath: string,
+  options: { singleChildOnly?: boolean } = {}
+): string[] {
   const paths = new Set<string>([fullPath]);
 
   function collectAll(node: SegmentNode): void {
     paths.add(node.fullPath);
+    if (options.singleChildOnly && node.children.length !== 1) return;
     for (const child of node.children) collectAll(child);
   }
 

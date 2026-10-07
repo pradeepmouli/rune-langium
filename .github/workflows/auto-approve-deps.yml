@@ -47,6 +47,12 @@ jobs:
       contains(github.event.pull_request.labels.*.name, 'dependencies')
 
     steps:
+      - name: Checkout trusted workflow helpers
+        uses: actions/checkout@v7
+        with:
+          ref: ${{ github.sha }}
+          persist-credentials: false
+
       - name: Check PR details
         id: pr-details
         uses: actions/github-script@v9
@@ -57,15 +63,11 @@ jobs:
             const title = pr.title.toLowerCase();
             const labels = pr.labels.map(l => l.name);
 
-            const isMinorOrPatch =
-              labels.includes('minor') ||
-              labels.includes('patch') ||
-              title.includes('patch') ||
-              title.includes('minor') ||
-              (!title.includes('major') && !labels.includes('major'));
-
-            const isMajorUpdate = labels.includes('major') || title.includes('major');
-            const isSecurityUpdate = labels.includes('security');
+            const { classifyDependencyUpdate } = await import(`${process.env.GITHUB_WORKSPACE}/scripts/lib/dependency-automerge.mjs`);
+            const policy = classifyDependencyUpdate(pr);
+            const isMajorUpdate = policy.isMajor;
+            const isMinorOrPatch = !isMajorUpdate;
+            const isSecurityUpdate = policy.isSecurity;
 
             core.setOutput('is_minor_or_patch', isMinorOrPatch);
             core.setOutput('is_major_update', isMajorUpdate);
@@ -103,35 +105,12 @@ jobs:
                     'Please review the changelog and test thoroughly before merging.'
             });
 
-      - name: Enable auto-merge for approved updates
+      - name: Await completed checks before merging
         if: |
           steps.pr-details.outputs.is_minor_or_patch == 'true' &&
           steps.pr-details.outputs.is_major_update == 'false' &&
           steps.pr-details.outputs.is_security_update == 'false'
-        uses: actions/github-script@v9
-        with:
-          github-token: ${{ secrets.GITHUB_TOKEN }}
-          script: |
-            // MERGE, not SQUASH: this repo only allows merge-commit/rebase (squash
-            // is disabled repo-wide), so SQUASH was rejected on every dependabot PR
-            // with "Merge method squash merging is not allowed on this repository".
-            await github.graphql(`
-              mutation($pullRequestId: ID!) {
-                enablePullRequestAutoMerge(input: {
-                  pullRequestId: $pullRequestId,
-                  mergeMethod: MERGE
-                }) {
-                  pullRequest {
-                    autoMergeRequest {
-                      enabledAt
-                    }
-                  }
-                }
-              }
-            `, {
-              pullRequestId: context.payload.pull_request.node_id
-            });
-            console.log('Auto-merge enabled for this PR');
+        run: echo "Approved dependency update; Finalize Dependency Updates will recheck the head and CI before merging."
 
   report:
     name: Report dependency update

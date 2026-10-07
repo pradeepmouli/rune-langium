@@ -1,51 +1,24 @@
 // SPDX-License-Identifier: MIT
 // Copyright (c) 2026 Pradeep Mouli
 
-/**
- * EditorActionsContext — bridges declarative section components to
- * the host editor's `EditorFormActions` + `nodeId`.
- *
- * Section components rendered through z2f's `componentModule` lookup
- * (Phase 7 / US5) only receive a `fields: string[]` prop. They cannot
- * accept the per-action callbacks that the imperative call sites still
- * supply directly. The host editor therefore wraps `<ZodForm>` with
- * this provider; the section components consume it via
- * `useEditorActionsContext()` to commit edits to the graph.
- *
- * The imperative call sites (today's `<MetadataSection onCommitDef ...>`
- * inside each editor) are unaffected — they pass callbacks as props,
- * which take precedence over the context. Phase 3+/Phase 5 will switch
- * each editor to the declarative path per its own cutover commit.
- *
- * @module
- */
+/** Shared graph actions and editor options for configured form sections. */
 
 import { createContext, useContext } from 'react';
 import type { ReactNode } from 'react';
-import type { EditorFormActions } from '../../../types.js';
+import type { CommonFormActions, EnumFormActions, ExpressionEditorSlotProps, SourceRefOption } from '../../../types.js';
 
 // ---------------------------------------------------------------------------
 // Context shape
 // ---------------------------------------------------------------------------
 
-/**
- * Minimal contract a host editor must surface for declaratively-rendered
- * sections to commit graph edits.
- *
- * - `nodeId`: the graph node currently being edited.
- * - `actions`: the kind-aware action set (intersection-typed for sections
- *   so they can call any method without narrowing per editor kind — the
- *   host always provides at least the `CommonFormActions` surface).
- * - `readOnly`: optional global read-only flag the host can flip when
- *   the node is not user-editable (e.g. external types).
- * - `availableAnnotations`: optional list passed to `AnnotationSection`'s
- *   picker. When omitted the section falls back to its built-in defaults.
- */
 export interface EditorActionsContextValue {
   nodeId: string;
-  actions: EditorFormActions;
+  actions: CommonFormActions & Partial<Pick<EnumFormActions, 'addEnumValueSynonym' | 'removeEnumValueSynonym'>>;
   readOnly?: boolean;
   availableAnnotations?: string[];
+  synonymSourceOptions?: SourceRefOption[];
+  renderExpressionEditor?: (props: ExpressionEditorSlotProps) => ReactNode;
+  showPostConditionToggle?: boolean;
 }
 
 const EditorActionsContext = createContext<EditorActionsContextValue | null>(null);

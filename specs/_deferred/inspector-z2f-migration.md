@@ -1,6 +1,6 @@
 # Deferred Feature Scope: Inspector form migration to `@zod-to-form`
 
-**Status**: Deferred — not yet a feature branch.
+**Status**: Superseded by `specs/013-z2f-editor-migration`. The runtime migration shipped; its remaining parity/HMR checks and section cleanup are recorded in [the October 2 follow-up audit](../../docs/agents/follow-up-audit-2026-10-02.md). This document preserves the original proposal.
 **Origin**: Phase 7 of feature `012-studio-workspace-ux` set up the
 `@zod-to-form/vite` build pipeline, but stopped short of migrating any
 real forms. T102 (roundtrip test) and T107 (HMR e2e) were carried into

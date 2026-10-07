@@ -5,7 +5,7 @@ import type { ExportSelection, Target } from '@rune-langium/codegen/export';
 import { decodeExportArtifact, type ExportArtifact } from './export-artifact.js';
 import { requestCodegenDownload } from './codegen-download-client.js';
 import { withInstrumentation } from './instrumentation/core.js';
-import { collectCuratedSourcesForCodegen, type WorkspaceFile } from './workspace.js';
+import { collectCuratedSourcesForCodegen, collectRawWorkspaceSources, type WorkspaceFile } from './workspace.js';
 
 export interface ExportConfig {
   target: Target;
@@ -73,7 +73,7 @@ export const exportInputKey = withInstrumentation(
 /** Generate one inspectable, immutable export artifact for a captured workspace input. */
 export const generateExport = withInstrumentation(
   async function generateExport(input: ExportInput, signal: AbortSignal): Promise<ExportArtifact> {
-    const files = input.files.filter((file) => !file.readOnly).map(({ path, content }) => ({ path, content }));
+    const files = collectRawWorkspaceSources(input.files);
     const { curatedBundles, curatedDocs } = collectCuratedSourcesForCodegen(input.files);
     const response = await requestCodegenDownload(
       {

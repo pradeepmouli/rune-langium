@@ -172,6 +172,43 @@ describe('useModelStore — archiveLoader DI (T015)', () => {
     expect(result.source).toBe(CURATED_SOURCE);
   });
 
+  it.each(['resolve', 'reject'] as const)('ignores a cancelled load that later %ss', async (outcome) => {
+    let finish!: (value: LoadedModel) => void;
+    let fail!: (reason: Error) => void;
+    loadModelMock.mockImplementationOnce(
+      () =>
+        new Promise<LoadedModel>((resolve, reject) => {
+          finish = resolve;
+          fail = reject;
+        })
+    );
+    const oldLoad = useModelStore.getState().load(CURATED_SOURCE);
+    const oldSignal = loadModelMock.mock.calls[0]![1].signal as AbortSignal;
+    useModelStore.getState().cancel(CURATED_SOURCE.id);
+    expect(oldSignal.aborted).toBe(true);
+
+    let finishNew!: (value: LoadedModel) => void;
+    loadModelMock.mockImplementationOnce(
+      () =>
+        new Promise<LoadedModel>((resolve) => {
+          finishNew = resolve;
+        })
+    );
+    const newLoad = useModelStore.getState().load(CURATED_SOURCE);
+    if (outcome === 'resolve') finish(FAKE_MODEL);
+    else fail(new Error('old workspace failed'));
+    await oldLoad;
+    expect(useModelStore.getState().models.size).toBe(0);
+    expect(useModelStore.getState().errors.size).toBe(0);
+    expect(useModelStore.getState().loading.has(CURATED_SOURCE.id)).toBe(true);
+
+    const newModel = { ...FAKE_MODEL, commitHash: 'new-workspace' };
+    finishNew(newModel);
+    await newLoad;
+    expect(useModelStore.getState().models.get(CURATED_SOURCE.id)).toBe(newModel);
+    expect(useModelStore.getState().loading.size).toBe(0);
+  });
+
   it('resets preview and codegen state when the last loaded model is unloaded', () => {
     useModelStore.setState({
       models: new Map([['cdm', FAKE_MODEL]]),

@@ -52,7 +52,14 @@ vi.mock('../../src/store/model-store.js', () => {
   const useStore = ((selector: (s: { models: Map<string, unknown> }) => unknown) => {
     return selector({ models: modelsRef.current });
   }) as unknown as { (selector: unknown): unknown; getState: () => unknown };
-  useStore.getState = () => ({ load: loadSpy, models: modelsRef.current });
+  useStore.getState = () => ({
+    load: loadSpy,
+    models: modelsRef.current,
+    unload: (id: string) => {
+      modelsRef.current = new Map(modelsRef.current);
+      modelsRef.current.delete(id);
+    }
+  });
   return { useModelStore: useStore };
 });
 
@@ -68,6 +75,7 @@ vi.mock('../../src/services/lsp-client.js', () => ({
     connect: vi.fn().mockResolvedValue(undefined),
     reconnect: vi.fn().mockResolvedValue(undefined),
     syncWorkspaceFiles: vi.fn(),
+    syncWorkspaceModels: vi.fn().mockResolvedValue(undefined),
     dispose: vi.fn()
   })
 }));
@@ -128,6 +136,85 @@ afterEach(() => {
 });
 
 describe('App curated-bundle persistence (D1 / workspace-state-pipeline)', () => {
+  it('retains failed selections through a retry but removes a successfully loaded model on unload', async () => {
+    const loadedAt = new Date().toISOString();
+    const bindings = ['cdm', 'fpml'].map((modelId) => ({
+      modelId,
+      loadedVersion: 'saved-version',
+      loadedAt,
+      updateAvailable: false
+    }));
+    await saveWorkspace(makeWorkspace('ws-curated-retry', 'Curated retry', bindings));
+    await saveWorkspaceFiles('ws-curated-retry', []);
+    loadSpy.mockResolvedValue(undefined);
+    const view = render(<App />);
+    await waitFor(() => expect(document.body).toHaveAttribute('data-workspace-active', 'true'));
+    expect((await loadWorkspace('ws-curated-retry'))?.curatedModels).toEqual(bindings);
+
+    modelsRef.current = new Map([
+      [
+        'cdm',
+        {
+          source: { id: 'cdm', archiveUrl: 'https://example/cdm/latest.tar.gz' },
+          commitHash: 'retry-version',
+          files: [],
+          loadedAt: Date.now()
+        }
+      ]
+    ]);
+    view.rerender(<App />);
+    await waitFor(async () => {
+      const saved = (await loadWorkspace('ws-curated-retry'))?.curatedModels;
+      expect(saved).toHaveLength(2);
+      expect(saved?.[0]).toMatchObject({ modelId: 'cdm', loadedVersion: 'retry-version' });
+      expect(saved?.[1]).toEqual(bindings[1]);
+    });
+
+    modelsRef.current = new Map();
+    view.rerender(<App />);
+    await waitFor(async () => {
+      expect((await loadWorkspace('ws-curated-retry'))?.curatedModels).toEqual([bindings[1]]);
+    });
+  });
+  it.each(['cdm', 'temporarily-missing'])(
+    'retains an unavailable declared binding (%s) after curated-only restore',
+    async (modelId) => {
+      const binding = {
+        modelId,
+        loadedVersion: 'saved-version',
+        loadedAt: new Date().toISOString(),
+        updateAvailable: false
+      };
+      await saveWorkspace(makeWorkspace('ws-curated-outage', 'Curated outage', [binding]));
+      await saveWorkspaceFiles('ws-curated-outage', []);
+      loadSpy.mockResolvedValue(undefined);
+      const view = render(<App />);
+      await waitFor(() => expect(document.body).toHaveAttribute('data-workspace-active', 'true'));
+      view.rerender(<App />);
+      expect((await loadWorkspace('ws-curated-outage'))?.curatedModels).toEqual([binding]);
+      cleanup();
+      render(<App />);
+      await waitFor(() => expect(document.body).toHaveAttribute('data-workspace-active', 'true'));
+      expect((await loadWorkspace('ws-curated-outage'))?.curatedModels).toEqual([binding]);
+      if (modelId === 'cdm') expect(loadSpy).toHaveBeenCalledTimes(2);
+    }
+  );
+  it('restores curated bindings even when a workspace has no source files', async () => {
+    await saveWorkspace(
+      makeWorkspace('ws-curated-only', 'Curated only', [
+        {
+          modelId: 'cdm',
+          loadedVersion: 'latest',
+          loadedAt: new Date().toISOString(),
+          updateAvailable: false
+        }
+      ])
+    );
+    await saveWorkspaceFiles('ws-curated-only', []);
+    render(<App />);
+    await waitFor(() => expect(loadSpy).toHaveBeenCalledWith(expect.objectContaining({ id: 'cdm' })));
+    await waitFor(() => expect(document.body).toHaveAttribute('data-workspace-active', 'true'));
+  });
   it('replays persisted curated bindings on workspace restore', async () => {
     await saveWorkspace(
       makeWorkspace('ws-restore-curated', 'Restored Curated', [
@@ -174,9 +261,9 @@ describe('App curated-bundle persistence (D1 / workspace-state-pipeline)', () =>
       }
     ]);
 
-    // Pre-populate the mocked store with a curated LoadedModel so the
-    // initial selector subscription sees it. We then assert the
-    // App-level effect serializes it into IDB.
+    const view = render(<App />);
+    await waitFor(() => expect(document.body).toHaveAttribute('data-workspace-active', 'true'));
+
     modelsRef.current = new Map([
       [
         'cdm',
@@ -196,7 +283,7 @@ describe('App curated-bundle persistence (D1 / workspace-state-pipeline)', () =>
       ]
     ]);
 
-    render(<App />);
+    view.rerender(<App />);
 
     await waitFor(async () => {
       const ws = await loadWorkspace('ws-persist-curated');

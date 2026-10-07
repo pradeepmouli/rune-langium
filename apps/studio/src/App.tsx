@@ -22,6 +22,8 @@ import {
   loadCuratedNamespaceSource
 } from './services/workspace.js';
 import { useModelStore } from './store/model-store.js';
+import { usePreviewStore } from './store/preview-store.js';
+import { useCodegenStore } from './store/codegen-store.js';
 import { getModelSource } from './services/model-registry.js';
 import type { LoadedModel } from './types/model-types.js';
 import { BASE_TYPE_FILES } from './resources/base-types.js';
@@ -87,11 +89,14 @@ function makeWorkspaceId(): string {
  * 4768-type explorer collapsed to the 22 built-in types because nothing
  * triggered a re-load.
  */
-function deriveCuratedBindings(loadedModels: Map<string, LoadedModel>): CuratedModelBinding[] {
-  const bindings: CuratedModelBinding[] = [];
+function deriveCuratedBindings(
+  loadedModels: Map<string, LoadedModel>,
+  retainedBindings: readonly CuratedModelBinding[] = []
+): CuratedModelBinding[] {
+  const bindings = new Map(retainedBindings.map((binding) => [binding.modelId, binding]));
   for (const model of loadedModels.values()) {
     if (!model.source.archiveUrl) continue;
-    bindings.push({
+    bindings.set(model.source.id, {
       modelId: model.source.id,
       loadedVersion: model.commitHash || 'latest',
       loadedAt: new Date(model.loadedAt).toISOString(),
@@ -99,8 +104,7 @@ function deriveCuratedBindings(loadedModels: Map<string, LoadedModel>): CuratedM
     });
   }
   // Stable order so the equality check below doesn't flap on Map iteration order.
-  bindings.sort((a, b) => a.modelId.localeCompare(b.modelId));
-  return bindings;
+  return [...bindings.values()].sort((a, b) => a.modelId.localeCompare(b.modelId));
 }
 
 /**
@@ -197,6 +201,8 @@ function AppContent() {
   // preserve them without calling useModelStore.getState() (which is not
   // available in the test mock of useModelStore).
   const loadedModelsRef = useRef<Map<string, LoadedModel>>(new Map());
+  // Declared selections survive failed loads until the model is observed loaded.
+  const unavailableCuratedBindingsRef = useRef(new Map<string, CuratedModelBinding>());
   const { showToast, showLoadingToast, dismissToast } = useStudioToast();
 
   const reportWorkspaceError = useCallback((message: string, error: unknown) => {
@@ -295,6 +301,7 @@ function AppContent() {
   useEffect(() => {
     if (pendingHydration.length === 0) return;
     let cancelled = false;
+    const epoch = workspaceEpochRef.current;
     const hydratedSoFar = useEditorStore.getState().hydratedNamespaces;
     const requested = [...new Set([...hydratedSoFar, ...pendingHydration])];
     // Background process with no natural "done" UI state of its own (unlike
@@ -305,7 +312,7 @@ function AppContent() {
     const toastId = showLoadingToast({ description: `Loading ${label}…` });
     void parseWorkspaceFiles(files, { hydrateNamespaces: requested, requireCuratedHydration: true })
       .then((result) => {
-        if (cancelled) return;
+        if (cancelled || epoch !== workspaceEpochRef.current) return;
         applyParseResult(result, { preserveSemanticModelOnErrors: true });
         if (result.errors.size > 0) {
           // The last valid semantic model is still in use. Keep this namespace
@@ -318,7 +325,7 @@ function AppContent() {
         useEditorStore.getState().markNamespacesHydrated(pendingHydration);
       })
       .catch((err) => {
-        if (cancelled) return;
+        if (cancelled || epoch !== workspaceEpochRef.current) return;
         // Dequeue the failed namespaces (without marking hydrated) so the user
         // can retry by re-selecting/re-expanding them; keep the last valid graph.
         useEditorStore.getState().dequeuePendingHydration(pendingHydration);
@@ -336,15 +343,67 @@ function AppContent() {
     // so it's a wasted request but correctness-safe.
   }, [pendingHydration, files, applyParseResult, reportWorkspaceError, showLoadingToast, dismissToast]);
 
+  const invalidateWorkspaceParses = useCallback(() => {
+    workspaceEpochRef.current += 1;
+    editParseTokenRef.current += 1;
+    modelParseTokenRef.current += 1;
+    if (reparseTimerRef.current) {
+      clearTimeout(reparseTimerRef.current);
+      reparseTimerRef.current = null;
+    }
+    useEditorStore.getState().resetHydration();
+    return workspaceEpochRef.current;
+  }, []);
+
+  const reconcileWorkspaceModels = useCallback((bindings: readonly CuratedModelBinding[]) => {
+    unavailableCuratedBindingsRef.current = new Map(bindings.map((binding) => [binding.modelId, binding]));
+    // Some component tests supply a hook-only store mock.
+    const store = useModelStore.getState?.();
+    if (!store) {
+      loadedModelsRef.current = new Map();
+      return;
+    }
+    const declaredIds = new Set(bindings.map((binding) => binding.modelId));
+    for (const id of store.loading?.keys() ?? []) {
+      if (!declaredIds.has(id)) store.cancel(id);
+    }
+    for (const id of store.models.keys()) {
+      if (!declaredIds.has(id)) store.unload(id);
+    }
+    for (const id of store.errors?.keys() ?? []) {
+      if (!declaredIds.has(id)) store.dismissError(id);
+    }
+    // React's subscription effect runs later; activation must merge the
+    // reconciled snapshot now, rather than the previous render's models.
+    loadedModelsRef.current = useModelStore.getState().models;
+    lastModelMergeRef.current = loadedModelsRef.current;
+  }, []);
+
+  const clearWorkspaceState = useCallback(() => {
+    unavailableCuratedBindingsRef.current.clear();
+    invalidateWorkspaceParses();
+    filesRef.current = [];
+    setFiles([]);
+    setModels([]);
+    setParsedModels([]);
+    setParseErrors(new Map());
+    setDeferredExports([]);
+    setCuratedSyncedWorkspaceId(null);
+    setWorkspaceError(null);
+    setWorkspaceNotice(null);
+    const editor = useEditorStore.getState();
+    editor.loadDeferredExports([]);
+    editor.loadModels([]);
+    editor.selectNode(null);
+    useEditorStore.temporal.getState().clear();
+    usePreviewStore.getState().resetPreviewState();
+    useCodegenStore.getState().resetCodegenState();
+  }, [invalidateWorkspaceParses]);
+
   const syncWorkspaceToEditor = useCallback(
     async (workspaceFiles: WorkspaceFile[]) => {
       setLoading(true);
-      workspaceEpochRef.current += 1;
-      // Reset hydration state so a new workspace doesn't inherit the previous
-      // workspace's browsed-namespace set. Without this, switching workspaces
-      // leaves stale hydratedNamespaces entries that the on-demand effect won't
-      // re-fire for (they're already in hydratedNamespaces, not pending).
-      useEditorStore.getState().resetHydration();
+      const epoch = invalidateWorkspaceParses();
       try {
         // Start with the built-in base types and the user's workspace files.
         let mergedFiles: WorkspaceFile[] = [...BASE_TYPE_FILES.map((file) => ({ ...file })), ...workspaceFiles];
@@ -353,6 +412,7 @@ function AppContent() {
         for (const model of loadedModelsRef.current.values()) {
           mergedFiles = mergeModelFiles(mergedFiles, model);
         }
+        filesRef.current = mergedFiles;
         setFiles(mergedFiles);
         // LSP doc-set sync is owned by LspProvider, which re-syncs on the
         // `files` state it reads from useWorkspace() (filtering bundle-marker
@@ -361,13 +421,18 @@ function AppContent() {
         const result = await parseWorkspaceFiles(mergedFiles, {
           hydrateNamespaces: useEditorStore.getState().activeHydrationNamespaces()
         });
+        if (epoch !== workspaceEpochRef.current) return;
         applyParseResult(result);
         setWorkspaceError(null);
+      } catch (error) {
+        if (epoch !== workspaceEpochRef.current) return;
+        reportWorkspaceError('Failed to parse workspace files', error);
+        throw error;
       } finally {
-        setLoading(false);
+        if (epoch === workspaceEpochRef.current) setLoading(false);
       }
     },
-    [applyParseResult]
+    [applyParseResult, invalidateWorkspaceParses, reportWorkspaceError]
   );
 
   const createWorkspaceRecord = useCallback(async (name: string): Promise<WorkspaceRecord> => {
@@ -409,34 +474,24 @@ function AppContent() {
     return workspace;
   }, []);
 
-  // Capture the workspace ID active when `restoreWorkspace` is called so the
-  // eviction step inside it knows whether we're cold-starting (no prior) or
-  // switching (prior workspace differs). The ref pattern avoids stale-closure
-  // issues that would dog a useCallback-captured `restoredWorkspace`.
+  // Async activation must check the current identity before publishing results.
   const restoredWorkspaceRef = useRef<WorkspaceRecord | null>(null);
   useEffect(() => {
     restoredWorkspaceRef.current = restoredWorkspace;
   }, [restoredWorkspace]);
 
   const restoreWorkspace = useCallback(
-    async (workspace: WorkspaceRecord): Promise<boolean> => {
-      const previousWorkspaceId = restoredWorkspaceRef.current?.id ?? null;
+    async (workspace: WorkspaceRecord): Promise<'restored' | 'empty' | 'superseded'> => {
+      clearWorkspaceState();
+      const activationEpoch = workspaceEpochRef.current;
+      reconcileWorkspaceModels(workspace.curatedModels ?? []);
       const restoredFiles = await loadWorkspaceFiles(workspace.id);
-      if (restoredFiles.length === 0) {
-        // Defect D3: switching to an OPFS-empty workspace left the previous
-        // workspace's `files`/`models` state in place. The App then matched
-        // `bootState === 'start' && userFiles.length > 0` and re-mounted
-        // EditorPage with the stale untitled.rosetta tab — a phantom file
-        // that didn't exist in OPFS for the workspace the user just opened.
-        // Clear the carry-over state so the start page renders cleanly.
+      if (activationEpoch !== workspaceEpochRef.current) return 'superseded';
+      if (restoredFiles.length === 0 && (workspace.curatedModels?.length ?? 0) === 0) {
+        reconcileWorkspaceModels([]);
+        restoredWorkspaceRef.current = null;
         setRestoredWorkspace(null);
-        setFiles([]);
-        setModels([]);
-        setParsedModels([]);
-        setParseErrors(new Map());
-        setDeferredExports([]);
-        setCuratedSyncedWorkspaceId(null);
-        return false;
+        return 'empty';
       }
 
       const nextWorkspace = {
@@ -444,6 +499,7 @@ function AppContent() {
         lastOpenedAt: new Date().toISOString()
       };
       await persistence.saveWorkspace(nextWorkspace);
+      if (activationEpoch !== workspaceEpochRef.current) return 'superseded';
       // Mark curated-bindings sync as "pending for this workspace" BEFORE
       // updating restoredWorkspace, so the persist effect sees a non-matching
       // synced id on its first run after the switch and bails out. Without
@@ -452,47 +508,11 @@ function AppContent() {
       // A's bundles, overwriting B's saved curatedModels with stale state
       // (Codex P1, PR #220).
       setCuratedSyncedWorkspaceId(null);
+      restoredWorkspaceRef.current = nextWorkspace;
       setRestoredWorkspace(nextWorkspace);
       try {
-        // On a workspace SWITCH (previous workspace exists and differs from
-        // the destination), evict any bundles from the global model-store
-        // that aren't declared by the destination workspace. Without this
-        // step the model-store accumulates bundles across switches: opening
-        // A (curated: [cdm]) and then B (curated: [fpml]) would leave [cdm,
-        // fpml] in the store, and the persist effect would write `[cdm,
-        // fpml]` back to B's record — silently inheriting A's bindings.
-        //
-        // The persist-gate (`curatedSyncedWorkspaceId`) alone isn't enough:
-        // it stops the persist effect from firing too early, but once it
-        // opens with stale bundles still in the store, the derived set is
-        // still polluted. Eviction makes the store a faithful projection of
-        // the destination workspace's declared bindings before the gate is
-        // opened.
-        //
-        // We intentionally SKIP eviction on cold-start restore (no prior
-        // workspace) because at that point the model-store's contents
-        // reflect bundles the USER loaded since mount — they belong to
-        // *this* workspace and should be persisted into its record, not
-        // discarded. The D1 fix (persistence test) relies on that path.
-        const isSwitch = previousWorkspaceId !== null && previousWorkspaceId !== workspace.id;
-        if (isSwitch) {
-          const declaredIds = new Set((workspace.curatedModels ?? []).map((b) => b.modelId));
-          let currentModelIds: string[] = [];
-          try {
-            currentModelIds = Array.from(useModelStore.getState().models.keys());
-          } catch {
-            /* mocked store without getState — treat as empty (nothing to evict). */
-          }
-          const toEvict = currentModelIds.filter((id) => !declaredIds.has(id));
-          if (toEvict.length > 0) {
-            const storeUnload = useModelStore.getState().unload;
-            for (const id of toEvict) {
-              storeUnload(id);
-            }
-          }
-        }
-
         await syncWorkspaceToEditor(restoredFiles);
+        if (restoredWorkspaceRef.current?.id !== nextWorkspace.id) return 'superseded';
 
         // Replay any curated bundles bound to this workspace (D1 fix). Without
         // this, refresh / switch-workspace would drop CDM/FpML/etc. because
@@ -534,11 +554,13 @@ function AppContent() {
         // don't invalidate the curated-binding snapshot. Without the
         // try/finally a parse failure during the very first restore would
         // strand the gate closed for the remainder of the session.
-        setCuratedSyncedWorkspaceId(nextWorkspace.id);
+        if (restoredWorkspaceRef.current?.id === nextWorkspace.id) {
+          setCuratedSyncedWorkspaceId(nextWorkspace.id);
+        }
       }
-      return true;
+      return restoredWorkspaceRef.current?.id === nextWorkspace.id ? 'restored' : 'superseded';
     },
-    [syncWorkspaceToEditor]
+    [clearWorkspaceState, reconcileWorkspaceModels, syncWorkspaceToEditor]
   );
 
   // Restore the most recently opened workspace on mount when its metadata and
@@ -562,7 +584,8 @@ function AppContent() {
         }
         setBootState('restoring');
         const restored = await restoreWorkspace(ws);
-        if (!restored) {
+        if (cancelled || restored === 'superseded') return;
+        if (restored === 'empty') {
           // Restore yielded zero user files — show the no-workspace shell with
           // the Workspaces launcher rather than an empty Explore surface.
           setBootState('start');
@@ -570,7 +593,7 @@ function AppContent() {
           return;
         }
         setBootState('restored');
-        // restoreWorkspace returns true only when user files were loaded, so
+        // A restored workspace has user files, so
         // userFiles.length > 0 here — jump straight to the explore perspective.
         usePerspectiveStore.getState().setActivePerspective('explore');
       } catch (err) {
@@ -693,7 +716,10 @@ function AppContent() {
   useEffect(() => {
     if (!restoredWorkspace) return;
     if (curatedSyncedWorkspaceId !== restoredWorkspace.id) return;
-    const nextBindings = deriveCuratedBindings(loadedModels);
+    for (const model of loadedModels.values()) {
+      if (model.source.archiveUrl) unavailableCuratedBindingsRef.current.delete(model.source.id);
+    }
+    const nextBindings = deriveCuratedBindings(loadedModels, [...unavailableCuratedBindingsRef.current.values()]);
     const prevBindings = restoredWorkspace.curatedModels ?? [];
     if (curatedBindingsEqual(prevBindings, nextBindings)) return;
     const nextWorkspace = { ...restoredWorkspace, curatedModels: nextBindings };
@@ -726,33 +752,50 @@ function AppContent() {
 
   const handleFilesLoaded = useCallback(
     async (loadedFiles: WorkspaceFile[], targetWorkspaceId?: string) => {
-      // Resolve the workspace these files belong to. An explicit target (e.g.
-      // the git-clone path passes the freshly created git-backed workspace)
-      // loads INTO that workspace. With no target this is a launcher load:
-      // ALWAYS create a new workspace — never reuse whichever workspace is
-      // currently open. The Workspaces perspective is reachable while a project
-      // is active (#238), so reusing `restoredWorkspace` here would silently
-      // overwrite (or, for "New blank workspace", wipe) the open project's
-      // files (Codex P1).
-      let workspace = targetWorkspaceId ? await persistence.loadWorkspace(targetWorkspaceId) : null;
-      if (!workspace) {
-        workspace = await createWorkspaceRecord(deriveWorkspaceName(loadedFiles));
-        // Fresh workspace has no declared curated bindings, so curated
-        // sync is trivially "settled" — opening the persist gate so any
-        // bundles the user loads next get persisted. Without this the
-        // user could load a curated bundle into a fresh workspace and
-        // the bindings would never reach IDB because the gate would
-        // stay closed (no restoreWorkspace call ever flipped it).
+      // Reference models selected on the launcher seed a new workspace.
+      // An active workspace's bindings belong only to that workspace.
+      const launcherModels = restoredWorkspaceRef.current ? new Map<string, LoadedModel>() : loadedModelsRef.current;
+      clearWorkspaceState();
+      const activationEpoch = workspaceEpochRef.current;
+      setBootState('start');
+      setLoading(true);
+      try {
+        let workspace = targetWorkspaceId ? await persistence.loadWorkspace(targetWorkspaceId) : null;
+        if (activationEpoch !== workspaceEpochRef.current) return;
+        let createdWorkspace = false;
+        if (!workspace) {
+          workspace = await createWorkspaceRecord(deriveWorkspaceName(loadedFiles));
+          createdWorkspace = true;
+        }
+        if (launcherModels.size > 0) {
+          workspace = { ...workspace, curatedModels: deriveCuratedBindings(launcherModels, workspace.curatedModels) };
+          await persistence.saveWorkspace(workspace);
+        }
+        if (activationEpoch !== workspaceEpochRef.current) {
+          if (createdWorkspace) {
+            await persistence.deleteWorkspace(workspace.id);
+            await deleteWorkspaceFiles(workspace.id);
+          }
+          return;
+        }
+        reconcileWorkspaceModels(workspace.curatedModels ?? []);
+        restoredWorkspaceRef.current = workspace;
+        setRestoredWorkspace(workspace);
+        await saveWorkspaceFiles(workspace.id, loadedFiles);
+        if (activationEpoch !== workspaceEpochRef.current) return;
+        await syncWorkspaceToEditor(loadedFiles);
+        if (restoredWorkspaceRef.current?.id !== workspace.id) return;
         setCuratedSyncedWorkspaceId(workspace.id);
+        setBootState('restored');
+        usePerspectiveStore.getState().setActivePerspective('explore');
+      } catch (error) {
+        if (activationEpoch === workspaceEpochRef.current) {
+          setLoading(false);
+          reportWorkspaceError('Failed to load workspace files', error);
+        }
       }
-      setRestoredWorkspace(workspace);
-
-      await saveWorkspaceFiles(workspace.id, loadedFiles);
-      await syncWorkspaceToEditor(loadedFiles);
-      // Switch to the explore perspective now that a workspace is loaded.
-      usePerspectiveStore.getState().setActivePerspective('explore');
     },
-    [createWorkspaceRecord, syncWorkspaceToEditor]
+    [clearWorkspaceState, createWorkspaceRecord, reconcileWorkspaceModels, reportWorkspaceError, syncWorkspaceToEditor]
   );
 
   /**
@@ -856,27 +899,14 @@ function AppContent() {
   );
 
   const handleReset = useCallback(() => {
-    workspaceEpochRef.current += 1;
-    if (restoredWorkspace) {
-      void saveWorkspaceFiles(restoredWorkspace.id, []).catch((err) => {
-        reportWorkspaceError('Failed to persist the cleared workspace state to browser storage', err);
-      });
-    }
-    setFiles([]);
-    setModels([]);
-    setParsedModels([]);
-    setParseErrors(new Map());
-    // Return to the start page so the user can open or create a workspace.
-    // Without this, bootState stays 'restored' and the "Workspace ready."
-    // placeholder is shown with no way to load new files.
-    setBootState('start');
+    clearWorkspaceState();
+    reconcileWorkspaceModels([]);
+    restoredWorkspaceRef.current = null;
     setRestoredWorkspace(null);
-    setCuratedSyncedWorkspaceId(null);
-    setWorkspaceError(null);
-    setWorkspaceNotice(null);
-    // Return to the launcher perspective.
+    setLoading(false);
+    setBootState('start');
     usePerspectiveStore.getState().setActivePerspective('workspaces');
-  }, [reportWorkspaceError, restoredWorkspace]);
+  }, [clearWorkspaceState, reconcileWorkspaceModels]);
 
   /** Switch to a recent workspace from the start page list (T029). */
   const handleSwitchWorkspace = useCallback(
@@ -889,7 +919,8 @@ function AppContent() {
         }
         setBootState('restoring');
         const restored = await restoreWorkspace(ws);
-        if (!restored) {
+        if (restored === 'superseded') return;
+        if (restored === 'empty') {
           setBootState('start');
           setWorkspaceError(null);
           setWorkspaceNotice(null);
@@ -934,13 +965,7 @@ function AppContent() {
     };
   }, [handleFilesLoaded, handleSwitchWorkspace, restoredWorkspace, syncWorkspaceToEditor]);
 
-  /** New-workspace affordance from the recents list — same path as FileLoader. */
-  const handleCreateWorkspace = useCallback(() => {
-    setBootState('start');
-    setRestoredWorkspace(null);
-    setCuratedSyncedWorkspaceId(null);
-    setWorkspaceNotice(null);
-  }, []);
+  const handleCreateWorkspace = handleReset;
 
   const getWorkspaceManager = useCallback(async (): Promise<WorkspaceManager> => {
     if (workspaceManagerRef.current) return workspaceManagerRef.current;
@@ -1089,15 +1114,7 @@ function AppContent() {
         await persistence.deleteWorkspace(workspaceId);
         await deleteWorkspaceFiles(workspaceId);
         if (restoredWorkspace?.id === workspaceId) {
-          setRestoredWorkspace(null);
-          setCuratedSyncedWorkspaceId(null);
-          setFiles([]);
-          setModels([]);
-          setParsedModels([]);
-          setParseErrors(new Map());
-          setBootState('start');
-          // Return to the launcher perspective when the active workspace is deleted.
-          usePerspectiveStore.getState().setActivePerspective('workspaces');
+          handleReset();
         }
         setWorkspaceError(null);
         setWorkspaceNotice(null);
@@ -1105,7 +1122,7 @@ function AppContent() {
         reportWorkspaceError('Failed to delete the selected workspace', err);
       }
     },
-    [reportWorkspaceError, restoredWorkspace]
+    [handleReset, reportWorkspaceError, restoredWorkspace]
   );
 
   // Merge reference model files into workspace when models change and re-parse
@@ -1119,6 +1136,7 @@ function AppContent() {
       modelParseTokenRef.current += 1;
       return;
     }
+    const epoch = workspaceEpochRef.current;
     const prev = filesRef.current;
     const hadModelFiles = prev.some((f) => f.path.startsWith('['));
     // Skip the no-op case: no models loaded and none to clean up.
@@ -1136,11 +1154,11 @@ function AppContent() {
     const token = modelParseTokenRef.current;
     parseWorkspaceFiles(merged, { hydrateNamespaces: useEditorStore.getState().activeHydrationNamespaces() })
       .then((result) => {
-        if (token !== modelParseTokenRef.current) return;
+        if (token !== modelParseTokenRef.current || epoch !== workspaceEpochRef.current) return;
         applyParseResult(result, { preserveSemanticModelOnErrors: true });
       })
       .catch((err) => {
-        if (token !== modelParseTokenRef.current) return;
+        if (token !== modelParseTokenRef.current || epoch !== workspaceEpochRef.current) return;
         reportWorkspaceError(
           'Failed to re-parse the workspace after loading reference models; keeping the last valid graph',
           err

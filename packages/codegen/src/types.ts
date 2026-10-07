@@ -274,6 +274,8 @@ export interface PreviewFieldBase {
 
 export interface PreviewScalarField extends PreviewFieldBase {
   kind: 'string' | 'number' | 'boolean';
+  /** ISO calendar date string, kept as YYYY-MM-DD throughout editing. */
+  format?: 'date';
 }
 
 export interface PreviewEnumField extends PreviewFieldBase {
@@ -283,6 +285,8 @@ export interface PreviewEnumField extends PreviewFieldBase {
 
 export interface PreviewObjectField extends PreviewFieldBase {
   kind: 'object';
+  /** Deferred body in FormPreviewSchema.definitions; expand one level on demand. */
+  definitionId?: string;
   /** Fully-qualified Rune type resolved for this object input. */
   referencedTypeFqn?: string;
   /** Fully-qualified concrete types assignable to this reference. */
@@ -340,6 +344,8 @@ export interface FormPreviewSchema {
   kind?: FormPreviewKind;
   status: 'ready' | 'unsupported';
   fields: PreviewField[];
+  /** Finite, namespace-qualified bodies for recursive and deep object fields. */
+  definitions?: Record<string, Pick<FormPreviewSchema, 'fields' | 'choiceArmPaths' | 'sourceMap'>>;
   /**
    * The resolved result type for a function. This remains available when the
    * function belongs to a lazily hydrated curated bundle instead of the local

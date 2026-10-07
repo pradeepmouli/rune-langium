@@ -907,3 +907,166 @@ describe('RuneLspSession — real Langium wiring', () => {
     expect(backing.has('docs:file:///h.rosetta')).toBe(false);
   });
 });
+
+describe('RuneLspSession — dependency replay', () => {
+  it('restores dependency models before source and preserves the persisted generation', async () => {
+    const backing = new Map<string, unknown>();
+    const state = makeState(backing);
+    let session = new RuneLspSession(state);
+    const ws = makeFakeWs();
+    const request = async (id: number, method: string, params: unknown) => {
+      await session.webSocketMessage(ws, JSON.stringify({ jsonrpc: '2.0', id, method, params }));
+      await vi.waitFor(() => expect(ws.sent.some((message: any) => message.id === id)).toBe(true));
+      const response = ws.sent.find((message: any) => message.id === id) as any;
+      expect(response.error).toBeUndefined();
+      return response.result;
+    };
+    await request(1, 'initialize', { processId: null, rootUri: null, capabilities: {} });
+    await session.webSocketMessage(ws, JSON.stringify({ jsonrpc: '2.0', method: 'initialized', params: {} }));
+    const dependencyUri = 'file:///[cdm]/dependency file.rosetta';
+    const canonicalDependencyUri = URI.parse(dependencyUri).toString();
+    const modelJson = JSON.stringify({
+      $type: 'RosettaModel',
+      name: 'example',
+      imports: [],
+      elements: [
+        {
+          $type: 'Data',
+          name: 'Party',
+          attributes: [],
+          conditions: [],
+          $textRegion: {
+            offset: 19,
+            length: 11,
+            end: 30,
+            range: { start: { line: 2, character: 0 }, end: { line: 2, character: 11 } },
+            assignments: {
+              name: [
+                {
+                  offset: 24,
+                  end: 29,
+                  length: 5,
+                  range: { start: { line: 2, character: 5 }, end: { line: 2, character: 10 } }
+                }
+              ]
+            }
+          }
+        }
+      ]
+    });
+    await request(2, 'rune/syncModels', { document: { uri: dependencyUri, modelJson } });
+    await request(3, 'rune/syncModels', { retain: [dependencyUri] });
+    const generation = backing.get('model-meta:' + canonicalDependencyUri);
+    const uri = 'file:///workspace/user.rosetta';
+    await session.webSocketMessage(
+      ws,
+      JSON.stringify({
+        jsonrpc: '2.0',
+        method: 'textDocument/didOpen',
+        params: {
+          textDocument: {
+            uri,
+            languageId: 'rosetta',
+            version: 0,
+            text: 'namespace example\n\ntype Trade:\n party Party (1..1)\n'
+          }
+        }
+      })
+    );
+    await vi.waitFor(() => expect(backing.has('docs:' + uri)).toBe(true));
+    expect(backing.has('docs:' + dependencyUri)).toBe(false);
+    session = new RuneLspSession(makeState(backing));
+    const result = await request(4, 'textDocument/definition', {
+      textDocument: { uri },
+      position: { line: 3, character: 9 }
+    });
+    expect(result).toMatchObject([{ targetUri: canonicalDependencyUri }]);
+    expect(backing.get('model-meta:' + canonicalDependencyUri)).toEqual(generation);
+    await session.webSocketMessage(
+      ws,
+      JSON.stringify({
+        jsonrpc: '2.0',
+        method: 'textDocument/didOpen',
+        params: {
+          textDocument: {
+            uri: canonicalDependencyUri,
+            languageId: 'rosetta',
+            version: 1,
+            text: 'namespace example\n\ntype Renamed:\n'
+          }
+        }
+      })
+    );
+    await vi.waitFor(() =>
+      expect(
+        ws.sent.some(
+          (message: any) =>
+            message.method === 'textDocument/publishDiagnostics' &&
+            message.params.uri === uri &&
+            message.params.diagnostics.some((diagnostic: any) => diagnostic.message.includes("'Party'"))
+        )
+      ).toBe(true)
+    );
+    await session.webSocketMessage(
+      ws,
+      JSON.stringify({
+        jsonrpc: '2.0',
+        method: 'textDocument/didClose',
+        params: {
+          textDocument: { uri: canonicalDependencyUri }
+        }
+      })
+    );
+    await vi.waitFor(() => expect(backing.has('docs:' + canonicalDependencyUri)).toBe(false));
+    session = new RuneLspSession(makeState(backing));
+    const afterEdit = await request(5, 'textDocument/definition', {
+      textDocument: { uri },
+      position: { line: 3, character: 9 }
+    });
+    expect(afterEdit).toBeNull();
+    const validGeneration = backing.get('model-meta:' + canonicalDependencyUri);
+    await session.webSocketMessage(
+      ws,
+      JSON.stringify({
+        jsonrpc: '2.0',
+        method: 'textDocument/didOpen',
+        params: {
+          textDocument: {
+            uri: canonicalDependencyUri,
+            languageId: 'rosetta',
+            version: 2,
+            text: 'namespace example\n\ntype Party:\n bad (1..1)\n'
+          }
+        }
+      })
+    );
+    await vi.waitFor(() =>
+      expect(
+        ws.sent.some(
+          (message: any) =>
+            message.method === 'textDocument/publishDiagnostics' &&
+            message.params.uri === canonicalDependencyUri &&
+            message.params.diagnostics.some((diagnostic: any) => diagnostic.severity === 1)
+        )
+      ).toBe(true)
+    );
+    await session.webSocketMessage(
+      ws,
+      JSON.stringify({
+        jsonrpc: '2.0',
+        method: 'textDocument/didClose',
+        params: { textDocument: { uri: canonicalDependencyUri } }
+      })
+    );
+    await vi.waitFor(() => expect(backing.has('docs:' + canonicalDependencyUri)).toBe(false));
+    session = new RuneLspSession(makeState(backing));
+    const afterInvalidEdit = await request(6, 'textDocument/definition', {
+      textDocument: { uri },
+      position: { line: 3, character: 9 }
+    });
+    expect(afterInvalidEdit).toBeNull();
+    expect(backing.get('model-meta:' + canonicalDependencyUri)).toEqual(validGeneration);
+    await session.webSocketClose(ws, 1000, 'test finished', true);
+    expect([...backing.keys()].some((key) => key.startsWith('models:') || key.startsWith('model-meta:'))).toBe(false);
+  });
+});

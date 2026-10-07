@@ -3,6 +3,7 @@
 
 import { create } from 'zustand';
 import { qualifiedNameFromNodeId } from '@rune-langium/visual-editor';
+import { expandPreviewField } from '@rune-langium/codegen/export';
 import type { FormPreviewSchema, PreviewField, PreviewSourceMapEntry } from '@rune-langium/codegen/export';
 import type { ValidationDiagnostic } from '@rune-langium/codegen/instances';
 import { useOutputStore, fmtLine } from './output-store.js';
@@ -142,20 +143,27 @@ function reconcileScalarValue(field: PreviewField, current: unknown): unknown {
   }
 }
 
-function reconcileFieldValue(field: PreviewField, current: unknown): unknown {
+function reconcileFieldValue(
+  field: PreviewField,
+  current: unknown,
+  definitions: FormPreviewSchema['definitions']
+): unknown {
   switch (field.kind) {
     case 'object': {
-      if (current === undefined && !field.required) {
+      if (current === undefined && (!field.required || field.definitionId)) {
         return undefined;
       }
       const record =
         current && typeof current === 'object' && !Array.isArray(current) ? (current as Record<string, unknown>) : {};
-      return reconcileFieldsObject(field.children ?? [], field.choiceArmPaths, record);
+      const expanded = expandPreviewField(field, definitions);
+      // Preserve authored data if a response lacks its deferred definition.
+      if (expanded.kind !== 'object' || (field.definitionId && expanded === field)) return record;
+      return reconcileFieldsObject(expanded.children ?? [], expanded.choiceArmPaths, record, definitions);
     }
     case 'array': {
       const items = Array.isArray(current) ? current : [];
       const [child] = field.children ?? [];
-      return child ? items.map((item) => reconcileFieldValue(child, item)) : [];
+      return child ? items.map((item) => reconcileFieldValue(child, item, definitions)) : [];
     }
     default:
       return reconcileScalarValue(field, current);
@@ -174,16 +182,17 @@ function reconcileFieldValue(field: PreviewField, current: unknown): unknown {
 function reconcileFieldsObject(
   fields: PreviewField[],
   armPaths: string[] | undefined,
-  current: Record<string, unknown>
+  current: Record<string, unknown>,
+  definitions: FormPreviewSchema['definitions']
 ): Record<string, unknown> {
   const { armFields, otherFields } = splitChoiceArmFields(fields, armPaths);
   const entries: Array<[string, unknown]> = otherFields.map((field) => [
     fieldLeafKey(field.path),
-    reconcileFieldValue(field, current[fieldLeafKey(field.path)])
+    reconcileFieldValue(field, current[fieldLeafKey(field.path)], definitions)
   ]);
   const selected = armFields.find((arm) => current[fieldLeafKey(arm.path)] !== undefined) ?? armFields[0];
   if (selected) {
-    const reconciled = reconcileFieldValue(selected, current[fieldLeafKey(selected.path)]);
+    const reconciled = reconcileFieldValue(selected, current[fieldLeafKey(selected.path)], definitions);
     entries.push([fieldLeafKey(selected.path), reconciled === undefined ? buildArmValue(selected) : reconciled]);
   }
   return Object.fromEntries(entries);
@@ -192,9 +201,10 @@ function reconcileFieldsObject(
 function reconcileSampleValues(
   fields: PreviewField[],
   armPaths: string[] | undefined,
-  values: Record<string, unknown> | undefined
+  values: Record<string, unknown> | undefined,
+  definitions: FormPreviewSchema['definitions']
 ): Record<string, unknown> {
-  return reconcileFieldsObject(fields, armPaths, values ?? {});
+  return reconcileFieldsObject(fields, armPaths, values ?? {}, definitions);
 }
 
 function sameSourceRange(left: FormPreviewTarget['sourceRange'], right: FormPreviewTarget['sourceRange']): boolean {
@@ -361,7 +371,7 @@ export const usePreviewStore = create<PreviewStore>((set, get) => ({
     // 2 on PR #444).
     const armPaths = resolveArmPaths(schema);
     const sampleValues = existingSample
-      ? reconcileSampleValues(schema.fields, armPaths, existingSample.values)
+      ? reconcileSampleValues(schema.fields, armPaths, existingSample.values, schema.definitions)
       : buildDefaultValues(schema.fields, armPaths);
     samples.set(schema.targetId, {
       targetId: schema.targetId,

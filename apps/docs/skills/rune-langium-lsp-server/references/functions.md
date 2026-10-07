@@ -16,8 +16,10 @@ The server responds to `initialize` requests only once per lifecycle — the
 connection adapter manages the `Created → Initializing → Initialized` state
 machine to avoid duplicate initialization errors.
 ```ts
-createRuneLspServer(): RuneLspServer
+createRuneLspServer(options: { onModelUpdate?: (update: LspModelUpdate) => Promise<void> }): RuneLspServer
 ```
+**Parameters:**
+- `options: { onModelUpdate?: (update: LspModelUpdate) => Promise<void> }` — default: `{}`
 **Returns:** `RuneLspServer` — A RuneLspServer ready for `listen(transport)`.
 ```ts
 import { createRuneLspServer } from '@rune-langium/lsp-server';

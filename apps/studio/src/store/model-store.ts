@@ -207,7 +207,7 @@ export const useModelStore = create<ModelStore>((set, get) => ({
         onProgress: (progress) => {
           const currentLoading = get().loading;
           const entry = currentLoading.get(source.id);
-          if (entry) {
+          if (entry?.abortController === abortController && !abortController.signal.aborted) {
             const updated = new Map(currentLoading);
             updated.set(source.id, { ...entry, progress });
             set({ loading: updated });
@@ -215,6 +215,8 @@ export const useModelStore = create<ModelStore>((set, get) => ({
         },
         archiveLoader
       });
+
+      if (abortController.signal.aborted || get().loading.get(source.id)?.abortController !== abortController) return;
 
       // Success — add to loaded models, remove from loading
       const currentModels = new Map(get().models);
@@ -246,6 +248,7 @@ export const useModelStore = create<ModelStore>((set, get) => ({
         }
       }
     } catch (e) {
+      if (abortController.signal.aborted || get().loading.get(source.id)?.abortController !== abortController) return;
       const currentLoading = new Map(get().loading);
       currentLoading.delete(source.id);
 

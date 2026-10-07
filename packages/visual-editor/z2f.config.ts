@@ -21,6 +21,7 @@
  */
 
 import { defineConfig } from '@zod-to-form/core';
+import { editorSectionFields } from './src/components/forms/sections/config.js';
 
 import type * as Components from './src/components/zod-form-components.js';
 import type * as ZodSchemas from './src/generated/zod-schemas.js';
@@ -54,6 +55,7 @@ export default defineConfig<typeof Components, typeof ZodSchemas>({
     TypeSelector: { component: 'TypeSelector', controlled: true }
   },
   fields: {
+    ...editorSectionFields,
     // --- Global field mappings (apply across all schemas) ---
 
     // Cross-reference fields → TypeSelector
@@ -70,7 +72,7 @@ export default defineConfig<typeof Components, typeof ZodSchemas>({
     'output.card': { component: 'CardinalitySelector' },
 
     // Note: top-level `definition` is rendered via MetadataSection (declared
-    // below). Per-row definition (`attributes[].definition`,
+    // in the shared section config). Per-row definition (`attributes[].definition`,
     // `enumValues[].definition`, etc.) is mapped to Textarea via the
     // per-schema overrides further down.
 
@@ -89,28 +91,11 @@ export default defineConfig<typeof Components, typeof ZodSchemas>({
     'output.$type': { hidden: true },
 
     // Annotations — rendered by AnnotationSection (Phase 7 / US5)
-    annotations: { section: 'AnnotationSection' },
     // Nested annotations stay hidden — owned by their parent row, not the
     // top-level section.
     'attributes[].annotations': { hidden: true },
     'enumValues[].annotations': { hidden: true },
 
-    // Conditions — rendered by ConditionSection (Phase 7 / US5)
-    conditions: { section: 'ConditionSection' },
-    postConditions: { section: 'ConditionSection' },
-
-    // Description (definition) — rendered by MetadataSection (Phase 7 / US5)
-    // Note: this overrides the global Textarea mapping above for the
-    // top-level `definition` field; per-row `definition` (e.g.
-    // `attributes[].definition`) is still rendered as a Textarea via the
-    // schema-scoped overrides further down.
-    definition: { section: 'MetadataSection' },
-
-    // Comments — rendered by MetadataSection (Phase 7 / US5)
-    comments: { section: 'MetadataSection' },
-
-    // Synonyms — rendered by MetadataSection (Phase 7 / US5)
-    synonyms: { section: 'MetadataSection' },
     // Nested synonyms stay hidden — owned by their parent row.
     'attributes[].synonyms': { hidden: true },
     'enumValues[].enumSynonyms': { hidden: true },

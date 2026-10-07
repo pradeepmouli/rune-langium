@@ -395,7 +395,7 @@ invalid inputs throw a diagnostic naming the failed condition.
 ### 8b-vi. Fixture-diff tests and SC-009 fidelity matrix
 
 - [X] T128 [P] [US6] Run `pnpm --filter @rune-langium/codegen test us6-funcs` and iterate until all four func fixture-diff tests (T114–T117) pass byte-identically; commit `expected.ts` files; verify that the accumulator and alias fixtures produce correct TypeScript output compilable with `tsc --noEmit`
-- [X] T129 [US6] Create `packages/codegen/test/func-fidelity-matrix.test.ts`: implement the SC-009 function-fidelity test matrix — 100-case battery for the curated CDM func subset; for each func in the matrix: (a) confirm the emitted module compiles with `tsc --noEmit`, (b) dynamically import and call the function with valid CDM input, (c) assert output matches the Python generator's evaluation of the same function on the same input; assert ≥99% behavioral parity; mark as `.todo` until Phase 8b implementation tasks are green (SC-009)
+- [X] T129 [US6] SC-009 reference battery: `func-fidelity-matrix.test.ts` strictly compiles pinned upstream source closure; `apps/studio/test/workers/cdm-reference-parity.test.ts` executes 117 cases across 12 functions (116 parity cases and one documented null-safe equality difference) through the real Studio adapters/module loader against unmodified pinned Python bindings. The explicit coverage manifest records native/reference defects and comparison rules; no universal CDM parity claim or remaining fixture-blocker todo.
 
 ### 8b-vii. CLI and quickstart
 

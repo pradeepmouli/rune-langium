@@ -12,9 +12,9 @@
  *
  * Two call paths are supported:
  *
- * 1. **Imperative** (today's editors): the host passes the per-action
+ * 1. **Standalone** (public callback-prop consumers): the host passes the per-action
  *    callbacks (`onDefinitionCommit`, …) directly as props.
- * 2. **Declarative** (Phase 7 / US5): the section is resolved by name
+ * 2. **Configured** (Inspector section layout): the section is resolved by name
  *    from z2f's `componentModule` and only receives `fields: string[]`.
  *    The component falls back to `useEditorActionsContext()` to derive
  *    the callbacks from `EditorFormActions` + `nodeId`.
@@ -103,7 +103,7 @@ export function MetadataSection({
   onCommentsCommit,
   onSynonymAdd,
   onSynonymRemove,
-  synonymSourceOptions = EMPTY_SYNONYM_SOURCE_OPTIONS
+  synonymSourceOptions: sourceOptions
 }: MetadataSectionProps): React.ReactNode {
   const { control, getValues } = useFormContext();
   const [expanded, setExpanded] = useState(true);
@@ -118,6 +118,7 @@ export function MetadataSection({
   // with <EditorActionsProvider>; we derive the action via the context.
   // If neither is present we no-op (read-only-style behaviour, contract §6).
   const ctx = useEditorActionsContext();
+  const synonymSourceOptions = sourceOptions ?? ctx?.synonymSourceOptions ?? EMPTY_SYNONYM_SOURCE_OPTIONS;
   const effectiveReadOnly = readOnly ?? ctx?.readOnly ?? false;
 
   // Derive host kind from form state ($type is spread into form values by

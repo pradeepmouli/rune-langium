@@ -1,0 +1,130 @@
+{
+  "pins": [
+    {
+      "id": "cdm",
+      "owner": "finos",
+      "repo": "common-domain-model",
+      "ref": "7.0.0",
+      "commit": "a6ffe777bc12ef3d289579cb3a86d1cbffea63d2"
+    },
+    {
+      "id": "fpml",
+      "owner": "rosetta-models",
+      "repo": "rune-fpml",
+      "ref": "3.2.0",
+      "commit": "ce23df5562c077ec60e7d15e3d2df7e40fcca2f9"
+    },
+    {
+      "id": "rune-dsl",
+      "owner": "finos",
+      "repo": "rune-dsl",
+      "ref": "10.2.2",
+      "commit": "38631eab97265f90ff14d7dd89635d4a133ebd6b"
+    }
+  ],
+  "files": [
+    {
+      "name": "cdm.base.datetime--base-datetime-enum.rosetta",
+      "upstreamPath": "[cdm]/common-domain-model-a6ffe777bc12ef3d289579cb3a86d1cbffea63d2/rosetta-source/src/main/rosetta/base-datetime-enum.rosetta",
+      "sha256": "81d6ca97a7b3e3ea28ebbf3668485aaeaae6205784f87a3403f48360ff0f6406"
+    },
+    {
+      "name": "cdm.base.datetime--base-datetime-func.rosetta",
+      "upstreamPath": "[cdm]/common-domain-model-a6ffe777bc12ef3d289579cb3a86d1cbffea63d2/rosetta-source/src/main/rosetta/base-datetime-func.rosetta",
+      "sha256": "5ddeb4dcc9593082fa674f2d05ac398c280bb6ee23acd47ad219ed43559b0d7c"
+    },
+    {
+      "name": "cdm.base.datetime--base-datetime-type.rosetta",
+      "upstreamPath": "[cdm]/common-domain-model-a6ffe777bc12ef3d289579cb3a86d1cbffea63d2/rosetta-source/src/main/rosetta/base-datetime-type.rosetta",
+      "sha256": "108a9f21dfa036696a66e76fc748d0d27e859f54b74cf1978bc0bf598f36e983"
+    },
+    {
+      "name": "cdm.base.math--base-math-enum.rosetta",
+      "upstreamPath": "[cdm]/common-domain-model-a6ffe777bc12ef3d289579cb3a86d1cbffea63d2/rosetta-source/src/main/rosetta/base-math-enum.rosetta",
+      "sha256": "5825beb3f86aa4721723129224f8d35ea79d198257213ed04acd3750f14c1417"
+    },
+    {
+      "name": "cdm.base.math--base-math-func.rosetta",
+      "upstreamPath": "[cdm]/common-domain-model-a6ffe777bc12ef3d289579cb3a86d1cbffea63d2/rosetta-source/src/main/rosetta/base-math-func.rosetta",
+      "sha256": "d9e66b7d762d5fa0d2b1d6f97c7a57fbec8d152f247d090f9e0f9a974acb5a06"
+    },
+    {
+      "name": "cdm.base.math--base-math-type.rosetta",
+      "upstreamPath": "[cdm]/common-domain-model-a6ffe777bc12ef3d289579cb3a86d1cbffea63d2/rosetta-source/src/main/rosetta/base-math-type.rosetta",
+      "sha256": "7d2ce4051c97493262a2340c2466accca174606a47576db1fe373c828b748f88"
+    },
+    {
+      "name": "com.rosetta.model--annotations.rosetta",
+      "upstreamPath": "[rune-dsl]/rune-dsl-38631eab97265f90ff14d7dd89635d4a133ebd6b/rune-runtime/src/main/resources/model/annotations.rosetta",
+      "sha256": "4240ed9c574f8f9218dafa29748a4346acb6b9a1d911518f436ab2daaa1f5137"
+    },
+    {
+      "name": "com.rosetta.model--basictypes.rosetta",
+      "upstreamPath": "[rune-dsl]/rune-dsl-38631eab97265f90ff14d7dd89635d4a133ebd6b/rune-runtime/src/main/resources/model/basictypes.rosetta",
+      "sha256": "1cbb271c11f09ba1c9e42c721eef6d16e8cfd21f9092521fa7584966f2a35d65"
+    }
+  ],
+  "declarations": [
+    {
+      "namespace": "cdm.base.math",
+      "name": "CompareNumbers",
+      "kind": "RosettaFunction"
+    },
+    {
+      "namespace": "cdm.base.math",
+      "name": "ArithmeticOperation",
+      "kind": "RosettaFunction"
+    },
+    {
+      "namespace": "cdm.base.math",
+      "name": "Abs",
+      "kind": "RosettaFunction"
+    },
+    {
+      "namespace": "cdm.base.math",
+      "name": "Min",
+      "kind": "RosettaFunction"
+    },
+    {
+      "namespace": "cdm.base.math",
+      "name": "Max",
+      "kind": "RosettaFunction"
+    },
+    {
+      "namespace": "cdm.base.math",
+      "name": "StringEquals",
+      "kind": "RosettaFunction"
+    },
+    {
+      "namespace": "cdm.base.math",
+      "name": "AppendToVector",
+      "kind": "RosettaFunction"
+    },
+    {
+      "namespace": "cdm.base.math",
+      "name": "UnitEquals",
+      "kind": "RosettaFunction"
+    },
+    {
+      "namespace": "cdm.base.math",
+      "name": "FilterQuantityByCurrency",
+      "kind": "RosettaFunction"
+    },
+    {
+      "namespace": "cdm.base.datetime",
+      "name": "AppendDateToList",
+      "kind": "RosettaFunction"
+    },
+    {
+      "namespace": "cdm.base.math",
+      "name": "RoundToNearest",
+      "kind": "RosettaFunction"
+    },
+    {
+      "namespace": "cdm.base.math",
+      "name": "Sqrt",
+      "kind": "RosettaFunction"
+    }
+  ],
+  "normalization": "RuneDslParser optional implicit-functional brackets; declaration bodies otherwise retained from upstream CST"
+}

@@ -33,6 +33,7 @@ vi.mock('@rune-langium/core', async (importOriginal) => {
   const actual = await importOriginal<typeof import('@rune-langium/core')>();
   return {
     ...actual,
+    serializeRuneModel: (_serializer: unknown, model: unknown) => JSON.stringify(model),
     parseWorkspace: vi.fn(async (docs: Array<{ uri: string; content: string }>) => {
       return docs.map((doc) => {
         if (!doc.uri.toLowerCase().endsWith('.rosetta')) {
