@@ -24,7 +24,7 @@
     "wrangler": "^4.136.0"
   },
   "engines": {
-    "node": ">=22.13.0"
+    "node": "^22.22.2 || ^24.15.0 || >=26.0.0"
   },
   "license": "FSL-1.1-ALv2",
   "author": "Pradeep Mouli <pmouli@mac.com> (https://github.com/pradeepmouli)"

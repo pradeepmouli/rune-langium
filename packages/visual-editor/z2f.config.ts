@@ -27,15 +27,21 @@ import type * as Components from './src/components/zod-form-components.js';
 import type * as ZodSchemas from './src/generated/zod-schemas.js';
 
 export default defineConfig<typeof Components, typeof ZodSchemas>({
-  components: '@/components/zod-form-components',
-  formPrimitives: {
-    field: 'Field',
-    label: 'FieldLabel',
-    control: 'FieldControl'
+  components: {
+    source: '@/components/zod-form-components',
+    fieldTemplate: '@/components/zod-field-template',
+    overrides: {
+      CardinalitySelector: { controlled: true, props: { value: 'field.value', onChange: 'field.onChange' } },
+      Input: {},
+      Select: { controlled: true, props: { value: 'field.value', onChange: 'field.onChange' } },
+      Textarea: {},
+      TypeSelector: { controlled: true, props: { value: 'field.value', onChange: 'field.onChange' } }
+    }
   },
   defaults: {
     mode: 'auto-save',
     ui: 'shadcn',
+    optimization: { compileZod: false },
     overwrite: true,
     serverAction: false
   },
@@ -47,13 +53,6 @@ export default defineConfig<typeof Components, typeof ZodSchemas>({
     'RosettaTypeAliasSchema'
   ],
   exclude: [],
-  fieldTypes: {
-    CardinalitySelector: { component: 'CardinalitySelector', controlled: true },
-    Input: { component: 'Input' },
-    Select: { component: 'Select', controlled: true },
-    Textarea: { component: 'Textarea' },
-    TypeSelector: { component: 'TypeSelector', controlled: true }
-  },
   fields: {
     ...editorSectionFields,
     // --- Global field mappings (apply across all schemas) ---

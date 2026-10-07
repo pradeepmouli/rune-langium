@@ -19,7 +19,7 @@
  */
 
 import { useCallback, useMemo } from 'react';
-import { FormProvider, useFieldArray, type Control } from 'react-hook-form';
+import { useFieldArray, type Control } from 'react-hook-form';
 import type { GhostRow, GhostRowContext } from '@zod-to-form/core';
 import { FieldGroup, FieldLegend, FieldSet } from '@rune-langium/design-system/ui/field';
 import { Button } from '@rune-langium/design-system/ui/button';
@@ -36,6 +36,9 @@ import { getRefText, parseCardinality } from '../../adapters/model-helpers.js';
 import { useAutoSave } from '../../hooks/useAutoSave.js';
 import { useLatestRef } from '../../hooks/useLatestRef.js';
 import { useZodForm, useExternalSync } from '@zod-to-form/react';
+import { EditorFormProvider as FormProvider } from '../forms/EditorFormProvider.js';
+import { editorOptimization } from '../forms/editor-optimization.js';
+
 import { DataSchema } from '../../generated/zod-schemas.js';
 import { formRegistry } from '../forms/rows/index.js';
 import { formValuesProjection } from './identity-projection.js';
@@ -127,6 +130,7 @@ function DataTypeForm({
   // there is no projection layer and no reshape bridge.
 
   const { form } = useZodForm(DataSchema, {
+    optimization: editorOptimization,
     defaultValues: formValuesProjection<typeof DataSchema>(data, nodeMeta),
     mode: 'onChange',
     formRegistry,
@@ -327,7 +331,7 @@ function DataTypeForm({
   // ---- Render --------------------------------------------------------------
 
   return (
-    <FormProvider {...form}>
+    <FormProvider {...form} schema={DataSchema}>
       <EditorActionsProvider
         nodeId={nodeId}
         actions={actions}

@@ -5,13 +5,15 @@ settings:
   excludeLinksFromLockfile: false
 
 overrides:
+  zod: 4.6.5
+  '@zod-to-form/vite': 0.5.0
   '@l1xnan/tree-sitter-sql': 0.4.7
   react: 19.2.8
   react-dom: 19.2.8
   langium-zod: 0.12.0
   x-to-zod: ^0.8.0
-  '@zod-to-form/core': 0.11.4
-  '@zod-to-form/react': 0.12.0
+  '@zod-to-form/core': 0.12.0
+  '@zod-to-form/react': 0.13.0
   codemirror: 6.0.2
   ws: '>=8.21.0'
   uuid: '>=11.1.1'
@@ -218,7 +220,7 @@ importers:
         specifier: ^4.4.0
         version: 4.4.0
       zod:
-        specifier: ^4.6.5
+        specifier: 4.6.5
         version: 4.6.5
     devDependencies:
       '@cloudflare/workers-types':
@@ -354,7 +356,7 @@ importers:
         specifier: 3.35.1
         version: 3.35.1
       zod:
-        specifier: ^4.6.5
+        specifier: 4.6.5
         version: 4.6.5
       zustand:
         specifier: ^5.0.15
@@ -391,11 +393,11 @@ importers:
         specifier: ^6.1.1
         version: 6.1.1(vite@8.3.2(@types/node@26.6.2)(esbuild@0.28.2)(jiti@2.7.0)(tsx@4.23.15)(yaml@2.9.1))
       '@zod-to-form/core':
-        specifier: 0.11.4
-        version: 0.11.4(jiti@2.7.0)(zod@4.6.5)
+        specifier: 0.12.0
+        version: 0.12.0(jiti@2.7.0)(zod@4.6.5)
       '@zod-to-form/vite':
-        specifier: 0.4.8
-        version: 0.4.8(@hookform/resolvers@5.9.1(ajv-formats@2.1.1(ajv@8.20.0))(ajv@8.20.0)(react-hook-form@7.88.0(react@19.2.8))(zod@4.6.5))(jiti@2.7.0)(react-hook-form@7.88.0(react@19.2.8))(react@19.2.8)(vite@8.3.2(@types/node@26.6.2)(esbuild@0.28.2)(jiti@2.7.0)(tsx@4.23.15)(yaml@2.9.1))(zod@4.6.5)
+        specifier: 0.5.0
+        version: 0.5.0(@hookform/resolvers@5.9.1(ajv-formats@2.1.1(ajv@8.20.0))(ajv@8.20.0)(react-hook-form@7.88.0(react@19.2.8))(zod@4.6.5))(jiti@2.7.0)(react-hook-form@7.88.0(react@19.2.8))(react@19.2.8)(vite@8.3.2(@types/node@26.6.2)(esbuild@0.28.2)(jiti@2.7.0)(tsx@4.23.15)(yaml@2.9.1))(zod@4.6.5)
       esbuild:
         specifier: ^0.28.2
         version: 0.28.2
@@ -442,7 +444,7 @@ importers:
         specifier: workspace:*
         version: link:../../packages/worker-core
       zod:
-        specifier: ^4.6.5
+        specifier: 4.6.5
         version: 4.6.5
     devDependencies:
       '@cloudflare/workers-types':
@@ -544,7 +546,7 @@ importers:
         specifier: ^5.0.1
         version: 5.0.1(@opentelemetry/api@1.9.1)(@types/node@26.6.2)(@vitest/coverage-v8@5.0.1)(@vitest/ui@5.0.1)(jsdom@30.1.0)(vite@8.3.2(@types/node@26.6.2)(esbuild@0.28.2)(jiti@2.7.0)(tsx@4.23.15)(yaml@2.9.1))
       zod:
-        specifier: ^4.6.5
+        specifier: 4.6.5
         version: 4.6.5
 
   packages/codegen-legacy:
@@ -562,7 +564,7 @@ importers:
         specifier: ^4.4.0
         version: 4.4.0
       zod:
-        specifier: ^4.6.5
+        specifier: 4.6.5
         version: 4.6.5
     devDependencies:
       langium-cli:
@@ -581,7 +583,7 @@ importers:
   packages/curated-schema:
     dependencies:
       zod:
-        specifier: ^4.6.5
+        specifier: 4.6.5
         version: 4.6.5
     devDependencies:
       vitest:
@@ -627,7 +629,7 @@ importers:
         specifier: ^4.3.3
         version: 4.3.3
       zod:
-        specifier: ^4.6.5
+        specifier: 4.6.5
         version: 4.6.5
     devDependencies:
       '@types/react':
@@ -728,11 +730,11 @@ importers:
         specifier: ^12.11.6
         version: 12.11.6(@types/react-dom@19.3.0(@types/react@19.3.0))(@types/react@19.3.0)(react-dom@19.2.8(react@19.2.8))(react@19.2.8)
       '@zod-to-form/core':
-        specifier: 0.11.4
-        version: 0.11.4(jiti@2.7.0)(zod@4.6.5)
-      '@zod-to-form/react':
         specifier: 0.12.0
-        version: 0.12.0(@hookform/resolvers@5.9.1(ajv-formats@2.1.1(ajv@8.20.0))(ajv@8.20.0)(react-hook-form@7.88.0(react@19.2.8))(zod@4.6.5))(jiti@2.7.0)(react-hook-form@7.88.0(react@19.2.8))(react@19.2.8)(zod@4.6.5)
+        version: 0.12.0(jiti@2.7.0)(zod@4.6.5)
+      '@zod-to-form/react':
+        specifier: 0.13.0
+        version: 0.13.0(@hookform/resolvers@5.9.1(ajv-formats@2.1.1(ajv@8.20.0))(ajv@8.20.0)(react-hook-form@7.88.0(react@19.2.8))(zod@4.6.5))(jiti@2.7.0)(react-hook-form@7.88.0(react@19.2.8))(react@19.2.8)(zod@4.6.5)
       elkjs:
         specifier: ^0.12.0
         version: 0.12.0
@@ -746,7 +748,7 @@ importers:
         specifier: ^7.88.0
         version: 7.88.0(react@19.2.8)
       zod:
-        specifier: ^4.6.5
+        specifier: 4.6.5
         version: 4.6.5
       zundo:
         specifier: ^2.3.0
@@ -771,8 +773,8 @@ importers:
         specifier: ^19.3.0
         version: 19.3.0(@types/react@19.3.0)
       '@zod-to-form/vite':
-        specifier: 0.4.8
-        version: 0.4.8(@hookform/resolvers@5.9.1(ajv-formats@2.1.1(ajv@8.20.0))(ajv@8.20.0)(react-hook-form@7.88.0(react@19.2.8))(zod@4.6.5))(jiti@2.7.0)(react-hook-form@7.88.0(react@19.2.8))(react@19.2.8)(vite@8.3.2(@types/node@26.6.2)(esbuild@0.28.2)(jiti@2.7.0)(tsx@4.23.15)(yaml@2.9.1))(zod@4.6.5)
+        specifier: 0.5.0
+        version: 0.5.0(@hookform/resolvers@5.9.1(ajv-formats@2.1.1(ajv@8.20.0))(ajv@8.20.0)(react-hook-form@7.88.0(react@19.2.8))(zod@4.6.5))(jiti@2.7.0)(react-hook-form@7.88.0(react@19.2.8))(react@19.2.8)(vite@8.3.2(@types/node@26.6.2)(esbuild@0.28.2)(jiti@2.7.0)(tsx@4.23.15)(yaml@2.9.1))(zod@4.6.5)
       jsdom:
         specifier: ^30.1.0
         version: 30.1.0
@@ -920,6 +922,10 @@ packages:
     resolution: {integrity: sha512-Aup7aUOfpbAUg2ROOJN6Iw5f9DMBlzu0mIkm/malLQFN/YQgO48wCj0Kxa3sEHJvPVFg7siR+qRInwXd2qhQKw==}
     engines: {node: '>=6.9.0'}
 
+  '@babel/code-frame@8.0.6':
+    resolution: {integrity: sha512-uMHhvmDmwFiLuiozaoRYTZHqMFuu3fem/X9JY78lohAuLoh8LSGGC8JqUzo2cVuBsBxkjMZNk56CE7ock8Xxkw==}
+    engines: {node: ^22.18.0 || >=24.11.0}
+
   '@babel/compat-data@7.29.7':
     resolution: {integrity: sha512-locTkQyKvwIEgBzVrn8693ebc97F2U8ZHjbXwDXJ5Fn2TCpNwTlKcaKLkdHop5c/icOFE7qt7Q9JC5hnKNa6Gg==}
     engines: {node: '>=6.9.0'}
@@ -931,6 +937,10 @@ packages:
   '@babel/generator@7.29.8':
     resolution: {integrity: sha512-gZbepsdh3WDtgZKWL+vTPh71LSBrm/Y4/QDZBVCcYfmeTEEuoOYwlSy+G1StfJg+/Zy550u/3TATbm7qDbbMtg==}
     engines: {node: '>=6.9.0'}
+
+  '@babel/generator@8.0.6':
+    resolution: {integrity: sha512-/pcanjdRsonCexCuxgGD8fKnBLLzk2i9uM4kmcmGyyev2R5YDs+rafMYZ89RvaGY1mW8T7C5au0TyYaEeHBGng==}
+    engines: {node: ^22.18.0 || >=24.11.0}
 
   '@babel/helper-annotate-as-pure@7.29.7':
     resolution: {integrity: sha512-OoK6239jHPuSQOoS0kfTVKn0b/rVTk0seKq4Gd2UMLtmOVLjDC0ki3e+c90Trqv2gMfvJFqkiljrr568+qddiw==}
@@ -949,6 +959,10 @@ packages:
   '@babel/helper-globals@7.29.7':
     resolution: {integrity: sha512-3nQVUAtvkKH9zahfWgw96Jc/uFOmjACE1kQz82E2lqWmHBgjzbNlsC22nuQTfahmWeQtTq5nQ/4Nnd2A1wj4zA==}
     engines: {node: '>=6.9.0'}
+
+  '@babel/helper-globals@8.0.6':
+    resolution: {integrity: sha512-OdnA/N52LhzFpeUuVz5YGuSWjc7TPHiFmVYZbPlSgExocO2GwbxVpSni9MVs5wwW+wZ4kPuwBEBN9pIPDYz1mA==}
+    engines: {node: ^22.18.0 || >=24.11.0}
 
   '@babel/helper-member-expression-to-functions@7.29.7':
     resolution: {integrity: sha512-j+7JYmk1JYDtACIGj0QJqqWZjoUpMoEikQGADMaHgCMCSDqd2+P32rfcibUNrGOMWrlzK1WJBdxrB3JJQZwWtg==}
@@ -986,9 +1000,17 @@ packages:
     resolution: {integrity: sha512-Pb5ijPrZ89GDH8223L4UP8i6QApWxs04RbPQJTeWDV0/keR2E36MeKnyr6LYmUUvqRRI+Iv87SuF1W6ErINzYw==}
     engines: {node: '>=6.9.0'}
 
+  '@babel/helper-string-parser@8.0.6':
+    resolution: {integrity: sha512-+6HYEBnsDRZHJtUTAEfMQd0zMDqdFHS7C+5vAsEZqBUr3vEMWOWlHJ0Jz1gS8jJIlCvLsuA6ivmeoqzH936YcA==}
+    engines: {node: ^22.18.0 || >=24.11.0}
+
   '@babel/helper-validator-identifier@7.29.7':
     resolution: {integrity: sha512-qehxGkRj55h/ff8EMaJ+cYhyaKlHIxqYDn682wQD7RNp9UujOQsHog2uS0r2vzr4pW+sXf90NeeayjcNaX3fFg==}
     engines: {node: '>=6.9.0'}
+
+  '@babel/helper-validator-identifier@8.0.6':
+    resolution: {integrity: sha512-HYx0YmuchRxRSpnjvcNffnPS8DCauKNmnumIuHG3jnQAVewRA7kfJGwF13ayEpSZs7s4R/oBH4eppuXcAQd5JQ==}
+    engines: {node: ^22.18.0 || >=24.11.0}
 
   '@babel/helper-validator-option@7.29.7':
     resolution: {integrity: sha512-N9ZErrD+yW5geCDtBqnOoxmR8+tNKiGuxKlDpuJxfsqpa2dFcexaziGAE/qoHLiDDreVNMupxGmSoNlyvsA3gw==}
@@ -1001,6 +1023,11 @@ packages:
   '@babel/parser@7.29.9':
     resolution: {integrity: sha512-CjXrNHTnvqBVqHgdBysY3vk2T8tpJHb5/RMeHJBTyVa9xgugCB0CJTx/3oO8RV2QRQP391RWpB7D6hLjm8V9uA==}
     engines: {node: '>=6.0.0'}
+    hasBin: true
+
+  '@babel/parser@8.0.6':
+    resolution: {integrity: sha512-LpGDIYJAzc3Y3PT9x+FxBrGYu2PlWxLmyN7SwPTzaX0LSwEmFJBsRnPBqmaXF2r1v+Zhz6lNiEJ+7yKtM5+Ugg==}
+    engines: {node: ^22.18.0 || >=24.11.0}
     hasBin: true
 
   '@babel/plugin-syntax-jsx@7.29.7':
@@ -1041,13 +1068,25 @@ packages:
     resolution: {integrity: sha512-puq+Gf35oI24FeN11LkoUQFqv9uwNeWpxXZi/Ji3rRIoKAzKnxRaZ+Gkj0vKS9ZCiTESfng1N9LyOyXvo+m+Gg==}
     engines: {node: '>=6.9.0'}
 
+  '@babel/template@8.0.0':
+    resolution: {integrity: sha512-eAD0QW/AlbamBbw0FeGiwasbCVPq5ncW0HNVyLP3B9czqLyh4gvw+5JTSNt6le9+ziAU7mqDZsKTHf3jTb4chQ==}
+    engines: {node: ^22.18.0 || >=24.11.0}
+
   '@babel/traverse@7.29.8':
     resolution: {integrity: sha512-I5z7H3bf/41ktsNVLtpN0wAa336HkqIHQ5BuPLEhTkt1jVSyZpeNKIzTgEWmlxjdg81R0IgUCcaE+Ok3NvrfZg==}
     engines: {node: '>=6.9.0'}
 
+  '@babel/traverse@8.0.6':
+    resolution: {integrity: sha512-ilYV+qLStGzSKLipJlETdvdtpK3rAuwfCmCoGKv15MU4EoeIuLkespSNoNLFGOPSciEHx9TLWtN5mv0fz5w5mQ==}
+    engines: {node: ^22.18.0 || >=24.11.0}
+
   '@babel/types@7.29.8':
     resolution: {integrity: sha512-Vj1jF3cPfxg7OAfoI7QnVKLoILlm2JF9pnVHrX8qx7AHMiYWT+NDAA7jChlNgRS4WTLc/fD1lXLmPixluj+3Gg==}
     engines: {node: '>=6.9.0'}
+
+  '@babel/types@8.0.6':
+    resolution: {integrity: sha512-c+xgSWboV2pdwXP67BUWDVRHi2BO5Q3KwxyFVs7taVTY+fsK47/L51ZXQoV9rozHJDNHvJ4v4WEsI/IlxV2l2A==}
+    engines: {node: ^22.18.0 || >=24.11.0}
 
   '@base-ui/react@1.8.0':
     resolution: {integrity: sha512-P0/1sxo6SBVZOklKMIedvTWqw2s2IQzi9x5bIVsXu980cuSOD4NeuRSs+/L7LZQfDkZP/uRZyGPyfFl/B1oH+Q==}
@@ -1759,7 +1798,7 @@ packages:
       valibot: '>=0.31.0 || ^1.0.0-beta.4 || ^1.0.0-rc'
       vest: '>=6.0.0'
       yup: ^1.0.0
-      zod: ^3.25.0 || ^4.0.0
+      zod: 4.6.5
     peerDependenciesMeta:
       '@sinclair/typebox':
         optional: true
@@ -2004,6 +2043,9 @@ packages:
   '@jridgewell/gen-mapping@0.3.13':
     resolution: {integrity: sha512-2kkt/7niJ6MgEPxF0bYdQ6etZaA+fQvDcLKckhy1yIQOzaoKjBBjSj63/aLVjYE3qhRt5dvM+uUyfCg6UKCBbA==}
 
+  '@jridgewell/gen-mapping@0.4.0-beta.0':
+    resolution: {integrity: sha512-JdGNkbE4GlNPYQhM0L95fBQr7ctLZJ276QXQLTad4t1oSdnnCI3fDq9DW3BqYAWv8Wc3+HS+4Gsii1oPMCfz1w==}
+
   '@jridgewell/remapping@2.3.5':
     resolution: {integrity: sha512-LI9u/+laYG4Ds1TDKSJW2YPrIlcVYOwi2fUC6xB43lueCjgxV4lffOCZCtYFiH6TNOX+tQKXx97T4IKHbhyHEQ==}
 
@@ -2100,7 +2142,7 @@ packages:
     engines: {node: '>=18'}
     peerDependencies:
       '@cfworker/json-schema': ^4.1.1
-      zod: ^3.25 || ^4.0
+      zod: 4.6.5
     peerDependenciesMeta:
       '@cfworker/json-schema':
         optional: true
@@ -3231,6 +3273,9 @@ packages:
   '@types/hast@3.0.5':
     resolution: {integrity: sha512-rp/ezSWaD1m44dPKICGhiskI13nVr7qTloFwDa/IYkhhf5nzwP+zIQcIJh3WIFSBOy/H1PzB40jPjMDksN4F+g==}
 
+  '@types/jsesc@2.5.1':
+    resolution: {integrity: sha512-9VN+6yxLOPLOav+7PwjZbxiID2bVaeq0ED4qSQmdQTdjnXJSaCVKTR58t15oqH1H5t8Ng2ZX1SabJVoN9Q34bw==}
+
   '@types/json-schema@7.0.15':
     resolution: {integrity: sha512-5+fP8P8MFNC+AyZCDxrB2pkZFPGzqQWUzpSeuuVLvm8VMcorNYavBqoFcxK8bQz4Qsbn4oUEEem4wDLfcysGHA==}
 
@@ -3577,34 +3622,34 @@ packages:
   '@xyflow/system@0.0.82':
     resolution: {integrity: sha512-4DKnL3CGtCGLRSmgDqaajRVgeksMXq/Yw4wPfdMfm7JvdIiWHGzVYOfFUztiATwdBXZqUU6HhehwUdbV9G23PQ==}
 
-  '@zod-to-form/codegen@0.10.4':
-    resolution: {integrity: sha512-pprN10xY9e/dFcHgDWxOul++uDVtitz40MEmS0OXNol4J86UvcDjGZ9PEK8wbh0Vwl5z2IIVBhDT0cKfEn2QFg==}
+  '@zod-to-form/codegen@0.11.0':
+    resolution: {integrity: sha512-KQqXfgw9pNuQ5udEb8zHQC72v2ahScwueE/nZD8sOqc1gWidS9WZpklxr2nvnl8vyAo2IZYYd1k3zwAyF5bSIA==}
 
-  '@zod-to-form/core@0.11.4':
-    resolution: {integrity: sha512-jKCvdR7HeVikOc7miH17mBpaR0tqOrjX1nG+i25TFw2gARMQOkSk0fYNHrBEWdwN07F+flbqxHb4c3FLQqtAgw==}
+  '@zod-to-form/core@0.12.0':
+    resolution: {integrity: sha512-Km/WiUlZMWkL7OiRk694PJuGnviBeXn6VMvVrJ01R45E24IsR1jsrqBzsDGiSmiXw3+e91ulv3STRkgWtbVwOA==}
     peerDependencies:
       jiti: ^2.0.0
-      zod: ^4.0.0
+      zod: 4.6.5
     peerDependenciesMeta:
       jiti:
         optional: true
 
-  '@zod-to-form/react@0.12.0':
-    resolution: {integrity: sha512-1xgXhvYzqaAY/ciUAZ5DS6p1TJEi6N+GDRwil5XqxV7Kg20vTlVCuTHeV1yQwOu2CZ4id9kN9R2xpCr0P6ZH4w==}
+  '@zod-to-form/react@0.13.0':
+    resolution: {integrity: sha512-EfiWZJqwSK2LHWbcNGpAl4/3SLtSvnidtsKMOKobMwyUeC+Dl+Icb4VaE/NrWCUMbytfq2bUQ5ZwuKNifBA5aA==}
     peerDependencies:
       '@hookform/resolvers': ^5.0.0
       react: 19.2.8
       react-hook-form: ^7.0.0
-      zod: ^4.0.0
+      zod: 4.6.5
 
-  '@zod-to-form/vite@0.4.8':
-    resolution: {integrity: sha512-eifanHniWnUuIqT8XcNFY5ov5wo0WvdW8v4HEkNqEVZGs1Vz5EAJbqL19vAo9eRN4P17BA42LHwmTwD32VP3NQ==}
+  '@zod-to-form/vite@0.5.0':
+    resolution: {integrity: sha512-Abuz7NwjSNRDP06CwyHQM7SLFbd3OMmDgBZnzLRjOwuFpxncL4ZbuKVh1fdFVXyD9JFYHyy9FRLLPYhRJukjHA==}
     peerDependencies:
       '@hookform/resolvers': ^5.0.0
       react: 19.2.8
       react-hook-form: ^7.0.0
       vite: ^5.0.0 || ^6.0.0 || ^7.0.0 || ^8.0.0
-      zod: ^4.0.0
+      zod: 4.6.5
 
   abort-controller@3.0.0:
     resolution: {integrity: sha512-h8lQ8tacZYnR3vNQTgibj+tODHI5/+l06Au2Pcriv/Gmet0eaj4TwWH41sO9wnHDiQsEj19q0drzdWdeAHtweg==}
@@ -6837,16 +6882,13 @@ packages:
   zod-to-json-schema@3.25.2:
     resolution: {integrity: sha512-O/PgfnpT1xKSDeQYSCfRI5Gy3hPf91mKVDuYLUHZJMiDFptvP41MSnWofm8dnCm0256ZNfZIM7DSzuSMAFnjHA==}
     peerDependencies:
-      zod: ^3.25.28 || ^4
+      zod: 4.6.5
 
   zod-validation-error@4.0.2:
     resolution: {integrity: sha512-Q6/nZLe6jxuU80qb/4uJ4t5v2VEZ44lzQjPDhYJNztRQ4wyWc6VF3D3Kb/fAuPetZQnhS3hnajCf9CsWesghLQ==}
     engines: {node: '>=18.0.0'}
     peerDependencies:
-      zod: ^3.25.0 || ^4.0.0
-
-  zod@3.25.76:
-    resolution: {integrity: sha512-gzUt/qt81nXsFGKIFcC3YnfEAx5NkunCfnDlvuBSSFS02bcXu4Lmea0AFIUwbLWxWPx3d9p8S5QoaujKcNQxcQ==}
+      zod: 4.6.5
 
   zod@4.6.5:
     resolution: {integrity: sha512-v5l/aFXZQeai4awLbOpSoHecE9UiMrnfx75tEXLjNonXVARxQ5mOeipTjROUchszUNCqnE+hqAMujRsRHsut2Q==}
@@ -6963,6 +7005,11 @@ snapshots:
       js-tokens: 4.0.0
       picocolors: 1.1.1
 
+  '@babel/code-frame@8.0.6':
+    dependencies:
+      '@babel/helper-validator-identifier': 8.0.6
+      js-tokens: 10.0.0
+
   '@babel/compat-data@7.29.7': {}
 
   '@babel/core@7.29.7':
@@ -6993,6 +7040,15 @@ snapshots:
       '@jridgewell/trace-mapping': 0.3.31
       jsesc: 3.1.0
 
+  '@babel/generator@8.0.6':
+    dependencies:
+      '@babel/parser': 8.0.6
+      '@babel/types': 8.0.6
+      '@jridgewell/gen-mapping': 0.4.0-beta.0
+      '@jridgewell/trace-mapping': 0.3.31
+      '@types/jsesc': 2.5.1
+      jsesc: 3.1.0
+
   '@babel/helper-annotate-as-pure@7.29.7':
     dependencies:
       '@babel/types': 7.29.8
@@ -7019,6 +7075,8 @@ snapshots:
       - supports-color
 
   '@babel/helper-globals@7.29.7': {}
+
+  '@babel/helper-globals@8.0.6': {}
 
   '@babel/helper-member-expression-to-functions@7.29.7':
     dependencies:
@@ -7067,7 +7125,11 @@ snapshots:
 
   '@babel/helper-string-parser@7.29.7': {}
 
+  '@babel/helper-string-parser@8.0.6': {}
+
   '@babel/helper-validator-identifier@7.29.7': {}
+
+  '@babel/helper-validator-identifier@8.0.6': {}
 
   '@babel/helper-validator-option@7.29.7': {}
 
@@ -7079,6 +7141,10 @@ snapshots:
   '@babel/parser@7.29.9':
     dependencies:
       '@babel/types': 7.29.8
+
+  '@babel/parser@8.0.6':
+    dependencies:
+      '@babel/types': 8.0.6
 
   '@babel/plugin-syntax-jsx@7.29.7(@babel/core@7.29.7)':
     dependencies:
@@ -7128,6 +7194,12 @@ snapshots:
       '@babel/parser': 7.29.9
       '@babel/types': 7.29.8
 
+  '@babel/template@8.0.0':
+    dependencies:
+      '@babel/code-frame': 8.0.6
+      '@babel/parser': 8.0.6
+      '@babel/types': 8.0.6
+
   '@babel/traverse@7.29.8':
     dependencies:
       '@babel/code-frame': 7.29.7
@@ -7140,10 +7212,25 @@ snapshots:
     transitivePeerDependencies:
       - supports-color
 
+  '@babel/traverse@8.0.6':
+    dependencies:
+      '@babel/code-frame': 8.0.6
+      '@babel/generator': 8.0.6
+      '@babel/helper-globals': 8.0.6
+      '@babel/parser': 8.0.6
+      '@babel/template': 8.0.0
+      '@babel/types': 8.0.6
+      obug: 2.2.1
+
   '@babel/types@7.29.8':
     dependencies:
       '@babel/helper-string-parser': 7.29.7
       '@babel/helper-validator-identifier': 7.29.7
+
+  '@babel/types@8.0.6':
+    dependencies:
+      '@babel/helper-string-parser': 8.0.6
+      '@babel/helper-validator-identifier': 8.0.6
 
   '@base-ui/react@1.8.0(@types/react@19.3.0)(react-dom@19.2.8(react@19.2.8))(react@19.2.8)':
     dependencies:
@@ -7898,6 +7985,11 @@ snapshots:
       '@jridgewell/sourcemap-codec': 1.6.0
       '@jridgewell/trace-mapping': 0.3.31
 
+  '@jridgewell/gen-mapping@0.4.0-beta.0':
+    dependencies:
+      '@jridgewell/sourcemap-codec': 1.6.0
+      '@jridgewell/trace-mapping': 0.3.31
+
   '@jridgewell/remapping@2.3.5':
     dependencies:
       '@jridgewell/gen-mapping': 0.3.13
@@ -8000,7 +8092,7 @@ snapshots:
       react: 19.2.8
       react-dom: 19.2.8(react@19.2.8)
 
-  '@modelcontextprotocol/sdk@1.30.0(zod@3.25.76)':
+  '@modelcontextprotocol/sdk@1.30.0(zod@4.6.5)':
     dependencies:
       '@hono/node-server': 2.1.1(hono@4.13.8)
       ajv: 8.20.0
@@ -8017,8 +8109,8 @@ snapshots:
       json-schema-typed: 8.0.2
       pkce-challenge: 5.0.1
       raw-body: 3.0.2
-      zod: 3.25.76
-      zod-to-json-schema: 3.25.2(zod@3.25.76)
+      zod: 4.6.5
+      zod-to-json-schema: 3.25.2(zod@4.6.5)
     transitivePeerDependencies:
       - supports-color
 
@@ -8772,6 +8864,8 @@ snapshots:
     dependencies:
       '@types/unist': 3.0.3
 
+  '@types/jsesc@2.5.1': {}
+
   '@types/json-schema@7.0.15': {}
 
   '@types/linkify-it@5.0.0': {}
@@ -9052,37 +9146,37 @@ snapshots:
       d3-selection: 3.0.0
       d3-zoom: 3.0.0
 
-  '@zod-to-form/codegen@0.10.4(jiti@2.7.0)(zod@4.6.5)':
+  '@zod-to-form/codegen@0.11.0(jiti@2.7.0)(zod@4.6.5)':
     dependencies:
-      '@zod-to-form/core': 0.11.4(jiti@2.7.0)(zod@4.6.5)
+      '@zod-to-form/core': 0.12.0(jiti@2.7.0)(zod@4.6.5)
     transitivePeerDependencies:
       - jiti
       - zod
 
-  '@zod-to-form/core@0.11.4(jiti@2.7.0)(zod@4.6.5)':
+  '@zod-to-form/core@0.12.0(jiti@2.7.0)(zod@4.6.5)':
     dependencies:
       zod: 4.6.5
     optionalDependencies:
       jiti: 2.7.0
 
-  '@zod-to-form/react@0.12.0(@hookform/resolvers@5.9.1(ajv-formats@2.1.1(ajv@8.20.0))(ajv@8.20.0)(react-hook-form@7.88.0(react@19.2.8))(zod@4.6.5))(jiti@2.7.0)(react-hook-form@7.88.0(react@19.2.8))(react@19.2.8)(zod@4.6.5)':
+  '@zod-to-form/react@0.13.0(@hookform/resolvers@5.9.1(ajv-formats@2.1.1(ajv@8.20.0))(ajv@8.20.0)(react-hook-form@7.88.0(react@19.2.8))(zod@4.6.5))(jiti@2.7.0)(react-hook-form@7.88.0(react@19.2.8))(react@19.2.8)(zod@4.6.5)':
     dependencies:
       '@hookform/resolvers': 5.9.1(ajv-formats@2.1.1(ajv@8.20.0))(ajv@8.20.0)(react-hook-form@7.88.0(react@19.2.8))(zod@4.6.5)
-      '@zod-to-form/core': 0.11.4(jiti@2.7.0)(zod@4.6.5)
+      '@zod-to-form/core': 0.12.0(jiti@2.7.0)(zod@4.6.5)
       react: 19.2.8
       react-hook-form: 7.88.0(react@19.2.8)
       zod: 4.6.5
     transitivePeerDependencies:
       - jiti
 
-  '@zod-to-form/vite@0.4.8(@hookform/resolvers@5.9.1(ajv-formats@2.1.1(ajv@8.20.0))(ajv@8.20.0)(react-hook-form@7.88.0(react@19.2.8))(zod@4.6.5))(jiti@2.7.0)(react-hook-form@7.88.0(react@19.2.8))(react@19.2.8)(vite@8.3.2(@types/node@26.6.2)(esbuild@0.28.2)(jiti@2.7.0)(tsx@4.23.15)(yaml@2.9.1))(zod@4.6.5)':
+  '@zod-to-form/vite@0.5.0(@hookform/resolvers@5.9.1(ajv-formats@2.1.1(ajv@8.20.0))(ajv@8.20.0)(react-hook-form@7.88.0(react@19.2.8))(zod@4.6.5))(jiti@2.7.0)(react-hook-form@7.88.0(react@19.2.8))(react@19.2.8)(vite@8.3.2(@types/node@26.6.2)(esbuild@0.28.2)(jiti@2.7.0)(tsx@4.23.15)(yaml@2.9.1))(zod@4.6.5)':
     dependencies:
-      '@babel/parser': 7.29.9
-      '@babel/traverse': 7.29.8
-      '@babel/types': 7.29.8
+      '@babel/parser': 8.0.6
+      '@babel/traverse': 8.0.6
+      '@babel/types': 8.0.6
       '@hookform/resolvers': 5.9.1(ajv-formats@2.1.1(ajv@8.20.0))(ajv@8.20.0)(react-hook-form@7.88.0(react@19.2.8))(zod@4.6.5)
-      '@zod-to-form/codegen': 0.10.4(jiti@2.7.0)(zod@4.6.5)
-      '@zod-to-form/core': 0.11.4(jiti@2.7.0)(zod@4.6.5)
+      '@zod-to-form/codegen': 0.11.0(jiti@2.7.0)(zod@4.6.5)
+      '@zod-to-form/core': 0.12.0(jiti@2.7.0)(zod@4.6.5)
       magic-string: 1.4.1
       pathe: 2.0.3
       react: 19.2.8
@@ -9091,7 +9185,6 @@ snapshots:
       zod: 4.6.5
     transitivePeerDependencies:
       - jiti
-      - supports-color
 
   abort-controller@3.0.0:
     dependencies:
@@ -11575,7 +11668,7 @@ snapshots:
       '@babel/plugin-transform-typescript': 7.29.9(@babel/core@7.29.7)
       '@babel/preset-typescript': 7.29.7(@babel/core@7.29.7)
       '@dotenvx/dotenvx': 1.75.1
-      '@modelcontextprotocol/sdk': 1.30.0(zod@3.25.76)
+      '@modelcontextprotocol/sdk': 1.30.0(zod@4.6.5)
       '@types/validate-npm-package-name': 4.0.2
       browserslist: 4.29.0
       cn: 0.2.6
@@ -11601,8 +11694,8 @@ snapshots:
       tsconfig-paths: 4.2.0
       undici: 7.29.1
       validate-npm-package-name: 7.0.2
-      zod: 3.25.76
-      zod-to-json-schema: 3.25.2(zod@3.25.76)
+      zod: 4.6.5
+      zod-to-json-schema: 3.25.2(zod@4.6.5)
     transitivePeerDependencies:
       - '@cfworker/json-schema'
       - babel-plugin-macros
@@ -12468,15 +12561,13 @@ snapshots:
       compress-commons: 4.1.2
       readable-stream: 3.6.2
 
-  zod-to-json-schema@3.25.2(zod@3.25.76):
+  zod-to-json-schema@3.25.2(zod@4.6.5):
     dependencies:
-      zod: 3.25.76
+      zod: 4.6.5
 
   zod-validation-error@4.0.2(zod@4.6.5):
     dependencies:
       zod: 4.6.5
-
-  zod@3.25.76: {}
 
   zod@4.6.5: {}
 

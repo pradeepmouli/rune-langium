@@ -5,9 +5,8 @@ import { defineConfig, type Plugin } from 'vite';
 import react from '@vitejs/plugin-react';
 import tailwindcss from '@tailwindcss/vite';
 import z2fVite from '@zod-to-form/vite';
-import { defineConfig as defineZ2FConfig } from '@zod-to-form/core';
+import studioFormConfig from './z2f.config.js';
 import { fileURLToPath } from 'url';
-import type { Z2FViteConfig } from '@zod-to-form/vite';
 
 /**
  * Force the build process to terminate once the bundle is written.
@@ -60,49 +59,8 @@ export default defineConfig(() => {
   // which a bare-prefix string alias could not).
   return {
     base: process.env.VITE_BASE_URL || (process.env.CF_PAGES === '1' ? '/rune-studio/studio/' : '/'),
-    // Plugin order: z2fVite BEFORE react() per upstream's quickstart, so the
-    // generated TSX flows through React's JSX transform normally.
-    //
-    // `configOverride` is `Partial<CodegenConfig>` (flat: mode/ui/componentConfig
-    // at the top level) — NOT the nested `{components, defaults}` shape that
-    // `z2f.config.ts` FILES use with `defineConfig()`. This file is excluded
-    // from apps/studio's tsconfig `include` (src/**/* only), so a shape
-    // mismatch here type-checks as nothing at all — `satisfies` never runs.
-    // A previous version used the file-format shape here, which silently fell
-    // through to the plugin's hardcoded DEFAULT_CONFIG (mode: 'submit',
-    // ui: 'html') for every `?z2f` form in the app — no auto-save wiring, no
-    // shadcn styling, for both Excel export and the JSON Schema/OpenAPI/SQL/XSD
-    // import-options forms.
-    //
-    // `componentConfig` itself DOES nest `components: {source, preset}` (a
-    // `ZodFormsConfig`, unlike the flat outer config) — wrap it in
-    // `defineZ2FConfig` (`@zod-to-form/core`'s `defineConfig`) so the shadcn
-    // preset's `Checkbox`/`Select`/etc. overrides (controlled mode:
-    // `checked`+`onCheckedChange`) actually get merged into
-    // `componentConfig.components.overrides`. Passing the raw literal here
-    // (as a previous version did) skips that merge — Checkbox renders as a
-    // bare uncontrolled `<input type="checkbox">` even with preset: 'shadcn'.
-    plugins: [
-      z2fVite({
-        configOverride: {
-          mode: 'auto-save',
-          ui: 'shadcn',
-          componentConfig: defineZ2FConfig({
-            components: {
-              // Resolved relative to each generated form's own directory
-              // (i.e. relative to the source schema file), not the Vite
-              // root — every schema+components pair lives in
-              // src/codegen-forms/ together, so this is just a sibling import.
-              source: './z2f-components',
-              preset: 'shadcn'
-            }
-          })
-        } satisfies Partial<Z2FViteConfig>
-      }),
-      tailwindcss(),
-      react(),
-      forceExitAfterBuild()
-    ],
+    // Generate TSX before React transforms it; use the same config as CLI/discovery.
+    plugins: [z2fVite({ configOverride: studioFormConfig }), tailwindcss(), react(), forceExitAfterBuild()],
     optimizeDeps: {
       include: ['buffer']
     },

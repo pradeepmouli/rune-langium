@@ -33,7 +33,8 @@
  */
 
 import { useCallback, useMemo } from 'react';
-import { useFormContext, Controller } from 'react-hook-form';
+import { useFormContext } from 'react-hook-form';
+import { EditorController as Controller } from '../forms/EditorFormProvider.js';
 import { Button } from '@rune-langium/design-system/ui/button';
 import { Input } from '@rune-langium/design-system/ui/input';
 import { X } from 'lucide-react';
