@@ -50,7 +50,7 @@ API surface: 717 functions, 8 classes, 170 types, 81 constants
 
 **Key functions:** `parse` (Parse a Rosetta DSL source string into a typed AST), `parseWorkspace` (Parse multiple Rosetta DSL source strings as a workspace), `parseExpression` (Synchronously parse a bare Rune DSL expression snippet (e), `createRuneDslServices` (Create the full set of services required for the Rune DSL language), `createRuneDslParser` (Factory function that creates and fully initializes a RuneDslParser), `insertImplicitBrackets` (Scans Rune DSL source text and inserts `[` and `]` around bare expressions
 that follow `extract`, `filter`, or `reduce` operators)
-**Key classes:** `RuneDslParser` (Custom Langium parser for the Rune DSL that pre-processes input text to insert
+**Key classes:** `RuneDslParser` (Custom Langium parser for the Rune DSL that normalizes lexer input to insert
 implicit `[` and `]` brackets around bare expressions after `extract`,
 `filter`, and `reduce` operators)
 

@@ -18,6 +18,14 @@ Use the pinned pnpm version and preserve overrides/patches in
 
 Keep `@zod-to-form/vite` exactly pinned to `0.4.8` in Studio and visual-editor. Version `0.4.9` upgrades to Babel 8, whose Node requirement excludes the workspace’s supported Node 22.13–22.17 versions. The plugin pin is independent of the React runtime release; reconsider it when deliberately updating the documented Node floor.
 
+## Dependency Compatibility and Audit Exceptions
+
+`@lspeasy/core@3.0.1` imports `type-fest` in its published declarations without declaring the dependency. The workspace package extension supplies `type-fest@5.10.0` so type checking cannot pick up an incompatible hoisted copy from another tool. [Upstream issue #307](https://github.com/pradeepmouli/lspeasy/issues/307) tracks removal after the package declares its own dependency.
+
+`auditConfig.ignoreGhsas` temporarily excludes only the unpatched `braces` development-tool advisory `GHSA-vfj7-8cjw-p6xm`. This is an exception, not a remediation; [issue #572](https://github.com/pradeepmouli/rune-langium/issues/572) tracks removal once a fixed npm release is available. Other advisories remain blocking. Use `pnpm audit --prod` to check the production tree separately.
+
+Keep TypeScript `6.0.3` in docs and the `typescript-classic` alias in codegen: TypeDoc's peer range and codegen's compiler API need that release, while normal workspace compilation uses TypeScript 7.
+
 ## Generated Sources
 
 Do not hand-edit generated AST, Zod, editable-domain, or conformance files.
