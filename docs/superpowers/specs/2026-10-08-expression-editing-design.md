@@ -1,8 +1,9 @@
 # Function and Condition Editing Redesign
 
-**Status:** Implementation in progress; rendering policy clarified with the user on 2026-10-08.
+**Status:** Implemented and locally verified; PR review and authorized production deployment pending.
 **Date:** 2026-10-08
 **Implementation:** [Main plan](../plans/2026-10-08-expression-editing.md), [Python projection plan](../plans/2026-10-08-python-expression-projections.md).
+**Evidence:** [Validation and final review fixes](../reports/2026-10-08-expression-editing-validation.md).
 
 ## Problem and evidence
 

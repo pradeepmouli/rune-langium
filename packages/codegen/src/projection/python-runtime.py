@@ -212,6 +212,33 @@ def rune_reduce(value, reducer, normalize=lambda value: value):
     return reduce(reducer, values[1:], normalize(values[0])) if values else None
 
 
+def rune_number_string(value):
+    value = float(value)
+    if math.isnan(value):
+        return "NaN"
+    if math.isinf(value):
+        return "Infinity" if value > 0 else "-Infinity"
+    if value == 0:
+        return "0"
+    sign = "-" if value < 0 else ""
+    # Both targets use IEEE-754 doubles and shortest round-trip decimal digits.
+    # ECMAScript prints fixed notation for [1e-6, 1e21), unlike Python repr.
+    mantissa, _, exponent = repr(abs(value)).partition("e")
+    whole, _, fraction = mantissa.partition(".")
+    raw = whole + fraction
+    digits = raw.lstrip("0")
+    position = len(whole) + int(exponent or "0") - (len(raw) - len(digits))
+    digits = digits.rstrip("0")
+    if 0 < position <= 21:
+        text = (digits + "0" * (position - len(digits))) if position >= len(digits) else digits[:position] + "." + digits[position:]
+    elif -6 < position <= 0:
+        text = "0." + "0" * -position + digits
+    else:
+        power = position - 1
+        text = digits[0] + ("." + digits[1:] if len(digits) > 1 else "") + "e" + ("+" if power >= 0 else "-") + str(abs(power))
+    return sign + text
+
+
 def rune_string(value):
     if value is None:
         return "null"
@@ -221,13 +248,8 @@ def rune_string(value):
         return ",".join("" if item is None else rune_string(item) for item in value)
     if isinstance(value, dict):
         return "[object Object]"
-    if isinstance(value, float):
-        if math.isnan(value):
-            return "NaN"
-        if math.isinf(value):
-            return "Infinity" if value > 0 else "-Infinity"
-        if value.is_integer():
-            return str(int(value))
+    if isinstance(value, (int, float)):
+        return rune_number_string(value)
     return str(value)
 
 

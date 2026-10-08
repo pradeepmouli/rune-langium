@@ -24,6 +24,21 @@ const cases = [
   ['rune_equals({"value": False}, {"value": 0})', 'runeValueEquals({value: false}, {value: 0})'],
   ['rune_equals([1, 2], [2, 1])', 'runeValueEquals([1, 2], [2, 1])'],
   ['rune_divide(1, 0)', '1 / 0'],
+  ...[
+    0,
+    -0,
+    1e-7,
+    -1e-7,
+    1e-6,
+    1.25e-6,
+    1e20,
+    1e21,
+    -1e21,
+    1.0000000000000001e18,
+    1.2345678901234567,
+    5e-324,
+    Number.MAX_VALUE
+  ].map((value) => [`rune_to_string(float(${String(value)}))`, `String(${String(value)})`] as const),
   [
     'rune_to_field({"value": 0, "meta": {"scheme": "x"}}, "field")',
     'runeToField({value: 0, meta: {scheme: "x"}}, "field")'

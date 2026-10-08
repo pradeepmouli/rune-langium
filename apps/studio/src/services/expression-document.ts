@@ -2,6 +2,8 @@
 // Copyright (c) 2026 Pradeep Mouli
 
 import type { SourceRegion } from '@rune-langium/core';
+import { ChangeSet } from '@codemirror/state';
+import { minimalDocumentChange } from '../lang/document-extensions.js';
 
 export type DocumentBinding = Readonly<{
   workspaceGeneration: number;
@@ -47,12 +49,46 @@ function validRegion(region: SourceRegion, length: number): boolean {
 export class ExpressionDocument {
   private revision = 0;
   private snapshots = new Map<string, { generation: number; source: string; revision: number }>();
+  private regions = new Map<string, DocumentBinding>();
 
   constructor(private options: DocumentOptions) {}
 
   /** Observe every workspace change, including edits later undone to identical text. */
   observe(uri: string): void {
+    if (!this.options.getFile(uri)) {
+      for (const [key, binding] of this.regions) if (binding.uri === uri) this.regions.delete(key);
+      this.snapshots.delete(uri);
+    }
     this.capture(uri, '', { from: 0, to: 0 });
+  }
+
+  retainRegion(binding: DocumentBinding, target: string, source = binding.source, region = binding.region): void {
+    if (binding.workspaceGeneration !== this.options.getGeneration() || !validRegion(region, source.length)) return;
+    this.regions.set(JSON.stringify([binding.uri, binding.nodeId, target]), { ...binding, source, region });
+  }
+
+  /** Recover only edits inside the known region; changed identity/signatures need a fresh parse. */
+  recoverRegion(uri: string, nodeId: string, target: string): DocumentBinding | null {
+    const key = JSON.stringify([uri, nodeId, target]);
+    const binding = this.regions.get(key);
+    const file = this.options.getFile(uri);
+    if (!binding || !file || binding.workspaceGeneration !== this.options.getGeneration()) {
+      this.regions.delete(key);
+      return null;
+    }
+    const changes = ChangeSet.of(minimalDocumentChange(binding.source, file.content), binding.source.length);
+    let outside = false;
+    changes.iterChangedRanges((from, to) => {
+      if (from < binding.region.from || to > binding.region.to) outside = true;
+    });
+    if (outside) {
+      this.regions.delete(key);
+      return null;
+    }
+    const region = { from: changes.mapPos(binding.region.from, -1), to: changes.mapPos(binding.region.to, 1) };
+    const current = this.capture(uri, nodeId, region);
+    if (current) this.retainRegion(current, target);
+    return current;
   }
 
   capture(uri: string, nodeId: string, region: SourceRegion): DocumentBinding | null {

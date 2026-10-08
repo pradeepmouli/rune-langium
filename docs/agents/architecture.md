@@ -95,7 +95,7 @@ checks separate from local unit-test results.
 
 Studio's Inspector reuses SourceEditor and `documentExtensions` for continuous function implementation and active Data condition editing. Region views keep the complete owning file in CodeMirror, conceal and protect other regions, and retain full-file UTF-16 offsets (including CRLF bytes). The shared editor theme owns typography and chrome density for both views.
 
-`ExpressionDocument` captures file identity, workspace generation, revision and expected range text for guarded edits. Parsed workspace entries retain their exact input source; pending or invalid drafts keep the text editor available while structural form edits wait for reconciliation. Curated source loads on demand for either Source or Inspector and remains read-only. `LspClientService.claimDocumentView` assigns one plugin owner per URI, transfers it on focus, and flushes final pending edits before detachment; closing an inactive view cannot untrack its active peer.
+`ExpressionDocument` captures file identity, workspace generation, revision and expected range text for guarded edits. It retains mapped regions by file/declaration/target so invalid drafts remain editable after Inspector disposal; edits outside a retained region require fresh parsed coordinates. Parsed workspace entries retain their exact input source while structural form edits wait for reconciliation. Curated source loads on demand for either Source or Inspector and remains read-only. `LspClientService.claimDocumentView` assigns one plugin owner per URI, transfers it on focus, and flushes final pending edits before detachment; closing an inactive view cannot untrack its active peer.
 
 The Inspector Builder opens a private expression draft dialog from the current
 function caret or selected Data condition. Apply validates the captured workspace,
@@ -110,6 +110,9 @@ Before requesting builder scope, Studio normalizes the owning workspace path to
 its URI and sends the current source/dependency snapshot through the parser
 worker's existing parse/link pipeline. This also seeds that worker after a router
 request falls back to main-thread parsing; it does not create a second resolver.
+The worker serializes complete requests over its mutable document/index services,
+including scope's parse/link/read sequence. Failed snapshot builds fail the scope
+request rather than continuing against another request's documents.
 
 Generated expression views use codegen's recorded projection metadata and the
 existing preview worker/session client. TypeScript functions display the exact

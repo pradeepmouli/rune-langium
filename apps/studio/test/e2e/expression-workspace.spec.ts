@@ -105,6 +105,26 @@ test('Data conditions have independent active editors and typed projections', as
   await expect(page.getByRole('region', { name: 'Condition expression' })).toContainText('PeriodExtendedEnum');
 });
 
+test('an invalid implementation can be reopened and repaired after changing declarations', async ({ page }) => {
+  await loadPinnedFunction(page);
+  const editor = page.getByTestId('implementation-editor').locator('.cm-content');
+  const original = await editor.innerText();
+  await editor.press('ControlOrMeta+a');
+  await page.keyboard.insertText('    set result: if (');
+  await page.getByTestId('namespace-search').fill('Frequency');
+  await typeNavigationButton(page, 'cdm.base.datetime.Frequency', 'Data').click();
+  await page.getByTestId('namespace-search').fill('Abs');
+  await typeNavigationButton(page, 'cdm.base.math.Abs', 'RosettaFunction').click();
+  await expect(editor).toContainText('set result: if (');
+  await editor.press('ControlOrMeta+a');
+  await page.keyboard.insertText(original);
+  await expect(editor).toContainText(original.split('\n').at(-1)!);
+  const implementation = page.getByRole('region', { name: 'Function implementation' });
+  await implementation.getByRole('button', { name: 'Python', exact: true }).click();
+  await expect(page.getByRole('textbox', { name: 'Generated python' })).toContainText('def Abs');
+  await expect(implementation.getByRole('alert')).toHaveCount(0);
+});
+
 test('Source and Inspector send each edit once through the real network LSP', async ({ page }, testInfo) => {
   test.skip(process.env.PLAYWRIGHT_EXPRESSION_LSP !== '1', 'requires the isolated local LSP Worker');
   const sent: Array<{ method?: string; params?: { textDocument?: { uri?: string } } }> = [];

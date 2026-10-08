@@ -46,7 +46,7 @@ export interface PythonModule {
 }
 
 const reserved = new Set(
-  'False None True and as assert async await break class continue def del elif else except finally for from global if import in is lambda nonlocal not or pass raise return try while with yield match case type Any Callable TypedDict NotRequired Literal math re calendar date time datetime timedelta timezone ZoneInfo reduce cmp_to_key input bool float int str list dict len sum min max sorted range enumerate map set tuple all any next isinstance globals ValueError TypeError'.split(
+  'False None True and as assert async await break class continue def del elif else except finally for from global if import in is lambda nonlocal not or pass raise return try while with yield match case type Any Callable TypedDict NotRequired Literal math re calendar date time datetime timedelta timezone ZoneInfo reduce cmp_to_key input bool float int str list dict len sum min max sorted range enumerate map set tuple all any next isinstance globals ValueError TypeError OverflowError abs callable divmod reversed repr'.split(
     ' '
   )
 );
@@ -222,7 +222,9 @@ export function projectPythonFunction(func: RosettaFunction, context: PythonProj
     lines.push(
       `input[${pyString(input.name)}] = rune_cardinality(input.get(${pyString(input.name)}), ${input.card.inf}, ${input.card.unbounded ? 'None' : (input.card.sup ?? 1)}, ${pyString(`Argument '${input.name}'`)})`
     );
-  lines.push(`${result}: ${pythonFieldType(output, context)} = ${outputMany ? '[]' : 'None'}`);
+  const outputType = pythonFieldType(output, context);
+  const accumulatorType = outputMany || outputType.includes(' | None') ? outputType : `${outputType} | None`;
+  lines.push(`${result}: ${accumulatorType} = ${outputMany ? '[]' : 'None'}`);
   for (const alias of func.shortcuts) {
     const local = identifier(alias.name, used);
     const text = renderPythonExpression(alias.expression, { ...renderContext, preserveMetadata: true });

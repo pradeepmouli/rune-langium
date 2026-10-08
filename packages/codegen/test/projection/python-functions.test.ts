@@ -18,6 +18,7 @@ import {
 } from '../../src/projection/python-functions.js';
 import { referenceCases, referenceFiles } from '../helpers/cdm-reference.js';
 import { linkedFunctions } from './python-test-utils.js';
+import { PYTHON_RUNTIME_SOURCE } from '../../src/projection/python-runtime.js';
 
 function execute(source: string, cases: readonly { expression: string; data?: unknown }[]) {
   const result = spawnSync(
@@ -33,6 +34,139 @@ function execute(source: string, cases: readonly { expression: string; data?: un
 }
 
 describe('complete Python function projections', () => {
+  it('reserves every builtin loaded by the authoritative Python runtime', async () => {
+    const [scan] = execute('import ast\nimport builtins\n', [
+      {
+        expression: `sorted({node.id for node in ast.walk(ast.parse(${JSON.stringify(PYTHON_RUNTIME_SOURCE)})) if isinstance(node, ast.Name) and isinstance(node.ctx, ast.Load) and node.id in vars(builtins)})`
+      }
+    ]);
+    expect(scan!.error).toBeUndefined();
+    // These are grammar keywords and cannot be legal Rune function identifiers.
+    const names = (scan!.value as string[]).filter((name) => !['all', 'any', 'min', 'set'].includes(name));
+    const funcs = await linkedFunctions(
+      'namespace python.builtins\n' +
+        names.map((name) => `func ${name}:\n output: result number (1..1)\n set result: 1\n`).join('')
+    );
+    const module = generatePythonModule([AstUtils.getDocument(funcs[0]!)]);
+    for (const name of names) expect(module.bindings.get(`python.builtins.${name}`)).not.toBe(name);
+  });
+  it('preserves absent required outputs and aliases until the final cardinality check', async () => {
+    const funcs = await linkedFunctions(`namespace python.initialization
+func RequiredOutput:
+ inputs: flag boolean (1..1)
+ output: result number (1..1)
+ set result: if flag then 1
+ set result: result + 1
+func AliasOutput:
+ inputs: flag boolean (1..1)
+ output: result number (1..1)
+ alias pending: result
+ set result: pending + 1
+`);
+    const module = generatePythonModule([AstUtils.getDocument(funcs[0]!)]);
+    const name = module.bindings.get('python.initialization.RequiredOutput')!;
+    expect(execute(module.code, [{ expression: `${name}(data)`, data: { flag: false } }])[0]!.error).toContain(
+      'produced'
+    );
+    expect(execute(module.code, [{ expression: `${name}(data)`, data: { flag: true } }])).toEqual([{ value: 2 }]);
+    expect(
+      execute(module.code, [
+        { expression: `${module.bindings.get('python.initialization.AliasOutput')}(data)`, data: { flag: true } }
+      ])[0]!.error
+    ).toContain('produced');
+    expect(module.code).toContain('result: float | None = None');
+    expect(module.code).toContain(`def ${name}(input: ${name}_Input) -> float:`);
+  });
+
+  it('keeps comprehension bindings and runtime builtins separate from legal declarations', async () => {
+    const funcs = await linkedFunctions(`namespace python.names
+func Collision:
+ inputs: xs number (0..*)
+ output: child number (0..*)
+ set child: [10]
+ add child: xs extract [ child ]
+func reversed:
+ inputs: xs number (0..*)
+ output: result number (0..*)
+ set result: xs reverse
+func callable:
+ inputs: amount number (1..1)
+ output: result number (1..1)
+ set result: amount
+func abs:
+ output: result number (1..1)
+ set result: 1
+func divmod:
+ output: result number (1..1)
+ set result: 1
+func OverflowError:
+ output: result number (1..1)
+ set result: 1
+func Native:
+ inputs: amount number (1..1)
+ output: result number (1..1)
+`);
+    const module = generatePythonModule([AstUtils.getDocument(funcs[0]!)]);
+    const call = (name: string) => module.bindings.get(`python.names.${name}`)!;
+    expect(
+      execute(module.code + '\nrune_bind("python.names.Native", lambda input: input["amount"] + 1)\n', [
+        { expression: `${call('Collision')}(data)`, data: { xs: [1, 2] } },
+        { expression: `${call('reversed')}(data)`, data: { xs: [1, 2] } },
+        { expression: `${call('Native')}(data)`, data: { amount: 2 } }
+      ])
+    ).toEqual([{ value: [10, 10, 10] }, { value: [2, 1] }, { value: 3 }]);
+    for (const builtin of ['reversed', 'callable', 'abs', 'divmod', 'OverflowError'])
+      expect(call(builtin)).not.toBe(builtin);
+  });
+
+  it('accepts computed common parents for only-exists and keeps different parents distinct', async () => {
+    const funcs = await linkedFunctions(`namespace python.selection
+type Leaf:
+ amount number (0..1)
+ extra number (0..1)
+type Other:
+ name string (0..1)
+choice Instrument:
+ Leaf
+ Other
+func Check:
+ inputs: object Instrument (1..1)
+ output: result boolean (1..1)
+ set result: ((object as Leaf) -> amount) only exists
+func Both:
+ inputs: object Instrument (1..1)
+ output: result boolean (1..1)
+ set result: (((object as Leaf) -> amount), ((object as Leaf) -> extra)) only exists
+`);
+    const module = generatePythonModule([AstUtils.getDocument(funcs[0]!)]);
+    const check = module.bindings.get('python.selection.Check')!;
+    expect(
+      execute(module.code, [
+        { expression: `${check}(data)`, data: { object: { leaf: { amount: 1 } } } },
+        { expression: `${check}(data)`, data: { object: { leaf: { amount: 1, extra: 2 } } } },
+        {
+          expression: `${module.bindings.get('python.selection.Both')}(data)`,
+          data: { object: { leaf: { amount: 1, extra: 2 } } }
+        }
+      ])
+    ).toEqual([{ value: true }, { value: false }, { value: true }]);
+    const different = await linkedFunctions(`namespace python.different
+type Leaf:
+ amount number (0..1)
+ extra number (0..1)
+type Other:
+ name string (0..1)
+choice Instrument:
+ Leaf
+ Other
+func Check:
+ inputs: left Instrument (1..1) right Instrument (1..1)
+ output: result boolean (1..1)
+ set result: (((left as Leaf) -> amount), ((right as Leaf) -> extra)) only exists
+`);
+    expect(() => generatePythonModule([AstUtils.getDocument(different[0]!)])).toThrow('linked common parent');
+  });
+
   it('types a continuous body and preserves aliases, nested writes, append and condition order', async () => {
     const funcs = await linkedFunctions(`namespace python.functions
 type Child:

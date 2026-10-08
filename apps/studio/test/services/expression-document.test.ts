@@ -26,6 +26,21 @@ function workspace() {
 }
 
 describe('expression document ownership', () => {
+  it('recovers mapped body drafts and rejects changed identity or workspace generation', () => {
+    const { documents, files, edit, switchWorkspace } = workspace();
+    documents.retainRegion(edit.binding, 'implementation');
+    files.set(edit.binding.uri, { path: '/first.rosetta', content: 'prefix if ( suffix' });
+    const recovered = documents.recoverRegion(edit.binding.uri, edit.binding.nodeId, 'implementation')!;
+    expect(recovered.source.slice(recovered.region.from, recovered.region.to)).toBe('if (');
+    expect(documents.recoverRegion(edit.binding.uri, 'other-node', 'implementation')).toBeNull();
+    expect(documents.recoverRegion(edit.binding.uri, edit.binding.nodeId, 'condition:0')).toBeNull();
+    files.set(edit.binding.uri, { path: '/first.rosetta', content: 'renamed if ( suffix' });
+    expect(documents.recoverRegion(edit.binding.uri, edit.binding.nodeId, 'implementation')).toBeNull();
+    files.set(edit.binding.uri, { path: '/first.rosetta', content: edit.binding.source });
+    documents.retainRegion(edit.binding, 'implementation');
+    switchWorkspace();
+    expect(documents.recoverRegion(edit.binding.uri, edit.binding.nodeId, 'implementation')).toBeNull();
+  });
   it('changes only the captured range in its owning file', () => {
     const { documents, files, writes, edit } = workspace();
     expect(documents.applyDocumentEdit(edit)).toEqual({ ok: true });

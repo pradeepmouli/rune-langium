@@ -12,6 +12,9 @@ import { join } from 'node:path';
 import { tmpdir } from 'node:os';
 import { linkedFunctions } from './python-test-utils.js';
 import { generatedDirectory } from '../helpers/generated-directory.js';
+import { AstUtils } from 'langium';
+import { generate } from '../../src/export.js';
+import { createRequire } from 'node:module';
 
 const context: ExpressionTranspilerContext = {
   selfName: 'data',
@@ -34,6 +37,59 @@ function evaluate(text: string, data: unknown = {}) {
 }
 
 describe('native operators in the canonical emitter', () => {
+  it('lifts required outputs and aliases because declaration cardinality does not prove initialization', async () => {
+    const [func] = await linkedFunctions(`namespace native.initialization
+func RequiredOutput:
+ inputs: flag boolean (1..1)
+ output: result number (1..1)
+ alias pending: result
+ set result: if flag then 1
+ set result: result + 1
+ set result: pending + 1
+`);
+    for (const operation of func!.operations.slice(1)) {
+      const expression = transpileExpression(operation.expression, {
+        ...context,
+        localBindings: new Map([
+          ['result', 'result'],
+          ['pending', 'pending']
+        ])
+      });
+      expect(expression).toContain('runeBinary');
+      const javascript = ts.transpileModule(
+        `function run(result: unknown, pending: unknown) { return ${expression}; }`,
+        { compilerOptions: { target: ts.ScriptTarget.ES2022 } }
+      ).outputText;
+      expect(
+        new Function(
+          'result',
+          'pending',
+          RUNTIME_HELPER_JS_SOURCE + '\n' + javascript + '\nreturn run(result, pending);'
+        )(undefined, undefined)
+      ).toBeUndefined();
+    }
+  });
+  it('rejects an absent final result rather than returning NaN from emitted TypeScript', async () => {
+    const [func] = await linkedFunctions(`namespace native.initialization
+func RequiredOutput:
+ inputs: flag boolean (1..1)
+ output: result number (1..1)
+ set result: if flag then 1
+ set result: result + 1
+`);
+    const files = await generate([AstUtils.getDocument(func!)], {
+      target: 'typescript',
+      typescript: { layout: 'single-file' }
+    });
+    const source = files.find((file) => file.content.includes('function RequiredOutput'))!.content;
+    const javascript = ts.transpileModule(source, {
+      compilerOptions: { target: ts.ScriptTarget.ES2022, module: ts.ModuleKind.CommonJS }
+    }).outputText;
+    const exports: { RequiredOutput?: (input: { flag: boolean }) => number } = {};
+    new Function('exports', 'require', javascript)(exports, createRequire(import.meta.url));
+    expect(exports.RequiredOutput!({ flag: true })).toBe(2);
+    expect(() => exports.RequiredOutput!({ flag: false })).toThrow("Function 'RequiredOutput' produced no result");
+  });
   it('uses strict scalar equality and direct numeric comparisons', () => {
     expect(render('"a" = "b"')).toBe("(('a' as string) === 'b')");
     expect(render('True <> False')).toBe('((true as boolean) !== false)');

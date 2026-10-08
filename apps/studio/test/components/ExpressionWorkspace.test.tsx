@@ -43,6 +43,23 @@ async function context() {
 }
 
 describe('source-bound expression workspace', () => {
+  it('reopens and repairs an invalid draft after Inspector disposal', async () => {
+    const { props, getFile } = await context();
+    const first = render(<ExpressionWorkspace {...props} />);
+    const editor = await first.findByTestId('implementation-editor');
+    const view = EditorView.findFromDOM(editor.querySelector('.cm-editor')!)!;
+    const from = source.indexOf('1\n');
+    act(() => view.dispatch({ changes: { from, to: from + 1, insert: 'if (' } }));
+    first.rerender(<ExpressionWorkspace {...props} file={getFile()} parseCurrent={false} />);
+    first.unmount();
+    const second = render(<ExpressionWorkspace {...props} file={getFile()} parseCurrent={false} />);
+    const reopened = await second.findByTestId('implementation-editor');
+    const current = EditorView.findFromDOM(reopened.querySelector('.cm-editor')!)!;
+    expect(current.state.doc.toString()).toContain('if (');
+    act(() => current.dispatch({ changes: { from, to: from + 4, insert: '2' } }));
+    expect(getFile().content).toBe(source.replace('1\n', '2\n'));
+    expect(second.getByRole('button', { name: 'Builder' })).toBeDisabled();
+  });
   it.each(['TypeScript', 'Python'])(
     'displays generated %s read-only, caches tab clicks, and retains stale output for invalid Rune',
     async (tab) => {

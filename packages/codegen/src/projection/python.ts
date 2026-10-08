@@ -216,8 +216,11 @@ export function renderPythonExpression(expression: RosettaExpression, context: P
       return `rune_edge(${argument()}, ${pyBool(expression.$type === 'LastOperation')})`;
     case 'SumOperation':
       return `sum(rune_list(${argument(false)}))`;
-    case 'FlattenOperation':
-      return `[child for item in rune_list(${argument()}) for child in rune_list(item)]`;
+    case 'FlattenOperation': {
+      const item = pythonFresh(context, 'item'),
+        child = pythonFresh(context, 'child');
+      return `[${child} for ${item} in rune_list(${argument()}) for ${child} in rune_list(${item})]`;
+    }
     case 'ReverseOperation':
       return `list(reversed(rune_list(${argument()})))`;
     case 'DistinctOperation':
@@ -234,10 +237,11 @@ export function renderPythonExpression(expression: RosettaExpression, context: P
           })
         : pythonUnwrap(item, context.preserveMetadata ? undefined : expressionMetadataKind(arg));
       const input = argument(preserve);
+      const mapped = pythonFresh(context, 'mapped');
       const result =
         expression.$type === 'FilterOperation'
           ? `[${item} for ${item} in rune_list(${input}) if ${body}]`
-          : `[child for ${item} in rune_list(${input}) for child in rune_list(${body})]`;
+          : `[${mapped} for ${item} in rune_list(${input}) for ${mapped} in rune_list(${body})]`;
       return expression.$type === 'FilterOperation' && !context.preserveMetadata
         ? pythonUnwrap(result, expressionMetadataKind(arg), true)
         : result;
@@ -289,7 +293,9 @@ export function renderPythonExpression(expression: RosettaExpression, context: P
           ? pythonNormalize(render(item, { ...context, preserveMetadata: true }), expressionMetadataKind(item), target)
           : render(item, context)
       );
-      return `[item for branch in [${values.join(', ')}] for item in rune_list(branch)${target ? ' if item is not None' : ''}]`;
+      const item = pythonFresh(context, 'item'),
+        branch = pythonFresh(context, 'branch');
+      return `[${item} for ${branch} in [${values.join(', ')}] for ${item} in rune_list(${branch})${target ? ` if ${item} is not None` : ''}]`;
     }
     case 'RosettaConstructorExpression': {
       const target = expression.typeRef.$type === 'RosettaSymbolReference' ? expression.typeRef.symbol.ref : undefined;
@@ -319,7 +325,8 @@ export function renderPythonExpression(expression: RosettaExpression, context: P
     }
     case 'JoinOperation': {
       const separator = expression.right ? render(expression.right, valueContext) : '""';
-      return `rune_string(${separator}).join("" if item is None else rune_string(item) for item in rune_list(${expression.left ? render(expression.left, valueContext) : argument(false)}))`;
+      const item = pythonFresh(context, 'item');
+      return `rune_string(${separator}).join("" if ${item} is None else rune_string(${item}) for ${item} in rune_list(${expression.left ? render(expression.left, valueContext) : argument(false)}))`;
     }
     case 'ToStringOperation':
       return `rune_to_string(${argument(false)})`;
@@ -379,7 +386,8 @@ export function renderPythonExpression(expression: RosettaExpression, context: P
       const values = names.length
         ? `[${names.map((name) => pythonRead(root, [name])).join(', ')}]`
         : `rune_list(${root})`;
-      const count = `sum(1 for value in ${values} if rune_exists(value))`;
+      const value = pythonFresh(context, 'value');
+      const count = `sum(1 for ${value} in ${values} if rune_exists(${value}))`;
       const predicate = `${count} ${expression.$type === 'ChoiceOperation' && expression.necessity === 'optional' ? '<= 1' : '== 1'}`;
       return pythonBind(
         argument(false),

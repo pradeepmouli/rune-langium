@@ -10,6 +10,7 @@ import {
 } from '@rune-langium/core';
 import { expressionType, featureName, typeFeatures } from './navigation.js';
 import type { ExpressionTranspilerContext } from './transpiler.js';
+import { treesEquivalent } from '../emit/rosetta/expression-tree-equivalence.js';
 
 /** Shared parent/field selection; emitters own their target predicate syntax. */
 export function onlyExistsSelection(
@@ -27,16 +28,16 @@ export function onlyExistsSelection(
   if (!args.length) return undefined;
   const first = args[0]!;
   const parent = isRosettaFeatureCall(first) ? first.receiver : undefined;
-  const parentText = parent ? render(parent) : undefined;
   const names: string[] = [];
   for (const arg of args) {
-    if (parent && isRosettaFeatureCall(arg) && arg.receiver && render(arg.receiver) === parentText)
+    if (parent && isRosettaFeatureCall(arg) && arg.receiver && treesEquivalent(arg.receiver, parent))
       names.push(isChoiceOption(arg.feature?.ref) ? featureName(arg.feature.ref) : (arg.feature?.$refText ?? ''));
     else if (!parent && isRosettaSymbolReference(arg)) names.push(arg.symbol.$refText);
     else return undefined;
   }
   const attributes = parent ? typeFeatures(expressionType(parent)).map(featureName) : rootAttributes;
   const allowed = new Set(names);
+  const parentText = parent ? render(parent) : undefined;
   return { parent, parentText, attributes, forbidden: attributes.filter((name) => !allowed.has(name)) };
 }
 
