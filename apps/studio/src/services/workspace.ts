@@ -183,6 +183,8 @@ export interface WorkspaceState {
 export interface ParsedWorkspaceModel {
   filePath: string;
   model: RosettaModel;
+  /** Exact input whose coordinates this model describes; absent for deferred source. */
+  source?: string;
   serializedModelJson?: string;
 }
 
@@ -281,6 +283,7 @@ async function parseWorkspaceFilesOnMainThread(
       parsedModels.push({
         filePath: file.path,
         model: result.value,
+        source: file.content,
         serializedModelJson: serializeRuneModel(serializer, result.value)
       });
     }
@@ -577,6 +580,7 @@ export const parseWorkspaceFiles = withInstrumentation(
     files: WorkspaceFile[],
     options: { hydrateNamespaces?: string[]; requireCuratedHydration?: boolean } = {}
   ): Promise<ParseWorkspaceFilesResult> {
+    const capturedFiles = files.map((file) => ({ ...file }));
     const wantsHydration = (options.hydrateNamespaces?.length ?? 0) > 0;
     if (files.length === 0 && !wantsHydration) {
       return { models: [], parsedModels: [], errors: new Map(), parseMode: 'router' };
@@ -590,8 +594,8 @@ export const parseWorkspaceFiles = withInstrumentation(
     // through and got POSTed to /api/parse as bogus files named
     // `[bundleId]/<namespace>`, which Langium rejects with "no services for the
     // extension '.'" → 500, collapsing the curated catalog to the user closure.
-    const userFiles = collectRawWorkspaceSources(files).map(({ path, content }) => ({ name: path, content }));
-    const curatedBundles = collectCuratedBundlesFromWorkspace(files);
+    const userFiles = collectRawWorkspaceSources(capturedFiles).map(({ path, content }) => ({ name: path, content }));
+    const curatedBundles = collectCuratedBundlesFromWorkspace(capturedFiles);
 
     try {
       const response = await parseWorkspaceViaRouter(userFiles, {
@@ -639,7 +643,9 @@ export const parseWorkspaceFiles = withInstrumentation(
       //      Langium's getServices() to throw "no services for the extension ''".
       // Together these mirror the router path's `userFiles` filter so the fallback
       // never dead-ends on mixed workspaces.
-      const parseableFiles = files.filter((f) => !f.serializedModelJson && f.path.toLowerCase().endsWith('.rosetta'));
+      const parseableFiles = capturedFiles.filter(
+        (f) => !f.serializedModelJson && f.path.toLowerCase().endsWith('.rosetta')
+      );
       return parseWorkspaceFilesOnMainThread(parseableFiles, {
         parseMode: 'main-thread-fallback',
         fallbackMessage: formatRouterFallbackMessage(error)
@@ -685,13 +691,15 @@ export const parseWorkspaceViaRouter = withInstrumentation(
       requireCuratedHydration?: boolean;
     } = {}
   ): Promise<ParseWorkspaceResponse> {
+    const capturedFiles = files.map((file) => ({ ...file }));
+    const sourceByPath = new Map(capturedFiles.map((file) => [file.name, file.content]));
     const requestParse = (knownCuratedArtifacts: string[]) =>
       withAbortTimeout(async (signal) => {
         const response = await fetch('/api/parse', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
-            files,
+            files: capturedFiles,
             curatedBundles: options.curatedBundles ?? [],
             hydrateNamespaces: options.hydrateNamespaces ?? [],
             knownCuratedArtifacts
@@ -790,7 +798,7 @@ export const parseWorkspaceViaRouter = withInstrumentation(
     // lazy/deferred-corpus design (the whole reason curated docs serialize to
     // JSON in the first place) and reintroduces multi-megabyte main-thread
     // deserialization on every debounced edit parse.
-    const userFileNames = new Set(files.map((f) => f.name));
+    const userFileNames = new Set(sourceByPath.keys());
     const services = createRuneDslServices(EmptyFileSystem).RuneDsl;
     const models: RosettaModel[] = [];
     const parsedModels: ParsedWorkspaceModel[] = [];
@@ -818,7 +826,12 @@ export const parseWorkspaceViaRouter = withInstrumentation(
         try {
           const model = services.serializer.JsonSerializer.deserialize<RosettaModel>(doc.serializedModel);
           models.push(model);
-          parsedModels.push({ filePath, model, serializedModelJson: doc.serializedModel });
+          parsedModels.push({
+            filePath,
+            model,
+            source: sourceByPath.get(filePath),
+            serializedModelJson: doc.serializedModel
+          });
         } catch (err) {
           console.warn('[workspace] failed to deserialize hydration model for', doc.uri, err);
         }

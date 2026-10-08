@@ -71,6 +71,8 @@ export {
 export type { HydrateServices, HydrateOptions } from './serializer/hydrate-model-document.js';
 
 // Utility functions
+export { getNodeSourceRegion, getFunctionImplementationRegion, getExpressionRegions } from './utils/source-regions.js';
+export type { SourceRegion, ExpressionRegion } from './utils/source-regions.js';
 export { isOptional, isSingular, isPlural, isRequired, toConstraintString } from './utils/cardinality-utils.js';
 export {
   getOptions,
