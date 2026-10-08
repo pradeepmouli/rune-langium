@@ -99,7 +99,13 @@ export const ExpressionWorkspace = withInstrumentation(
           : readOnly
             ? sourceOwner
             : undefined;
-      if (!owner || (owner.$type !== 'RosettaFunction' && owner.$type !== 'Data')) return;
+      if (!owner || (owner.$type !== 'RosettaFunction' && owner.$type !== 'Data')) {
+        if (parseCurrent) {
+          setBinding(null);
+          setCoordinateError('The selected declaration is no longer present in the current source.');
+        }
+        return;
+      }
       try {
         const region = target
           ? getExpressionRegions(owner).find((entry) => entry.kind === target.kind && entry.index === target.index)
