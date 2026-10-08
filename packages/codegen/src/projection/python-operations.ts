@@ -57,8 +57,10 @@ export function pythonInline(
   const locals = new Map(context.locals);
   fn?.parameters.forEach((parameter, index) => locals.set(parameter, names[index] ?? names[0]!));
   const type = expressionType(argument);
+  const metadata = expressionMetadataKind(argument);
   if (!fn?.parameters.length)
-    for (const feature of typeFeatures(type)) locals.set(feature, pythonRead(names[0]!, [featureName(feature)], many));
+    for (const feature of typeFeatures(type))
+      locals.set(feature, pythonRead(pythonUnwrap(names[0]!, metadata, many), [featureName(feature)], many));
   return {
     ...context,
     locals,
@@ -66,7 +68,7 @@ export function pythonInline(
     implicit: {
       expression: argument,
       name: names[0]!,
-      metadata: expressionMetadataKind(argument),
+      metadata,
       many,
       ...(type ? { type } : {})
     }

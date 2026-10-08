@@ -121,6 +121,54 @@ const cases = [
     2
   ],
   ['metadataSet', 'value number (1..1)', 'value with-meta {scheme:"x"}', { value: 0 }, 0],
+  [
+    'metadataImplicitExtract',
+    'objects Leaf (0..*) [metadata scheme]',
+    'objects extract [amount]',
+    {
+      objects: [
+        { value: { amount: 0 }, meta: { scheme: 'x' } },
+        { value: { amount: 3 }, meta: { scheme: 'y' } }
+      ]
+    },
+    [0, 3]
+  ],
+  [
+    'metadataImplicitFilter',
+    'objects Leaf (0..*) [metadata reference]',
+    'objects filter [amount > 1]',
+    {
+      objects: [
+        { value: { amount: 0 }, externalReference: 'a' },
+        { value: { amount: 3 }, externalReference: 'b' }
+      ]
+    },
+    [{ amount: 3 }]
+  ],
+  [
+    'metadataImplicitSort',
+    'objects Leaf (0..*) [metadata scheme]',
+    'objects sort [amount]',
+    {
+      objects: [
+        { value: { amount: 3 }, meta: { scheme: 'x' } },
+        { value: { amount: 0 }, meta: { scheme: 'y' } }
+      ]
+    },
+    [{ amount: 0 }, { amount: 3 }]
+  ],
+  [
+    'metadataImplicitThen',
+    'objects Leaf (0..*) [metadata scheme]',
+    'objects then amount sum',
+    {
+      objects: [
+        { value: { amount: 0 }, meta: { scheme: 'x' } },
+        { value: { amount: 3 }, meta: { scheme: 'y' } }
+      ]
+    },
+    3
+  ],
   ['one', 'object Leaf (1..1)', 'object one-of', { object: { amount: 0 } }, true],
   ['oneBad', 'object Leaf (1..1)', 'object one-of', { object: { amount: 0, extra: 1 } }, false],
   ['choiceRule', 'object Leaf (1..1)', 'object required choice amount, extra', { object: { amount: 0 } }, true],
