@@ -131,4 +131,24 @@ describe('ReferencePicker', () => {
     );
     expect(onSelect.mock.calls[0][0]).not.toHaveProperty('explicitArguments');
   });
+  it('omits unresolved callable arity while retaining confirmed zero-input calls', () => {
+    const onSelect = vi.fn();
+    const scope: FunctionScope = {
+      inputs: [],
+      aliases: [],
+      output: null,
+      references: [
+        { name: 'Deferred', kind: 'callable' },
+        { name: 'Zero', kind: 'callable', argumentCount: 0 }
+      ]
+    };
+    render(<ReferencePicker open scope={scope} onSelect={onSelect} onClose={vi.fn()} />);
+    expect(screen.queryByTestId('ref-option-Deferred')).toBeNull();
+    const option = screen.getByTestId('ref-option-Zero');
+    fireEvent.pointerDown(option, { pointerType: 'mouse' });
+    fireEvent.click(option);
+    expect(onSelect).toHaveBeenCalledWith(
+      expect.objectContaining({ symbol: 'Zero', explicitArguments: true, rawArgs: [] })
+    );
+  });
 });
