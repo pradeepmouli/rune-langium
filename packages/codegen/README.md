@@ -27,6 +27,28 @@ used for emission, plus a kind-aware `requiredBy` map from each dependency to
 its explicit roots, without resolving the workspace a second time. Studio
 stores that receipt in its downloadable artifact envelope.
 
+## Python projections
+
+The browser-safe `@rune-langium/codegen/export` surface exposes
+`generatePythonModule(documents)` and `selectPythonProjection(module, subject, kind)`.
+The module contains complete functions, typed input/Data records, enum literals,
+runtime helpers and source-addressed function/condition fragments. Python 3.13
+uses standard-library `TypedDict` and `Literal`; optional fields use `NotRequired`,
+collection fields use lists, and Rune numeric values use binary64 floats. Functions
+retain ordered aliases, preconditions, set/add operations and postconditions.
+Native declarations require `rune_bind(qualifiedName, callable)` before execution;
+missing bindings raise an explicit error. Studio displays projections read-only
+and retains the narrower reverse-expression lens.
+
+Python syntax/runtime checks require Python >=3.13. Set `PYTHON_BINARY` when the
+shell's `python3` is older. The checked-in 117-case CDM execution battery and AST
+grammar census run without downloads. An optional linked `.resources` scan compiles
+staged CDM/FpML/Rune bodies and records versions, content hashes, expression counts,
+syntax/linking exclusions and rendering failures in `dist/python-projection-coverage.json`.
+Corpus syntax coverage is distinct from execution parity. Both targets share linked
+type/cardinality/metadata resolution and `only exists` selection; Python switch
+arms remain lazy without nested-ternary depth limits.
+
 ## TypeScript functions
 
 Rune functions emit named exports with a single typed input object and an explicit

@@ -50,6 +50,7 @@ SQL node types derive from the exactly pinned `@l1xnan/tree-sitter-sql` grammar.
 - Real CDM/Rune/FpML fixtures live under hidden `.resources/`. Prefer them for corpus repros, and guard or skip corpus-dependent tests when absent.
 - Verify fixture revisions before claiming upstream parity. The September 12 refresh found a February Rune reference checkout; current production CDM/FpML needed `as` narrowing and schema declarations. A successful parse or ZIP download does not establish that the entire generated corpus passes strict TypeScript compilation.
 - Studio Playwright tests must wait for visible readiness, not `networkidle`, when workers or LSP traffic remain active.
+- Expression editing: `pnpm --filter @rune-langium/studio exec playwright test test/e2e/expression-workspace.spec.ts --retries=0` checks the pinned CDM function and Data-condition slices, generated views, builder draft/undo, dialog accessibility and narrow layouts at the largest pane font setting. Source/Inspector network ownership additionally requires `PLAYWRIGHT_EXPRESSION_LSP=1` and a local LSP Worker, with Studio's `VITE_LSP_SESSION_URL` and `VITE_LSP_WS_URL` pointing at it. That case skips explicitly without the Worker; unit tests still cover read-only, stale revision and workspace-change guards. Hosted curated read-only and the production J10 journey require a deployed build and are separate from local acceptance.
 - Production smoke: `pnpm --filter @rune-langium/studio run test:prod-smoke`. Endpoint and fuller UX checks are documented in [TESTING.md](../TESTING.md).
 - Tailwind IntelliSense uses `.vscode/settings.json`: `tailwindCSS.experimental.configFile` maps `apps/studio/src/app.css` to Studio, design-system, and visual-editor source trees.
 
@@ -196,3 +197,11 @@ Python projection tests require Python >=3.13 and fail explicitly if it is absen
 Set `PYTHON_BINARY` to the supported interpreter when the shell's `python3` is older.
 The standard-library driver checks Python 3.13 syntax and compares runtime behavior
 with the shared TypeScript helpers; it does not run Python inside Studio.
+
+The `Python Projections` workflow runs the grammar census, syntax/runtime tests,
+pinned CDM execution battery and both inverse round-trip suites on every PR; it
+has no path filter. Main CI also installs Python 3.13 before package tests.
+The staged corpus scan reuses core's fixture loader and links all three bundles
+together. Its ignored `packages/codegen/dist/python-projection-coverage.json`
+records versions, content hashes, counts and syntax/linking exclusions. The
+checked-in census and execution battery remain required when `.resources` is absent.

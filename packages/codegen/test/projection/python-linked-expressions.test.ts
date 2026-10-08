@@ -177,6 +177,48 @@ const cases = [
   ],
   ['yearZero', 'value date (1..1)', 'value -> year', { value: '0000-02-29' }, 0],
   [
+    'yearZeroZonedTime',
+    'value zonedDateTime (1..1)',
+    'value -> time',
+    { value: '0000-02-29T12:00:00.123456789+00:00[UTC]' },
+    '12:00:00.123456789'
+  ],
+  [
+    'yearZeroZonedCompare',
+    'left zonedDateTime (1..1) right zonedDateTime (1..1)',
+    'left < right',
+    { left: '0000-02-29T23:30:00-01:00[-01:00]', right: '0000-03-01T00:15:00+00:00[UTC]' },
+    false
+  ],
+  [
+    'zonedAbsoluteDate',
+    'value zonedDateTime (1..1)',
+    'value -> date',
+    { value: '2026-10-08T01:00:00Z[America/New_York]' },
+    '2026-10-07'
+  ],
+  [
+    'zonedFixedAbsoluteDate',
+    'value zonedDateTime (1..1)',
+    'value -> date',
+    { value: '0000-03-01T01:00:00Z[-04:00]' },
+    '0000-02-29'
+  ],
+  [
+    'zonedGapConstructor',
+    '',
+    'zonedDateTime {date: "2026-03-08" to-date, time: "02:30:00.123456789" to-time, timezone: "America/New_York"}',
+    {},
+    '2026-03-08T03:30:00.123456789-04:00[America/New_York]'
+  ],
+  [
+    'yearZeroZonedConstructor',
+    '',
+    'zonedDateTime {date: date {year: 0, month: 2, day: 29}, time: "12:00:00" to-time, timezone: "UTC"}',
+    {},
+    '0000-02-29T12:00:00+00:00[UTC]'
+  ],
+  [
     'yearZeroConstructor',
     '',
     'dateTime {date: date {year: 0, month: 2, day: 29}, time: "12:00:00.123456789" to-time}',

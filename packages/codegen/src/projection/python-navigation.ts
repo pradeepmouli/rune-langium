@@ -24,6 +24,7 @@ import {
 import { isMetadataFeature, metadataPropertyPath } from '../expr/metadata-runtime.js';
 import { expressionMetadataKind, choiceSelection } from '../expr/metadata-type.js';
 import { dataSelectionFacts } from '../expr/type-selection.js';
+import { onlyExistsSelection } from '../expr/only-exists.js';
 import {
   pythonBind,
   pythonFresh,
@@ -139,34 +140,24 @@ export function pythonOnlyExists(
   render: PythonRender
 ): string | undefined {
   if (expression.$type !== 'RosettaOnlyExistsExpression') return undefined;
-  const args = expression.args.length
-    ? expression.args
-    : expression.argument?.$type === 'ListLiteral'
-      ? expression.argument.elements
-      : expression.argument
-        ? [expression.argument]
-        : [];
-  if (!args.length) throw new Error('only-exists requires a linked common parent');
-  const first = args[0]!,
-    parent = first.$type === 'RosettaFeatureCall' ? first.receiver : undefined;
-  const value = parent ? render(parent, context) : context.self;
-  const allowed = new Set<string>();
-  for (const arg of args) {
-    if (parent && arg.$type === 'RosettaFeatureCall' && render(arg.receiver, context) === value) {
-      const feature = arg.feature?.ref;
-      if (!feature) throw new Error('Unresolved only-exists field');
-      allowed.add(isChoiceOption(feature) ? featureName(feature) : (arg.feature?.$refText ?? '?'));
-    } else if (!parent && arg.$type === 'RosettaSymbolReference') allowed.add(arg.symbol.$refText);
-    else throw new Error('only-exists requires a linked common parent');
+  const rootFields = context.implicit?.type
+    ? typeFeatures(context.implicit.type)
+    : [...context.locals.keys()].filter((node) => isAttribute(node) || isChoiceOption(node));
+  const selected = onlyExistsSelection(expression, rootFields.map(featureName), (node) => render(node, context));
+  if (!selected || !selected.attributes.length) throw new Error('only-exists requires a linked common parent');
+  if (!selected.parent) {
+    const fields = new Map(rootFields.map((field) => [featureName(field), field]));
+    return (
+      selected.forbidden
+        .map((name) => `not rune_exists(${context.locals.get(fields.get(name)!) ?? pythonRead(context.self, [name])})`)
+        .join(' and ') || pyBool(true)
+    );
   }
-  const type = parent ? expressionType(parent) : context.implicit?.type;
-  const fields = typeFeatures(type);
-  if (!fields.length) throw new Error('only-exists requires a linked common parent');
-  const names = fields.map(featureName).filter((name) => !allowed.has(name));
+  const value = selected.parentText ?? context.self;
   const bound = pythonFresh(context, 'parent');
   return pythonBind(
     value,
     bound,
-    names.map((name) => `not rune_exists(${pythonRead(bound, [name])})`).join(' and ') || pyBool(true)
+    selected.forbidden.map((name) => `not rune_exists(${pythonRead(bound, [name])})`).join(' and ') || pyBool(true)
   );
 }

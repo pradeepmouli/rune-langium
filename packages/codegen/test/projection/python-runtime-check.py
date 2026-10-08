@@ -12,10 +12,14 @@ if sys.version_info < (3, 13):
 
 request = json.load(sys.stdin)
 ast.parse(request["source"], feature_version=(3, 13))
+compiled = compile(request["source"], "<Rune Python projection>", "exec")
+if request.get("syntax_only"):
+    json.dump([], sys.stdout)
+    sys.exit(0)
 module = ModuleType("rune_projection")
 sys.modules[module.__name__] = module
 scope = module.__dict__
-exec(compile(request["source"], "<Rune Python projection>", "exec"), scope)
+exec(compiled, scope)
 
 def normalize(value):
     if isinstance(value, float) and not math.isfinite(value):

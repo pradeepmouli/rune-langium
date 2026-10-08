@@ -892,8 +892,11 @@ export function transpileComparison(expr: RosettaExpression, ctx: ExpressionTran
   if (isEqualityOperation(expr)) {
     const left = expr.left ? transpileExpression(expr.left, ctx) : ctx.selfName;
     const right = transpileExpression(expr.right, ctx);
-    if (nativeEqualityOperands(expr.left, expr.right))
-      return `(${left} ${expr.operator === '<>' ? '!==' : '==='} ${right})`;
+    if (nativeEqualityOperands(expr.left, expr.right)) {
+      // Widen the proven primitive so nested predicates do not trigger TS2367.
+      const kind = nativeScalarOperands(expr.left, expr.right)!;
+      return `((${left} as ${kind}) ${expr.operator === '<>' ? '!==' : '==='} ${right})`;
+    }
     return `${expr.operator === '<>' ? '!' : ''}runeValueEquals(${left}, ${right})`;
   }
   if (isComparisonOperation(expr)) {

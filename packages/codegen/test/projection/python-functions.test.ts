@@ -82,7 +82,11 @@ func Build:
     expect(selected.code.indexOf('doubled =')).toBeLessThan(selected.code.indexOf('Positive'));
     expect(selected.sourceMap[0]!.sourceUri).toBe(document.uri.toString());
     for (const condition of [...funcs[0]!.conditions, ...funcs[0]!.postConditions]) {
-      const subject = { uri: document.uri.toString(), nodeId: 'Build', region: getNodeSourceRegion(condition) };
+      const subject = {
+        uri: document.uri.toString(),
+        nodeId: 'Build',
+        region: getNodeSourceRegion(condition.expression)
+      };
       const guard = selectPythonProjection(module, subject, 'condition');
       expect(selected.code).toContain(
         guard.code
@@ -202,6 +206,68 @@ func Identity:
         { expression: `${name}(data)`, data: { value: -1 } }
       ])
     ).toEqual([{ value: true }, { value: false }]);
+  });
+
+  it('projects bare only-exists fields with inherited siblings in Data condition scope', async () => {
+    const funcs = await linkedFunctions(`namespace python.onlyexists
+type Parent:
+ extra number (0..1)
+type Terms extends Parent:
+ price number (0..1)
+ dividend number (0..1)
+ condition ReturnTerms: (price, dividend) only exists
+func Identity:
+ inputs: terms Terms (1..1)
+ output: result Terms (1..1)
+ set result: terms
+`);
+    const module = generatePythonModule([AstUtils.getDocument(funcs[0]!)]);
+    const condition = module.projections.find((entry) => entry.kind === 'condition')!;
+    const name = /^def (\w+)/.exec(condition.code)![1]!;
+    expect(
+      execute(module.code, [
+        { expression: `${name}(data)`, data: { price: 1, dividend: 2 } },
+        { expression: `${name}(data)`, data: { price: 1, dividend: 2, extra: 0 } }
+      ])
+    ).toEqual([{ value: true }, { value: false }]);
+  });
+
+  it('compiles large switches without nesting limits and evaluates only the chosen branch', async () => {
+    const arms = Array.from({ length: 260 }, (_, index) => `${index} then ${index === 0 ? 'Fail()' : index}`);
+    const funcs = await linkedFunctions(`namespace python.largeswitch
+func Fail:
+ output: result number (1..1)
+func Select:
+ inputs: selector number (1..1)
+ output: result number (1..1)
+ set result: selector switch ${arms.join(', ')}, default Fail()
+`);
+    const module = generatePythonModule([AstUtils.getDocument(funcs[0]!)]);
+    const name = module.bindings.get('python.largeswitch.Select')!;
+    const results = execute(module.code, [
+      { expression: `${name}(data)`, data: { selector: 1 } },
+      { expression: `${name}(data)`, data: { selector: 259 } },
+      { expression: `${name}(data)`, data: { selector: 0 } },
+      { expression: `${name}(data)`, data: { selector: 999 } }
+    ]);
+    expect(results.slice(0, 2)).toEqual([{ value: 1 }, { value: 259 }]);
+    expect(results[2]!.error).toContain('Native binding required');
+    expect(results[3]!.error).toContain('Native binding required');
+  });
+
+  it('checks bare only-exists against the actual output local in function postconditions', async () => {
+    const funcs = await linkedFunctions(`namespace python.onlyexistslocal
+func Validate:
+ inputs: price number (0..1)
+ output: result number (0..1)
+ set result: price
+ post-condition Exclusive: price only exists
+`);
+    const module = generatePythonModule([AstUtils.getDocument(funcs[0]!)]);
+    const name = module.bindings.get('python.onlyexistslocal.Validate')!;
+    expect(execute(module.code, [{ expression: `${name}(data)`, data: { price: 1 } }])[0]!.error).toContain(
+      'Exclusive'
+    );
   });
 
   it('preserves user types when generated input records and metadata type names collide', async () => {

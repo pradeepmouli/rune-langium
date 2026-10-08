@@ -271,9 +271,14 @@ def rune_temporal(value, kind):
         parsed = datetime.fromisoformat(base.replace("Z", "+00:00"))
         if zone:
             name = zone.rstrip("]")
-            if name != "UTC" and not re.fullmatch(r"[+-]\d{2}:\d{2}", name):
-                target = ZoneInfo(name)
-                parsed = parsed.astimezone(target) if parsed.tzinfo else parsed.replace(tzinfo=target)
+            target = ZoneInfo(name)
+            if parsed.tzinfo:
+                local = parsed.astimezone(target)
+                if not base.endswith("Z") and local.replace(tzinfo=None) != parsed.replace(tzinfo=None):
+                    raise ValueError("Offset does not match timezone")
+                parsed = local
+            else:
+                parsed = parsed.replace(tzinfo=target).astimezone(timezone.utc).astimezone(target)
         if parsed.tzinfo is None:
             raise ValueError("zonedDateTime requires a timezone")
         return parsed
@@ -292,9 +297,7 @@ def rune_iso(value):
 def rune_time_text(value, kind=None):
     text = str(value)
     if kind == "zonedDateTime":
-        parsed = rune_temporal(text, kind)
-        hour, minute, second = parsed.hour, parsed.minute, parsed.second
-        nano = rune_clock_parts(text)[3]
+        _, (hour, minute, second, nano), _ = rune_zoned_parts(text)
     else:
         hour, minute, second, nano = rune_clock_parts(text)
     digits = f"{nano:09d}".rstrip("0") if nano else ""
@@ -338,6 +341,52 @@ def rune_date_days(value):
     return era * 146097 + year_of_era * 365 + year_of_era // 4 - year_of_era // 100 + day_of_year
 
 
+def rune_calendar_from_days(days):
+    era, day_of_era = divmod(days, 146097)
+    year_of_era = (day_of_era - day_of_era // 1460 + day_of_era // 36524 - day_of_era // 146096) // 365
+    year = year_of_era + era * 400
+    day_of_year = day_of_era - (365 * year_of_era + year_of_era // 4 - year_of_era // 100)
+    month_index = (5 * day_of_year + 2) // 153
+    day = day_of_year - (153 * month_index + 2) // 5 + 1
+    month = month_index + (3 if month_index < 10 else -9)
+    return year + int(month <= 2), month, day
+
+
+def rune_offset_seconds(text):
+    if text == "Z" or text == "UTC":
+        return 0
+    match = re.fullmatch(r"([+-])(\d{2}):(\d{2})", text)
+    if not match or int(match[2]) > 23 or int(match[3]) > 59:
+        raise ValueError("Invalid timezone offset")
+    return (1 if match[1] == "+" else -1) * (int(match[2]) * 3600 + int(match[3]) * 60)
+
+
+def rune_zoned_parts(value):
+    text = str(value)
+    base, _, annotation = text.partition("[")
+    zone = annotation.rstrip("]")
+    offset_match = re.search(r"(Z|[+-]\d{2}:\d{2})$", base)
+    if zone == "UTC" or re.fullmatch(r"[+-]\d{2}:\d{2}", zone):
+        offset = rune_offset_seconds(zone)
+        supplied = offset_match[1] if offset_match else None
+        if supplied and supplied != "Z" and rune_offset_seconds(supplied) != offset:
+            raise ValueError("Offset does not match timezone")
+    elif not zone and offset_match:
+        supplied = offset_match[1]
+        offset = rune_offset_seconds(supplied)
+    else:
+        parsed = rune_temporal(text, "zonedDateTime")
+        return (parsed.year, parsed.month, parsed.day), (parsed.hour, parsed.minute, parsed.second, rune_clock_parts(text)[3]), int(parsed.utcoffset().total_seconds())
+    parts, clock = rune_calendar_parts(base), rune_clock_parts(base)
+    if supplied == "Z" and offset:
+        day_shift, seconds = divmod(clock[0] * 3600 + clock[1] * 60 + clock[2] + offset, 86400)
+        parts = rune_calendar_from_days(rune_date_days(base) + day_shift)
+        hour, seconds = divmod(seconds, 3600)
+        minute, second = divmod(seconds, 60)
+        clock = hour, minute, second, clock[3]
+    return parts, clock, offset
+
+
 def rune_date_join(left, right):
     return rune_calendar_text(*rune_calendar_parts(left)) + "T" + rune_time_text(right)
 
@@ -350,8 +399,9 @@ def rune_temporal_key(value, kind):
         return clock
     if kind == "dateTime":
         return (rune_date_days(value), *clock)
-    parsed = rune_temporal(value, kind).astimezone(timezone.utc)
-    return (rune_date_days(parsed.date().isoformat()), parsed.hour, parsed.minute, parsed.second, clock[3])
+    parts, clock, offset = rune_zoned_parts(value)
+    seconds = rune_date_days(rune_calendar_text(*parts)) * 86400 + clock[0] * 3600 + clock[1] * 60 + clock[2] - offset
+    return seconds * 1000000000 + clock[3]
 
 
 def rune_convert_temporal(value, pattern):
@@ -361,7 +411,7 @@ def rune_convert_temporal(value, pattern):
 def rune_date_field(value, kind, field):
     if value is None:
         return None
-    parts = rune_calendar_parts(value)
+    parts = rune_zoned_parts(value)[0] if kind == "zonedDateTime" else rune_calendar_parts(value)
     if field in ("year", "month", "day"):
         return parts[("year", "month", "day").index(field)]
     if field == "date" and kind != "date":
@@ -388,10 +438,12 @@ def rune_date_construct(kind, fields):
     if zone is None:
         return None
     zone = "UTC" if zone == "Z" else zone
-    if re.fullmatch(r"[+-]\d{2}:\d{2}", zone):
-        return combined + zone + "[" + zone + "]"
-    parsed = datetime.fromisoformat(combined)
-    offset = parsed.replace(tzinfo=ZoneInfo(zone)).strftime("%z")
+    if zone == "UTC" or re.fullmatch(r"[+-]\d{2}:\d{2}", zone):
+        rune_offset_seconds(zone)
+        return combined + ("+00:00" if zone == "UTC" else zone) + "[" + zone + "]"
+    parsed = rune_temporal(combined + "[" + zone + "]", "zonedDateTime")
+    combined = parsed.date().isoformat() + "T" + rune_time_text(combined + "[" + zone + "]", "zonedDateTime")
+    offset = parsed.strftime("%z")
     offset = offset[:3] + ":" + offset[3:]
     return combined + offset + "[" + zone + "]"
 

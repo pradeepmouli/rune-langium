@@ -18,14 +18,14 @@ export interface ReferenceCase {
 
 const directory = resolve(import.meta.dirname, '../fixtures/cdm-reference');
 export const referenceCases: ReferenceCase[] = JSON.parse(readFileSync(resolve(directory, 'cases.json'), 'utf8'));
-const manifest: { files: { name: string; sha256: string }[] } = JSON.parse(
-  readFileSync(resolve(directory, 'sources.json'), 'utf8')
-);
 
 /** Read pinned upstream slices with their recorded integrity checks. */
-export function referenceFiles() {
+export function referenceFiles(fixtureDirectory = directory) {
+  const manifest: { files: { name: string; sha256: string }[] } = JSON.parse(
+    readFileSync(resolve(fixtureDirectory, 'sources.json'), 'utf8')
+  );
   return manifest.files.map(({ name, sha256 }) => {
-    const content = readFileSync(resolve(directory, name), 'utf8');
+    const content = readFileSync(resolve(fixtureDirectory, name), 'utf8');
     if (createHash('sha256').update(content).digest('hex') !== sha256) throw new Error(`CDM fixture changed: ${name}`);
     return { uri: `file:///cdm-reference/${name}`, content };
   });

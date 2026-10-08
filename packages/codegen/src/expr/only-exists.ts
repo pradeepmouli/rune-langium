@@ -11,12 +11,12 @@ import {
 import { expressionType, featureName, typeFeatures } from './navigation.js';
 import type { ExpressionTranspilerContext } from './transpiler.js';
 
-export function renderOnlyExists(
+/** Shared parent/field selection; emitters own their target predicate syntax. */
+export function onlyExistsSelection(
   expr: RosettaOnlyExistsExpression,
-  ctx: ExpressionTranspilerContext,
-  render: (node: RosettaExpression) => string,
-  renderAttribute: (name: string) => string
-): string | undefined {
+  rootAttributes: readonly string[],
+  render: (node: RosettaExpression) => string
+) {
   const args = expr.args.length
     ? expr.args
     : isListLiteral(expr.argument)
@@ -27,7 +27,7 @@ export function renderOnlyExists(
   if (!args.length) return undefined;
   const first = args[0]!;
   const parent = isRosettaFeatureCall(first) ? first.receiver : undefined;
-  const parentText = parent ? render(parent) : ctx.selfName;
+  const parentText = parent ? render(parent) : undefined;
   const names: string[] = [];
   for (const arg of args) {
     if (parent && isRosettaFeatureCall(arg) && arg.receiver && render(arg.receiver) === parentText)
@@ -35,10 +35,22 @@ export function renderOnlyExists(
     else if (!parent && isRosettaSymbolReference(arg)) names.push(arg.symbol.$refText);
     else return undefined;
   }
-  const attributes = parent ? typeFeatures(expressionType(parent)).map(featureName) : [...ctx.attributeTypes.keys()];
+  const attributes = parent ? typeFeatures(expressionType(parent)).map(featureName) : rootAttributes;
   const allowed = new Set(names);
+  return { parent, parentText, attributes, forbidden: attributes.filter((name) => !allowed.has(name)) };
+}
+
+export function renderOnlyExists(
+  expr: RosettaOnlyExistsExpression,
+  ctx: ExpressionTranspilerContext,
+  render: (node: RosettaExpression) => string,
+  renderAttribute: (name: string) => string
+): string | undefined {
+  const selected = onlyExistsSelection(expr, [...ctx.attributeTypes.keys()], render);
+  if (!selected) return undefined;
+  const { parent, parentText, forbidden } = selected;
   const access = (name: string) => (parent ? `__parent?.[${JSON.stringify(name)}]` : renderAttribute(name));
-  const checks = attributes.filter((name) => !allowed.has(name)).map((name) => `!runeAttrExists(${access(name)})`);
+  const checks = forbidden.map((name) => `!runeAttrExists(${access(name)})`);
   const predicate = checks.join(' && ') || 'true';
   return parent ? `((__parent) => ${predicate})(${parentText})` : `(${predicate})`;
 }

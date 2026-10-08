@@ -420,8 +420,9 @@ export function renderPythonExpression(expression: RosettaExpression, context: P
         const text = render(child, { ...ctx, preserveMetadata: !!target });
         return target ? pythonNormalize(text, expressionMetadataKind(child), target) : text;
       };
-      let result = fallback ? switchBranch(fallback.expression, childContext) : 'None';
-      for (const current of [...expression.cases].reverse()) {
+      const fallbackValue = fallback ? switchBranch(fallback.expression, childContext) : 'None';
+      const branches: string[] = [];
+      for (const current of expression.cases) {
         if (!current.guard) continue;
         const target = current.guard.referenceGuard?.ref;
         if (input && (isChoice(input) || input.$type === 'Data')) {
@@ -434,7 +435,9 @@ export function renderPythonExpression(expression: RosettaExpression, context: P
             self: item,
             implicit: { name: item, type: target, metadata: selection.projected ? selection.metadata : kind }
           };
-          result = `(${pythonBind(value, item, switchBranch(current.expression, child))} if ${selection.guard} else ${result})`;
+          branches.push(
+            `(lambda: ${selection.guard}, lambda: ${pythonBind(value, item, switchBranch(current.expression, child))})`
+          );
         } else {
           const guard = current.guard.literalGuard
             ? render(current.guard.literalGuard, valueContext)
@@ -442,10 +445,18 @@ export function renderPythonExpression(expression: RosettaExpression, context: P
               ? pyString(target.name)
               : undefined;
           if (!guard) throw new Error('Unresolved switch guard');
-          result = `(${switchBranch(current.expression, childContext)} if rune_equals(${selector}, ${guard}) else ${result})`;
+          branches.push(
+            `(lambda: rune_equals(${selector}, ${guard}), lambda: ${switchBranch(current.expression, childContext)})`
+          );
         }
       }
-      return pythonBind(argument(true), name, result);
+      const guard = pythonFresh(context, 'guard'),
+        body = pythonFresh(context, 'branch');
+      return pythonBind(
+        argument(true),
+        name,
+        `next((${body} for ${guard}, ${body} in [${branches.join(', ')}] if ${guard}()), lambda: ${fallbackValue})()`
+      );
     }
     case 'RosettaSuperCall': {
       const parent = context.superFunction;
