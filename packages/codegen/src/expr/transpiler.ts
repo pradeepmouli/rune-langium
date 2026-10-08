@@ -897,7 +897,7 @@ export function transpileComparison(expr: RosettaExpression, ctx: ExpressionTran
       const kind = nativeScalarOperands(expr.left, expr.right)!;
       return `((${left} as ${kind}) ${expr.operator === '<>' ? '!==' : '==='} ${right})`;
     }
-    return `${expr.operator === '<>' ? '!' : ''}runeValueEquals(${left}, ${right})`;
+    return `${expr.operator === '<>' ? '!' : ''}rune.equals(${left}, ${right})`;
   }
   if (isComparisonOperation(expr)) {
     const left = expr.left ? transpileExpression(expr.left, ctx) : ctx.selfName;

@@ -8,7 +8,7 @@ import { findProjectionFragment } from './provenance.js';
 export { recordedProjection as emittedTypeScriptProjection } from './provenance.js';
 
 const runtimeNames = [
-  ...new Set(Array.from(RUNTIME_HELPER_JS_SOURCE.matchAll(/\b(?:const|function) (rune\w+)/g), (match) => match[1]!))
+  ...new Set(Array.from(RUNTIME_HELPER_JS_SOURCE.matchAll(/\b(?:const|function) (rune\w*)/g), (match) => match[1]!))
 ];
 
 /** Select recorded output; display availability is independent of inverse-lens coverage. */

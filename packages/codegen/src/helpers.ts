@@ -180,7 +180,7 @@ export const RUNE_HELPER_NAMES = [
   'runeToFuncData',
   'runeCheckOneOf',
   'runeCount',
-  'runeValueEquals',
+  'rune',
   'runeValueKey',
   'runeAttrExists',
   'runeToDate',

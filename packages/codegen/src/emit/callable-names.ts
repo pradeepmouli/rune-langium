@@ -8,6 +8,7 @@ import {
   type RosettaRule
 } from '@rune-langium/core';
 import type { NamespaceRegistry } from './namespace-registry.js';
+import { RUNE_HELPER_NAMES } from '../helpers.js';
 
 export type CallableDeclaration = RosettaFunction | RosettaExternalFunction | RosettaRule;
 
@@ -20,6 +21,7 @@ export function callableExportName(declaration: CallableDeclaration): string {
 /** One name allocation shared by imports, calls, and bundled exports. */
 export class CallableNames {
   private readonly functionExports = new Map<string, string>();
+  private readonly dataExports = new Map<string, string>();
   private readonly owners = new Map<string, Set<string>>();
   private readonly aliases = new Map<string, string>();
 
@@ -31,17 +33,31 @@ export class CallableNames {
         ...manifest.exportedTypeAliasNames,
         ...manifest.exportedAnnotationNames
       ]);
-      const reserved = new Set([...typeNames, ...manifest.exportedFuncNames, ...manifest.exportedLibraryFuncNames]);
+      const helpers = new Set<string>(RUNE_HELPER_NAMES);
+      const reserved = new Set([
+        ...typeNames,
+        ...manifest.exportedFuncNames,
+        ...manifest.exportedLibraryFuncNames,
+        ...helpers
+      ]);
       for (const name of [...manifest.exportedFuncNames, ...manifest.exportedLibraryFuncNames].sort()) {
-        if (!typeNames.has(name)) continue;
+        if (!typeNames.has(name) && !helpers.has(name)) continue;
         const base = `${name}Function`;
         let exported = base;
         for (let suffix = 1; reserved.has(exported); suffix++) exported = `${base}${suffix}`;
         reserved.add(exported);
         this.functionExports.set(`${namespace}.${name}`, exported);
       }
+      for (const name of [...manifest.exportedDataNames].sort()) {
+        if (!helpers.has(name)) continue;
+        const base = `${name}Data`;
+        let exported = base;
+        for (let suffix = 1; reserved.has(exported); suffix++) exported = `${base}${suffix}`;
+        reserved.add(exported);
+        this.dataExports.set(`${namespace}.${name}`, exported);
+      }
       const names = new Set([
-        ...manifest.exportedDataNames,
+        ...[...manifest.exportedDataNames].map((name) => this.dataExported(namespace, name)),
         ...[...manifest.exportedDataNames].flatMap((name) => [`${name}Shape`, `is${name}`]),
         ...manifest.exportedEnumNames,
         ...[...manifest.exportedEnumNames].flatMap((name) => [`${name}Values`, `${name}DisplayNames`]),
@@ -73,6 +89,10 @@ export class CallableNames {
 
   exported(namespace: string, name: string): string {
     return this.functionExports.get(`${namespace}.${name}`) ?? name;
+  }
+
+  dataExported(namespace: string, name: string): string {
+    return this.dataExports.get(`${namespace}.${name}`) ?? name;
   }
 
   alias(namespace: string, name: string): string {

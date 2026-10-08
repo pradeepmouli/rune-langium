@@ -178,9 +178,9 @@ export function renderPythonExpression(expression: RosettaExpression, context: P
       if (!expression.cardMod && !many && !optional) {
         if (nativeEqualityOperands(expression.left, expression.right))
           return `(${left} ${expression.operator === '=' ? '==' : '!='} ${right})`;
-        return `${expression.operator === '<>' ? 'not ' : ''}rune_equals(${left}, ${right})`;
+        return `${expression.operator === '<>' ? 'not ' : ''}rune.equals(${left}, ${right})`;
       }
-      return `rune_equality(${left}, ${right}, ${pyBool(expression.operator === '<>')}, ${pyString(expression.cardMod ?? (expression.operator === '<>' ? 'any' : 'all'))})`;
+      return `rune.equals(${left}, ${right}, ${pyString(expression.cardMod ?? (expression.operator === '<>' ? 'any' : 'all'))}${expression.operator === '<>' ? ', True' : ''})`;
     }
     case 'ComparisonOperation': {
       const left = expression.left ? render(expression.left, valueContext) : argument(false),
@@ -454,7 +454,7 @@ export function renderPythonExpression(expression: RosettaExpression, context: P
               : undefined;
           if (!guard) throw new Error('Unresolved switch guard');
           branches.push(
-            `(lambda: rune_equals(${selector}, ${guard}), lambda: ${switchBranch(current.expression, childContext)})`
+            `(lambda: rune.equals(${selector}, ${guard}), lambda: ${switchBranch(current.expression, childContext)})`
           );
         }
       }

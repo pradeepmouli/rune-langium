@@ -34,6 +34,40 @@ function execute(source: string, cases: readonly { expression: string; data?: un
 }
 
 describe('complete Python function projections', () => {
+  it('keeps the equality namespace separate from declaration, output and alias names', async () => {
+    const funcs = await linkedFunctions(`namespace python.runtime_names
+func rune:
+ inputs:
+  a number (1..1)
+  b number (1..1)
+ output: result boolean (1..1)
+ set result: a = b
+func CheckAlias:
+ inputs:
+  a number (1..1)
+  b number (1..1)
+ output: result boolean (1..1)
+ alias rune: a
+ set result: rune = b
+func CheckOutput:
+ inputs:
+  a number (1..1)
+  b number (1..1)
+ output: rune boolean (1..1)
+ set rune: a = b
+`);
+    const module = generatePythonModule([AstUtils.getDocument(funcs[0]!)]);
+    expect(module.bindings.get('python.runtime_names.rune')).not.toBe('rune');
+    for (const name of ['rune', 'CheckAlias', 'CheckOutput']) {
+      const callable = module.bindings.get(`python.runtime_names.${name}`)!;
+      expect(
+        execute(module.code, [
+          { expression: `${callable}(data)`, data: { a: 1, b: 1 } },
+          { expression: `${callable}(data)`, data: { a: 1, b: 2 } }
+        ])
+      ).toEqual([{ value: true }, { value: false }]);
+    }
+  });
   it('reserves every builtin loaded by the authoritative Python runtime', async () => {
     const [scan] = execute('import ast\nimport builtins\n', [
       {

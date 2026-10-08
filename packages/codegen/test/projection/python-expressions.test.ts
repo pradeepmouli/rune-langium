@@ -75,6 +75,9 @@ describe('forward Python expression projections', () => {
     expect(project('True <> False').code).toBe('(True != False)');
     expect(project('1 < 2').code).toBe('(1.0 < 2.0)');
     const [equality] = await linkedExpressions(['a = b']);
-    expect(projectPythonExpression(equality!, pythonContext()).requiredHelpers).toContain('rune_equals');
+    const projection = projectPythonExpression(equality!, pythonContext());
+    expect(projection.code).toContain('rune.equals(');
+    expect(projection.requiredHelpers).toContain('rune.equals');
+    expect(projection.requiredHelpers).toContain('rune_value_key');
   });
 });

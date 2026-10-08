@@ -103,7 +103,9 @@ func RequiredOutput:
     expect(evaluate('[1, 2] = [2, 1]')).toBe(false);
     expect(evaluate('a = b', { a: { value: 1 }, b: { value: 1 } })).toBe(true);
     expect(evaluate('a = b', { a: undefined, b: null })).toBe(true);
-    expect(render('a = b')).toContain('runeValueEquals');
+    expect(render('a = b')).toBe('rune.equals(data.a, data.b)');
+    expect(render('[1, 2] = [1, 2]')).toMatch(/^rune\.equals\([^]*, "all"\)$/);
+    expect(render('[1, 2] = [1, 2]')).not.toContain('=>');
   });
   it('strictly compiles native equality after nested boolean control-flow narrowing', async () => {
     const [func] = await linkedFunctions(`namespace native.narrowing

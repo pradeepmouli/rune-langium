@@ -85,7 +85,7 @@ import {
 } from './base-namespace-emitter.js';
 import { getTargetRelativePath, type NamespaceWalkResult } from './namespace-walker.js';
 import { debug } from '../instrument.js';
-import { RUNTIME_HELPER_SOURCE, buildRuntimeHelperImportLine } from '../helpers.js';
+import { RUNTIME_HELPER_SOURCE, RUNE_HELPER_NAMES, buildRuntimeHelperImportLine } from '../helpers.js';
 import {
   attrAccessExpr,
   transpileCondition,
@@ -299,6 +299,7 @@ export class TsNamespaceEmitter extends BaseNamespaceEmitter {
 
   private typeName = (declaration: AstNode & { name: string }, exportedName = declaration.name): string => {
     const namespace = getElementNamespace(declaration) ?? this.model.namespace;
+    exportedName = this.callableNames.dataExported(namespace, exportedName);
     return this.singleFile || namespace !== this.model.namespace
       ? this.callableNames.bundled(namespace, exportedName)
       : exportedName;
@@ -511,7 +512,8 @@ export class TsNamespaceEmitter extends BaseNamespaceEmitter {
         symbols = new Set();
         imports.set(ns, symbols);
       }
-      const exported = this.singleFile ? this.callableNames.bundled(ns, symbolName) : symbolName;
+      const name = isData(typeRef) ? this.callableNames.dataExported(ns, symbolName) : symbolName;
+      const exported = this.singleFile ? this.callableNames.bundled(ns, name) : name;
       const local = localName ?? this.typeName(typeRef, symbolName);
       symbols.add(exported === local ? exported : `${exported} as ${local}`);
     };
@@ -1898,9 +1900,28 @@ export class TsNamespaceEmitter extends BaseNamespaceEmitter {
     const isArray = func.output.cardinality.upper === null || func.output.cardinality.upper > 1;
 
     const inputNames = new Set(func.inputs.map((p) => p.name));
+    const helperNames = new Set<string>(RUNE_HELPER_NAMES);
+    const reserved = new Set([
+      ...helperNames,
+      'input',
+      'result',
+      ...inputNames,
+      ...func.aliases.map((alias) => alias.name)
+    ]);
     const aliasBindings = new Map<string, string>();
     for (const alias of func.aliases) {
-      const localName = inputNames.has(alias.name) ? `${alias.name}_alias` : alias.name;
+      let localName = alias.name;
+      if (
+        inputNames.has(alias.name) ||
+        helperNames.has(alias.name) ||
+        alias.name === 'input' ||
+        alias.name === 'result'
+      ) {
+        const base = `${alias.name}_alias`;
+        localName = base;
+        for (let suffix = 1; reserved.has(localName); suffix++) localName = `${base}${suffix}`;
+        reserved.add(localName);
+      }
       aliasBindings.set(alias.name, localName);
     }
 

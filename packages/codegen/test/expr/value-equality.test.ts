@@ -11,12 +11,28 @@ describe.each([false, true])('value equality (TypeScript=%s)', (typescript) => {
   const executable = typescript
     ? ts.transpileModule(source, { compilerOptions: { target: ts.ScriptTarget.ES2022 } }).outputText
     : source;
-  const { runeValueEquals: equal, runeValueKey: key } = new Function(
-    `${executable}; return { runeValueEquals, runeValueKey };`
-  )() as {
-    runeValueEquals: (left: unknown, right: unknown) => boolean;
+  const {
+    rune: { equals: equal },
+    runeValueKey: key
+  } = new Function(`${executable}; return { rune, runeValueKey };`)() as {
+    rune: { equals: (left: unknown, right: unknown, quantifier?: 'all' | 'any', unequal?: boolean) => boolean };
     runeValueKey: (value: unknown) => string;
   };
+
+  it('pairs or broadcasts collection equality and preserves empty and unequal semantics', () => {
+    expect(equal([1, 2], [1, 2], 'all')).toBe(true);
+    expect(equal([1, 2], [2, 1], 'all')).toBe(false);
+    expect(equal([1, 2], [1, 3], 'any')).toBe(true);
+    expect(equal([1, 2], 2, 'any')).toBe(true);
+    expect(equal(2, [2, 2], 'all')).toBe(true);
+    expect(equal([], [], 'any')).toBe(true);
+    expect(equal([], null, 'all')).toBe(false);
+    expect(equal(null, undefined, 'all')).toBe(true);
+    expect(equal([1, 2], [1], 'all', true)).toBe(false);
+    expect(equal([1, 2], [1], 'any', true)).toBe(true);
+    expect(equal([1, 2], [3], 'all', true)).toBe(true);
+    expect(equal([], [], 'all', true)).toBe(false);
+  });
 
   it.each([
     ['PlainDate', () => Temporal.PlainDate.from('2026-09-11'), () => Temporal.PlainDate.from('2026-09-12')],

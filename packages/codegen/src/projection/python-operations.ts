@@ -75,15 +75,18 @@ export function pythonInline(
 /** Read helper dependencies from the authoritative runtime rather than a copied name registry. */
 export function pythonHelperDependencies(code: string): string[] {
   const bodies = new Map(
-    [...PYTHON_RUNTIME_SOURCE.matchAll(/^def (rune_\w+)\([^]*?(?=^def |$(?![^]))/gm)].map((match) => [
+    [...PYTHON_RUNTIME_SOURCE.matchAll(/^def (rune_\w+)\([^]*?(?=^(?:def |class )|$(?![^]))/gm)].map((match) => [
       match[1]!,
       match[0]
     ])
   );
+  for (const namespace of PYTHON_RUNTIME_SOURCE.matchAll(/^class (\w+):\n([^]*?)(?=^(?:def |class )|$(?![^]))/gm))
+    for (const method of namespace[2]!.matchAll(/^    def (\w+)\([^]*?(?=^    (?:@|def )|$(?![^]))/gm))
+      bodies.set(`${namespace[1]}.${method[1]}`, method[0]);
   const required = new Set<string>();
   function collect(text: string) {
     for (const name of bodies.keys())
-      if (new RegExp(`\\b${name}\\s*\\(`).test(text) && !required.has(name)) {
+      if (new RegExp(`\\b${name.replace(/\./g, '\\.')}\\s*\\(`).test(text) && !required.has(name)) {
         required.add(name);
         collect(bodies.get(name)!);
       }

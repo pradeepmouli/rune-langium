@@ -19,10 +19,30 @@ const cases = [
   ['rune_compare([], [2], lambda a, b: a < b)', 'runeCompare([], [2], (a, b) => a < b)'],
   ['rune_compare([1, 3], [2], lambda a, b: a < b, "any")', 'runeCompare([1, 3], [2], (a, b) => a < b, "any")'],
   ['rune_compare([1, 3], [2], lambda a, b: a < b, "all")', 'runeCompare([1, 3], [2], (a, b) => a < b, "all")'],
-  ['rune_equals(False, 0)', 'runeValueEquals(false, 0)'],
-  ['rune_equals({"a": 1, "missing": None}, {"a": 1})', 'runeValueEquals({a: 1, missing: null}, {a: 1})'],
-  ['rune_equals({"value": False}, {"value": 0})', 'runeValueEquals({value: false}, {value: 0})'],
-  ['rune_equals([1, 2], [2, 1])', 'runeValueEquals([1, 2], [2, 1])'],
+  ['rune.equals(False, 0)', 'rune.equals(false, 0)'],
+  ['rune.equals({"a": 1, "missing": None}, {"a": 1})', 'rune.equals({a: 1, missing: null}, {a: 1})'],
+  ['rune.equals({"value": False}, {"value": 0})', 'rune.equals({value: false}, {value: 0})'],
+  ['rune.equals([1, 2], [2, 1])', 'rune.equals([1, 2], [2, 1])'],
+  ...['all', 'any'].flatMap((quantifier) =>
+    [false, true].flatMap((unequal) =>
+      [
+        [null, null],
+        [[], []],
+        [[], null],
+        [[1, 2], 2],
+        [2, [2, 2]],
+        [[1, 2], [1]],
+        [[1], [1, 2]],
+        [[1, 2], [3]]
+      ].map(
+        ([left, right]) =>
+          [
+            `rune.equals(${JSON.stringify(left).replace(/null/g, 'None')}, ${JSON.stringify(right).replace(/null/g, 'None')}, "${quantifier}", ${unequal ? 'True' : 'False'})`,
+            `rune.equals(${JSON.stringify(left)}, ${JSON.stringify(right)}, "${quantifier}", ${unequal})`
+          ] as const
+      )
+    )
+  ),
   ['rune_divide(1, 0)', '1 / 0'],
   ...[
     0,

@@ -22,6 +22,31 @@ limited inverse-editing subset. Native scalar operators also apply to exported
 TypeScript where their shared proof establishes equivalence; null, collection,
 metadata, temporal and structured-value semantics retain necessary helpers.
 
+## Equality emission follow-up
+
+Following the requested naming change, structural comparisons use
+`rune.equals(left, right)` in TypeScript and Python. Collection comparisons pass
+their `all`/`any` quantifier and optional inequality flag to the same namespace;
+the long per-expression TypeScript comparison closure moved into the shared
+runtime. Compact native scalar operators retain the existing linked type proof.
+The actual exports, recorded projections and executable previews share this
+emission policy. Generated runtime files and 63 golden outputs were regenerated
+from their authoritative sources.
+
+Behavioral checks cover empty and unequal collections, scalar broadcasting,
+structural and temporal values, namespace dependency reporting, and legal `rune`
+names in declarations, aliases, outputs and inline parameters. TypeScript
+compilation and execution verify these names in all three export layouts.
+
+Verification: `pnpm --filter @rune-langium/codegen test` passed **2,220 tests**
+with the existing one skip and eight todo; Python checks used the supported 3.13
+interpreter via `PYTHON_BINARY`. Studio's codegen-runtime, codegen-worker and
+expression-projection suites passed **74 tests**. `pnpm run verify:codegen-corpus`
+strictly compiled all **132 pinned generated files**. Codegen build/type checks,
+scoped lint and authored-source formatting, generated Python runtime freshness,
+and `git diff --check` passed. Existing lint warnings remain. This follow-up is
+part of the open PR stack and has not been merged or deployed.
+
 ## One final review and fix pass
 
 A fresh reviewer examined the entire branch through `fcb1a567`, reporting six

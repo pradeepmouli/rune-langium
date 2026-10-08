@@ -46,12 +46,12 @@ export interface PythonModule {
 }
 
 const reserved = new Set(
-  'False None True and as assert async await break class continue def del elif else except finally for from global if import in is lambda nonlocal not or pass raise return try while with yield match case type Any Callable TypedDict NotRequired Literal math re calendar date time datetime timedelta timezone ZoneInfo reduce cmp_to_key input bool float int str list dict len sum min max sorted range enumerate map set tuple all any next isinstance globals ValueError TypeError OverflowError abs callable divmod reversed repr'.split(
+  'False None True and as assert async await break class continue def del elif else except finally for from global if import in is lambda nonlocal not or pass raise return try while with yield match case type Any Callable TypedDict NotRequired Literal math re calendar date time datetime timedelta timezone ZoneInfo reduce cmp_to_key input bool float int str list dict len sum min max sorted range enumerate map set tuple all any next isinstance globals ValueError TypeError OverflowError abs callable divmod reversed repr staticmethod'.split(
     ' '
   )
 );
 for (const match of PYTHON_RUNTIME_SOURCE.matchAll(/^def (\w+)\(/gm)) reserved.add(match[1]!);
-for (const match of PYTHON_RUNTIME_SOURCE.matchAll(/^class (\w+)[[(]/gm)) reserved.add(match[1]!);
+for (const match of PYTHON_RUNTIME_SOURCE.matchAll(/^class (\w+)(?:[[(]|:)/gm)) reserved.add(match[1]!);
 
 function identifier(name: string, used: Set<string>): string {
   let base = name.replace(/[^a-zA-Z0-9_]/g, '_');
@@ -337,7 +337,7 @@ export function generatePythonModule(documents: readonly LangiumDocument[]): Pyt
             fieldMetadataKind(parameter)
           );
           calls.push(
-            `    if rune_equals(${selector}, ${pyString(func.dispatchValue?.value.ref?.name ?? func.dispatchValue?.value.$refText ?? '')}):\n        return ${implementation}(input)`
+            `    if rune.equals(${selector}, ${pyString(func.dispatchValue?.value.ref?.name ?? func.dispatchValue?.value.$refText ?? '')}):\n        return ${implementation}(input)`
           );
         }
       }

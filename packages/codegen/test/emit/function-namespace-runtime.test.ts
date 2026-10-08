@@ -31,6 +31,9 @@ reporting rule Read from int: item + ${index + 1}
 `
       );
       sources[0] += '\ntype Entry:\n value int (1..1)\n';
+      sources[0] += '\ntype rune:\n value int (1..1)\n';
+      sources[1] +=
+        '\nfunc rune:\n inputs:\n  a number (1..1)\n  b number (1..1)\n output: result boolean (1..1)\n set result: a = b\n';
       sources[0] += '\ntype Foo:\n alphaValue int (1..1)\n';
       sources[1] += '\ntype Foo:\n betaValue string (1..1)\n';
       for (let index = 0; index < 2; index++) {
@@ -52,6 +55,24 @@ enum Side:
 `;
       sources[1] += '\nfunc isEntry:\n inputs: value int (1..1)\n output: result int (1..1)\n set result: value + 3\n';
       sources.push(`namespace caller
+func CheckRuntimeNamespace:
+ inputs:
+  a alpha.rune (1..1)
+  b alpha.rune (1..1)
+ output: result boolean (1..1)
+ alias rune: a
+ alias rune_alias: b
+ set result: rune = rune_alias
+func CallRuntimeName:
+ inputs:
+  a number (1..1)
+  b number (1..1)
+ output: result boolean (1..1)
+ set result: beta.rune(a, b)
+func CheckInlineRuntimeName:
+ inputs: xs number (0..*)
+ output: result boolean (0..*)
+ set result: xs extract rune [ rune = 1 ]
 func KeepAlias:
  inputs: value alpha.FooAlias (1..1)
  output: result alpha.FooAlias (1..1)
@@ -155,6 +176,11 @@ func Libraries:
         const require = createRequire(join(directory, 'entry.js'));
         const entry = layout === 'single-file' ? 'model' : layout === 'barrel' ? 'index' : 'caller';
         const funcs = require(`./${entry}.js`);
+        expect(funcs.CheckRuntimeNamespace({ a: { value: 1 }, b: { value: 1 } })).toBe(true);
+        expect(funcs.CheckRuntimeNamespace({ a: { value: 1 }, b: { value: 2 } })).toBe(false);
+        expect(funcs.CallRuntimeName({ a: 1, b: 1 })).toBe(true);
+        expect(funcs.CallRuntimeName({ a: 1, b: 2 })).toBe(false);
+        expect(funcs.CheckInlineRuntimeName({ xs: [1, 2] })).toEqual([true, false]);
         const first = layout === 'per-namespace' ? require('./alpha.js').Custom : funcs.__rune$alpha$Custom;
         const second = layout === 'per-namespace' ? require('./beta.js').Custom : funcs.__rune$beta$Custom;
         first.implementation = (value: number) => value + 10;

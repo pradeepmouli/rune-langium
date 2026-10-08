@@ -133,22 +133,27 @@ def rune_unwrap(value, many=False):
     return value.get("value") if isinstance(value, dict) else None
 
 
-def rune_equality(left, right, unequal=False, quantifier="all"):
-    l, r = rune_list(left), rune_list(right)
-    left_array, right_array = isinstance(left, list), isinstance(right, list)
-    if not l or not r:
-        same = left_array == right_array and len(l) == len(r)
-        return not same if unequal else same
-    compare = lambda a, b: not rune_equals(a, b) if unequal else rune_equals(a, b)
-    predicate = all if quantifier == "all" else any
-    if not left_array:
-        return predicate(compare(left, b) for b in r)
-    if not right_array:
-        return predicate(compare(a, right) for a in l)
-    if quantifier == "all":
-        return (unequal or len(l) == len(r)) and all(
-            (unequal if i >= len(r) else compare(a, r[i])) for i, a in enumerate(l))
-    return (unequal and len(l) != len(r)) or any(compare(a, r[i]) for i, a in enumerate(l) if i < len(r))
+class rune:
+    @staticmethod
+    def equals(left, right, quantifier=None, unequal=False):
+        if quantifier is None:
+            same = rune_value_key(left) == rune_value_key(right)
+            return not same if unequal else same
+        l, r = rune_list(left), rune_list(right)
+        left_array, right_array = isinstance(left, list), isinstance(right, list)
+        if not l or not r:
+            same = left_array == right_array and len(l) == len(r)
+            return not same if unequal else same
+        compare = lambda a, b: not rune.equals(a, b) if unequal else rune.equals(a, b)
+        predicate = all if quantifier == "all" else any
+        if not left_array:
+            return predicate(compare(left, b) for b in r)
+        if not right_array:
+            return predicate(compare(a, right) for a in l)
+        if quantifier == "all":
+            return (unequal or len(l) == len(r)) and all(
+                (unequal if i >= len(r) else compare(a, r[i])) for i, a in enumerate(l))
+        return (unequal and len(l) != len(r)) or any(compare(a, r[i]) for i, a in enumerate(l) if i < len(r))
 
 
 def rune_contains(left, right):
@@ -535,10 +540,6 @@ def rune_value_key(value):
     if isinstance(value, list):
         return ("array", tuple(rune_value_key(item) for item in value))
     return ("object", tuple((key, rune_value_key(value[key])) for key in sorted(value) if value[key] is not None))
-
-
-def rune_equals(left, right):
-    return rune_value_key(left) == rune_value_key(right)
 
 
 def rune_divide(left, right):

@@ -125,6 +125,14 @@ linked type/cardinality proof; collections, metadata, missing values and structu
 equality retain their required runtime behavior. Preview file receipts acknowledge
 delivery; identical content preserves the linked/generation caches.
 
+Equality projections and exports use compact native scalar comparisons when the
+linked type proof permits them. Structural equality and collection comparisons
+call `rune.equals(left, right, quantifier?, unequal?)`; the shared runtime owns
+pairing, broadcasting, missing values and `all`/`any` behavior. TypeScript, Zod
+and executable previews use the same generated runtime source; Python exposes
+the same namespace and argument order. Name allocation keeps legal declarations,
+aliases and inline parameters named `rune` separate from the runtime namespace.
+
 Python expression rendering lives in codegen's `projection/` backend and consumes
 the same linked declaration, cardinality, metadata and Choice-path facts. Shared
 scalar proofs, Data-selection facts and temporal wire formats serve both targets.

@@ -93,7 +93,27 @@ const runeValueKey = (value: unknown): string => {
   const fields = value as Record<string, unknown>;
   return 'object:' + JSON.stringify(Object.keys(fields).sort().filter((key) => fields[key] != null).map((key) => [key, runeValueKey(fields[key])]));
 };
-const runeValueEquals = (left: unknown, right: unknown): boolean => runeValueKey(left) === runeValueKey(right);
+const rune = {
+  equals: (left: unknown, right: unknown, quantifier?: 'all' | 'any', unequal = false): boolean => {
+    if (quantifier == null) {
+      const same = runeValueKey(left) === runeValueKey(right);
+      return unequal ? !same : same;
+    }
+    const leftArray = Array.isArray(left), rightArray = Array.isArray(right);
+    const l = leftArray ? left : left == null ? [] : [left];
+    const r = rightArray ? right : right == null ? [] : [right];
+    if (l.length === 0 || r.length === 0) {
+      const same = leftArray === rightArray && l.length === r.length;
+      return unequal ? !same : same;
+    }
+    const compare = (a: unknown, b: unknown) => unequal ? !rune.equals(a, b) : rune.equals(a, b);
+    if (!leftArray) return quantifier === 'all' ? r.every((b) => compare(left, b)) : r.some((b) => compare(left, b));
+    if (!rightArray) return quantifier === 'all' ? l.every((a) => compare(a, right)) : l.some((a) => compare(a, right));
+    return quantifier === 'all'
+      ? (unequal || l.length === r.length) && l.every((a, i) => i >= r.length ? unequal : compare(a, r[i]))
+      : (unequal && l.length !== r.length) || l.some((a, i) => i < r.length && compare(a, r[i]));
+  }
+};
 
 const runeCheckOneOf = (values: unknown[]): boolean =>
   values.filter((v) => v !== undefined && v !== null && !(Array.isArray(v) && v.length === 0)).length === 1;

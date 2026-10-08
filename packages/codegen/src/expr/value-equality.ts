@@ -15,5 +15,25 @@ export function valueEqualitySource(typescript: boolean, exported = false): stri
   const fields = value${fields};
   return 'object:' + JSON.stringify(Object.keys(fields).sort().filter((key) => fields[key] != null).map((key) => [key, runeValueKey(fields[key])]));
 };
-${prefix}const runeValueEquals = (left${valueType}, right${valueType})${typescript ? ': boolean' : ''} => runeValueKey(left) === runeValueKey(right);`;
+${prefix}const rune = {
+  equals: (left${valueType}, right${valueType}, quantifier${typescript ? "?: 'all' | 'any'" : ' = undefined'}, unequal = false)${typescript ? ': boolean' : ''} => {
+    if (quantifier == null) {
+      const same = runeValueKey(left) === runeValueKey(right);
+      return unequal ? !same : same;
+    }
+    const leftArray = Array.isArray(left), rightArray = Array.isArray(right);
+    const l = leftArray ? left : left == null ? [] : [left];
+    const r = rightArray ? right : right == null ? [] : [right];
+    if (l.length === 0 || r.length === 0) {
+      const same = leftArray === rightArray && l.length === r.length;
+      return unequal ? !same : same;
+    }
+    const compare = (a${valueType}, b${valueType}) => unequal ? !rune.equals(a, b) : rune.equals(a, b);
+    if (!leftArray) return quantifier === 'all' ? r.every((b) => compare(left, b)) : r.some((b) => compare(left, b));
+    if (!rightArray) return quantifier === 'all' ? l.every((a) => compare(a, right)) : l.some((a) => compare(a, right));
+    return quantifier === 'all'
+      ? (unequal || l.length === r.length) && l.every((a, i) => i >= r.length ? unequal : compare(a, r[i]))
+      : (unequal && l.length !== r.length) || l.some((a, i) => i < r.length && compare(a, r[i]));
+  }
+};`;
 }
