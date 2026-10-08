@@ -3,7 +3,7 @@
 The [expression editing design](../specs/2026-10-08-expression-editing-design.md)
 and both implementation plans are implemented in an isolated checkout based on
 `709f85839b6ac4ff8ed8619ac08c6229a61ff98d`. The dirty primary checkout and user
-browser tabs were preserved. No merge or deployment is part of this delivery.
+browser tabs were preserved. No production deployment is part of this delivery.
 
 ## Result
 
@@ -153,3 +153,50 @@ bindings, and Python named IANA-zone dates retain datetime's year range 1..9999.
 design-system and instrumentation-core dependency configuration, unchanged from
 the base revision. The consolidated changeset is present, but release preview
 did not pass and package publication needs that separate configuration repair.
+
+
+## PR review follow-up
+
+Thirteen actionable findings across #576–#578 have regression fixes. The
+correctness branch forwards the complete indexed-operation action through the
+Studio adapter, and its operation regression uses an original MIT `Summarize`
+fixture. The separately pinned CDM browser fixture and its dependency cohort remain
+unchanged.
+
+The standalone workspace branch now submits current sources and serialized
+references to the canonical parser-worker scope pipeline, normalizes file URIs,
+and serializes complete parse/link/scope requests. Offline router regressions
+cover empty and stale workers, changed dependency symbols, and stale positions.
+Confirmed declaration rename/delete invalidates the Inspector binding while
+pending/invalid drafts remain repairable. Bundled TypeScript output keeps code
+and display projections without stale per-namespace `GeneratedFunc` paths. Choice
+symbols flow through core scope, the presentation adapter and the picker; the
+picker requires known callable arity and retains confirmed zero-input calls.
+Visual-editor reuses core's scope-kind type.
+
+The Python branch preserves signed zero, unwraps implicit metadata feature
+bindings, narrows collections element by element and shares declaration-based
+scalar classification with the TypeScript input adapter. Internally created
+metadata dictionaries carry provenance without adding JSON keys, making nested
+function normalization idempotent while leaving ordinary `value` and
+`externalReference` Data fields intact. Annotation factories and their Args
+companions use the same central runtime-name allocator as other declarations;
+strict compilation and execution cover all three TypeScript layouts.
+
+Correctness fixes had failing behavioral regressions followed by passing ones; fixture provenance was reviewed separately.
+The standalone #577 broad gates passed 327 core, 1,536 visual-editor, 2,022 codegen
+and 1,654 Studio tests. Existing skips/todo cases were retained. The middle branch
+also includes the preview mock updates so the shared CodeMirror state API is
+exercised without incomplete state-module mocks. Its pre-push hook passed all
+workspace type checks.
+
+On the final stack, codegen passed 2,226 tests using supported Python 3.13
+(`PYTHON_BINARY`), with the existing one skip and eight todo cases. The pinned
+codegen corpus strictly compiled 132 emitted TypeScript files. Workspace type
+checks, lint, package builds and generated Python runtime freshness passed;
+existing lint warnings remain. The final full Studio suite passed 1,665 tests with two intentional skips.
+
+Full Studio runs exclude the ignored local reproduction under
+`test/prod-ux/report/**`, which asserts the former bug; every tracked Studio suite
+is included. Review fixes are delivered through the existing open PR stack;
+the user subsequently authorized top-down integration using merge commits after fresh review and CI checks. This validation does not claim a production deployment.
