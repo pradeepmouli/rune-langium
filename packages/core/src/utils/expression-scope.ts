@@ -2,9 +2,15 @@
 // Copyright (c) 2026 Pradeep Mouli
 
 import { AstUtils } from 'langium';
-import { isRosettaFunction, isAttribute, isShortcutDeclaration, type RosettaExpression } from '../generated/ast.js';
+import {
+  isRosettaFunction,
+  isRosettaExternalFunction,
+  isAttribute,
+  isShortcutDeclaration,
+  type RosettaExpression
+} from '../generated/ast.js';
 import type { RuneDslServices } from '../services/rune-dsl-module.js';
-import { getFunctionSignature } from './expression-utils.js';
+import { getFunctionSignature, getFunctionInputs, getFunctionOutput } from './expression-utils.js';
 import { toConstraintString } from './cardinality-utils.js';
 
 export interface ExpressionScopeEntry {
@@ -60,7 +66,12 @@ export function getExpressionScope(expression: RosettaExpression, services: Rune
         continue;
       kind = 'alias';
     } else if (node && isAttribute(node)) {
-      kind = signature?.output === node ? 'output' : signature?.inputs.includes(node) ? 'input' : 'attribute';
+      kind =
+        signature && getFunctionOutput(signature) === node
+          ? 'output'
+          : signature && getFunctionInputs(signature).includes(node)
+            ? 'input'
+            : 'attribute';
     } else if (description.type === 'RosettaFunction' || description.type === 'RosettaExternalFunction')
       kind = 'callable';
     else if (description.type === 'RosettaEnumValue') kind = 'enum';
@@ -73,8 +84,10 @@ export function getExpressionScope(expression: RosettaExpression, services: Rune
       declarationId: `${description.documentUri.toString()}#${description.path}`,
       ...(typed ? { typeName: typed.typeCall.type.$refText, cardinality: toConstraintString(typed.card) } : {}),
       ...(node && isRosettaFunction(node)
-        ? { argumentCount: getFunctionSignature(node, declarations).inputs.length }
-        : {})
+        ? { argumentCount: getFunctionInputs(node, new Set(), declarations).length }
+        : node && isRosettaExternalFunction(node)
+          ? { argumentCount: node.parameters.length }
+          : {})
     });
   }
   return entries;
