@@ -18,6 +18,10 @@ enum Color extends ParentColor:
 type Leaf:
  amount number (1..1)
  extra number (0..1)
+type BaseLeaf:
+ baseValue number (0..1)
+type DerivedLeaf extends BaseLeaf:
+ amount number (1..1)
 type Other:
  other string (1..1)
 type Container:
@@ -63,6 +67,32 @@ const cases = [
   ],
   ['as', 'object Instrument (1..1)', 'object as Leaf', { object: { leaf: { amount: 7 } } }, { amount: 7 }],
   ['asAbsent', 'object Instrument (1..1)', 'object as Leaf', { object: { other: { other: 'x' } } }, null],
+  [
+    'asManyChoice',
+    'objects Instrument (0..*)',
+    'objects as Leaf',
+    { objects: [{ leaf: { amount: 0 } }, { other: { other: 'x' } }, {}, { leaf: { amount: 3 } }] },
+    [{ amount: 0 }, { amount: 3 }]
+  ],
+  [
+    'asManyData',
+    'objects BaseLeaf (0..*)',
+    'objects as DerivedLeaf',
+    { objects: [{ baseValue: 2 }, { baseValue: 1, amount: 0 }, { amount: 3 }] },
+    [{ baseValue: 1, amount: 0 }, { amount: 3 }]
+  ],
+  [
+    'asManyMetadata',
+    'objects BaseLeaf (0..*) [metadata scheme]',
+    'objects as DerivedLeaf',
+    {
+      objects: [
+        { value: { baseValue: 2 }, meta: { scheme: 'x' } },
+        { value: { amount: 0 }, meta: { scheme: 'y' } }
+      ]
+    },
+    [{ amount: 0 }]
+  ],
   ['constructor', '', 'Leaf {amount: 7}', {}, { amount: 7 }],
   ['enum', 'text string (1..1)', 'text to-enum Color', { text: 'Red' }, 'Red'],
   ['enumBad', 'text string (1..1)', 'text to-enum Color', { text: 'Missing' }, null],
@@ -290,6 +320,26 @@ const cases = [
 ] as const;
 
 describe('linked Python expressions', () => {
+  it('retains the wrappers of collection elements selected by as', async () => {
+    const [func] = await linkedFunctions(
+      declarations +
+        `func Select:
+ inputs: objects BaseLeaf (0..*) [metadata scheme]
+ output: result DerivedLeaf (0..*) [metadata scheme]
+ set result: objects as DerivedLeaf`
+    );
+    const code = projectPythonExpression(func!.operations[0]!.expression, {
+      ...pythonContext(),
+      preserveMetadata: true
+    }).code;
+    const retained = { value: { amount: 0 }, meta: { scheme: 'y' } };
+    expect(
+      runPython([
+        { expression: code, data: { objects: [{ value: { baseValue: 2 }, meta: { scheme: 'x' } }, retained] } }
+      ])
+    ).toEqual([{ value: [retained] }]);
+  });
+
   it('executes declarations, scopes, Choice paths, metadata and temporal operations through canonical facts', async () => {
     const funcs = await linkedFunctions(
       declarations +

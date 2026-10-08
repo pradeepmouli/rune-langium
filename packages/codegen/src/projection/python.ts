@@ -408,7 +408,11 @@ export function renderPythonExpression(expression: RosettaExpression, context: P
         kind = expressionMetadataKind(arg);
       const selected = pythonTypeSelection(pythonUnwrap(name, kind), input, target, true);
       const value = selected.projected ? selected.selected : name;
-      const result = pythonBind(argument(true), name, `${value} if ${selected.guard} else None`);
+      const single = `${value} if ${selected.guard} else None`;
+      const mapped = pythonFresh(context, 'selected');
+      const result = expressionIsMany(expression)
+        ? `[${mapped} for ${name} in rune.list(${argument(true)}) for ${mapped} in rune.list(${single})]`
+        : pythonBind(argument(true), name, single);
       return context.preserveMetadata
         ? result
         : pythonUnwrap(result, expressionMetadataKind(expression), expressionIsMany(expression));
