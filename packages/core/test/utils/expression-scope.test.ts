@@ -59,6 +59,28 @@ describe('authoritative expression scope descriptions', () => {
     expect(entries).toContainEqual(expect.objectContaining({ name: 'Combine', kind: 'callable', argumentCount: 2 }));
   });
 
+  it('counts external parameters and inherited inputs', async () => {
+    const entries = await scope(
+      `namespace test
+version "test"
+library function Native(a int, b int) int
+func Parent:
+ inputs:
+  a int (1..1)
+  b int (1..1)
+ output: result int (1..1)
+ set result: a + b
+func Derived extends Parent:
+ set result: a
+func Use:
+ output: result int (1..1)
+ set result: Derived(1, 2)`,
+      'Use'
+    );
+    expect(entries).toContainEqual(expect.objectContaining({ name: 'Native', kind: 'callable', argumentCount: 2 }));
+    expect(entries).toContainEqual(expect.objectContaining({ name: 'Derived', kind: 'callable', argumentCount: 2 }));
+  });
+
   it('resolves a dispatch signature from its declaration and scopes enum members', async () => {
     const entries = await scope(
       [
