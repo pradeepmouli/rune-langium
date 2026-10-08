@@ -5,6 +5,8 @@ import { describe, expect, it } from 'vitest';
 import { parseExpression } from '@rune-langium/core';
 import { projectPythonExpression } from '../../src/projection/python.js';
 import { pythonContext, runPython, linkedExpressions } from './python-test-utils.js';
+import { transpileExpression } from '../../src/expr/transpiler.js';
+import { RUNTIME_HELPER_JS_SOURCE } from '../../src/helpers.js';
 import { pythonHelperDependencies } from '../../src/projection/python-operations.js';
 
 function project(text: string) {
@@ -85,6 +87,28 @@ describe('forward Python expression projections', () => {
     );
     expect(output).toEqual(semanticCases.map(([, , value]) => ({ value })));
   });
+  it('retains decimal negative zero and its reciprocal sign', async () => {
+    const expressions = await linkedExpressions(['-0.0', '1 / -0.0']);
+    const python = expressions.map((expression) => projectPythonExpression(expression, pythonContext()).code);
+    expect(runPython(python.map((expression) => ({ expression: `math.copysign(1, ${expression})` })))).toEqual([
+      { value: -1 },
+      { value: -1 }
+    ]);
+    const values = expressions.map((expression) => {
+      const code = transpileExpression(expression, {
+        selfName: 'data',
+        emitMode: 'ts-expression',
+        typeName: 'Fixture',
+        conditionName: 'NegativeZero',
+        attributeTypes: new Map(),
+        diagnostics: []
+      });
+      return new Function(RUNTIME_HELPER_JS_SOURCE + '\nreturn (' + code + ');')();
+    });
+    expect(Object.is(values[0], -0)).toBe(true);
+    expect(values[1]).toBe(-Infinity);
+  });
+
   it('uses native scalar operators where the shared type proof permits them', async () => {
     expect(project('1 + 2').code).toBe('(1.0 + 2.0)');
     expect(project('True <> False').code).toBe('(True != False)');

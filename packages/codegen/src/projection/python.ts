@@ -89,6 +89,7 @@ export function renderPythonExpression(expression: RosettaExpression, context: P
     case 'RosettaNumberLiteral': {
       const value = Number(expression.value);
       if (!Number.isFinite(value)) return value < 0 ? '-math.inf' : 'math.inf';
+      if (Object.is(value, -0)) return '-0.0';
       const text = String(value);
       return Number.isInteger(value) && !text.includes('e') ? `${text}.0` : text;
     }
