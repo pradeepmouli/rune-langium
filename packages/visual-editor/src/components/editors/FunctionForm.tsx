@@ -34,7 +34,8 @@
  * @module
  */
 
-import { useState, useCallback } from 'react';
+import { useState, useCallback, useEffect, useRef } from 'react';
+import { renderNode, type DehydratedNode } from '@rune-langium/codegen/rosetta';
 import type { ReactNode } from 'react';
 import { useFieldArray, type Control } from 'react-hook-form';
 import { Field, FieldError, FieldGroup, FieldLegend, FieldSet } from '@rune-langium/design-system/ui/field';
@@ -87,6 +88,81 @@ const EMPTY_GROUPS: InheritedGroup[] = [];
 
 /** Extract display text from an AST expression node. See {@link getExpressionDisplayText}. */
 const getCstText = getExpressionDisplayText;
+
+function OperationExpressionEditor({
+  nodeId,
+  operation,
+  index,
+  actions,
+  readOnly,
+  renderExpressionEditor
+}: {
+  nodeId: string;
+  operation: DehydratedNode & { expression?: unknown };
+  index: number;
+  actions: EditorFormActions<'func'>;
+  readOnly: boolean;
+  renderExpressionEditor?: (props: ExpressionEditorSlotProps) => ReactNode;
+}) {
+  const committedText = getCstText(operation.expression);
+  const [draft, setDraft] = useState(committedText);
+  const draftRef = useRef(draft);
+  const [error, setError] = useState<string | null>(null);
+  useEffect(() => {
+    setDraft(committedText);
+    draftRef.current = committedText;
+    setError(null);
+  }, [nodeId, committedText]);
+  const commit = () => {
+    if (readOnly) return;
+    const currentDraft = draftRef.current;
+    const validation = validateExpression(currentDraft);
+    setError(validation.valid ? null : (validation.error ?? 'Invalid expression'));
+    if (validation.valid && currentDraft !== committedText) actions.updateExpression(nodeId, currentDraft, index);
+  };
+  const change = (value: string) => {
+    draftRef.current = value;
+    setDraft(value);
+    setError(null);
+  };
+  const headingOperation = { ...operation, expression: undefined };
+  const heading =
+    renderNode(headingOperation, () => '')
+      ?.split('\n')[0]
+      ?.replace(/:$/, '') ?? '';
+  return (
+    <div data-slot="operation-section" className="flex flex-col gap-1">
+      <span className="text-xs font-medium text-muted-foreground">{heading}</span>
+      {readOnly ? (
+        <pre className="studio-scroll text-xs font-mono bg-muted/50 rounded p-2 whitespace-pre-wrap overflow-auto max-h-40">
+          {committedText || '(empty)'}
+        </pre>
+      ) : renderExpressionEditor ? (
+        renderExpressionEditor({
+          value: draft,
+          onChange: change,
+          onBlur: commit,
+          error,
+          placeholder: 'Enter expression...',
+          expressionAst: operation.expression
+        })
+      ) : (
+        <>
+          <Textarea
+            value={draft}
+            onChange={(event) => change(event.target.value)}
+            onBlur={commit}
+            aria-label={`Function operation ${index + 1}`}
+            rows={2}
+            className={`text-sm font-mono resize-y ${error ? 'border-destructive' : ''}`}
+            placeholder="Enter expression..."
+          />
+          {error && <FieldError>{error}</FieldError>}
+        </>
+      )}
+    </div>
+  );
+}
 
 // ---------------------------------------------------------------------------
 // Props
@@ -541,76 +617,17 @@ function FunctionForm({
               );
             })}
 
-            {/* Operations (set / add statements) */}
-            {(d.operations ?? []).map((op: any, i: number) => {
-              const opText = getCstText(op.expression);
-              // assignRoot is a Langium Reference — resolve to $refText string
-              const assignRoot = typeof op.assignRoot === 'string' ? op.assignRoot : (op.assignRoot?.$refText ?? '');
-              // Fall back to extracting from CST text: "set <target>: <expr>"
-              const assignTarget =
-                assignRoot ||
-                getCstText(op)
-                  .split(':')[0]
-                  ?.replace(/^(set|add)\s+/, '')
-                  .trim() ||
-                'result';
-              const isAdd = op.add === true;
-              return (
-                // Index, NOT useStableKey — updateExpression replaces the operation
-                // object wholesale on every expression save (Mutative's produce()
-                // always finalizes a touched item into a new reference), so a
-                // reference-identity WeakMap key changes on every save, remounting
-                // the rich expression editor and resetting its mode/undo
-                // history/palette/selection (Codex review). Same fix as
-                // ConditionSection.tsx's condition rows — operations carry no
-                // stable content-independent id to key by instead.
-                <div key={i} data-slot="operation-section" className="flex flex-col gap-1">
-                  <span className="text-xs font-medium text-muted-foreground">
-                    {isAdd ? 'add' : 'set'} {assignTarget}
-                  </span>
-                  {isReadOnly ? (
-                    // Read-only (including refOnly): render static text, same as
-                    // ConditionSection's own readOnly branch — renderExpressionEditor's
-                    // rich editor (e.g. ExpressionBuilder) has no readOnly awareness of
-                    // its own, so calling it here would let the user type into a
-                    // fully-interactive-looking editor whose changes silently never
-                    // persist (Codex review, PR #494).
-                    <pre className="studio-scroll text-xs font-mono bg-muted/50 rounded p-2 whitespace-pre-wrap overflow-auto max-h-40">
-                      {opText || '(empty)'}
-                    </pre>
-                  ) : renderExpressionEditor ? (
-                    renderExpressionEditor({
-                      value: opText,
-                      onChange: (val: string) => {
-                        const currentVals = form.getValues('expressionText' as never) as unknown as string;
-                        if (val !== currentVals) {
-                          form.setValue('expressionText' as never, val as never, {
-                            shouldDirty: true
-                          });
-                        }
-                      },
-                      onBlur: handleExpressionBlur,
-                      error: i === 0 ? expressionError : null,
-                      placeholder: 'Enter expression...',
-                      expressionAst: op.expression
-                    })
-                  ) : (
-                    <Textarea
-                      value={opText}
-                      onChange={(e) => {
-                        form.setValue('expressionText' as never, e.target.value as never, {
-                          shouldDirty: true
-                        });
-                      }}
-                      onBlur={handleExpressionBlur}
-                      rows={2}
-                      className={`text-sm font-mono resize-y ${i === 0 && expressionError ? 'border-destructive' : ''}`}
-                      placeholder="Enter expression..."
-                    />
-                  )}
-                </div>
-              );
-            })}
+            {(d.operations ?? []).map((op: DehydratedNode, index: number) => (
+              <OperationExpressionEditor
+                key={index}
+                nodeId={nodeId}
+                operation={op}
+                index={index}
+                actions={actions}
+                readOnly={isReadOnly}
+                renderExpressionEditor={renderExpressionEditor}
+              />
+            ))}
 
             {/* Empty state — no operations yet */}
             {(d.operations ?? []).length === 0 && (d.shortcuts ?? []).length === 0 && (

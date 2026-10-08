@@ -1,0 +1,47 @@
+// SPDX-License-Identifier: Apache-2.0
+// Copyright FINOS Common Domain Model contributors.
+// Extracted unchanged from FINOS CDM 7.0.0-dev.83, base-datetime-func.rosetta.
+// Original source SHA-256: b82f1525195ffce83e935e6d298105749fefafafb9d3704d36d3ac7ce2bb298e
+// Source: https://github.com/finos/common-domain-model/tree/7.0.0-dev.83/rosetta-source/src/main/rosetta
+
+namespace cdm.base.datetime
+version "test"
+
+func ConvertToAdjustableOrRelativeDate: <"Utility function to convert from AdjustableOrAdjustedOrRelativeDate to AdjustableOrRelativeDate">
+    inputs:
+        adjustableOrAdjustedOrRelativeDate AdjustableOrAdjustedOrRelativeDate (0..1)
+    output:
+        adjustableOrRelativeDate AdjustableOrRelativeDate (0..1)
+
+    alias relativeDate: adjustableOrAdjustedOrRelativeDate -> relativeDate
+
+    set adjustableOrRelativeDate -> adjustableDate -> adjustedDate:
+        adjustableOrAdjustedOrRelativeDate -> adjustedDate
+
+    set adjustableOrRelativeDate -> adjustableDate -> unadjustedDate:
+        adjustableOrAdjustedOrRelativeDate -> unadjustedDate
+
+    set adjustableOrRelativeDate -> adjustableDate -> dateAdjustments:
+        adjustableOrAdjustedOrRelativeDate -> dateAdjustments
+
+    set adjustableOrRelativeDate -> relativeDate -> adjustedDate:
+        if relativeDate exists then relativeDate -> adjustedDate
+
+    set adjustableOrRelativeDate -> relativeDate -> businessCenters:
+        if relativeDate exists then relativeDate -> businessCenters
+
+    set adjustableOrRelativeDate -> relativeDate -> businessDayConvention:
+        if relativeDate exists
+        then relativeDate -> businessDayConvention
+
+    set adjustableOrRelativeDate -> relativeDate -> dateRelativeTo:
+        if relativeDate exists then relativeDate -> dateRelativeTo
+
+    set adjustableOrRelativeDate -> relativeDate -> dayType:
+        if relativeDate exists then relativeDate -> dayType
+
+    set adjustableOrRelativeDate -> relativeDate -> period:
+        if relativeDate exists then relativeDate -> period
+
+    set adjustableOrRelativeDate -> relativeDate -> periodMultiplier:
+        if relativeDate exists then relativeDate -> periodMultiplier

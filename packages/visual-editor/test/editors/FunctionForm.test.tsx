@@ -17,6 +17,12 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { render, screen, fireEvent, act } from '@testing-library/react';
 import { FunctionForm } from '../../src/components/editors/FunctionForm.js';
+import { readFileSync } from 'node:fs';
+import { fileURLToPath } from 'node:url';
+import { dirname, resolve } from 'node:path';
+import { parse } from '@rune-langium/core';
+import { createEditorStore } from '../../src/store/editor-store.js';
+import { ExpressionBuilder } from '../../src/components/editors/expression-builder/ExpressionBuilder.js';
 import type { AnyGraphNode, TypeOption, EditorFormActions } from '../../src/types.js';
 import { testMeta } from '../helpers/node-meta.js';
 import { TYPE_REF_PAYLOAD_MIME, typeRefMimeForKind } from '../../src/types/structure-view.js';
@@ -353,6 +359,71 @@ describe('FunctionForm', () => {
     });
 
     expect(actions.reorderInputParam).toHaveBeenCalledWith('fn1', 0, 1);
+  });
+});
+
+describe('FunctionForm operation locality', () => {
+  it('editing operation 1 leaves operation 0 and sibling operations unchanged', async () => {
+    const source = readFileSync(
+      resolve(dirname(fileURLToPath(import.meta.url)), '../fixtures/function-multi-operation.rosetta'),
+      'utf8'
+    );
+    const parsed = await parse(source);
+    expect(parsed.parserErrors).toEqual([]);
+    const store = createEditorStore();
+    store.getState().loadModels(parsed.value);
+    const node = store.getState().nodes.find((n) => n.data.name === 'ConvertToAdjustableOrRelativeDate')!;
+    const before = (node.data as any).operations;
+    expect(before).toHaveLength(10);
+    render(
+      <FunctionForm
+        nodeId={node.id}
+        meta={node.meta}
+        data={node.data}
+        availableTypes={[]}
+        actions={store.getState()}
+        renderExpressionEditor={(props) => (
+          <ExpressionBuilder {...props} scope={{ inputs: [], output: null, aliases: [] }} />
+        )}
+      />
+    );
+    fireEvent.click(screen.getAllByTestId('tab-text')[1]!);
+    fireEvent.change(screen.getByTestId('text-editor'), { target: { value: '42' } });
+    fireEvent.blur(screen.getByTestId('text-editor'));
+    const after = (store.getState().nodes.find((n) => n.id === node.id)!.data as any).operations;
+    expect(after[0]).toEqual(before[0]);
+    expect(after[1].expression.text).toBe('42');
+    expect(after[1].path).toEqual(before[1].path);
+    expect(after.slice(2)).toEqual(before.slice(2));
+    expect(screen.getByText('set adjustableOrRelativeDate -> adjustableDate -> unadjustedDate')).toBeVisible();
+  });
+
+  it('keeps independent operation drafts and validation errors', () => {
+    const operations = ['1', '2'].map((text) => ({
+      $type: 'Operation',
+      add: false,
+      assignRoot: { $refText: 'result' },
+      expression: { $type: 'RawDsl', text }
+    }));
+    const actions = makeActions();
+    render(
+      <FunctionForm
+        nodeId="fn1"
+        meta={testMeta('test.model')}
+        data={makeFuncData({ operations } as any)}
+        availableTypes={[]}
+        actions={actions}
+      />
+    );
+    const editors = screen.getAllByRole('textbox').filter((e) => e.tagName === 'TEXTAREA');
+    fireEvent.change(editors[0]!, { target: { value: '(1' } });
+    fireEvent.blur(editors[0]!);
+    fireEvent.change(editors[1]!, { target: { value: '42' } });
+    fireEvent.blur(editors[1]!);
+    expect(editors[0]).toHaveValue('(1');
+    expect(actions.updateExpression).toHaveBeenCalledExactlyOnceWith('fn1', '42', 1);
+    expect(actions.updateExpression).not.toHaveBeenCalledWith('fn1', '(1', 0);
+    expect(screen.getByText(/unbalanced/i)).toBeVisible();
   });
 });
 

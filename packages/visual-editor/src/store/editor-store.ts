@@ -364,7 +364,7 @@ export interface EditorActions {
   /** Set (or clear, with `null`) a Function's `superFunction` parent reference. */
   setFunctionParent(nodeId: string, parentId: string | null): void;
   updateTypeAliasType(nodeId: string, typeName: string): void;
-  updateExpression(nodeId: string, expressionText: string): void;
+  updateExpression(nodeId: string, expressionText: string, operationIndex?: number): void;
 
   // --- Condition operations ---
   addCondition(
@@ -1996,15 +1996,25 @@ export const createEditorStore = (overrides?: Partial<EditorState>) => {
             });
           },
 
-          updateExpression(nodeId: string, expressionText: string) {
+          updateExpression(nodeId: string, expressionText: string, operationIndex?: number) {
+            if (operationIndex !== undefined) {
+              const node = get().nodes.find((n) => n.id === nodeId);
+              const operations = node?.data.$type === 'RosettaFunction' ? node.data.operations : undefined;
+              if (
+                !Number.isInteger(operationIndex) ||
+                operationIndex < 0 ||
+                operationIndex >= (operations?.length ?? 0)
+              ) {
+                throw new RangeError(`Invalid function operation index: ${operationIndex}`);
+              }
+            }
+            const index = operationIndex ?? 0;
             mutateGraph(set, get, (draft) => {
               const n = draft.nodes.get(nodeId);
               if (!n) return;
               const d = n.data;
               if (d.$type === 'RosettaFunction') {
-                // Function body is in operations[0].expression, represented as a
-                // RawDsl leaf (edited text pending reparse — see RAW_DSL_TYPE).
-                // Also write expressionText as a display field.
+                // Keep edited expressions as RawDsl until the owning source is reparsed.
                 const fd = d as { operations?: any[]; expressionText?: string; output?: { name?: string } };
                 if (!fd.operations || fd.operations.length === 0) {
                   fd.operations = [
@@ -2020,9 +2030,9 @@ export const createEditorStore = (overrides?: Partial<EditorState>) => {
                   // $cstText overwritten would still carry its OLD $type and
                   // structural fields, which the structural-first renderer
                   // would render instead of the edit (silently dropping it).
-                  fd.operations[0].expression = { $type: RAW_DSL_TYPE, text: expressionText };
+                  fd.operations[index].expression = { $type: RAW_DSL_TYPE, text: expressionText };
                 }
-                fd.expressionText = expressionText;
+                if (index === 0) fd.expressionText = expressionText;
               } else {
                 // For Data/TypeAlias, store as a display field only.
                 (d as { expressionText?: string }).expressionText = expressionText;
