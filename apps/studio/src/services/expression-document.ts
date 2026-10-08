@@ -75,7 +75,10 @@ export class ExpressionDocument {
     };
   }
 
-  applyDocumentEdit({ binding, region, expectedText, replacement }: DocumentEdit): CommitResult {
+  applyDocumentEdit(
+    { binding, region, expectedText, replacement }: DocumentEdit,
+    commit = this.options.onContentChange
+  ): CommitResult {
     const file = this.options.getFile(binding.uri);
     if (!file || file.sourceLoaded === false) return { ok: false, reason: 'missing-source' };
     if (binding.readOnly || file.readOnly) return { ok: false, reason: 'read-only' };
@@ -90,7 +93,7 @@ export class ExpressionDocument {
     )
       return { ok: false, reason: 'stale' };
     const content = file.content.slice(0, region.from) + replacement + file.content.slice(region.to);
-    if (content !== file.content) this.options.onContentChange(file.path, content);
+    if (content !== file.content) commit(file.path, content);
     return { ok: true };
   }
 }

@@ -82,6 +82,22 @@ describe('ExpressionBuilder', () => {
     expect(container.querySelector('[data-testid="dsl-preview"]')).toBeTruthy();
   });
 
+  it('reseeds the tree after text editing so switching modes cannot restore stale logic', () => {
+    const host = render(<ExpressionBuilder value="1 + 2" onChange={vi.fn()} scope={testScope} />);
+    fireEvent.click(host.getByTestId('tab-text'));
+    fireEvent.change(host.getByTestId('text-editor'), { target: { value: '3 + 4' } });
+    fireEvent.click(host.getByTestId('tab-builder'));
+    fireEvent.click(host.getByTestId('tab-text'));
+    expect((host.getByTestId('text-editor') as HTMLTextAreaElement).value).toBe('3 + 4');
+  });
+
+  it('preserves unchanged expression bytes including comments through mode switching', () => {
+    const raw = '1 /* explain */ + 2';
+    const host = render(<ExpressionBuilder value={raw} onChange={vi.fn()} scope={testScope} />);
+    fireEvent.click(host.getByTestId('tab-text'));
+    expect((host.getByTestId('text-editor') as HTMLTextAreaElement).value).toBe(raw);
+  });
+
   it('calls onChange on text blur', () => {
     const onChange = vi.fn();
     const { container } = render(

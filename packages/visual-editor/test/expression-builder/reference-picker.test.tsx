@@ -94,4 +94,25 @@ describe('ReferencePicker', () => {
     const picker = document.body.querySelector('[data-testid="reference-picker"]')!;
     expect(picker.textContent).toContain('No variables in scope');
   });
+  it('offers inherited attributes and creates callable argument placeholders', () => {
+    const onSelect = vi.fn();
+    const scope: FunctionScope = {
+      inputs: [],
+      aliases: [],
+      output: null,
+      attributes: [{ name: 'inherited', kind: 'attribute', declarationId: 'file:///base#attribute' }],
+      references: [{ name: 'Combine', kind: 'callable', argumentCount: 2, declarationId: 'file:///helper#function' }]
+    };
+    render(<ReferencePicker open scope={scope} onSelect={onSelect} onClose={vi.fn()} />);
+    expect(screen.getByTestId('ref-option-inherited')).toBeVisible();
+    fireEvent.pointerDown(screen.getByTestId('ref-option-Combine'), { pointerType: 'mouse' });
+    fireEvent.click(screen.getByTestId('ref-option-Combine'));
+    expect(onSelect).toHaveBeenCalledWith(
+      expect.objectContaining({
+        symbol: 'Combine',
+        explicitArguments: true,
+        rawArgs: [expect.objectContaining({ $type: 'Placeholder' }), expect.objectContaining({ $type: 'Placeholder' })]
+      })
+    );
+  });
 });

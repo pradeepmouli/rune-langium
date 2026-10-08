@@ -26,7 +26,9 @@ export function ReferencePicker({ open, scope, onSelect, onClose }: ReferencePic
   const allEntries = [
     ...scope.inputs.map((e) => ({ ...e, origin: 'input' as const })),
     ...(scope.output ? [{ ...scope.output, origin: 'output' as const }] : []),
-    ...scope.aliases.map((e) => ({ ...e, origin: 'alias' as const }))
+    ...scope.aliases.map((e) => ({ ...e, origin: 'alias' as const })),
+    ...(scope.attributes ?? []).map((e) => ({ ...e, origin: 'attribute' as const })),
+    ...(scope.references ?? []).map((e) => ({ ...e, origin: e.kind ?? 'callable' }))
   ];
   const handleValueChange = (value: string) => {
     const entry: FunctionScopeEntry | undefined = allEntries.find(({ origin, name }) => `${origin}:${name}` === value);
@@ -34,7 +36,16 @@ export function ReferencePicker({ open, scope, onSelect, onClose }: ReferencePic
     onSelect({
       $type: 'RosettaSymbolReference',
       id: crypto.randomUUID(),
-      symbol: entry.name
+      symbol: entry.name,
+      ...(entry.kind === 'callable'
+        ? {
+            explicitArguments: true,
+            rawArgs: Array.from({ length: entry.argumentCount ?? 0 }, () => ({
+              $type: 'Placeholder',
+              id: crypto.randomUUID()
+            }))
+          }
+        : {})
     } as unknown as ExpressionNode);
   };
 

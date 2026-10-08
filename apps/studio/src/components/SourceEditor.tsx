@@ -397,11 +397,13 @@ const renderSourceEditor = withInstrumentation(
       }
     }, [files]);
 
+    const currentFile = useMemo(() => files.find((f) => f.path === selectedPath), [files, selectedPath]);
+
     // Handle external content updates (e.g., from graph → source sync)
     useEffect(() => {
       const view = editorViewRef.current;
       if (!view) return;
-      const file = files.find((f) => f.path === selectedPath);
+      const file = currentFile;
       if (!file) return;
       const editorContent = view.state.doc.toString();
       const mapContent = contentMapRef.current.get(file.path);
@@ -413,9 +415,10 @@ const renderSourceEditor = withInstrumentation(
           annotations: [externalDocumentChange.of(true), Transaction.addToHistory.of(false)]
         });
       }
-    }, [files, selectedPath]);
+      // A cursor/dialog rerender may provide a new files array containing the
+      // same snapshot. Only a changed source value can be an external edit.
+    }, [currentFile?.content, selectedPath]);
 
-    const currentFile = useMemo(() => files.find((f) => f.path === selectedPath), [files, selectedPath]);
     useEffect(() => {
       const view = editorViewRef.current;
       if (view && region && regionSource === view.state.doc.toString()) {

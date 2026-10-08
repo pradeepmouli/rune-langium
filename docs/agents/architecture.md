@@ -96,3 +96,12 @@ checks separate from local unit-test results.
 Studio's Inspector reuses SourceEditor and `documentExtensions` for continuous function implementation and active Data condition editing. Region views keep the complete owning file in CodeMirror, conceal and protect other regions, and retain full-file UTF-16 offsets (including CRLF bytes). The shared editor theme owns typography and chrome density for both views.
 
 `ExpressionDocument` captures file identity, workspace generation, revision and expected range text for guarded edits. Parsed workspace entries retain their exact input source; pending or invalid drafts keep the text editor available while structural form edits wait for reconciliation. Curated source loads on demand for either Source or Inspector and remains read-only. `LspClientService.claimDocumentView` assigns one plugin owner per URI, transfers it on focus, and flushes final pending edits before detachment; closing an inactive view cannot untrack its active peer.
+
+The Inspector Builder opens a private expression draft dialog from the current
+function caret or selected Data condition. Apply validates the captured workspace,
+file revision and original expression bytes, then commits one CodeMirror undo
+transaction; Cancel and Escape never write. Reordering/deleting a condition or
+editing Source makes an open draft stale. The parser worker exposes core's
+canonical expression scope, including dispatch signatures, inherited fields,
+earlier aliases and callable argument counts. The dialog's Text surface reuses
+SourceEditor with a private buffer and no live LSP owner.

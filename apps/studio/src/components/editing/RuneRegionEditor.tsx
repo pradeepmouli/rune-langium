@@ -54,8 +54,6 @@ export const RuneRegionEditor = withInstrumentation(
     );
   },
   {
-    op: 'RuneRegionEditor',
-    sanitize: () => '[unsanitized-default: REVIEW]',
-    sanitizeError: (e) => ({ signature: e instanceof Error ? e.name : 'Error' })
+    op: 'RuneRegionEditor'
   }
 );

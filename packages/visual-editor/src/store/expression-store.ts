@@ -19,6 +19,9 @@ import type { ExpressionNode } from '../schemas/expression-node-schema.js';
 // ---------------------------------------------------------------------------
 
 export interface FunctionScopeEntry {
+  declarationId?: string;
+  kind?: 'input' | 'output' | 'alias' | 'attribute' | 'callable' | 'enum';
+  argumentCount?: number;
   name: string;
   typeName?: string;
   cardinality?: string;
@@ -28,6 +31,8 @@ export interface FunctionScope {
   inputs: FunctionScopeEntry[];
   output: FunctionScopeEntry | null;
   aliases: FunctionScopeEntry[];
+  attributes?: FunctionScopeEntry[];
+  references?: FunctionScopeEntry[];
 }
 
 export interface ExpressionBuilderState {

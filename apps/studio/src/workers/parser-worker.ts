@@ -11,6 +11,10 @@
  */
 
 import {
+  getExpressionScope,
+  getExpressionRegions,
+  type ExpressionScopeEntry,
+  type SourceRegion,
   createRuneDslServices,
   RuneDslIndexManager,
   namespaceFromSource,
@@ -71,6 +75,20 @@ export interface LinkDocumentResponse {
   newModels: RosettaModel[];
 }
 
+export interface ExpressionScopeRequest {
+  type: 'expressionScope';
+  id: string;
+  uri: string;
+  name: string;
+  region: SourceRegion;
+}
+export interface ExpressionScopeResponse {
+  type: 'expressionScopeResult';
+  id: string;
+  entries: ExpressionScopeEntry[];
+  error?: string;
+}
+
 export interface HydrateRequest {
   type: 'hydrate';
   id: string;
@@ -104,7 +122,12 @@ export interface HydrateResponse {
   error?: string;
 }
 
-export type WorkerRequest = ParseRequest | ParseWorkspaceRequest | LinkDocumentRequest | HydrateRequest;
+export type WorkerRequest =
+  | ParseRequest
+  | ParseWorkspaceRequest
+  | LinkDocumentRequest
+  | HydrateRequest
+  | ExpressionScopeRequest;
 
 export interface ParseResponse {
   type: 'parseResult';
@@ -137,7 +160,12 @@ export interface ParseWorkspaceResponse {
   curatedRefOnlyFiles?: Record<string, import('../types/model-types.js').CachedFile[]>;
 }
 
-export type WorkerResponse = ParseResponse | ParseWorkspaceResponse | LinkDocumentResponse | HydrateResponse;
+export type WorkerResponse =
+  | ParseResponse
+  | ParseWorkspaceResponse
+  | LinkDocumentResponse
+  | HydrateResponse
+  | ExpressionScopeResponse;
 
 // Deferred corpus model map: URI string → raw JSON (never deserialized until needed).
 // Populated by handleParseWorkspace, consumed lazily by RuneDslLinker.loadAstNode
@@ -547,6 +575,36 @@ async function handleHydrate(req: HydrateRequest): Promise<HydrateResponse> {
   }
 }
 
+async function handleExpressionScope(req: ExpressionScopeRequest): Promise<ExpressionScopeResponse> {
+  try {
+    const linked = await handleLinkDocument({ type: 'linkDocument', id: req.id, uri: req.uri });
+    if (!linked.linked) throw new Error('The expression document is not loaded.');
+    const doc = activeLangiumDocs.getDocument(URI.parse(req.uri));
+    const model = doc?.parseResult.value as RosettaModel | undefined;
+    const owner = model?.elements.find(
+      (node) => (node.$type === 'RosettaFunction' || node.$type === 'Data') && node.name === req.name
+    );
+    if (!owner || (owner.$type !== 'RosettaFunction' && owner.$type !== 'Data'))
+      throw new Error('The expression owner is unavailable.');
+    const target = getExpressionRegions(owner).find(
+      (entry) => entry.region.from === req.region.from && entry.region.to === req.region.to
+    );
+    if (!target) throw new Error('The expression source changed. Reopen the builder.');
+    return {
+      type: 'expressionScopeResult',
+      id: req.id,
+      entries: getExpressionScope(target.expression as import('@rune-langium/core').RosettaExpression, RuneDsl)
+    };
+  } catch (error) {
+    return {
+      type: 'expressionScopeResult',
+      id: req.id,
+      entries: [],
+      error: error instanceof Error ? error.message : String(error)
+    };
+  }
+}
+
 // ---------------------------------------------------------------------------
 // Exported dispatcher — testable in Node without spinning up a Web Worker
 // ---------------------------------------------------------------------------
@@ -562,6 +620,8 @@ export const dispatchWorkerRequest = withInstrumentation(
         return handleLinkDocument(req);
       case 'hydrate':
         return handleHydrate(req);
+      case 'expressionScope':
+        return handleExpressionScope(req);
     }
     // Delegates to already-instrumented handlers above (each with its own
     // tailored sanitizer) — capturing here too would be redundant and riskier

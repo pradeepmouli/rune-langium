@@ -8,6 +8,8 @@
  */
 
 import {
+  type ExpressionScopeEntry,
+  type SourceRegion,
   parse,
   parseWorkspace,
   createRuneDslServices,
@@ -24,6 +26,8 @@ import { CURATED_MODEL_IDS } from '@rune-langium/curated-schema';
 import type { CachedFile } from '../types/model-types.js';
 import type {
   WorkerRequest,
+  ExpressionScopeRequest,
+  ExpressionScopeResponse,
   ParseResponse,
   ParseWorkspaceResponse,
   LinkDocumentRequest,
@@ -339,9 +343,10 @@ function workerRequest(msg: Extract<WorkerRequest, { type: 'parse' }>): Promise<
 function workerRequest(msg: Extract<WorkerRequest, { type: 'parseWorkspace' }>): Promise<ParseWorkspaceResponse>;
 function workerRequest(msg: LinkDocumentRequest): Promise<LinkDocumentResponse>;
 function workerRequest(msg: HydrateRequest): Promise<HydrateResponse>;
+function workerRequest(msg: ExpressionScopeRequest): Promise<ExpressionScopeResponse>;
 function workerRequest(
   msg: WorkerRequest
-): Promise<ParseResponse | ParseWorkspaceResponse | LinkDocumentResponse | HydrateResponse> {
+): Promise<ParseResponse | ParseWorkspaceResponse | LinkDocumentResponse | HydrateResponse | ExpressionScopeResponse> {
   return new Promise((resolve, reject) => {
     const w = getWorker();
     if (!w) {
@@ -384,6 +389,15 @@ function workerRequest(
             return;
           }
           resolve(e.data);
+          return;
+        }
+        if (msg.type === 'expressionScope') {
+          const data = e.data as ExpressionScopeResponse;
+          if (data.type !== 'expressionScopeResult' || !Array.isArray(data.entries)) {
+            reject(new Error('Worker returned an invalid expression scope'));
+            return;
+          }
+          resolve(data);
           return;
         }
         if (msg.type === 'hydrate') {
@@ -951,6 +965,20 @@ export const parseWorkspaceViaRouter = withInstrumentation(
       return { modelCount: result.models.length };
     }
   }
+);
+
+export const requestExpressionScope = withInstrumentation(
+  async function requestExpressionScope(
+    uri: string,
+    name: string,
+    region: SourceRegion
+  ): Promise<ExpressionScopeEntry[]> {
+    const response = await workerRequest({ type: 'expressionScope', id: String(++requestId), uri, name, region });
+    if (response.type !== 'expressionScopeResult') throw new Error('Unexpected expression scope response');
+    if (response.error) throw new Error(response.error);
+    return response.entries;
+  },
+  { op: 'requestExpressionScope' }
 );
 
 export const linkDocument = withInstrumentation(

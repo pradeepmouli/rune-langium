@@ -31,6 +31,7 @@ import {
   NamespaceExplorerPanel,
   EditorFormPanel,
   ExpressionBuilder,
+  expressionScopeFromEntries,
   StructureView,
   NameCell,
   CardinalityCell,
@@ -94,7 +95,7 @@ import {
 import { Maximize2, LayoutGrid, Network } from 'lucide-react';
 import { useStudioToast } from '../components/StudioToastProvider.js';
 import { DockShell } from './DockShell.js';
-import { linkDocument } from '../services/workspace.js';
+import { linkDocument, requestExpressionScope } from '../services/workspace.js';
 import { useLspDiagnosticsBridge } from '../hooks/useLspDiagnosticsBridge.js';
 import { useDiagnosticsStore } from '../store/diagnostics-store.js';
 import { CodePreviewPanel } from '../components/CodePreviewPanel.js';
@@ -2006,6 +2007,11 @@ export const ExplorePerspective = withInstrumentation(
           }
           file={selectedExpressionFile}
           parsed={selectedParsedModel}
+          loadScope={(region) =>
+            requestExpressionScope(selectedExpressionFile!.path, nameFromNodeId(props.nodeId), region).then(
+              expressionScopeFromEntries
+            )
+          }
           documents={expressionDocuments}
           parseCurrent={selectedParseCurrent}
           onContentChange={handleSourceChange}
@@ -2050,6 +2056,11 @@ export const ExplorePerspective = withInstrumentation(
             }
             file={selectedExpressionFile}
             parsed={selectedParsedModel}
+            loadScope={(region) =>
+              requestExpressionScope(selectedExpressionFile!.path, nameFromNodeId(props.target!.nodeId), region).then(
+                expressionScopeFromEntries
+              )
+            }
             documents={expressionDocuments}
             parseCurrent={selectedParseCurrent}
             onContentChange={handleSourceChange}
