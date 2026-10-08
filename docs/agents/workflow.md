@@ -184,3 +184,15 @@ Verified on the supported Node **22.22.2** floor:
 Full workspace type checks and explicit bundler-resolution TypeScript checks of both config files also pass. Rebuild Studio's dependencies before type checking when their compiled exports are stale.
 
 Compilation remains disabled. All five hand-authored EditorForms enable L1 through a shared policy and schema-derived Controller validation bridge. Regression checks cover canonical identifier unions, optional values, independent field validation, and array reorder/remove/add. Safe L2 adoption is tracked in [issue #574](https://github.com/pradeepmouli/rune-langium/issues/574).
+
+## Python projection checks
+
+Codegen builds regenerate the browser-safe runtime string from
+`packages/codegen/src/projection/python-runtime.py`. Edit that Python source;
+never hand-edit `projection/generated/python-runtime-source.ts`.
+`pnpm --filter @rune-langium/codegen run generate:python-runtime` regenerates it;
+`node packages/codegen/scripts/generate-python-runtime.mjs --check` verifies it.
+Python projection tests require Python >=3.13 and fail explicitly if it is absent.
+Set `PYTHON_BINARY` to the supported interpreter when the shell's `python3` is older.
+The standard-library driver checks Python 3.13 syntax and compares runtime behavior
+with the shared TypeScript helpers; it does not run Python inside Studio.

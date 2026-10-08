@@ -30,7 +30,7 @@
 - Typed inputs/outputs, nested assignment paths and append cardinality checks are retained; native functions require explicit bindings (Task P3).
 - Every grammar kind is accounted for, including constructs absent from the staged corpus; unknown kinds never emit placeholders (Tasks P2/P4).
 
-## Task P1: Projection context and runtime contracts
+## Task 1 (P1): Projection context and runtime contracts
 
 **Files:** Create `packages/codegen/src/projection/context.ts`, `python-runtime.ts`, `python-runtime.py`, generated `projection/generated/python-runtime-source.ts` and `packages/codegen/scripts/generate-python-runtime.mjs`; update codegen's build script in `package.json`. Create `packages/codegen/test/projection/python-runtime.test.ts` and `packages/codegen/test/projection/python-runtime-check.py`. Reuse existing `src/expr/` semantics and core `expression-utils`/scope utilities; factor shared resolution helpers only where an existing function is unnecessarily TS-specific.
 
@@ -41,7 +41,7 @@
 - [ ] Implement helper-backed Python semantics and the resolved context. Use standard-library decimal/datetime/zoneinfo where needed; no approximate null/list/native-operator shortcut. Deduplicate semantic test data with existing TS cases and retain source mapping for failures. Regenerate the string module during codegen build and test deterministic regeneration plus browser-safe imports.
 - [ ] Rerun the runtime comparison and affected TS tests; commit `feat(codegen): define Python projection runtime contracts`.
 
-## Task P2: All grammar expression families
+## Task 2 (P2): All grammar expression families
 
 **Files:** Create `packages/codegen/src/projection/python.ts`, `python-operations.ts`, `python-navigation.ts`; create `packages/codegen/test/projection/python-expressions.test.ts` and `expression-kind-coverage.test.ts`.
 
@@ -56,7 +56,7 @@
 - [ ] Implement target-specific syntax using shared resolved context and canonical operation helpers. Emit needed helpers by dependency, with stable names that cannot collide with user identifiers. Record expression-to-source mapping; preserve Python comparison grouping explicitly.
 - [ ] Parse emitted expressions with Python `ast.parse`; execute semantic fixtures against the runtime contract. Rerun old Python reverse-lens tests unchanged. Commit `feat(codegen): render complete Rune expressions as Python`.
 
-## Task P3: Typed function/condition projection and worker integration
+## Task 3 (P3): Typed function/condition projection and worker integration
 
 **Files:** Create `packages/codegen/src/projection/python-functions.ts` and `packages/codegen/test/projection/python-functions.test.ts`; update export/projection metadata and Studio's codegen worker/service and ExpressionWorkspace tests.
 
@@ -68,7 +68,7 @@
 - [ ] Implement typed functions, conditions, runtime imports, source maps and worker wiring. Reuse projection caching/async guards from the main plan. Python selection shows generated code, not a reversible-subset refusal, while whole-body reverse editing stays disabled.
 - [ ] Parse/compile generated modules, run the battery and Studio component tests. Commit `feat(studio): show typed Python implementation projections`.
 
-## Task P4: Required coverage and delivery gate
+## Task 4 (P4): Required coverage and delivery gate
 
 **Files:** Extend main-plan `packages/codegen/test/projection/corpus-coverage.test.ts`; create `.github/workflows/python-projections.yml`; update codegen README and agent workflow guidance. Reuse the existing pinned reference sources/cases instead of introducing a second corpus manifest.
 
