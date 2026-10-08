@@ -81,6 +81,7 @@ export interface ExpressionScopeRequest {
   uri: string;
   name: string;
   region: SourceRegion;
+  files?: ParseWorkspaceRequest['files'];
 }
 export interface ExpressionScopeResponse {
   type: 'expressionScopeResult';
@@ -577,6 +578,11 @@ async function handleHydrate(req: HydrateRequest): Promise<HydrateResponse> {
 
 async function handleExpressionScope(req: ExpressionScopeRequest): Promise<ExpressionScopeResponse> {
   try {
+    if (req.files) {
+      const parsed = await handleParseWorkspace({ type: 'parseWorkspace', id: req.id, files: req.files });
+      const errors = Object.values(parsed.errors).flat();
+      if (errors.length) throw new Error(errors.join('\n'));
+    }
     const linked = await handleLinkDocument({ type: 'linkDocument', id: req.id, uri: req.uri });
     if (!linked.linked) throw new Error('The expression document is not loaded.');
     const doc = activeLangiumDocs.getDocument(URI.parse(req.uri));
@@ -609,20 +615,28 @@ async function handleExpressionScope(req: ExpressionScopeRequest): Promise<Expre
 // Exported dispatcher — testable in Node without spinning up a Web Worker
 // ---------------------------------------------------------------------------
 
+// Langium's document/index services are mutable. A complete request, including
+// scope's parse/link/read sequence, must own them until its response is captured.
+let requestQueue: Promise<unknown> = Promise.resolve();
 export const dispatchWorkerRequest = withInstrumentation(
   async function dispatchWorkerRequest(req: WorkerRequest): Promise<WorkerResponse> {
-    switch (req.type) {
-      case 'parse':
-        return handleParse(req);
-      case 'parseWorkspace':
-        return handleParseWorkspace(req);
-      case 'linkDocument':
-        return handleLinkDocument(req);
-      case 'hydrate':
-        return handleHydrate(req);
-      case 'expressionScope':
-        return handleExpressionScope(req);
-    }
+    const run = async (): Promise<WorkerResponse> => {
+      switch (req.type) {
+        case 'parse':
+          return handleParse(req);
+        case 'parseWorkspace':
+          return handleParseWorkspace(req);
+        case 'linkDocument':
+          return handleLinkDocument(req);
+        case 'hydrate':
+          return handleHydrate(req);
+        case 'expressionScope':
+          return handleExpressionScope(req);
+      }
+    };
+    const response = requestQueue.then(run);
+    requestQueue = response.catch(() => undefined);
+    return response;
     // Delegates to already-instrumented handlers above (each with its own
     // tailored sanitizer) — capturing here too would be redundant and riskier
     // (this dispatcher sees every request/response shape generically).

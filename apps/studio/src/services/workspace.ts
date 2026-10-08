@@ -41,6 +41,7 @@ import { useOutputStore, fmtLine } from '../store/output-store.js';
 import { routeTelemetryRecord } from './instrumentation/browser-sink.js';
 import { isTelemetryRecordMessage } from './instrumentation/worker-sink.js';
 import { withInstrumentation, Capture } from './instrumentation/core.js';
+import { pathToUri } from '../utils/uri.js';
 
 /** Known curated bundle ids — guards deferredExports filePath prefixes so user
  *  files that happen to live under `${bundleId}/...` aren't mis-grouped. */
@@ -971,9 +972,25 @@ export const requestExpressionScope = withInstrumentation(
   async function requestExpressionScope(
     uri: string,
     name: string,
-    region: SourceRegion
+    region: SourceRegion,
+    files?: readonly WorkspaceFile[]
   ): Promise<ExpressionScopeEntry[]> {
-    const response = await workerRequest({ type: 'expressionScope', id: String(++requestId), uri, name, region });
+    const snapshot = files
+      ?.filter((file) => !file.path.endsWith(BUNDLE_MARKER_SUFFIX) && (!file.refOnly || file.serializedModelJson))
+      .map((file) => ({
+        name: pathToUri(file.path),
+        content: file.content,
+        serializedModelJson: file.serializedModelJson,
+        exports: file.exports
+      }));
+    const response = await workerRequest({
+      type: 'expressionScope',
+      id: String(++requestId),
+      uri: pathToUri(uri),
+      name,
+      region,
+      files: snapshot
+    });
     if (response.type !== 'expressionScopeResult') throw new Error('Unexpected expression scope response');
     if (response.error) throw new Error(response.error);
     return response.entries;
