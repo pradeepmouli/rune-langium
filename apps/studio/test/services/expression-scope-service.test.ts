@@ -13,6 +13,7 @@ import {
   parseWorkspaceFiles,
   requestExpressionScope
 } from '../../src/services/workspace.js';
+import { pathToUri } from '../../src/utils/uri.js';
 import type { WorkerRequest } from '../../src/workers/parser-worker.js';
 
 afterEach(() => {
@@ -38,7 +39,7 @@ it('links the pinned ten-operation browser fixture with all of its original depe
   expect(func.shortcuts).toHaveLength(1);
 });
 
-it('opens canonical builder scope after router fallback using workspace paths and current dependencies', async () => {
+it.each([false, true])('opens current builder scope after router fallback with stale worker=%s', async (stale) => {
   const harness = createParserWorkerHarness();
   class HarnessWorker extends EventTarget {
     postMessage(request: WorkerRequest) {
@@ -52,19 +53,49 @@ it('opens canonical builder scope after router fallback using workspace paths an
     'scope.rosetta',
     `namespace browser.scope
 func Calculate:
- inputs: amount number (1..1)
+ inputs: factor number (1..1)
  output: calculated number (1..1)
- set calculated: amount + 1
+ set calculated: factor + 1
 `
   );
-  const parsed = await parseWorkspaceFiles([file]);
+  const dependency = createWorkspaceFile(
+    'dependency.rosetta',
+    `namespace browser.scope
+func CurrentDependency:
+ inputs: leftValue number (1..1)
+         rightValue number (1..1)
+ output: result number (1..1)
+ set result: leftValue + rightValue
+`
+  );
+  await harness.send({
+    type: 'parseWorkspace',
+    id: 'seed',
+    files: stale
+      ? [
+          { name: pathToUri(file.path), content: file.content.replaceAll('factor', 'amount') },
+          {
+            name: pathToUri(dependency.path),
+            content: dependency.content.replaceAll('CurrentDependency', 'StaleDependency')
+          }
+        ]
+      : []
+  });
+  const files = [file, dependency];
+  const parsed = await parseWorkspaceFiles(files);
+  expect(parsed.parseMode).toBe('main-thread-fallback');
   const owner = parsed.models[0]!.elements.find((node) => node.$type === 'RosettaFunction')!;
   if (owner.$type !== 'RosettaFunction') throw new Error('fixture owner');
   const region = getExpressionRegions(owner)[0]!.region;
-  const scope = await requestExpressionScope(file.path, owner.name, region, [file]);
-  expect(scope).toContainEqual(expect.objectContaining({ name: 'amount', kind: 'input' }));
+  const scope = await requestExpressionScope(file.path, owner.name, region, files);
+  expect(scope).toContainEqual(expect.objectContaining({ name: 'factor', kind: 'input' }));
   expect(scope).toContainEqual(expect.objectContaining({ name: 'calculated', kind: 'output' }));
-  await expect(requestExpressionScope(file.path, owner.name, { from: 0, to: 1 }, [file])).rejects.toThrow(
+  expect(scope).toContainEqual(
+    expect.objectContaining({ name: 'CurrentDependency', kind: 'callable', argumentCount: 2 })
+  );
+  expect(scope.map((entry) => entry.name)).not.toContain('StaleDependency');
+  expect(scope.map((entry) => entry.name)).not.toContain('amount');
+  await expect(requestExpressionScope(file.path, owner.name, { from: 0, to: 1 }, files)).rejects.toThrow(
     'source changed'
   );
 });

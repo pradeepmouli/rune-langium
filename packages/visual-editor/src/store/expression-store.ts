@@ -10,6 +10,7 @@
  * @module
  */
 
+import type { ExpressionScopeEntry } from '@rune-langium/core';
 import { createStore, type StoreApi } from 'zustand';
 import { temporal } from 'zundo';
 import type { ExpressionNode } from '../schemas/expression-node-schema.js';
@@ -20,7 +21,7 @@ import type { ExpressionNode } from '../schemas/expression-node-schema.js';
 
 export interface FunctionScopeEntry {
   declarationId?: string;
-  kind?: 'input' | 'output' | 'alias' | 'attribute' | 'callable' | 'enum';
+  kind?: ExpressionScopeEntry['kind'];
   argumentCount?: number;
   name: string;
   typeName?: string;

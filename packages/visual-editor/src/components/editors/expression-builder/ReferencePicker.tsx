@@ -29,23 +29,21 @@ export function ReferencePicker({ open, scope, onSelect, onClose }: ReferencePic
     ...scope.aliases.map((e) => ({ ...e, origin: 'alias' as const })),
     ...(scope.attributes ?? []).map((e) => ({ ...e, origin: 'attribute' as const })),
     ...(scope.references ?? []).map((e) => ({ ...e, origin: e.kind ?? 'callable' }))
-  ];
+  ].filter((entry) => entry.origin !== 'callable' || entry.argumentCount !== undefined);
   const handleValueChange = (value: string) => {
     const entry: FunctionScopeEntry | undefined = allEntries.find(({ origin, name }) => `${origin}:${name}` === value);
     if (!entry) return;
+    let rawArgs: ExpressionNode[] | undefined;
+    if (entry.kind === 'callable') {
+      const count = entry.argumentCount;
+      if (count === undefined) return;
+      rawArgs = Array.from({ length: count }, () => ({ $type: 'Placeholder', id: crypto.randomUUID() }));
+    }
     onSelect({
       $type: 'RosettaSymbolReference',
       id: crypto.randomUUID(),
       symbol: entry.name,
-      ...(entry.kind === 'callable'
-        ? {
-            explicitArguments: true,
-            rawArgs: Array.from({ length: entry.argumentCount ?? 0 }, () => ({
-              $type: 'Placeholder',
-              id: crypto.randomUUID()
-            }))
-          }
-        : {})
+      ...(rawArgs ? { explicitArguments: true, rawArgs } : {})
     } as unknown as ExpressionNode);
   };
 

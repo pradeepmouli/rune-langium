@@ -16,7 +16,7 @@ import { toConstraintString } from './cardinality-utils.js';
 export interface ExpressionScopeEntry {
   name: string;
   declarationId: string;
-  kind: 'input' | 'output' | 'alias' | 'attribute' | 'callable' | 'enum';
+  kind: 'input' | 'output' | 'alias' | 'attribute' | 'callable' | 'enum' | 'choice';
   typeName?: string;
   cardinality?: string;
   argumentCount?: number;
@@ -75,6 +75,7 @@ export function getExpressionScope(expression: RosettaExpression, services: Rune
     } else if (description.type === 'RosettaFunction' || description.type === 'RosettaExternalFunction')
       kind = 'callable';
     else if (description.type === 'RosettaEnumValue') kind = 'enum';
+    else if (description.type === 'Choice') kind = 'choice';
     else continue;
     names.add(description.name);
     const typed = node && isAttribute(node) ? node : undefined;

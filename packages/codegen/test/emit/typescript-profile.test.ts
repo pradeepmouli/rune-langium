@@ -101,6 +101,25 @@ describe('TypeScript LanguageProfile (019 Phase 0.5.3)', () => {
     expect((model?.content.match(/^\/\/ Source namespace:/gm) ?? []).length).toBe(0);
   });
 
+  it('does not expose namespace-relative function metadata in a concatenated artifact', async () => {
+    const { RuneDsl } = createRuneDslServices();
+    const docs = [SOURCE_A, SOURCE_B].map((source, i) =>
+      RuneDsl.shared.workspace.LangiumDocumentFactory.fromString(
+        `${source}\nfunc Fn${i}:\n output: result int (1..1)\n set result: 1`,
+        URI.parse(`file:///bundle-${i}.rosetta`)
+      )
+    );
+    await RuneDsl.shared.workspace.DocumentBuilder.build(docs, { validation: false });
+    const perNamespace = await generate(docs, { target: 'typescript' });
+    expect(perNamespace.flatMap((output) => output.funcs)).toHaveLength(2);
+    const bundled = await generate(docs, { target: 'typescript', typescript: { layout: 'single-file' } });
+    const model = bundled.find((output) => output.relativePath === 'model.ts')!;
+    expect(model.content).toContain('export function Fn0');
+    expect(model.content).toContain('export function Fn1');
+    expect(model.funcs).toEqual([]);
+    expect(model.projections).toHaveLength(2);
+  });
+
   it('single-file layout fires the size guardrail when maxNamespaces is exceeded', async () => {
     const { RuneDsl } = createRuneDslServices();
     const factory = RuneDsl.shared.workspace.LangiumDocumentFactory;

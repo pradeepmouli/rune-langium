@@ -102,6 +102,11 @@ export const ExpressionWorkspace = withInstrumentation(
             ? sourceOwner
             : undefined;
       if (!owner || (owner.$type !== 'RosettaFunction' && owner.$type !== 'Data')) {
+        if (parseCurrent) {
+          setBinding(null);
+          setCoordinateError('The selected declaration is no longer present in the current source.');
+          return;
+        }
         const recovered = documents.recoverRegion(pathToUri(file.path), nodeId, regionKey);
         setBinding(recovered);
         if (recovered) setCoordinateError(undefined);

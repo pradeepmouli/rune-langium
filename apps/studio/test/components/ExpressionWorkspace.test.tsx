@@ -116,6 +116,31 @@ describe('source-bound expression workspace', () => {
     expect(sibling.content).toBe(source);
   });
 
+  it.each(['rename', 'delete'])(
+    'invalidates the editor when a current parse confirms declaration %s',
+    async (change) => {
+      const { props, writes, getFile } = await context();
+      const host = render(<ExpressionWorkspace {...props} />);
+      await host.findByTestId('implementation-editor');
+      const updated = change === 'rename' ? source.replace('Calculate', 'Renamed') : 'namespace test\nversion "test"\n';
+      writes(props.file.path, updated);
+      writes.mockClear();
+      const result = await parse(updated);
+      host.rerender(
+        <ExpressionWorkspace
+          {...props}
+          file={getFile()}
+          parsed={{ filePath: props.file.path, source: updated, model: result.value }}
+          parseCurrent
+        />
+      );
+      await waitFor(() => expect(host.queryByTestId('implementation-editor')).toBeNull());
+      expect(host.getByRole('button', { name: 'Builder' })).toBeDisabled();
+      expect(host.getByRole('status')).toHaveTextContent('no longer present');
+      expect(writes).not.toHaveBeenCalled();
+    }
+  );
+
   it('applies a builder edit as one CodeMirror undo entry', async () => {
     const { props, writes } = await context();
     const loadScope = vi.fn(async () => ({ inputs: [], aliases: [], output: null }));

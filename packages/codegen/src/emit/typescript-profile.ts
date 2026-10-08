@@ -180,7 +180,7 @@ export const typescriptProfile: LanguageProfile<'typescript'> = {
       content: makeSingleFileContent(perNs),
       sourceMap: [],
       diagnostics: [],
-      funcs: perNs.flatMap((output) => output.funcs),
+      funcs: [],
       projections: perNs.flatMap((output) => output.projections ?? [])
     };
   },
