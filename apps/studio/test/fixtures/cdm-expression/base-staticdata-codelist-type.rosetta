@@ -1,0 +1,14 @@
+// SPDX-License-Identifier: Apache-2.0
+// Copyright FINOS contributors. Extracted from the pinned sources in sources.json.
+
+namespace cdm.base.staticdata.codelist
+version "${project.version}"
+
+typeAlias FpMLCodingScheme(domain string):
+    string
+
+    condition IsValidCodingScheme:
+        if item exists
+        then ValidateFpMLCodingSchemeDomain(item, domain)
+
+typeAlias BusinessCenter: FpMLCodingScheme(domain: "business-center")

@@ -27,6 +27,7 @@ vi.mock('@codemirror/view', () => ({
     static updateListener = { of: vi.fn(() => []) };
     static lineWrapping = [];
     static editable = { of: vi.fn(() => []) };
+    static contentAttributes = { of: vi.fn(() => []) };
     static domEventHandlers = vi.fn((handlers: { click?: (e: MouseEvent, v: object) => void }) => {
       if (handlers.click) capturedHandlers.click = handlers.click;
       return [];

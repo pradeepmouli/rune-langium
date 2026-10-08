@@ -183,7 +183,11 @@ export function ExpressionBuilder({
       {/* Builder mode */}
       {mode === 'builder' && (
         <>
-          <div className="relative min-h-8 rounded border border-border/50 bg-background/50 p-2">
+          <div
+            className="relative min-h-8 rounded border border-border/50 bg-background/50 p-2"
+            role="tree"
+            aria-label="Expression blocks"
+          >
             <BlockRenderer
               node={tree}
               selectedNodeId={selectedNodeId}

@@ -3,7 +3,13 @@
 
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { loadRealWorker } from './helpers/real-codegen-worker.js';
-import { parse, getFunctionImplementationRegion, serializeRuneModel, createRuneDslServices } from '@rune-langium/core';
+import {
+  parse,
+  getExpressionRegions,
+  getFunctionImplementationRegion,
+  serializeRuneModel,
+  createRuneDslServices
+} from '@rune-langium/core';
 
 const source = 'namespace test\nfunc Calculate:\n output: result int (1..1)\n set result: 1\n';
 afterEach(() => vi.unstubAllGlobals());
@@ -22,6 +28,33 @@ async function requestFixture(language: 'typescript' | 'python' = 'typescript') 
 }
 
 describe('linked expression projections', () => {
+  it.each(['typescript', 'python'] as const)('matches the edited Data condition expression in %s', async (language) => {
+    const conditionSource =
+      'namespace test\ntype Invoice:\n amount int (1..1)\n condition AmountPositive:\n  amount > 0\n';
+    const parsed = await parse(conditionSource);
+    const region = getExpressionRegions(parsed.value.elements[0])[0]!.region;
+    const { scope, dispatch } = await loadRealWorker();
+    const subject = { uri: 'file:///condition.rosetta', nodeId: 'test.Invoice#Data', region };
+    dispatch({ type: 'preview:setFiles', filesRevision: 1, files: [{ uri: subject.uri, content: conditionSource }] });
+    dispatch({
+      type: 'projection:generate',
+      requestId: 'condition',
+      language,
+      kind: 'condition',
+      source: conditionSource,
+      subject,
+      filesRevision: 1
+    });
+    await vi.waitFor(() =>
+      expect(scope.postMessage).toHaveBeenCalledWith(
+        expect.objectContaining({ type: 'projection:result', requestId: 'condition' })
+      )
+    );
+    const response = scope.postMessage.mock.calls
+      .map(([message]) => message)
+      .find((message) => message.requestId === 'condition');
+    expect(response.projection.code).toContain('amount');
+  });
   it.each(['typescript', 'python'] as const)(
     'shows a full typed %s function and rejects outdated source/revisions',
     async (language) => {

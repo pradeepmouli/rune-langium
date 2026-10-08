@@ -27,6 +27,7 @@ vi.mock('@codemirror/view', () => ({
     static domEventHandlers = vi.fn(() => []);
     static lineWrapping = [];
     static editable = { of: vi.fn(() => []) };
+    static contentAttributes = { of: vi.fn(() => []) };
     constructor({ parent }: { parent?: Element }) {
       if (parent) parent.appendChild(this.dom);
     }

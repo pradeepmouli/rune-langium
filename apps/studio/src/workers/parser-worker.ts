@@ -81,6 +81,7 @@ export interface ExpressionScopeRequest {
   uri: string;
   name: string;
   region: SourceRegion;
+  files?: ParseWorkspaceRequest['files'];
 }
 export interface ExpressionScopeResponse {
   type: 'expressionScopeResult';
@@ -577,6 +578,7 @@ async function handleHydrate(req: HydrateRequest): Promise<HydrateResponse> {
 
 async function handleExpressionScope(req: ExpressionScopeRequest): Promise<ExpressionScopeResponse> {
   try {
+    if (req.files) await handleParseWorkspace({ type: 'parseWorkspace', id: req.id, files: req.files });
     const linked = await handleLinkDocument({ type: 'linkDocument', id: req.id, uri: req.uri });
     if (!linked.linked) throw new Error('The expression document is not loaded.');
     const doc = activeLangiumDocs.getDocument(URI.parse(req.uri));
