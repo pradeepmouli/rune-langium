@@ -14,7 +14,7 @@ import {
   type RosettaEnumeration,
   type TypeCall
 } from '@rune-langium/core';
-import { resolveTypeCallTarget, type TypeIndexLookup } from '../emit/type-ref-resolver.js';
+import { resolveTypeCallTarget, isScalarTypeCall, type TypeIndexLookup } from '../emit/type-ref-resolver.js';
 import { typeFeatures, featureName } from '../expr/navigation.js';
 import { fieldMetadataKind } from '../expr/metadata-runtime.js';
 import type { PythonProjectionContext } from './context.js';
@@ -85,7 +85,7 @@ export function pythonFieldType(field: Attribute | ChoiceOption, context: Python
 export function pythonFieldNormalizer(field: Attribute | ChoiceOption, context: PythonProjectionContext): string {
   const type = pythonType(field.typeCall, context);
   const many = isAttribute(field) && (field.card.unbounded || (field.card.sup ?? 1) > 1);
-  return `lambda value: rune.normalizeAttribute(value, ${pyString(fieldMetadataKind(field) ?? 'value')}, ${pyBool(many)}, ${type.normalize})`;
+  return `lambda value: rune.normalizeAttribute(value, ${pyString(fieldMetadataKind(field) ?? 'value')}, ${pyBool(many)}, ${type.normalize}, ${pyBool(isScalarTypeCall(field.typeCall, linkedOnly))})`;
 }
 
 export function pythonTypedDict(

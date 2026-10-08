@@ -62,12 +62,12 @@ def rune_normalize_object(value, fields):
     return {key: fields[key](item) if key in fields else item for key, item in value.items()}
 
 
-def rune_normalize_attribute(value, kind, many, normalize):
+def rune_normalize_attribute(value, kind, many, normalize, scalar):
     if value is None:
         return None
     if many and isinstance(value, list):
-        return [rune_normalize_attribute(item, kind, False, normalize) for item in value]
-    wrapped = kind != "value" and isinstance(value, dict) and any(
+        return [rune_normalize_attribute(item, kind, False, normalize, scalar) for item in value]
+    wrapped = scalar and kind != "value" and isinstance(value, dict) and any(
         key in value for key in ("value", "externalReference", "globalReference", "reference"))
     if wrapped:
         result = dict(value)

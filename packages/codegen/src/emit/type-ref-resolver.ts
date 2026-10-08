@@ -134,3 +134,19 @@ export function resolveTypeCallTarget<T>(
     return visitor.onUnresolved(originalRefText);
   }
 }
+
+/** Whether an object can unambiguously be a scalar's declared metadata wrapper. */
+export function isScalarTypeCall(typeCall: TypeCall | undefined, namespace: TypeIndexLookup): boolean {
+  return resolveTypeCallTarget(
+    typeCall,
+    namespace,
+    {
+      onPrimitive: () => true,
+      onEnum: () => true,
+      onData: () => false,
+      onChoice: () => false,
+      onUnresolved: () => false
+    },
+    ''
+  );
+}

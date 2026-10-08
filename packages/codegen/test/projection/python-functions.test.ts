@@ -18,6 +18,7 @@ import {
 } from '../../src/projection/python-functions.js';
 import { referenceCases, referenceFiles } from '../helpers/cdm-reference.js';
 import { linkedFunctions } from './python-test-utils.js';
+import { normalizePreviewInputs } from '../../src/preview-schema.js';
 import { PYTHON_RUNTIME_SOURCE } from '../../src/projection/python-runtime.js';
 
 function execute(source: string, cases: readonly { expression: string; data?: unknown }[]) {
@@ -496,6 +497,48 @@ func Compute(kind: Kind -> Credit):
         { expression: `${compute}(data)`, data: { kind: { value: 'Credit', meta: { scheme: 'x' } } } }
       ])
     ).toEqual([{ value: null }, { value: { value: '', meta: {} } }, { value: 1 }, { value: 2 }]);
+  });
+
+  it('treats declared Data value fields as payloads, including aliases and arrays', async () => {
+    const funcs = await linkedFunctions(`namespace python.rawPayload
+annotation metadata:
+ scheme string (0..1)
+ reference string (0..1)
+metaType scheme string
+metaType reference string
+type Payload:
+ value number (1..1)
+ externalReference string (0..1)
+typeAlias PayloadAlias: Payload
+func Read:
+ inputs: object PayloadAlias (1..1)
+  [metadata scheme]
+ output: result number (1..1)
+ set result: object -> value
+func ReadMany:
+ inputs: objects Payload (0..*)
+  [metadata reference]
+ output: result number (0..*)
+ set result: objects extract [value]
+`);
+    const doc = AstUtils.getDocument(funcs[0]!);
+    const module = generatePythonModule([doc]);
+    const data = { object: { value: 1, externalReference: 'ordinary field' } };
+    expect(
+      normalizePreviewInputs([doc], 'python.rawPayload.Read', data, {
+        field: (value) => ({ value }),
+        reference: (value) => ({ value })
+      })
+    ).toEqual({ object: { value: data.object } });
+    expect(
+      execute(module.code, [
+        { expression: `${module.bindings.get('python.rawPayload.Read')}(data)`, data },
+        {
+          expression: `${module.bindings.get('python.rawPayload.ReadMany')}(data)`,
+          data: { objects: [{ value: 0 }, { value: 2 }] }
+        }
+      ])
+    ).toEqual([{ value: 1 }, { value: [0, 2] }]);
   });
 
   it('normalizes raw metadata inputs before choosing a dispatch branch', async () => {
