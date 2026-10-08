@@ -87,6 +87,7 @@ export type {
   EdgeData,
   ValidationError,
   ExpressionEditorSlotProps,
+  FunctionBodyEditorSlotProps,
   TypeOption,
   SourceRefOption,
   CommonFormActions,

@@ -10,7 +10,7 @@ export type ExpressionRegion = Readonly<{
   region: SourceRegion;
   kind: 'alias' | 'precondition' | 'operation' | 'postcondition';
   index: number;
-  expression: RosettaExpression;
+  expression: RosettaExpression | Dehydrated<RosettaExpression>;
 }>;
 
 type LocatedNode = {
@@ -78,8 +78,13 @@ export function getFunctionImplementationRegion(
 }
 
 /** Root expressions in grammar order; indexes address their original owner arrays. */
-export function getExpressionRegions(owner: Data | RosettaFunction): readonly ExpressionRegion[] {
-  const groups: [ExpressionRegion['kind'], readonly { expression: RosettaExpression }[]][] =
+export function getExpressionRegions(
+  owner: Data | RosettaFunction | Dehydrated<Data> | Dehydrated<RosettaFunction>
+): readonly ExpressionRegion[] {
+  const groups: [
+    ExpressionRegion['kind'],
+    readonly { expression: RosettaExpression | Dehydrated<RosettaExpression> }[]
+  ][] =
     owner.$type === 'RosettaFunction'
       ? [
           ['alias', owner.shortcuts],

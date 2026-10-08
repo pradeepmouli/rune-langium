@@ -90,3 +90,9 @@ The five hand-authored EditorForms use the shared `editorOptimization` policy wi
 build artifacts. Consult [the testing guide](../TESTING.md) for endpoint,
 production smoke, and full UX verification commands. Keep evidence from those
 checks separate from local unit-test results.
+
+## Expression editing
+
+Studio's Inspector reuses SourceEditor and `documentExtensions` for continuous function implementation and active Data condition editing. Region views keep the complete owning file in CodeMirror, conceal and protect other regions, and retain full-file UTF-16 offsets (including CRLF bytes). The shared editor theme owns typography and chrome density for both views.
+
+`ExpressionDocument` captures file identity, workspace generation, revision and expected range text for guarded edits. Parsed workspace entries retain their exact input source; pending or invalid drafts keep the text editor available while structural form edits wait for reconciliation. Curated source loads on demand for either Source or Inspector and remains read-only. `LspClientService.claimDocumentView` assigns one plugin owner per URI, transfers it on focus, and flushes final pending edits before detachment; closing an inactive view cannot untrack its active peer.

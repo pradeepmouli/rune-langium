@@ -142,6 +142,13 @@ export interface ExpressionEditorSlotProps {
   placeholder?: string;
   /** Raw AST expression object — enables direct tree conversion without reparsing text. */
   expressionAst?: unknown;
+  readOnly?: boolean;
+  target?: { nodeId: string; kind: 'precondition' | 'postcondition'; index: number };
+}
+
+export interface FunctionBodyEditorSlotProps {
+  nodeId: string;
+  readOnly: boolean;
 }
 
 // ---------------------------------------------------------------------------

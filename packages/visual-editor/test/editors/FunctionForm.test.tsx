@@ -113,6 +113,56 @@ function makeFuncData(overrides: Partial<AnyGraphNode> = {}): AnyGraphNode {
   } as AnyGraphNode;
 }
 
+describe('continuous implementation host', () => {
+  it('does not flush a queued signature edit over a newer invalid body draft', async () => {
+    vi.useFakeTimers();
+    const data = makeFuncData();
+    const actions = makeActions();
+    const props = {
+      nodeId: 'test.model.CalculateNotional',
+      data,
+      meta: testMeta(),
+      actions,
+      availableTypes: AVAILABLE_TYPES
+    };
+    const { rerender, unmount } = render(<FunctionForm {...props} />);
+    fireEvent.change(screen.getByLabelText('Function type name'), { target: { value: 'Renamed' } });
+    rerender(<FunctionForm {...props} structuralEditsDisabled />);
+    await act(async () => {
+      vi.advanceTimersByTime(600);
+    });
+    expect(actions.renameType).not.toHaveBeenCalled();
+    unmount();
+    vi.useRealTimers();
+  });
+  it('mounts one host instead of operation cards and duplicate conditions', () => {
+    const data = makeFuncData({
+      operations: [{ $type: 'Operation', expression: { $type: 'RosettaIntLiteral', value: 1 } }],
+      conditions: [{ $type: 'Condition', name: 'Good', expression: { $type: 'RosettaBooleanLiteral', value: true } }]
+    });
+    const host = vi.fn(({ nodeId, readOnly }) => (
+      <div data-testid="body-host">
+        {nodeId}:{String(readOnly)}
+      </div>
+    ));
+    render(
+      <FunctionForm
+        nodeId="test.model.CalculateNotional"
+        data={data}
+        meta={testMeta()}
+        actions={makeActions()}
+        availableTypes={AVAILABLE_TYPES}
+        renderFunctionBodyEditor={host}
+        structuralEditsDisabled
+      />
+    );
+    expect(screen.getAllByTestId('body-host')).toHaveLength(1);
+    expect(screen.queryByLabelText('Function operation 1')).toBeNull();
+    expect(screen.queryByText('Good')).toBeNull();
+    expect(host).toHaveBeenLastCalledWith({ nodeId: 'test.model.CalculateNotional', readOnly: false });
+  });
+});
+
 // ---------------------------------------------------------------------------
 // Tests
 // ---------------------------------------------------------------------------

@@ -50,6 +50,11 @@ export class ExpressionDocument {
 
   constructor(private options: DocumentOptions) {}
 
+  /** Observe every workspace change, including edits later undone to identical text. */
+  observe(uri: string): void {
+    this.capture(uri, '', { from: 0, to: 0 });
+  }
+
   capture(uri: string, nodeId: string, region: SourceRegion): DocumentBinding | null {
     const file = this.options.getFile(uri);
     if (!file || file.sourceLoaded === false || !validRegion(region, file.content.length)) return null;
