@@ -11,6 +11,14 @@ const fromStringMock = vi.fn((content: string, uri: string) => ({
   parseResult: { value: { uri, content }, lexerErrors: [], parserErrors: [] }
 }));
 const generateMock = vi.fn(() => []);
+const generatePythonMock = vi.fn(() => ({ code: '', projections: [], bindings: new Map() }));
+const selectPythonProjectionMock = vi.fn((_module, subject) => ({
+  language: 'python',
+  subject,
+  code: 'def F(input: F_Input) -> float:\n    return 1.0\n',
+  sourceMap: [],
+  requiredHelpers: []
+}));
 const selectProjectionMock = vi.fn((_outputs, subject) => ({
   language: 'typescript',
   subject,
@@ -116,6 +124,8 @@ vi.mock('@rune-langium/core', () => {
 vi.mock('@rune-langium/codegen/export', () => ({
   generate: generateMock,
   selectTypeScriptProjection: selectProjectionMock,
+  generatePythonModule: generatePythonMock,
+  selectPythonProjection: selectPythonProjectionMock,
   generatePreviewSchemas: generatePreviewSchemasMock,
   emitStandaloneZodSchema: emitStandaloneZodSchemaMock,
   RUNTIME_HELPER_JS_SOURCE: 'const runeToField = undefined; const runeToReference = undefined;',
@@ -176,72 +186,80 @@ async function flushWorker() {
 }
 
 describe('codegen-worker preview messages', () => {
-  it('reuses generation for identical receipts and invalidates when a dependency changes', async () => {
-    const { scope, dispatch } = await loadWorkerModule();
-    const files = [
-      { uri: 'file:///f.rosetta', content: 'namespace f\nfunc F: output: result int (1..1) set result: 1' },
-      { uri: 'file:///dep.rosetta', content: 'namespace dep\ntype D:' }
-    ];
-    const request = {
-      type: 'projection:generate',
-      language: 'typescript',
-      kind: 'function',
-      source: files[0].content,
-      subject: { uri: files[0].uri, nodeId: 'f.F#RosettaFunction', region: { from: 0, to: 20 } },
-      filesRevision: 1
-    };
-    dispatch({ type: 'preview:setFiles', files, filesRevision: 1 });
-    dispatch({ ...request, requestId: 'project:first' });
-    await flushWorker();
-    expect(generateMock).toHaveBeenCalledOnce();
-    dispatch({ type: 'preview:setFiles', files: structuredClone(files), filesRevision: 2 });
-    dispatch({ ...request, filesRevision: 2, requestId: 'project:again' });
-    await flushWorker();
-    expect(generateMock).toHaveBeenCalledOnce();
-    expect(scope.postMessage).toHaveBeenCalledWith(
-      expect.objectContaining({ type: 'projection:result', requestId: 'project:again' })
-    );
-    dispatch({
-      type: 'preview:setFiles',
-      files: [files[0], { ...files[1], content: 'namespace dep\ntype Changed:' }],
-      filesRevision: 3
-    });
-    dispatch({ ...request, filesRevision: 3, requestId: 'project:dependency' });
-    await flushWorker();
-    expect(generateMock).toHaveBeenCalledTimes(2);
-  });
-  it('rejects a generation reply superseded by another source snapshot', async () => {
-    const { scope, dispatch } = await loadWorkerModule();
-    let release;
-    generateMock.mockImplementationOnce(
-      () =>
-        new Promise((resolve) => {
-          release = resolve;
-        })
-    );
-    const file = { uri: 'file:///f.rosetta', content: 'namespace f\nfunc F:' };
-    dispatch({ type: 'preview:setFiles', files: [file], filesRevision: 1 });
-    dispatch({
-      type: 'projection:generate',
-      requestId: 'project:late',
-      language: 'typescript',
-      kind: 'function',
-      filesRevision: 1,
-      source: file.content,
-      subject: { uri: file.uri, nodeId: 'f.F#RosettaFunction', region: { from: 0, to: 10 } }
-    });
-    await flushWorker();
-    dispatch({ type: 'preview:setFiles', files: [{ ...file, content: file.content + '\n' }], filesRevision: 2 });
-    release([]);
-    await flushWorker();
-    expect(scope.postMessage).toHaveBeenCalledWith(
-      expect.objectContaining({
-        type: 'projection:error',
+  it.each(['typescript', 'python'])(
+    'reuses %s generation for identical receipts and invalidates when a dependency changes',
+    async (language) => {
+      const generate = language === 'python' ? generatePythonMock : generateMock;
+      const { scope, dispatch } = await loadWorkerModule();
+      const files = [
+        { uri: 'file:///f.rosetta', content: 'namespace f\nfunc F: output: result int (1..1) set result: 1' },
+        { uri: 'file:///dep.rosetta', content: 'namespace dep\ntype D:' }
+      ];
+      const request = {
+        type: 'projection:generate',
+        language,
+        kind: 'function',
+        source: files[0].content,
+        subject: { uri: files[0].uri, nodeId: 'f.F#RosettaFunction', region: { from: 0, to: 20 } },
+        filesRevision: 1
+      };
+      dispatch({ type: 'preview:setFiles', files, filesRevision: 1 });
+      dispatch({ ...request, requestId: 'project:first' });
+      await flushWorker();
+      expect(generate).toHaveBeenCalledOnce();
+      dispatch({ type: 'preview:setFiles', files: structuredClone(files), filesRevision: 2 });
+      dispatch({ ...request, filesRevision: 2, requestId: 'project:again' });
+      await flushWorker();
+      expect(generate).toHaveBeenCalledOnce();
+      expect(scope.postMessage).toHaveBeenCalledWith(
+        expect.objectContaining({ type: 'projection:result', requestId: 'project:again' })
+      );
+      dispatch({
+        type: 'preview:setFiles',
+        files: [files[0], { ...files[1], content: 'namespace dep\ntype Changed:' }],
+        filesRevision: 3
+      });
+      dispatch({ ...request, filesRevision: 3, requestId: 'project:dependency' });
+      await flushWorker();
+      expect(generate).toHaveBeenCalledTimes(2);
+    }
+  );
+  it.each(['typescript', 'python'])(
+    'rejects a %s generation reply superseded by another source snapshot',
+    async (language) => {
+      const generate = language === 'python' ? generatePythonMock : generateMock;
+      const { scope, dispatch } = await loadWorkerModule();
+      let release;
+      generate.mockImplementationOnce(
+        () =>
+          new Promise((resolve) => {
+            release = resolve;
+          })
+      );
+      const file = { uri: 'file:///f.rosetta', content: 'namespace f\nfunc F:' };
+      dispatch({ type: 'preview:setFiles', files: [file], filesRevision: 1 });
+      dispatch({
+        type: 'projection:generate',
         requestId: 'project:late',
-        error: expect.stringContaining('source changed')
-      })
-    );
-  });
+        language,
+        kind: 'function',
+        filesRevision: 1,
+        source: file.content,
+        subject: { uri: file.uri, nodeId: 'f.F#RosettaFunction', region: { from: 0, to: 10 } }
+      });
+      await flushWorker();
+      dispatch({ type: 'preview:setFiles', files: [{ ...file, content: file.content + '\n' }], filesRevision: 2 });
+      release([]);
+      await flushWorker();
+      expect(scope.postMessage).toHaveBeenCalledWith(
+        expect.objectContaining({
+          type: 'projection:error',
+          requestId: 'project:late',
+          error: expect.stringContaining('source changed')
+        })
+      );
+    }
+  );
   it('acknowledges the exact installed preview file revision', async () => {
     const { scope, dispatch } = await loadWorkerModule();
     dispatch({
@@ -263,6 +281,7 @@ describe('codegen-worker preview messages', () => {
     buildMock.mockImplementation(async () => undefined);
     fromStringMock.mockClear();
     generateMock.mockClear();
+    generatePythonMock.mockClear();
     generatePreviewSchemasMock.mockReset();
     deserializeMock.mockClear();
     deserializeMock.mockImplementation((json: string) => ({ __deserialized: true, json }));

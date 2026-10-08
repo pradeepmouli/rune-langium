@@ -2,10 +2,11 @@
 // Copyright (c) 2026 Pradeep Mouli
 
 import type { AstNode, LangiumDocument } from 'langium';
-import type { RosettaExpression, RosettaFunction } from '@rune-langium/core';
+import type { Condition, RosettaExpression, RosettaFunction } from '@rune-langium/core';
 import type { ExpressionType } from '../expr/navigation.js';
 import type { ProjectionSubject } from './types.js';
 import type { FieldMetadataKind } from '../expr/metadata-runtime.js';
+import type { RuneFunc } from '../types/func.js';
 
 /** Linked identities and semantic facts shared with the authoritative codegen utilities. */
 export interface PythonProjectionContext {
@@ -23,5 +24,10 @@ export interface PythonProjectionContext {
   preserveMetadata?: boolean;
   resultMode?: 'function' | 'condition';
   superFunction?: RosettaFunction;
+  functions?: readonly RosettaFunction[];
+  functionFacts?: ReadonlyMap<RosettaFunction, RuneFunc>;
+  globalNames?: ReadonlySet<string>;
+  inputName?(func: RosettaFunction): string;
+  onConditionProjection?(condition: Condition, code: string): void;
   name(declaration: AstNode): string;
 }

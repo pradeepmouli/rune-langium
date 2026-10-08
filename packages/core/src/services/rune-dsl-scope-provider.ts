@@ -3,7 +3,13 @@
 
 import type { AstNode, AstNodeDescription, ReferenceInfo, Scope, LangiumCoreServices } from 'langium';
 import { AstUtils, EMPTY_SCOPE, DefaultScopeProvider, MapScope, stream } from 'langium';
-import { getFunctionSignature, getOperationArgument, resolveOperationType } from '../utils/expression-utils.js';
+import {
+  getFunctionSignature,
+  getFunctionInputs,
+  getFunctionOutput,
+  getOperationArgument,
+  resolveOperationType
+} from '../utils/expression-utils.js';
 import { getEnumValues } from '../utils/enum-utils.js';
 import { qualifiedExportPath } from '../naming/qualified-export-path.js';
 import { getChoiceOptionPaths, choiceOptionFieldName } from '../utils/choice-utils.js';
@@ -964,10 +970,11 @@ export class RuneDslScopeProvider extends DefaultScopeProvider {
     if (func.output) addAttr(func.output);
     for (const shortcut of func.shortcuts) addAttr(shortcut);
 
-    if (func.dispatchAttribute) {
+    if (func.dispatchAttribute || func.superFunction) {
       const signature = this.dispatchSignature(func);
-      for (const input of signature.inputs) addAttr(input);
-      if (signature.output) addAttr(signature.output);
+      for (const input of getFunctionInputs(signature)) addAttr(input);
+      const output = getFunctionOutput(signature);
+      if (output) addAttr(output);
       for (const shortcut of signature.shortcuts) addAttr(shortcut);
     }
 
@@ -1088,9 +1095,10 @@ export class RuneDslScopeProvider extends DefaultScopeProvider {
     if (isRosettaEnumeration(outputEnum)) {
       extra.push(...getEnumValues(outputEnum).map((value) => this.createDescription(value, value.name)));
     }
-    if (func?.dispatchAttribute) {
+    if (func && (func.dispatchAttribute || func.superFunction)) {
       const signature = this.dispatchSignature(func);
-      const attributes = [...signature.inputs, ...(signature.output ? [signature.output] : []), ...signature.shortcuts];
+      const output = getFunctionOutput(signature);
+      const attributes = [...getFunctionInputs(signature), ...(output ? [output] : []), ...signature.shortcuts];
       for (const attribute of attributes) {
         const existing = baseScope.getElement(attribute.name)?.node;
         if (!existing || AstUtils.getContainerOfType(existing, isRosettaFunction) !== func) {

@@ -12,6 +12,108 @@ from typing import Any, Callable, TypedDict, NotRequired
 from zoneinfo import ZoneInfo
 
 
+class RuneField[T](TypedDict):
+    value: T
+    meta: NotRequired[dict[str, Any]]
+
+
+class RuneReference[T](TypedDict):
+    value: NotRequired[T]
+    externalReference: NotRequired[str]
+    globalReference: NotRequired[str]
+    reference: NotRequired[dict[str, Any]]
+    meta: NotRequired[dict[str, Any]]
+
+
+_rune_native_bindings = {}
+
+
+def rune_bind(name, implementation):
+    if not callable(implementation):
+        raise TypeError("Native binding must be callable: " + name)
+    _rune_native_bindings[name] = implementation
+
+
+def rune_native(name, *args):
+    implementation = _rune_native_bindings.get(name)
+    if implementation is None:
+        raise ValueError("Native binding required: " + name)
+    return implementation(*args)
+
+
+def rune_identity(value):
+    return value
+
+
+def rune_assignment_value(value, input_kind, target_kind, many):
+    value = rune_list(value) if many else rune_single(value)
+    if value is None or input_kind == target_kind:
+        return value
+    if target_kind == "value":
+        return rune_unwrap(value, many)
+    return rune_normalize_metadata(value, input_kind, target_kind)
+
+
+def rune_normalize_object(value, fields):
+    if value is None:
+        return None
+    if not isinstance(value, dict):
+        raise ValueError("Expected an object in function inputs")
+    return {key: fields[key](item) if key in fields else item for key, item in value.items()}
+
+
+def rune_normalize_attribute(value, kind, many, normalize):
+    if value is None:
+        return None
+    if many and isinstance(value, list):
+        return [rune_normalize_attribute(item, kind, False, normalize) for item in value]
+    wrapped = kind != "value" and isinstance(value, dict) and any(
+        key in value for key in ("value", "externalReference", "globalReference", "reference"))
+    if wrapped:
+        result = dict(value)
+        if result.get("value") is not None:
+            result["value"] = normalize(result["value"])
+        if result.get("meta") == {}:
+            result.pop("meta")
+        return result
+    normalized = normalize(value)
+    return {"value": normalized} if kind != "value" else normalized
+
+
+def rune_assign(root, segments, value, append, root_many, root_kind, lower, upper, label):
+    if root is None:
+        root = [] if root_many else ({"meta": {}} if root_kind == "field" else {})
+    current, many, kind = root, root_many, root_kind
+    for index, segment in enumerate(segments):
+        if many:
+            if not current:
+                current.append({"meta": {}} if kind == "field" else {})
+            current = current[0]
+        metadata = segment.get("metadata")
+        if metadata:
+            names = metadata
+        else:
+            if kind != "value":
+                if current.get("value") is None:
+                    current["value"] = {}
+                current = current["value"]
+            names = [segment["name"]]
+        for name in names[:-1]:
+            if current.get(name) is None:
+                current[name] = {}
+            current = current[name]
+        name = names[-1]
+        if index == len(segments) - 1:
+            combined = rune_list(current.get(name)) + rune_list(value) if append else value
+            current[name] = rune_cardinality(combined, lower, upper, label)
+        else:
+            next_many, next_kind = segment["many"], segment["kind"]
+            if current.get(name) is None:
+                current[name] = [] if next_many else ({"meta": {}} if next_kind == "field" else {})
+            current, many, kind = current[name], next_many, next_kind
+    return root
+
+
 def rune_exists(value):
     return value is not None and (not isinstance(value, list) or len(value) > 0)
 

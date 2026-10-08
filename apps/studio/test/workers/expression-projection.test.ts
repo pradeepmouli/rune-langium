@@ -8,12 +8,12 @@ import { parse, getFunctionImplementationRegion, serializeRuneModel, createRuneD
 const source = 'namespace test\nfunc Calculate:\n output: result int (1..1)\n set result: 1\n';
 afterEach(() => vi.unstubAllGlobals());
 
-async function requestFixture() {
+async function requestFixture(language: 'typescript' | 'python' = 'typescript') {
   const parsed = await parse(source);
   const region = getFunctionImplementationRegion(parsed.value.elements[0], source);
   return {
     type: 'projection:generate',
-    language: 'typescript',
+    language,
     kind: 'function',
     source,
     subject: { uri: 'file:///test.rosetta', nodeId: 'test.Calculate#RosettaFunction', region },
@@ -22,54 +22,62 @@ async function requestFixture() {
 }
 
 describe('linked expression projections', () => {
-  it('shows a full typed function and rejects outdated source/revisions', async () => {
-    const { scope, dispatch } = await loadRealWorker();
-    const request = await requestFixture();
-    dispatch({ type: 'preview:setFiles', filesRevision: 1, files: [{ uri: request.subject.uri, content: source }] });
-    dispatch({ ...request, requestId: 'first' });
-    await vi.waitFor(() =>
-      expect(scope.postMessage).toHaveBeenCalledWith(
-        expect.objectContaining({ type: 'projection:result', requestId: 'first' })
-      )
-    );
-    const response = scope.postMessage.mock.calls
-      .map(([message]) => message)
-      .find((message) => message.requestId === 'first');
-    expect(response.projection.code).toContain('export function Calculate(');
-    expect(response.projection.code).toContain(': number');
-    expect(response.projection.code).not.toContain('not renderable');
-    dispatch({
-      type: 'preview:setFiles',
-      filesRevision: 2,
-      files: [{ uri: request.subject.uri, content: source.replace('result: 1', 'result: 2') }]
-    });
-    dispatch({ ...request, requestId: 'stale' });
-    await vi.waitFor(() =>
-      expect(scope.postMessage).toHaveBeenCalledWith(
-        expect.objectContaining({
-          type: 'projection:error',
-          requestId: 'stale',
-          error: expect.stringContaining('source changed')
-        })
-      )
-    );
-  });
-  it('projects serialized curated declarations read-only with original source coordinates', async () => {
-    const { scope, dispatch } = await loadRealWorker();
-    const request = await requestFixture();
-    const parsed = await parse(source);
-    const { RuneDsl } = createRuneDslServices();
-    const serializedModelJson = serializeRuneModel(RuneDsl.serializer.JsonSerializer, parsed.value);
-    dispatch({
-      type: 'preview:setFiles',
-      filesRevision: 1,
-      files: [{ uri: request.subject.uri, content: source, serializedModelJson }]
-    });
-    dispatch({ ...request, requestId: 'curated' });
-    await vi.waitFor(() =>
-      expect(scope.postMessage).toHaveBeenCalledWith(
-        expect.objectContaining({ type: 'projection:result', requestId: 'curated' })
-      )
-    );
-  });
+  it.each(['typescript', 'python'] as const)(
+    'shows a full typed %s function and rejects outdated source/revisions',
+    async (language) => {
+      const { scope, dispatch } = await loadRealWorker();
+      const request = await requestFixture(language);
+      dispatch({ type: 'preview:setFiles', filesRevision: 1, files: [{ uri: request.subject.uri, content: source }] });
+      dispatch({ ...request, requestId: 'first' });
+      await vi.waitFor(() =>
+        expect(scope.postMessage).toHaveBeenCalledWith(
+          expect.objectContaining({ type: 'projection:result', requestId: 'first' })
+        )
+      );
+      const response = scope.postMessage.mock.calls
+        .map(([message]) => message)
+        .find((message) => message.requestId === 'first');
+      expect(response.projection.code).toContain(
+        language === 'typescript' ? 'export function Calculate(' : 'def Calculate('
+      );
+      expect(response.projection.code).toContain(language === 'typescript' ? ': number' : '-> float:');
+      expect(response.projection.code).not.toContain('not renderable');
+      dispatch({
+        type: 'preview:setFiles',
+        filesRevision: 2,
+        files: [{ uri: request.subject.uri, content: source.replace('result: 1', 'result: 2') }]
+      });
+      dispatch({ ...request, requestId: 'stale' });
+      await vi.waitFor(() =>
+        expect(scope.postMessage).toHaveBeenCalledWith(
+          expect.objectContaining({
+            type: 'projection:error',
+            requestId: 'stale',
+            error: expect.stringContaining('source changed')
+          })
+        )
+      );
+    }
+  );
+  it.each(['typescript', 'python'] as const)(
+    'projects serialized curated declarations as %s with original source coordinates',
+    async (language) => {
+      const { scope, dispatch } = await loadRealWorker();
+      const request = await requestFixture(language);
+      const parsed = await parse(source);
+      const { RuneDsl } = createRuneDslServices();
+      const serializedModelJson = serializeRuneModel(RuneDsl.serializer.JsonSerializer, parsed.value);
+      dispatch({
+        type: 'preview:setFiles',
+        filesRevision: 1,
+        files: [{ uri: request.subject.uri, content: source, serializedModelJson }]
+      });
+      dispatch({ ...request, requestId: 'curated' });
+      await vi.waitFor(() =>
+        expect(scope.postMessage).toHaveBeenCalledWith(
+          expect.objectContaining({ type: 'projection:result', requestId: 'curated' })
+        )
+      );
+    }
+  );
 });

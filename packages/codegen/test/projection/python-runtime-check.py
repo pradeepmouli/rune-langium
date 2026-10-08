@@ -5,13 +5,16 @@ import ast
 import json
 import math
 import sys
+from types import ModuleType
 
 if sys.version_info < (3, 13):
     raise RuntimeError("Python projection checks require Python >=3.13; set PYTHON_BINARY")
 
 request = json.load(sys.stdin)
 ast.parse(request["source"], feature_version=(3, 13))
-scope = {}
+module = ModuleType("rune_projection")
+sys.modules[module.__name__] = module
+scope = module.__dict__
 exec(compile(request["source"], "<Rune Python projection>", "exec"), scope)
 
 def normalize(value):

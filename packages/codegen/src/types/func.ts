@@ -6,6 +6,7 @@ import { isMetadataFeature, fieldMetadataKind, type FieldMetadataKind } from '..
 import { featureName } from '../expr/navigation.js';
 import {
   getFunctionSignature as functionSignature,
+  getFunctionInputs as functionInputs,
   getFunctionOutput,
   isRosettaModel,
   isRosettaFunction,
@@ -542,19 +543,11 @@ export function extractFuncs(
   return funcs;
 }
 
-export function functionInputs(node: RosettaFunction, seen: Set<RosettaFunction> = new Set()): Attribute[] {
-  if (node.inputs.length > 0 || seen.has(node)) return node.inputs;
-  seen.add(node);
-  const parent = node.superFunction?.ref;
-  const signature = functionSignature(node);
-  return parent ? functionInputs(parent, seen) : signature !== node ? functionInputs(signature, seen) : [];
-}
-
 export function functionOutput(node: RosettaFunction, seen: Set<RosettaFunction> = new Set()): Attribute | undefined {
   return getFunctionOutput(node, seen);
 }
 
-export { functionSignature };
+export { functionSignature, functionInputs };
 
 /** Resolve a signature attribute, including inherited inputs and output. */
 export function functionAttribute(func: RosettaFunction, name: string): Attribute | undefined {

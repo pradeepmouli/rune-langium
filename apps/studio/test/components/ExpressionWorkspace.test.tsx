@@ -43,42 +43,47 @@ async function context() {
 }
 
 describe('source-bound expression workspace', () => {
-  it('displays generated TypeScript read-only, caches tab clicks, and retains stale output for invalid Rune', async () => {
-    const { props, writes, getFile } = await context();
-    const project = vi.fn(async (language, subject) => ({
-      language,
-      subject,
-      code: 'export function Calculate(): number { return 1; }',
-      sourceMap: [],
-      requiredHelpers: []
-    }));
-    const factory = () => ({ schema: vi.fn(), execute: vi.fn(), project, dispose: vi.fn() });
-    const renderWorkspace = (current = props) => (
-      <PreviewSessionContext.Provider value={factory}>
-        <ExpressionWorkspace {...current} />
-      </PreviewSessionContext.Provider>
-    );
-    const host = render(renderWorkspace());
-    const editor = await host.findByTestId('implementation-editor');
-    const view = EditorView.findFromDOM(editor.querySelector('.cm-editor')!)!;
-    fireEvent.click(host.getByRole('button', { name: 'TypeScript' }));
-    await waitFor(() =>
-      expect(host.getByTestId('generated-expression')).toHaveTextContent('export function Calculate')
-    );
-    const generated = EditorView.findFromDOM(host.getByTestId('generated-expression').querySelector('.cm-editor')!)!;
-    act(() => generated.dispatch({ changes: { from: 0, insert: 'invalid' } }));
-    expect(writes).not.toHaveBeenCalled();
-    fireEvent.click(host.getByRole('button', { name: 'Rune' }));
-    fireEvent.click(host.getByRole('button', { name: 'TypeScript' }));
-    expect(project).toHaveBeenCalledOnce();
-    fireEvent.click(host.getByRole('button', { name: 'Rune' }));
-    act(() => view.dispatch({ changes: { from: source.indexOf('1\n'), insert: 'if (' } }));
-    host.rerender(renderWorkspace({ ...props, file: getFile(), parseCurrent: false }));
-    fireEvent.click(host.getByRole('button', { name: 'TypeScript' }));
-    expect(host.getByTestId('generated-expression')).toHaveTextContent('export function Calculate');
-    expect(host.getByRole('status')).toHaveTextContent('last valid source');
-    expect(project).toHaveBeenCalledOnce();
-  });
+  it.each(['TypeScript', 'Python'])(
+    'displays generated %s read-only, caches tab clicks, and retains stale output for invalid Rune',
+    async (tab) => {
+      const declaration = tab === 'Python' ? 'def Calculate' : 'export function Calculate';
+      const { props, writes, getFile } = await context();
+      const project = vi.fn(async (language, subject) => ({
+        language,
+        subject,
+        code:
+          tab === 'Python'
+            ? 'def Calculate(input: Calculate_Input) -> float:\n    return 1.0\n'
+            : 'export function Calculate(): number { return 1; }',
+        sourceMap: [],
+        requiredHelpers: []
+      }));
+      const factory = () => ({ schema: vi.fn(), execute: vi.fn(), project, dispose: vi.fn() });
+      const renderWorkspace = (current = props) => (
+        <PreviewSessionContext.Provider value={factory}>
+          <ExpressionWorkspace {...current} />
+        </PreviewSessionContext.Provider>
+      );
+      const host = render(renderWorkspace());
+      const editor = await host.findByTestId('implementation-editor');
+      const view = EditorView.findFromDOM(editor.querySelector('.cm-editor')!)!;
+      fireEvent.click(host.getByRole('button', { name: tab }));
+      await waitFor(() => expect(host.getByTestId('generated-expression')).toHaveTextContent(declaration));
+      const generated = EditorView.findFromDOM(host.getByTestId('generated-expression').querySelector('.cm-editor')!)!;
+      act(() => generated.dispatch({ changes: { from: 0, insert: 'invalid' } }));
+      expect(writes).not.toHaveBeenCalled();
+      fireEvent.click(host.getByRole('button', { name: 'Rune' }));
+      fireEvent.click(host.getByRole('button', { name: tab }));
+      expect(project).toHaveBeenCalledOnce();
+      fireEvent.click(host.getByRole('button', { name: 'Rune' }));
+      act(() => view.dispatch({ changes: { from: source.indexOf('1\n'), insert: 'if (' } }));
+      host.rerender(renderWorkspace({ ...props, file: getFile(), parseCurrent: false }));
+      fireEvent.click(host.getByRole('button', { name: tab }));
+      expect(host.getByTestId('generated-expression')).toHaveTextContent(declaration);
+      expect(host.getByRole('status')).toHaveTextContent('last valid source');
+      expect(project).toHaveBeenCalledOnce();
+    }
+  );
   it('keeps invalid text editable during pending/failed parses and writes only the owning file', async () => {
     const { props, sibling, writes, getFile } = await context();
     const host = render(<ExpressionWorkspace {...props} />);

@@ -43,9 +43,17 @@ import {
   emitStandaloneZodSchema,
   RUNTIME_HELPER_JS_SOURCE,
   normalizePreviewInputs,
-  selectTypeScriptProjection
+  selectTypeScriptProjection,
+  generatePythonModule,
+  selectPythonProjection
 } from '@rune-langium/codegen/export';
-import type { Target, FormPreviewSchema, GeneratorOutput, GeneratorDiagnostic } from '@rune-langium/codegen/export';
+import type {
+  Target,
+  FormPreviewSchema,
+  GeneratorOutput,
+  GeneratorDiagnostic,
+  PythonModule
+} from '@rune-langium/codegen/export';
 import { findDataNode, getActiveConditionPredicates } from '@rune-langium/codegen/instances';
 import type { ValidationDiagnostic } from '@rune-langium/codegen/instances';
 import { qualifiedNameFromNodeId } from '@rune-langium/visual-editor/identifiers';
@@ -142,6 +150,7 @@ let previewVersionStartRevision = 0;
 const documentsCache = new Map<string, VersionedEntry<LangiumDocument[]>>();
 const previewSchemaCache = new Map<string, VersionedEntry<FormPreviewSchema[]>>();
 const previewGenerateCache = new Map<string, VersionedEntry<GeneratorOutput[]>>();
+const previewPythonCache = new Map<string, VersionedEntry<PythonModule>>();
 let codegenFilesVersion = 0;
 const codegenGenerateCache = new Map<string, VersionedEntry<GeneratorOutput[]>>();
 const standaloneValidatorCache = new Map<string, VersionedEntry<StandaloneValidatorResult>>();
@@ -868,7 +877,22 @@ async function runProjection(request: ProjectionRequest): Promise<void> {
       currentPreviewFiles.some((file) => file.uri === request.subject.uri && file.content === request.source);
     if (!current()) throw new Error('The source changed. Refresh the generated view.');
     const { version, value: documents } = await buildDocuments();
-    if (request.language !== 'typescript') throw new Error('Python generation is not available yet.');
+    if (request.language === 'python') {
+      const { value: module } = await getOrComputeAsync(
+        previewPythonCache,
+        'generate:python',
+        () => version,
+        () => Promise.resolve(generatePythonModule(documents))
+      );
+      if (version !== previewFilesVersion || !current())
+        throw new Error('The source changed. Refresh the generated view.');
+      scope.postMessage({
+        type: 'projection:result',
+        requestId: request.requestId,
+        projection: selectPythonProjection(module, request.subject, request.kind)
+      });
+      return;
+    }
     const { value: outputs } = await getOrComputeAsync(
       previewGenerateCache,
       'generate:typescript',
