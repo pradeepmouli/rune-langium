@@ -422,7 +422,7 @@ describe('FunctionForm operation locality', () => {
     expect(parsed.parserErrors).toEqual([]);
     const store = createEditorStore();
     store.getState().loadModels(parsed.value);
-    const node = store.getState().nodes.find((n) => n.data.name === 'ConvertToAdjustableOrRelativeDate')!;
+    const node = store.getState().nodes.find((n) => n.data.name === 'Summarize')!;
     const before = (node.data as any).operations;
     expect(before).toHaveLength(10);
     render(
@@ -445,7 +445,7 @@ describe('FunctionForm operation locality', () => {
     expect(after[1].expression.text).toBe('42');
     expect(after[1].path).toEqual(before[1].path);
     expect(after.slice(2)).toEqual(before.slice(2));
-    expect(screen.getByText('set adjustableOrRelativeDate -> adjustableDate -> unadjustedDate')).toBeVisible();
+    expect(screen.getByText('set result -> average')).toBeVisible();
   });
 
   it('keeps independent operation drafts and validation errors', () => {

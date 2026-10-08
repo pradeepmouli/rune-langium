@@ -97,7 +97,7 @@ describe('full-file protected Rune editing', () => {
 });
 
 describe('real region editor', () => {
-  it('keeps ten corpus operations in one full-file view and synchronizes Source', async () => {
+  it('keeps ten original fixture operations in one full-file view and synchronizes Source', async () => {
     const source = readFileSync(
       resolve(process.cwd(), '../../packages/visual-editor/test/fixtures/function-multi-operation.rosetta'),
       'utf8'
@@ -110,7 +110,7 @@ describe('real region editor', () => {
     const change = vi.fn();
     const binding = {
       uri: 'file:///corpus.rosetta',
-      nodeId: 'test.ConvertToAdjustableOrRelativeDate',
+      nodeId: 'test.operations.Summarize',
       workspaceGeneration: 1,
       revision: 1,
       source,
@@ -139,7 +139,7 @@ describe('real region editor', () => {
     );
     expect(host.getAllByTestId('implementation-editor')).toHaveLength(1);
     expect(inspector!.state.doc.toString()).toBe(source);
-    expect(inspector!.state.doc.toString()).toContain('alias relativeDate:');
+    expect(inspector!.state.doc.toString()).toContain('alias totalValue:');
     expect(func.operations).toHaveLength(10);
     const insert = '  // draft retained even while invalid\n';
     act(() => inspector!.dispatch({ changes: { from: region.from, insert } }));
