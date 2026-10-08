@@ -116,3 +116,11 @@ functions remain read-only. Native scalar operators share the export emitter's
 linked type/cardinality proof; collections, metadata, missing values and structured
 equality retain their required runtime behavior. Preview file receipts acknowledge
 delivery; identical content preserves the linked/generation caches.
+
+Python expression rendering lives in codegen's `projection/` backend and consumes
+the same linked declaration, cardinality, metadata and Choice-path facts. Shared
+scalar proofs, Data-selection facts and temporal wire formats serve both targets.
+The browser-safe Python runtime string is generated from one authoritative `.py`
+file. Grammar reflection drives the expression-kind census; linked execution
+fixtures compare Python with the TypeScript emitter, including lexical closure
+scope, metadata retention, nanoseconds and daylight-saving transitions.

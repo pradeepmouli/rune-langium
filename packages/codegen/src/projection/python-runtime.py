@@ -4,9 +4,322 @@
 from __future__ import annotations
 
 import math
+import re
+import calendar
 from functools import reduce, cmp_to_key
-from datetime import date, time, datetime, timedelta
+from datetime import date, time, datetime, timedelta, timezone
 from typing import Any, Callable, TypedDict, NotRequired
+from zoneinfo import ZoneInfo
+
+
+def rune_exists(value):
+    return value is not None and (not isinstance(value, list) or len(value) > 0)
+
+
+def rune_default(value, fallback):
+    return value if rune_exists(value) else fallback()
+
+
+def rune_coalesce(values):
+    return next((value for value in values if value is not None), None)
+
+
+def rune_unwrap(value, many=False):
+    if many or isinstance(value, list):
+        return [item.get("value") for item in rune_list(value)
+                if isinstance(item, dict) and item.get("value") is not None]
+    return value.get("value") if isinstance(value, dict) else None
+
+
+def rune_equality(left, right, unequal=False, quantifier="all"):
+    l, r = rune_list(left), rune_list(right)
+    left_array, right_array = isinstance(left, list), isinstance(right, list)
+    if not l or not r:
+        same = left_array == right_array and len(l) == len(r)
+        return not same if unequal else same
+    compare = lambda a, b: not rune_equals(a, b) if unequal else rune_equals(a, b)
+    predicate = all if quantifier == "all" else any
+    if not left_array:
+        return predicate(compare(left, b) for b in r)
+    if not right_array:
+        return predicate(compare(a, right) for a in l)
+    if quantifier == "all":
+        return (unequal or len(l) == len(r)) and all(
+            (unequal if i >= len(r) else compare(a, r[i])) for i, a in enumerate(l))
+    return (unequal and len(l) != len(r)) or any(compare(a, r[i]) for i, a in enumerate(l) if i < len(r))
+
+
+def rune_contains(left, right):
+    l, r = rune_list(left), rune_list(right)
+    keys = set(map(rune_value_key, l))
+    return bool(l and r) and all(rune_value_key(item) in keys for item in r)
+
+
+def rune_disjoint(left, right):
+    keys = set(map(rune_value_key, rune_list(right)))
+    return all(rune_value_key(item) not in keys for item in rune_list(left))
+
+
+def rune_distinct(value, wrapped=False):
+    seen, result = set(), []
+    for item in rune_list(value):
+        key = rune_value_key(rune_unwrap(item) if wrapped else item)
+        if key not in seen:
+            seen.add(key)
+            result.append(item)
+    return result
+
+
+def rune_order(left, right, nulls_last=True):
+    if left is None and right is None:
+        return 0
+    if left is None:
+        return 1 if nulls_last else -1
+    if right is None:
+        return -1 if nulls_last else 1
+    return -1 if left < right else 1 if left > right else 0
+
+
+def rune_ordered(value, key, operation):
+    pairs = [(item, key(item)) for item in rune_list(value)]
+    if operation == "sort":
+        return [item for item, _ in sorted(pairs, key=cmp_to_key(
+            lambda a, b: rune_order(a[1], b[1])))]
+    if not pairs:
+        return None
+    best = pairs[0]
+    for pair in pairs[1:]:
+        order = rune_order(pair[1], best[1], operation == "min")
+        if (order < 0 if operation == "min" else order > 0):
+            best = pair
+    return best[0]
+
+
+def rune_only(value):
+    values = rune_list(value)
+    return values[0] if len(values) == 1 else None
+
+
+def rune_edge(value, last=False):
+    values = rune_list(value)
+    return values[-1 if last else 0] if values else None
+
+
+def rune_reduce(value, reducer, normalize=lambda value: value):
+    values = rune_list(value)
+    return reduce(reducer, values[1:], normalize(values[0])) if values else None
+
+
+def rune_string(value):
+    if value is None:
+        return "null"
+    if isinstance(value, bool):
+        return "true" if value else "false"
+    if isinstance(value, list):
+        return ",".join("" if item is None else rune_string(item) for item in value)
+    if isinstance(value, dict):
+        return "[object Object]"
+    if isinstance(value, float):
+        if math.isnan(value):
+            return "NaN"
+        if math.isinf(value):
+            return "Infinity" if value > 0 else "-Infinity"
+        if value.is_integer():
+            return str(int(value))
+    return str(value)
+
+
+def rune_to_string(value):
+    return None if value is None else rune_string(value)
+
+
+def rune_number(value, integer=False):
+    if value is None:
+        return None
+    if isinstance(value, (dict, list)):
+        value = rune_string(value)
+    try:
+        if isinstance(value, str):
+            value = value.strip()
+            if not value:
+                result = 0.0
+            elif re.fullmatch(r"0[xX][0-9a-fA-F]+|0[bB][01]+|0[oO][0-7]+", value):
+                result = float(int(value, 0))
+            elif re.fullmatch(r"[+-]?(?:Infinity|(?:(?:[0-9]+(?:\.[0-9]*)?|\.[0-9]+)(?:[eE][+-]?[0-9]+)?))", value):
+                result = float(value.replace("Infinity", "inf"))
+            else:
+                return None
+        else:
+            result = float(value)
+        if math.isnan(result) or (integer and (not math.isfinite(result) or not result.is_integer())):
+            return None
+        return int(result) if integer else result
+    except (ValueError, TypeError, OverflowError):
+        return None
+
+
+def rune_temporal(value, kind):
+    text = str(value)
+    if kind == "date":
+        return date.fromisoformat(text)
+    if kind == "time":
+        return time.fromisoformat(text)
+    if kind == "zonedDateTime":
+        base, _, zone = text.partition("[")
+        parsed = datetime.fromisoformat(base.replace("Z", "+00:00"))
+        if zone:
+            name = zone.rstrip("]")
+            if name != "UTC" and not re.fullmatch(r"[+-]\d{2}:\d{2}", name):
+                target = ZoneInfo(name)
+                parsed = parsed.astimezone(target) if parsed.tzinfo else parsed.replace(tzinfo=target)
+        if parsed.tzinfo is None:
+            raise ValueError("zonedDateTime requires a timezone")
+        return parsed
+    return datetime.fromisoformat(text)
+
+
+def rune_iso(value):
+    if isinstance(value, (time, datetime)):
+        text = value.isoformat(timespec="microseconds" if value.microsecond else "seconds")
+        if value.microsecond:
+            text = re.sub(r"(\.\d*?[1-9])0+(?=[+-]|$)", r"\1", text)
+        return text
+    return value.isoformat()
+
+
+def rune_time_text(value, kind=None):
+    text = str(value)
+    if kind == "zonedDateTime":
+        parsed = rune_temporal(text, kind)
+        hour, minute, second = parsed.hour, parsed.minute, parsed.second
+        nano = rune_clock_parts(text)[3]
+    else:
+        hour, minute, second, nano = rune_clock_parts(text)
+    digits = f"{nano:09d}".rstrip("0") if nano else ""
+    return f"{hour:02d}:{minute:02d}:{second:02d}" + ("." + digits if digits else "")
+
+
+def rune_clock_parts(value):
+    match = re.search(r"(?:^|[Tt ])(\d{2}):(\d{2})(?::(\d{2})(?:\.(\d{1,9}))?)?", str(value))
+    if not match:
+        raise ValueError("Invalid ISO time")
+    hour, minute, second = int(match[1]), int(match[2]), int(match[3] or 0)
+    if hour > 23 or minute > 59 or second > 60:
+        raise ValueError("Invalid ISO time")
+    return hour, minute, min(second, 59), int((match[4] or "0").ljust(9, "0"))
+
+
+def rune_calendar_parts(value):
+    match = re.match(r"^([+-]?\d{4,6})-(\d{2})-(\d{2})", str(value))
+    if not match:
+        raise ValueError("Invalid ISO date")
+    year, month, day = map(int, match.groups())
+    if not 1 <= month <= 12 or not 1 <= day <= calendar.monthrange(year, month)[1]:
+        raise ValueError("Invalid ISO date")
+    return year, month, day
+
+
+def rune_calendar_text(year, month, day):
+    prefix = f"{year:04d}" if 0 <= year <= 9999 else ("-" if year < 0 else "+") + f"{abs(year):06d}"
+    text = f"{prefix}-{month:02d}-{day:02d}"
+    rune_calendar_parts(text)
+    return text
+
+
+def rune_date_days(value):
+    # Gregorian eras avoid datetime's year-1 floor and retain astronomical year zero.
+    year, month, day = rune_calendar_parts(value)
+    year -= int(month <= 2)
+    era = year // 400
+    year_of_era = year - era * 400
+    day_of_year = (153 * (month + (-3 if month > 2 else 9)) + 2) // 5 + day - 1
+    return era * 146097 + year_of_era * 365 + year_of_era // 4 - year_of_era // 100 + day_of_year
+
+
+def rune_date_join(left, right):
+    return rune_calendar_text(*rune_calendar_parts(left)) + "T" + rune_time_text(right)
+
+
+def rune_temporal_key(value, kind):
+    if kind == "date":
+        return rune_date_days(value)
+    clock = rune_clock_parts(value)
+    if kind == "time":
+        return clock
+    if kind == "dateTime":
+        return (rune_date_days(value), *clock)
+    parsed = rune_temporal(value, kind).astimezone(timezone.utc)
+    return (rune_date_days(parsed.date().isoformat()), parsed.hour, parsed.minute, parsed.second, clock[3])
+
+
+def rune_convert_temporal(value, pattern):
+    return value if isinstance(value, str) and re.fullmatch(pattern, value, re.ASCII) else None
+
+
+def rune_date_field(value, kind, field):
+    if value is None:
+        return None
+    parts = rune_calendar_parts(value)
+    if field in ("year", "month", "day"):
+        return parts[("year", "month", "day").index(field)]
+    if field == "date" and kind != "date":
+        return rune_calendar_text(*parts)
+    if field == "time" and kind != "date":
+        return rune_time_text(value, kind)
+    if field == "timezone":
+        zone = str(value).partition("[")[2].rstrip("]")
+        return zone or ("UTC" if str(value).endswith("Z") else str(value)[-6:])
+    return None
+
+
+def rune_date_construct(kind, fields):
+    if kind == "date":
+        if any(fields.get(name) is None for name in ("year", "month", "day")):
+            return None
+        return rune_calendar_text(int(fields["year"]), int(fields["month"]), int(fields["day"]))
+    if fields.get("date") is None or fields.get("time") is None:
+        return None
+    combined = rune_date_join(fields["date"], fields["time"])
+    if kind == "dateTime":
+        return combined
+    zone = fields.get("timezone")
+    if zone is None:
+        return None
+    zone = "UTC" if zone == "Z" else zone
+    if re.fullmatch(r"[+-]\d{2}:\d{2}", zone):
+        return combined + zone + "[" + zone + "]"
+    parsed = datetime.fromisoformat(combined)
+    offset = parsed.replace(tzinfo=ZoneInfo(zone)).strftime("%z")
+    offset = offset[:3] + ":" + offset[3:]
+    return combined + offset + "[" + zone + "]"
+
+
+def rune_with_meta(value, entries, input_kind="value"):
+    if not entries:
+        return value
+    if isinstance(value, list):
+        return [wrapped for item in value for wrapped in [rune_with_meta(item, entries, input_kind)] if wrapped is not None]
+    wrapper = value if input_kind != "value" and value is not None else None
+    raw = wrapper.get("value") if wrapper is not None else value
+    field_meta = {key: item for key, item in entries.items() if key not in ("key", "template", "address", "reference")}
+    type_meta = {"externalKey" if key == "key" else key: entries[key] for key in ("key", "template") if key in entries}
+    reference_meta = {key: entries[key] for key in ("address", "reference") if key in entries}
+    if raw is None and not reference_meta:
+        return None
+    if type_meta and isinstance(raw, dict):
+        raw = dict(raw, meta={**(raw.get("meta") or {}), **type_meta})
+    if reference_meta:
+        result = dict(wrapper, value=raw) if wrapper is not None else {"value": raw}
+        if "address" in reference_meta:
+            result["reference"] = {**((wrapper or {}).get("reference") or {}), "reference": reference_meta["address"]}
+        if "reference" in reference_meta:
+            result["externalReference"] = reference_meta["reference"]
+        if field_meta:
+            result["meta"] = {**((wrapper or {}).get("meta") or {}), **field_meta}
+        return result
+    if field_meta:
+        return {**(wrapper or {}), "value": raw, "meta": {**((wrapper or {}).get("meta") or {}), **field_meta}}
+    return dict(wrapper, value=raw) if wrapper is not None else raw
 
 
 def rune_list(value):
@@ -95,9 +408,15 @@ def rune_as_key(value, input_kind="value"):
         return [rune_as_key(item, input_kind) for item in value]
     candidate = value if isinstance(value, dict) else {}
     nested = candidate.get("value") if input_kind != "value" else None
-    meta = nested.get("meta", {}) if isinstance(nested, dict) else candidate.get("meta", {})
+    meta = nested.get("meta") if isinstance(nested, dict) else None
+    if meta is None:
+        meta = candidate.get("meta")
+    if meta is None:
+        meta = {}
     external = next((item for item in (meta.get("externalKey"), meta.get("id"), meta.get("key"), candidate.get("externalReference")) if item is not None), None)
-    global_key = meta.get("globalKey", candidate.get("globalReference"))
+    global_key = meta.get("globalKey")
+    if global_key is None:
+        global_key = candidate.get("globalReference")
     return {key: item for key, item in (("externalReference", external), ("globalReference", global_key)) if item is not None}
 
 

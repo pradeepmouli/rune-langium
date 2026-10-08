@@ -1,0 +1,473 @@
+// SPDX-License-Identifier: MIT
+// Copyright (c) 2026 Pradeep Mouli
+
+import { AstUtils } from 'langium';
+import {
+  getEnumValues,
+  getOperationArgument,
+  getNodeSourceRegion,
+  isAttribute,
+  isChoice,
+  isChoiceOption,
+  isRosettaEnumValue,
+  isRosettaFunction,
+  isRosettaRecordType,
+  isRosettaType,
+  type RosettaExpression
+} from '@rune-langium/core';
+import { expressionIsMany, expressionType, featureName, typeFeatures } from '../expr/navigation.js';
+import { expressionMetadataKind } from '../expr/metadata-type.js';
+import { fieldMetadataKind, metadataPropertyPath } from '../expr/metadata-runtime.js';
+import { nativeEqualityOperands, nativeScalarOperands } from '../expr/scalar-operators.js';
+import { TEMPORAL_CONVERSION_PATTERNS } from '../expr/temporal-conversions.js';
+import { functionInputs, functionOutput } from '../types/func.js';
+import type { PythonProjectionContext } from './context.js';
+import type { GeneratedProjection } from './types.js';
+import {
+  pythonArgument,
+  pythonBind,
+  pythonDeclarationValue,
+  pythonFresh,
+  pythonHelperDependencies,
+  pythonInline,
+  pythonNormalize,
+  pythonRead,
+  pythonUnwrap,
+  pyBool,
+  pyString,
+  type PythonRenderContext
+} from './python-operations.js';
+import { pythonCalendarField, pythonNavigation, pythonOnlyExists, pythonTypeSelection } from './python-navigation.js';
+
+/** Forward generation is independent of the deliberately narrower inverse Python lens. */
+export function projectPythonExpression(
+  expression: RosettaExpression,
+  context: PythonProjectionContext
+): GeneratedProjection {
+  const locals = new Map(context.locals);
+  const owner = AstUtils.getContainerOfType(expression, isRosettaFunction);
+  if (owner)
+    for (const input of functionInputs(owner))
+      if (!locals.has(input)) locals.set(input, pythonRead(context.self, [input.name]));
+  const code = renderPythonExpression(expression, { ...context, locals, state: { next: 0 } });
+  let sourceLine = 1,
+    sourceChar = context.subject.region.from + 1;
+  try {
+    const document = AstUtils.getDocument(expression);
+    const position = document.textDocument.positionAt(getNodeSourceRegion(expression).from);
+    sourceLine = position.line + 1;
+    sourceChar = position.character + 1;
+  } catch {
+    /* Standalone parser expressions have no owning document. */
+  }
+  return {
+    language: 'python',
+    subject: context.subject,
+    code,
+    requiredHelpers: pythonHelperDependencies(code),
+    sourceMap: [{ outputLine: 0, sourceUri: context.subject.uri, sourceLine, sourceChar }]
+  };
+}
+
+export function renderPythonExpression(expression: RosettaExpression, context: PythonRenderContext): string {
+  const render = renderPythonExpression;
+  const valueContext = { ...context, preserveMetadata: false };
+  const arg = getOperationArgument(expression);
+  const argument = (preserve = context.preserveMetadata) =>
+    arg
+      ? render(arg, { ...context, preserveMetadata: preserve })
+      : pythonUnwrap(context.self, preserve ? undefined : context.implicit?.metadata, context.implicit?.many);
+  const branch = (child: RosettaExpression, target = expressionMetadataKind(expression)) => {
+    const text = render(child, { ...context, preserveMetadata: !!target });
+    if (child.$type === 'ListLiteral' && !child.elements.length && !expressionIsMany(expression)) return 'None';
+    return target ? pythonNormalize(text, expressionMetadataKind(child), target) : text;
+  };
+  switch (expression.$type) {
+    case 'RosettaBooleanLiteral':
+      return pyBool(expression.value);
+    case 'RosettaIntLiteral':
+    case 'RosettaNumberLiteral': {
+      const value = Number(expression.value);
+      if (!Number.isFinite(value)) return value < 0 ? '-math.inf' : 'math.inf';
+      const text = String(value);
+      return Number.isInteger(value) && !text.includes('e') ? `${text}.0` : text;
+    }
+    case 'RosettaStringLiteral':
+      return pyString(expression.value);
+    case 'RosettaImplicitVariable':
+      return pythonUnwrap(
+        context.self,
+        context.preserveMetadata ? undefined : context.implicit?.metadata,
+        context.implicit?.many
+      );
+    case 'RosettaSymbolReference': {
+      const target = expression.symbol.ref;
+      if (!target) throw new Error(`Unresolved symbol '${expression.symbol.$refText}'`);
+      const local = context.locals.get(target);
+      if (local !== undefined) return pythonDeclarationValue(local, context, expression);
+      if (isRosettaFunction(target)) {
+        const inputs = functionInputs(target);
+        let args: Array<RosettaExpression | undefined>;
+        if (expression.explicitArguments) args = expression.rawArgs;
+        else if (inputs.length === 1) args = [undefined];
+        else if (!inputs.length) args = [];
+        else throw new Error(`Function '${target.name}' requires a linked argument list`);
+        if (args.length !== inputs.length)
+          throw new Error(`Function '${target.name}' requires a linked argument list of ${inputs.length} inputs`);
+        const values = inputs.map((parameter, index) => {
+          const source = args[index];
+          const text = source ? render(source, { ...context, preserveMetadata: true }) : context.self;
+          return `${pyString(parameter.name)}: ${pythonArgument(text, parameter, source, context)}`;
+        });
+        return pythonUnwrap(
+          `${context.name(target)}({${values.join(', ')}})`,
+          context.preserveMetadata ? undefined : fieldMetadataKind(functionOutput(target)),
+          expressionIsMany(expression)
+        );
+      }
+      if (target.$type === 'RosettaExternalFunction' || target.$type === 'RosettaRule') {
+        const parameters =
+          target.$type === 'RosettaRule' ? (target.input ? [{ isArray: false }] : []) : target.parameters;
+        const args = expression.explicitArguments ? expression.rawArgs : parameters.length === 1 ? [undefined] : [];
+        if (args.length !== parameters.length)
+          throw new Error(`Function '${target.name}' requires a linked argument list of ${parameters.length} inputs`);
+        const values = args.map((item, index) => {
+          const text = item ? render(item, valueContext) : argument(false);
+          return parameters[index]!.isArray ? `rune_list(${text})` : `rune_single(${text})`;
+        });
+        return `${context.name(target)}(${values.join(', ')})`;
+      }
+      if (isRosettaEnumValue(target)) return pyString(target.name);
+      if (isRosettaType(target)) return context.name(target);
+      const calendar = pythonCalendarField(target, context.self, context.implicit?.many);
+      if (calendar) return calendar;
+      const name = isChoiceOption(target) ? featureName(target) : expression.symbol.$refText;
+      return pythonDeclarationValue(pythonRead(context.self, [name], context.implicit?.many), context, expression);
+    }
+    case 'RosettaFeatureCall':
+    case 'RosettaDeepFeatureCall':
+      return pythonNavigation(expression, context, render)!;
+    case 'ArithmeticOperation': {
+      const left = expression.left ? render(expression.left, valueContext) : argument(false),
+        right = render(expression.right, valueContext);
+      const leftType = expressionType(expression.left)?.name,
+        rightType = expressionType(expression.right)?.name;
+      const operation =
+        leftType === 'date' && rightType === 'date' && expression.operator === '-'
+          ? '(rune_date_days(a) - rune_date_days(b))'
+          : leftType === 'date' && rightType === 'time' && expression.operator === '+'
+            ? 'rune_date_join(a, b)'
+            : expression.operator === '/'
+              ? 'rune_divide(a, b)'
+              : `(a ${expression.operator} b)`;
+      const scalar = nativeScalarOperands(expression.left, expression.right);
+      if (scalar === 'number' || (scalar === 'string' && expression.operator === '+'))
+        return expression.operator === '/'
+          ? `rune_divide(${left}, ${right})`
+          : `(${left} ${expression.operator} ${right})`;
+      return `rune_binary(${left}, ${right}, lambda a, b: ${operation})`;
+    }
+    case 'EqualityOperation': {
+      const left = expression.left ? render(expression.left, valueContext) : argument(false),
+        right = render(expression.right, valueContext);
+      const many = expressionIsMany(expression.left) || expressionIsMany(expression.right);
+      const optional = [expression.left, expression.right].some(
+        (item) =>
+          item?.$type === 'RosettaSymbolReference' && isAttribute(item.symbol.ref) && item.symbol.ref.card.inf === 0
+      );
+      if (!expression.cardMod && !many && !optional) {
+        if (nativeEqualityOperands(expression.left, expression.right))
+          return `(${left} ${expression.operator === '=' ? '==' : '!='} ${right})`;
+        return `${expression.operator === '<>' ? 'not ' : ''}rune_equals(${left}, ${right})`;
+      }
+      return `rune_equality(${left}, ${right}, ${pyBool(expression.operator === '<>')}, ${pyString(expression.cardMod ?? (expression.operator === '<>' ? 'any' : 'all'))})`;
+    }
+    case 'ComparisonOperation': {
+      const left = expression.left ? render(expression.left, valueContext) : argument(false),
+        right = render(expression.right, valueContext);
+      const scalar = nativeScalarOperands(expression.left, expression.right);
+      if (!expression.cardMod && (scalar === 'number' || scalar === 'string'))
+        return `(${left} ${expression.operator} ${right})`;
+      const type = expressionType(expression.left ?? arg)?.name;
+      const temporal = type && ['date', 'time', 'dateTime', 'zonedDateTime'].includes(type);
+      const compare = temporal
+        ? `rune_temporal_key(a, ${pyString(type)}) ${expression.operator} rune_temporal_key(b, ${pyString(type)})`
+        : `a ${expression.operator} b`;
+      return `rune_compare(${left}, ${right}, lambda a, b: ${compare}, ${pyString(expression.cardMod ?? 'all')})`;
+    }
+    case 'LogicalOperation':
+      return `(${expression.left ? render(expression.left, valueContext) : argument(false)} ${expression.operator} ${render(expression.right, valueContext)})`;
+    case 'RosettaContainsExpression':
+    case 'RosettaDisjointExpression':
+      return `rune_${expression.$type === 'RosettaContainsExpression' ? 'contains' : 'disjoint'}(${expression.left ? render(expression.left, valueContext) : argument(false)}, ${render(expression.right, valueContext)})`;
+    case 'RosettaExistsExpression': {
+      const value = argument(false);
+      if (!expression.modifier) return `rune_exists(${value})`;
+      return `(len(rune_list(${value})) ${expression.modifier === 'single' ? '== 1' : '> 1'})`;
+    }
+    case 'RosettaAbsentExpression':
+      return `(not rune_exists(${argument(false)}))`;
+    case 'RosettaCountOperation':
+      return `len(rune_list(${argument(false)}))`;
+    case 'RosettaOnlyElement':
+      return `rune_only(${argument()})`;
+    case 'FirstOperation':
+    case 'LastOperation':
+      return `rune_edge(${argument()}, ${pyBool(expression.$type === 'LastOperation')})`;
+    case 'SumOperation':
+      return `sum(rune_list(${argument(false)}))`;
+    case 'FlattenOperation':
+      return `[child for item in rune_list(${argument()}) for child in rune_list(item)]`;
+    case 'ReverseOperation':
+      return `list(reversed(rune_list(${argument()})))`;
+    case 'DistinctOperation':
+      return `rune_distinct(${argument()}, ${pyBool(!!context.preserveMetadata && !!expressionMetadataKind(arg))})`;
+    case 'FilterOperation':
+    case 'MapOperation': {
+      const item = pythonFresh(context, 'item');
+      const preserve = !!context.preserveMetadata || !!expressionMetadataKind(arg);
+      const child = pythonInline(expression.function, context, [item], arg);
+      const body = expression.function
+        ? render(expression.function.body, {
+            ...child,
+            preserveMetadata: expression.$type === 'FilterOperation' ? false : context.preserveMetadata
+          })
+        : pythonUnwrap(item, context.preserveMetadata ? undefined : expressionMetadataKind(arg));
+      const input = argument(preserve);
+      const result =
+        expression.$type === 'FilterOperation'
+          ? `[${item} for ${item} in rune_list(${input}) if ${body}]`
+          : `[child for ${item} in rune_list(${input}) for child in rune_list(${body})]`;
+      return expression.$type === 'FilterOperation' && !context.preserveMetadata
+        ? pythonUnwrap(result, expressionMetadataKind(arg), true)
+        : result;
+    }
+    case 'SortOperation':
+    case 'MinOperation':
+    case 'MaxOperation': {
+      const item = pythonFresh(context, 'item'),
+        kind = expressionMetadataKind(arg);
+      const child = pythonInline(expression.function, valueContext, [item], arg);
+      const key = expression.function ? render(expression.function.body, child) : pythonUnwrap(item, kind);
+      const result = `rune_ordered(${argument(!!kind || context.preserveMetadata)}, lambda ${item}: ${key}, ${pyString(expression.operator)})`;
+      return context.preserveMetadata ? result : pythonUnwrap(result, kind, expression.$type === 'SortOperation');
+    }
+    case 'ReduceOperation': {
+      const accumulator = pythonFresh(context, 'acc'),
+        item = pythonFresh(context, 'item');
+      const target = context.preserveMetadata ? expressionMetadataKind(expression) : undefined;
+      const child = pythonInline(expression.function, context, [accumulator, item], arg);
+      const result = expression.function
+        ? render(expression.function.body, { ...child, preserveMetadata: !!target })
+        : item;
+      const body = target ? pythonNormalize(result, expressionMetadataKind(expression.function?.body), target) : result;
+      const first = pythonNormalize(item, expressionMetadataKind(arg), target);
+      return `rune_reduce(${argument(true)}, lambda ${accumulator}, ${item}: ${body}, lambda ${item}: ${first})`;
+    }
+    case 'ThenOperation': {
+      const item = pythonFresh(context, 'then');
+      const child = pythonInline(expression.function, context, [item], arg, expressionIsMany(arg));
+      return pythonBind(
+        argument(true),
+        item,
+        expression.function
+          ? render(expression.function.body, child)
+          : pythonUnwrap(
+              item,
+              context.preserveMetadata ? undefined : expressionMetadataKind(arg),
+              expressionIsMany(arg)
+            )
+      );
+    }
+    case 'RosettaConditionalExpression':
+      if (!expression.if || !expression.ifthen) throw new Error('Conditional requires a linked predicate and branch');
+      return `(${branch(expression.ifthen)} if ${render(expression.if, valueContext)} else ${expression.elsethen ? branch(expression.elsethen) : context.resultMode === 'condition' ? 'True' : 'None'})`;
+    case 'ListLiteral': {
+      const target = context.preserveMetadata ? expressionMetadataKind(expression) : undefined;
+      const values = expression.elements.map((item) =>
+        target
+          ? pythonNormalize(render(item, { ...context, preserveMetadata: true }), expressionMetadataKind(item), target)
+          : render(item, context)
+      );
+      return `[item for branch in [${values.join(', ')}] for item in rune_list(branch)${target ? ' if item is not None' : ''}]`;
+    }
+    case 'RosettaConstructorExpression': {
+      const target = expression.typeRef.$type === 'RosettaSymbolReference' ? expression.typeRef.symbol.ref : undefined;
+      if (!isRosettaType(target)) throw new Error('Constructor requires a linked type');
+      const values = expression.values.map((pair) => {
+        const feature = pair.key.ref;
+        if (!feature) throw new Error(`Unresolved constructor field '${pair.key.$refText}'`);
+        let value = render(pair.value, { ...context, preserveMetadata: true });
+        if (isAttribute(feature)) value = pythonArgument(value, feature, pair.value, context);
+        else
+          value = pythonNormalize(
+            value,
+            expressionMetadataKind(pair.value),
+            'annotations' in feature ? fieldMetadataKind(feature) : undefined
+          );
+        return `${pyString(isChoiceOption(feature) ? featureName(feature) : pair.key.$refText)}: ${value}`;
+      });
+      const object = `{${values.join(', ')}}`;
+      if (isRosettaRecordType(target) && ['date', 'dateTime', 'zonedDateTime'].includes(target.name))
+        return `rune_date_construct(${pyString(target.name)}, ${object})`;
+      return isChoice(target) && !values.length ? 'None' : object;
+    }
+    case 'DefaultOperation': {
+      const left = expression.left ? branch(expression.left) : argument(),
+        right = branch(expression.right);
+      return `rune_default(${left}, lambda: ${right})`;
+    }
+    case 'JoinOperation': {
+      const separator = expression.right ? render(expression.right, valueContext) : '""';
+      return `rune_string(${separator}).join("" if item is None else rune_string(item) for item in rune_list(${expression.left ? render(expression.left, valueContext) : argument(false)}))`;
+    }
+    case 'ToStringOperation':
+      return `rune_to_string(${argument(false)})`;
+    case 'ToNumberOperation':
+    case 'ToIntOperation':
+      return `rune_number(${argument(false)}, ${pyBool(expression.$type === 'ToIntOperation')})`;
+    case 'ToEnumOperation': {
+      const enumeration = expression.enumeration.ref;
+      if (!enumeration) throw new Error(`Unresolved enum '${expression.enumeration.$refText}'`);
+      const value = pythonFresh(context, 'enum');
+      return pythonBind(
+        argument(false),
+        value,
+        `${value} if ${value} in [${getEnumValues(enumeration)
+          .map((item) => pyString(item.name))
+          .join(', ')}] else None`
+      );
+    }
+    case 'ToDateOperation':
+    case 'ToTimeOperation':
+    case 'ToDateTimeOperation':
+    case 'ToZonedDateTimeOperation': {
+      const kinds = {
+        ToDateOperation: 'date',
+        ToTimeOperation: 'time',
+        ToDateTimeOperation: 'dateTime',
+        ToZonedDateTimeOperation: 'zonedDateTime'
+      };
+      const kind = kinds[expression.$type] as keyof typeof TEMPORAL_CONVERSION_PATTERNS;
+      return `rune_convert_temporal(${argument(false)}, ${pyString(TEMPORAL_CONVERSION_PATTERNS[kind])})`;
+    }
+    case 'AsKeyOperation': {
+      const value = `rune_as_key(${argument(true)}, ${pyString(expressionMetadataKind(arg) ?? 'value')})`;
+      return context.preserveMetadata ? value : pythonUnwrap(value, 'reference', expressionIsMany(expression));
+    }
+    case 'WithMetaOperation': {
+      const entries = expression.entries.map((entry) => {
+        const name = entry.key.$refText;
+        const property = ['key', 'template', 'address', 'reference'].includes(name)
+          ? name
+          : metadataPropertyPath(name).slice(-1)[0]!;
+        return `${pyString(property)}: ${render(entry.value, valueContext)}`;
+      });
+      const value = `rune_with_meta(${argument(true)}, {${entries.join(', ')}}, ${pyString(expressionMetadataKind(arg) ?? 'value')})`;
+      return context.preserveMetadata
+        ? value
+        : pythonUnwrap(value, expressionMetadataKind(expression), expressionIsMany(expression));
+    }
+    case 'OneOfOperation':
+    case 'ChoiceOperation': {
+      const root = pythonFresh(context, 'choice'),
+        type = arg ? expressionType(arg) : context.implicit?.type;
+      const names =
+        expression.$type === 'ChoiceOperation'
+          ? expression.attributes.map((ref) => (isChoiceOption(ref.ref) ? featureName(ref.ref) : ref.$refText))
+          : typeFeatures(type).map(featureName);
+      const values = names.length
+        ? `[${names.map((name) => pythonRead(root, [name])).join(', ')}]`
+        : `rune_list(${root})`;
+      const count = `sum(1 for value in ${values} if rune_exists(value))`;
+      const predicate = `${count} ${expression.$type === 'ChoiceOperation' && expression.necessity === 'optional' ? '<= 1' : '== 1'}`;
+      return pythonBind(
+        argument(false),
+        root,
+        expression.$type === 'ChoiceOperation' && expression.argument
+          ? `${root} is not None and (${predicate})`
+          : predicate
+      );
+    }
+    case 'RosettaOnlyExistsExpression':
+      return pythonOnlyExists(expression, context, render)!;
+    case 'AsOperation': {
+      const input = expressionType(arg),
+        target = expression.type.ref;
+      if (!isRosettaType(input) || !target) throw new Error('Narrowing requires a linked source and target type');
+      const name = pythonFresh(context, 'as'),
+        kind = expressionMetadataKind(arg);
+      const selected = pythonTypeSelection(pythonUnwrap(name, kind), input, target, true);
+      const value = selected.projected ? selected.selected : name;
+      const result = pythonBind(argument(true), name, `${value} if ${selected.guard} else None`);
+      return context.preserveMetadata
+        ? result
+        : pythonUnwrap(result, expressionMetadataKind(expression), expressionIsMany(expression));
+    }
+    case 'SwitchOperation': {
+      const name = pythonFresh(context, 'switch'),
+        input = expressionType(arg),
+        kind = expressionMetadataKind(arg);
+      const selector = pythonUnwrap(name, kind),
+        fallback = expression.cases.find((item) => !item.guard);
+      const childContext = {
+        ...context,
+        self: name,
+        implicit: { expression: arg, name, metadata: kind, ...(input ? { type: input } : {}) }
+      };
+      const switchBranch = (child: RosettaExpression, ctx: PythonRenderContext) => {
+        const target = context.preserveMetadata ? expressionMetadataKind(expression) : undefined;
+        const text = render(child, { ...ctx, preserveMetadata: !!target });
+        return target ? pythonNormalize(text, expressionMetadataKind(child), target) : text;
+      };
+      let result = fallback ? switchBranch(fallback.expression, childContext) : 'None';
+      for (const current of [...expression.cases].reverse()) {
+        if (!current.guard) continue;
+        const target = current.guard.referenceGuard?.ref;
+        if (input && (isChoice(input) || input.$type === 'Data')) {
+          if (!isRosettaType(target)) throw new Error('Switch requires a linked type guard');
+          const selection = pythonTypeSelection(selector, input, target);
+          const item = pythonFresh(context, 'selected');
+          const value = selection.projected ? selection.selected : name;
+          const child = {
+            ...childContext,
+            self: item,
+            implicit: { name: item, type: target, metadata: selection.projected ? selection.metadata : kind }
+          };
+          result = `(${pythonBind(value, item, switchBranch(current.expression, child))} if ${selection.guard} else ${result})`;
+        } else {
+          const guard = current.guard.literalGuard
+            ? render(current.guard.literalGuard, valueContext)
+            : isRosettaEnumValue(target)
+              ? pyString(target.name)
+              : undefined;
+          if (!guard) throw new Error('Unresolved switch guard');
+          result = `(${switchBranch(current.expression, childContext)} if rune_equals(${selector}, ${guard}) else ${result})`;
+        }
+      }
+      return pythonBind(argument(true), name, result);
+    }
+    case 'RosettaSuperCall': {
+      const parent = context.superFunction;
+      if (!parent) throw new Error('super() requires a parent function binding');
+      const inputs = functionInputs(parent);
+      if (expression.explicitArguments && expression.rawArgs.length !== inputs.length)
+        throw new Error('super() requires a linked argument list');
+      const values = inputs.map((parameter, index) => {
+        const source = expression.rawArgs[index];
+        const value =
+          expression.explicitArguments && source
+            ? render(source, { ...context, preserveMetadata: true })
+            : (context.locals.get(parameter) ?? pythonRead(context.self, [parameter.name]));
+        return `${pyString(parameter.name)}: ${pythonArgument(value, parameter, source, context)}`;
+      });
+      return pythonUnwrap(
+        `${context.name(parent)}({${values.join(', ')}})`,
+        context.preserveMetadata ? undefined : fieldMetadataKind(functionOutput(parent)),
+        expressionIsMany(expression)
+      );
+    }
+    default:
+      throw new Error(`Unknown Python expression kind: ${(expression as RosettaExpression).$type}`);
+  }
+}

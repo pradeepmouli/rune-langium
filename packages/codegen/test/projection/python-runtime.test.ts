@@ -35,7 +35,33 @@ const cases = [
   ],
   ['rune_to_field({"externalReference": "id"}, "reference")', 'runeToField({externalReference: "id"}, "reference")'],
   ['rune_as_key({"meta": {"externalKey": "id"}}, "value")', 'runeAsKey({meta: {externalKey: "id"}}, "value")'],
-  ['(1 if True else rune_single([1, 2]))', '(true ? 1 : runeSingle([1, 2]))']
+  ['(1 if True else rune_single([1, 2]))', '(true ? 1 : runeSingle([1, 2]))'],
+  [
+    'rune_with_meta(1, {"scheme":"x", "reference":"id"}, "value")',
+    'runeWithMeta(1, {scheme:"x", reference:"id"}, "value")'
+  ],
+  [
+    'rune_with_meta({"value":1,"reference":{"scope":"s"}}, {"address":"id"}, "reference")',
+    'runeWithMeta({value:1,reference:{scope:"s"}}, {address:"id"}, "reference")'
+  ],
+  ['rune_with_meta({"a":1}, {"key":"id"}, "value")', 'runeWithMeta({a:1}, {key:"id"}, "value")'],
+  ['rune_with_meta([None, 1], {"scheme":"x"}, "value")', 'runeWithMeta([null, 1], {scheme:"x"}, "value")'],
+  [
+    'rune_with_meta({"value":1,"externalReference":"id"}, {"scheme":"x"}, "reference")',
+    'runeWithMeta({value:1,externalReference:"id"}, {scheme:"x"}, "reference")'
+  ],
+  [
+    'rune_as_key({"value":{"meta":None},"meta":{"externalKey":"id"}}, "reference")',
+    'runeAsKey({value:{meta:null},meta:{externalKey:"id"}}, "reference")'
+  ],
+  [
+    'rune_as_key({"value":{"meta":{}},"meta":{"externalKey":"id"}}, "reference")',
+    'runeAsKey({value:{meta:{}},meta:{externalKey:"id"}}, "reference")'
+  ],
+  [
+    'rune_as_key({"meta":{"globalKey":None},"globalReference":"id"}, "value")',
+    'runeAsKey({meta:{globalKey:null},globalReference:"id"}, "value")'
+  ]
 ] as const;
 
 describe('Python runtime contracts', () => {

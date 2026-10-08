@@ -16,10 +16,10 @@ import {
 } from '@rune-langium/core';
 import { normalizeMetadataExpression, unwrapMetadata } from './metadata-runtime.js';
 import { choiceSelection } from './metadata-type.js';
+import { dataSelectionFacts } from './type-selection.js';
 import {
   expressionType,
   expressionIsMany,
-  featureIsRequired,
   featureName,
   renderFeaturePath,
   typeMatches,
@@ -56,21 +56,17 @@ function isObject(value: string): string {
 }
 
 function dataGuard(value: string, data: RosettaType, inputType: RosettaType): string {
-  const features = typeFeatures(data);
-  const required = features.filter(featureIsRequired).map((feature) => JSON.stringify(featureName(feature)));
+  const facts = dataSelectionFacts(data, inputType);
+  const required = facts.required.map((name) => JSON.stringify(name));
   const checks = [isObject(value), ...required.map((key) => `${key} in ${value}`)];
-  if (!typeMatches(inputType, data)) {
-    const inputFields = new Set([
-      ...typeFeatures(inputType).map(featureName),
-      ...typeFeatures(isData(data) ? data.superType?.ref : undefined).map(featureName)
-    ]);
-    const distinguishing = features.filter((feature) => !inputFields.has(featureName(feature)));
+  if (!facts.matches) {
+    const distinguishing = facts.distinguishing;
     checks.push(
       distinguishing.length === 0
         ? 'false'
         : `(${distinguishing
-            .map((feature) => {
-              const key = JSON.stringify(featureName(feature));
+            .map((name) => {
+              const key = JSON.stringify(name);
               return `(${key} in ${value} && ${value}[${key}] != null)`;
             })
             .join(' || ')})`

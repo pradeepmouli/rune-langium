@@ -2,7 +2,8 @@
 // Copyright (c) 2026 Pradeep Mouli
 
 import type { AstNode, LangiumDocument } from 'langium';
-import type { RosettaExpression } from '@rune-langium/core';
+import type { RosettaExpression, RosettaFunction } from '@rune-langium/core';
+import type { ExpressionType } from '../expr/navigation.js';
 import type { ProjectionSubject } from './types.js';
 import type { FieldMetadataKind } from '../expr/metadata-runtime.js';
 
@@ -12,6 +13,15 @@ export interface PythonProjectionContext {
   documents: readonly LangiumDocument[];
   self: string;
   locals: ReadonlyMap<AstNode, string>;
-  implicit?: { expression: RosettaExpression; name: string; metadata?: FieldMetadataKind };
+  implicit?: {
+    expression?: RosettaExpression;
+    name: string;
+    metadata?: FieldMetadataKind;
+    many?: boolean;
+    type?: ExpressionType;
+  };
+  preserveMetadata?: boolean;
+  resultMode?: 'function' | 'condition';
+  superFunction?: RosettaFunction;
   name(declaration: AstNode): string;
 }
