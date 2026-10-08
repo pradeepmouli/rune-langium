@@ -46,7 +46,10 @@ export const RuneDslSharedModule: Module<LangiumSharedCoreServices, PartialLangi
  *
  * @category Core
  */
-export type RuneDslServices = LangiumCoreServices & { serializer: { JsonSerializer: RuneJsonSerializer } };
+export type RuneDslServices = LangiumCoreServices & {
+  serializer: { JsonSerializer: RuneJsonSerializer };
+  references: { Linker: RuneDslLinker };
+};
 
 /**
  * Dependency-injection module for the Rune DSL language.
@@ -79,6 +82,7 @@ export const RuneDslModule = {
     LangiumParser: (services) => createRuneDslParser(services)
   },
   references: {
+    Linker: (services) => new RuneDslLinker(services),
     ScopeComputation: (services) => new RuneDslScopeComputation(services),
     ScopeProvider: (services) => new RuneDslScopeProvider(services)
   }

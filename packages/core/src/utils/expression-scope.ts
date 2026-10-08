@@ -37,6 +37,17 @@ export function getExpressionScope(expression: RosettaExpression, services: Rune
     property: 'symbol',
     reference: probe.symbol
   });
+  const resolved = scope
+    .getAllElements()
+    .map((description) => ({
+      description,
+      node:
+        description.node ??
+        (description.type === 'RosettaFunction' || description.type === 'RosettaExternalFunction'
+          ? services.references.Linker.loadAstNode(description)
+          : undefined)
+    }))
+    .toArray();
   const owner = AstUtils.getContainerOfType(expression, isRosettaFunction);
   const declarations = services.shared.workspace.LangiumDocuments.all
     .flatMap((doc) => {
@@ -50,11 +61,8 @@ export function getExpressionScope(expression: RosettaExpression, services: Rune
   const currentAlias = AstUtils.getContainerOfType(expression, isShortcutDeclaration);
   const entries: ExpressionScopeEntry[] = [];
   const names = new Set<string>();
-  for (const description of scope.getAllElements()) {
+  for (const { description, node } of resolved) {
     if (names.has(description.name)) continue;
-    const root = services.shared.workspace.LangiumDocuments.getDocument(description.documentUri)?.parseResult.value;
-    const node =
-      description.node ?? (root ? services.workspace.AstNodeLocator.getAstNode(root, description.path) : undefined);
     let kind: ExpressionScopeEntry['kind'];
     if (node && isShortcutDeclaration(node)) {
       if (

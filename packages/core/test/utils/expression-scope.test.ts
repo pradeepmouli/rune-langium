@@ -1,8 +1,9 @@
 // SPDX-License-Identifier: MIT
 // Copyright (c) 2026 Pradeep Mouli
 
-import { describe, it, expect } from 'vitest';
-import { URI } from 'langium';
+import { describe, it, expect, vi } from 'vitest';
+import { URI, EmptyFileSystem } from 'langium';
+import type { RuneDslIndexManager} from '../../src/index.js';
 import { createRuneDslServices, getExpressionScope, type RosettaModel } from '../../src/index.js';
 
 async function scope(source: string | string[], name: string, aliasIndex?: number) {
@@ -29,6 +30,81 @@ async function scope(source: string | string[], name: string, aliasIndex?: numbe
 }
 
 describe('authoritative expression scope descriptions', () => {
+  it('materializes unreferenced deferred callables once before describing their signatures', async () => {
+    const models = new Map<string, string>();
+    const getModel = vi.fn((uri: string) => {
+      const json = models.get(uri);
+      return json === undefined ? undefined : RuneDsl.serializer.JsonSerializer.deserialize(json);
+    });
+    const consume = vi.fn((uri: string) => models.delete(uri));
+    const { RuneDsl } = createRuneDslServices(EmptyFileSystem, { getModel, consume });
+    const {
+      LangiumDocumentFactory: factory,
+      LangiumDocuments: documents,
+      DocumentBuilder: builder
+    } = RuneDsl.shared.workspace;
+    const uri = URI.parse('file:///helpers.rosetta');
+    const cacheServices = createRuneDslServices().RuneDsl;
+    const cached = cacheServices.shared.workspace.LangiumDocumentFactory.fromString<RosettaModel>(
+      `namespace helpers
+version "test"
+library function Native(a int, b int) int
+func Parent:
+ inputs:
+  a int (1..1)
+  b int (1..1)
+ output: result int (1..1)
+ set result: a + b
+func Derived extends Parent:
+ set result: a`,
+      uri
+    );
+    expect(cached.parseResult.parserErrors).toEqual([]);
+    cacheServices.shared.workspace.LangiumDocuments.addDocument(cached);
+    await cacheServices.shared.workspace.DocumentBuilder.build([cached], { validation: false, eagerLinking: true });
+    models.set(uri.toString(), cacheServices.serializer.JsonSerializer.serialize(cached.parseResult.value));
+    (RuneDsl.shared.workspace.IndexManager as RuneDslIndexManager).registerExports(
+      uri,
+      cached.parseResult.value.elements.map((node) => ({
+        name: `helpers.${node.name}`,
+        type: node.$type,
+        path: RuneDsl.workspace.AstNodeLocator.getAstNodePath(node),
+        documentUri: uri
+      }))
+    );
+    const unusedUri = URI.parse('file:///unused.rosetta');
+    (RuneDsl.shared.workspace.IndexManager as RuneDslIndexManager).registerExports(unusedUri, [
+      { name: 'helpers.Unused', type: 'Data', path: '/elements@0', documentUri: unusedUri }
+    ]);
+    const doc = factory.fromString<RosettaModel>(
+      `namespace test
+version "test"
+import helpers.*
+func Use:
+ output: result int (1..1)
+ set result: 1`,
+      URI.parse('file:///use.rosetta')
+    );
+    documents.addDocument(doc);
+    await builder.build([doc], { validation: false, eagerLinking: true });
+    expect(doc.parseResult.parserErrors).toEqual([]);
+    expect(getModel).not.toHaveBeenCalled();
+    expect(documents.hasDocument(uri)).toBe(false);
+    const owner = doc.parseResult.value.elements[0]!;
+    if (owner.$type !== 'RosettaFunction') throw new Error('fixture owner');
+    const entries = getExpressionScope(owner.operations[0]!.expression, RuneDsl);
+    for (const name of ['Native', 'Parent', 'Derived']) {
+      expect(entries).toContainEqual(
+        expect.objectContaining({ name: `helpers.${name}`, kind: 'callable', argumentCount: 2 })
+      );
+    }
+    expect(getModel).toHaveBeenCalledExactlyOnceWith(uri.toString());
+    expect(consume).toHaveBeenCalledExactlyOnceWith(uri.toString());
+    expect(getExpressionScope(owner.operations[0]!.expression, RuneDsl)).toEqual(entries);
+    expect(getModel).toHaveBeenCalledTimes(1);
+    expect(documents.hasDocument(unusedUri)).toBe(false);
+  });
+
   it('uses the actual output name and exposes earlier aliases', async () => {
     const entries = await scope(
       'namespace test\nversion "test"\nfunc Convert:\n inputs: date int (1..1)\n output: adjustableOrRelativeDate int (1..1)\n alias earlier: date\n set adjustableOrRelativeDate: earlier',
