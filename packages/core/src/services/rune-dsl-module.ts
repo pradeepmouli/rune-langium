@@ -82,6 +82,7 @@ export const RuneDslModule = {
     LangiumParser: (services) => createRuneDslParser(services)
   },
   references: {
+    Linker: (services) => new RuneDslLinker(services),
     ScopeComputation: (services) => new RuneDslScopeComputation(services),
     ScopeProvider: (services) => new RuneDslScopeProvider(services)
   }
