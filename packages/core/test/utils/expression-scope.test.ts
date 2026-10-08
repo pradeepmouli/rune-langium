@@ -59,6 +59,26 @@ describe('authoritative expression scope descriptions', () => {
     expect(entries).toContainEqual(expect.objectContaining({ name: 'Combine', kind: 'callable', argumentCount: 2 }));
   });
 
+  it('includes Choice symbols from the authoritative language-service scope', async () => {
+    const entries = await scope(
+      `namespace test
+version "test"
+type Cash:
+ amount int (1..1)
+type Security:
+ units int (1..1)
+choice Asset:
+ Cash
+ Security
+func Use:
+ inputs: asset Asset (1..1)
+ output: result Asset (1..1)
+ set result: asset`,
+      'Use'
+    );
+    expect(entries).toContainEqual(expect.objectContaining({ name: 'Asset', kind: 'choice' }));
+  });
+
   it('counts external parameters and inherited inputs', async () => {
     const entries = await scope(
       `namespace test

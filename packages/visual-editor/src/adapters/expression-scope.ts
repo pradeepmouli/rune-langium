@@ -11,6 +11,6 @@ export function expressionScopeFromEntries(entries: readonly ExpressionScopeEntr
     output: entries.find((entry) => entry.kind === 'output') ?? null,
     aliases: entries.filter((entry) => entry.kind === 'alias'),
     attributes: entries.filter((entry) => entry.kind === 'attribute'),
-    references: entries.filter((entry) => entry.kind === 'callable' || entry.kind === 'enum')
+    references: entries.filter((entry) => entry.kind === 'callable' || entry.kind === 'enum' || entry.kind === 'choice')
   };
 }

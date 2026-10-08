@@ -105,7 +105,7 @@ file revision and original expression bytes, then commits one CodeMirror undo
 transaction; Cancel and Escape never write. Reordering/deleting a condition or
 editing Source makes an open draft stale. The parser worker exposes core's
 canonical expression scope, including dispatch signatures, inherited fields,
-earlier aliases and callable argument counts. The dialog's Text surface reuses
+earlier aliases, Choice symbols and callable argument counts. Visual-editor reuses the core scope-kind type. The dialog's Text surface reuses
 SourceEditor with a private buffer and no live LSP owner.
 
 Generated expression views use codegen's recorded projection metadata and the

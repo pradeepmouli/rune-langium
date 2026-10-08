@@ -13,6 +13,7 @@
 import { describe, it, expect, vi } from 'vitest';
 import { render, screen, fireEvent } from '@testing-library/react';
 import { ReferencePicker } from '../../src/components/editors/expression-builder/ReferencePicker.js';
+import { expressionScopeFromEntries } from '../../src/adapters/expression-scope.js';
 import type { FunctionScope } from '../../src/store/expression-store.js';
 
 const testScope: FunctionScope = {
@@ -114,5 +115,20 @@ describe('ReferencePicker', () => {
         rawArgs: [expect.objectContaining({ $type: 'Placeholder' }), expect.objectContaining({ $type: 'Placeholder' })]
       })
     );
+  });
+  it('offers Choice symbols through the canonical scope adapter', () => {
+    const onSelect = vi.fn();
+    const scope = expressionScopeFromEntries([
+      { name: 'Asset', kind: 'choice', declarationId: 'file:///model#choice' }
+    ]);
+    render(<ReferencePicker open scope={scope} onSelect={onSelect} onClose={vi.fn()} />);
+    const option = screen.getByTestId('ref-option-Asset');
+    expect(option).toHaveTextContent('choice');
+    fireEvent.pointerDown(option, { pointerType: 'mouse' });
+    fireEvent.click(option);
+    expect(onSelect).toHaveBeenCalledWith(
+      expect.objectContaining({ $type: 'RosettaSymbolReference', symbol: 'Asset' })
+    );
+    expect(onSelect.mock.calls[0][0]).not.toHaveProperty('explicitArguments');
   });
 });
