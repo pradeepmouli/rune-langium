@@ -119,7 +119,8 @@ export const ExpressionWorkspace = withInstrumentation(
         ? binding
         : null;
     const openBuilder = async () => {
-      if (!active || !file || !parsed || !parseCurrent || readOnly || active.readOnly || !loadScope) return;
+      if (!active || !file || !parsed || !parseCurrent || readOnly || file.readOnly || active.readOnly || !loadScope)
+        return;
       const owner = parsed.model.elements.find(
         (element) =>
           (element.$type === 'RosettaFunction' || element.$type === 'Data') && element.name === nameFromNodeId(nodeId)
@@ -167,7 +168,15 @@ export const ExpressionWorkspace = withInstrumentation(
             <Button
               variant="ghost"
               size="xs"
-              disabled={!active || !parseCurrent || readOnly || active?.readOnly || !loadScope || builderPending}
+              disabled={
+                !active ||
+                !parseCurrent ||
+                readOnly ||
+                file?.readOnly ||
+                active?.readOnly ||
+                !loadScope ||
+                builderPending
+              }
               onClick={openBuilder}
             >
               {builderPending ? 'Opening…' : 'Builder'}
@@ -179,7 +188,7 @@ export const ExpressionWorkspace = withInstrumentation(
         </div>
         {active && file ? (
           <RuneRegionEditor
-            binding={{ ...active, readOnly: readOnly || active.readOnly }}
+            binding={{ ...active, readOnly: readOnly || Boolean(file.readOnly) || active.readOnly }}
             path={file.path}
             source={file.content}
             onContentChange={onContentChange}
