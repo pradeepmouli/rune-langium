@@ -36,13 +36,7 @@ import { groupFuncDispatches, renderFuncDispatchGroup } from './func-dispatch.js
 import { AstUtils, isMultiReference, type AstNode } from 'langium';
 import { renderFuncAssignment } from './func-assignment.js';
 import { renderCardinalityChecks, normalizeCardinalityValue } from '../expr/cardinality.js';
-import {
-  fieldMetadataKind,
-  metadataType,
-  hasFieldMetadata,
-  hasTypeMetadata,
-  metadataRuntimeSource
-} from '../expr/metadata-runtime.js';
+import { fieldMetadataKind, metadataType, hasFieldMetadata, hasTypeMetadata } from '../expr/metadata-runtime.js';
 
 /**
  * TypeScript class target emitter for the Rune code generator.
@@ -85,7 +79,7 @@ import {
 } from './base-namespace-emitter.js';
 import { getTargetRelativePath, type NamespaceWalkResult } from './namespace-walker.js';
 import { debug } from '../instrument.js';
-import { RUNTIME_HELPER_SOURCE, RUNE_HELPER_NAMES, buildRuntimeHelperImportLine } from '../helpers.js';
+import { runtimeHelperSource, RUNE_HELPER_NAMES, buildRuntimeHelperImportLine } from '../helpers.js';
 import {
   attrAccessExpr,
   transpileCondition,
@@ -1001,7 +995,7 @@ export class TsNamespaceEmitter extends BaseNamespaceEmitter {
 
     // Data-extends-Choice: exactly-one-of validator over the inherited
     // Choice's option names, mirroring emitOneOf's ts-method emission
-    // convention (runeCheckOneOf + errors.push), read off `this` since the
+    // convention (rune.checkOneOf + errors.push), read off `this` since the
     // option keys were copied on via Object.assign in the constructor.
     if (choiceParent) {
       lines.push('');
@@ -1021,7 +1015,7 @@ export class TsNamespaceEmitter extends BaseNamespaceEmitter {
   /**
    * Data-extends-Choice: emit an exactly-one-of validate method for a
    * child's inherited Choice supertype — mirrors `emitOneOf`'s ts-method
-   * body shape (`runeCheckOneOf` + `errors.push`) exactly, since this IS
+   * body shape (`rune.checkOneOf` + `errors.push`) exactly, since this IS
    * the same exactly-one-of semantics as a `OneOfOperation`/
    * `ChoiceOperation` condition, just synthesized from the Choice's option
    * list instead of an authored `Condition` node.
@@ -1060,7 +1054,7 @@ export class TsNamespaceEmitter extends BaseNamespaceEmitter {
     return [
       `  validate${choice.name}(): { valid: boolean; errors: string[] } {`,
       `    const errors: string[] = [];`,
-      `    if (!runeCheckOneOf([${accessors}])) {`,
+      `    if (!rune.checkOneOf([${accessors}])) {`,
       `      errors.push('${message}');`,
       `    }`,
       `    return { valid: errors.length === 0, errors };`,
@@ -1315,7 +1309,7 @@ export class TsNamespaceEmitter extends BaseNamespaceEmitter {
   /**
    * Emit `export function is<ChoiceName>(x: unknown): x is <ChoiceName>` —
    * an "exactly one of the option keys is present" validator, mirroring
-   * runeCheckOneOf's one-of semantics (same as the ChoiceOperation condition
+   * rune.checkOneOf's one-of semantics (same as the ChoiceOperation condition
    * validator) but as a standalone type guard for the emitted union type.
    */
   private emitChoiceTypeGuard(choice: Choice): string {
@@ -1331,7 +1325,7 @@ export class TsNamespaceEmitter extends BaseNamespaceEmitter {
     const lines: string[] = [
       `export function ${this.typeName(choice, `is${choice.name}`)}(x: unknown): x is ${name} {`,
       `  if (typeof x !== 'object' || x === null) return false;`,
-      `  return runeCheckOneOf([${accessors}]);`,
+      `  return rune.checkOneOf([${accessors}]);`,
       `}`
     ];
     return lines.join('\n');
@@ -1528,23 +1522,14 @@ export class TsNamespaceEmitter extends BaseNamespaceEmitter {
             buildRuntimeHelperImportLine(`${resolveImportPath(this.model.namespace, 'runtime', this.registry)}.js`, [
               ...libraryHelpers,
               ...(this.usesMetadata()
-                ? [
-                    'runeWithMeta',
-                    'runeAsKey',
-                    'runeToField',
-                    'runeToReference',
-                    'type RuneFieldWithMeta',
-                    'type RuneReferenceWithMeta',
-                    'type RuneMetadata'
-                  ]
+                ? ['type RuneFieldWithMeta', 'type RuneReferenceWithMeta', 'type RuneMetadata']
                 : [])
             ]),
             ``
           ]
         : [
-            RUNTIME_HELPER_SOURCE,
+            runtimeHelperSource(true, false, this.usesMetadata()),
             ...(libraryHelpers.length ? [TS_LIBRARY_RUNTIME_SOURCE] : []),
-            ...(this.usesMetadata() ? [metadataRuntimeSource(true)] : []),
             ''
           ])
     ].join('\n');

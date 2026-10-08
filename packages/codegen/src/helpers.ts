@@ -9,92 +9,72 @@ import { temporalRuntimeSource } from './expr/temporal-runtime.js';
 import { functionDataRuntimeSource } from './expr/function-data-runtime.js';
 import { collectionRuntimeSource } from './expr/collection-runtime.js';
 
-/**
- * Source text of the runtime helper functions that are
- * inlined at the top of every emitted file (Zod and TypeScript targets).
- *
- * Per contracts/runtime-helpers.md §Inlined source text.
- * FR-021 (inlined helpers), SC-003 (Python parity).
- */
-export const RUNTIME_HELPER_SOURCE: string =
-  `// --- rune-codegen runtime helpers (inlined) ---\n` +
-  temporalRuntimeSource(true) +
-  '\n' +
-  functionDataRuntimeSource(true) +
-  '\n' +
-  binaryRuntimeSource(true) +
-  '\n' +
-  collectionRuntimeSource(true) +
-  '\n\n' +
-  valueEqualitySource(true) +
-  '\n\n' +
-  `const runeCheckOneOf = (values: unknown[]): boolean =>\n` +
-  `  values.filter((v) => v !== undefined && v !== null && !(Array.isArray(v) && v.length === 0)).length === 1;\n` +
-  `\n` +
-  `const runeCount = (value: unknown): number => Array.isArray(value) ? value.length : value == null ? 0 : 1;\n` +
-  `\n` +
-  `const runeAttrExists = <T>(v: T): v is NonNullable<T> & (T extends readonly (infer I)[] ? readonly [I, ...I[]] : unknown) =>\n` +
-  `  v !== undefined && v !== null && !(Array.isArray(v) && v.length === 0);\n` +
-  `\n` +
-  `const runeToDate = (v: unknown): string | undefined =>\n` +
-  `  typeof v === 'string' && /${TEMPORAL_CONVERSION_PATTERNS.date}/.test(v) ? v : undefined;\n` +
-  `\n` +
-  `const runeToTime = (v: unknown): string | undefined =>\n` +
-  `  typeof v === 'string' && /${TEMPORAL_CONVERSION_PATTERNS.time}/.test(v) ? v : undefined;\n` +
-  `\n` +
-  `const runeToDateTime = (v: unknown): string | undefined =>\n` +
-  `  typeof v === 'string' && /${TEMPORAL_CONVERSION_PATTERNS.dateTime}/.test(v) ? v : undefined;\n` +
-  `\n` +
-  `const runeToZonedDateTime = (v: unknown): string | undefined =>\n` +
-  `  typeof v === 'string' && /${TEMPORAL_CONVERSION_PATTERNS.zonedDateTime}/.test(v)\n` +
-  `    ? v\n` +
-  `    : undefined;\n` +
-  `// --- end runtime helpers ---`;
+/** Namespace members reference the authoritative implementations, retaining generic types. */
+const RUNTIME_NAMESPACE_MEMBERS = {
+  list: 'runeList',
+  single: 'runeSingle',
+  contains: 'runeContains',
+  disjoint: 'runeDisjoint',
+  distinct: 'runeDistinct',
+  binary: 'runeBinary',
+  compare: 'runeCompare',
+  order: 'runeOrder',
+  parseZonedDateTime: 'runeParseZonedDateTime',
+  dateField: 'runeDateField',
+  dateConstruct: 'runeDateConstruct',
+  toFuncData: 'runeToFuncData',
+  checkOneOf: 'runeCheckOneOf',
+  count: 'runeCount',
+  exists: 'runeAttrExists',
+  valueKey: 'runeValueKey',
+  toDate: 'runeToDate',
+  toTime: 'runeToTime',
+  toDateTime: 'runeToDateTime',
+  toZonedDateTime: 'runeToZonedDateTime'
+} as const;
+const METADATA_NAMESPACE_MEMBERS = {
+  withMeta: 'runeWithMeta',
+  asKey: 'runeAsKey',
+  toField: 'runeToField',
+  toReference: 'runeToReference'
+} as const;
 
-/**
- * Plain JavaScript equivalent of `RUNTIME_HELPER_SOURCE` — no type annotations.
- *
- * Used by the Studio codegen worker when executing generated functions in a
- * sandboxed Function constructor. Since the worker strips TypeScript annotations
- * from the isolated function body (`GeneratedFunc.fileContents`), the helpers
- * also need to be annotation-free so no TypeScript constructs reach the JS engine.
- */
-export const RUNTIME_HELPER_JS_SOURCE: string =
-  temporalRuntimeSource(false) +
-  '\n' +
-  functionDataRuntimeSource(false) +
-  '\n' +
-  binaryRuntimeSource(false) +
-  '\n' +
-  collectionRuntimeSource(false) +
-  '\n\n' +
-  metadataRuntimeSource(false) +
-  '\n\n' +
-  `// --- rune-codegen runtime helpers (inlined) ---\n` +
-  valueEqualitySource(false) +
-  '\n\n' +
-  `const runeCheckOneOf = (values) =>\n` +
-  `  values.filter((v) => v !== undefined && v !== null && !(Array.isArray(v) && v.length === 0)).length === 1;\n` +
-  `\n` +
-  `const runeCount = (value) => Array.isArray(value) ? value.length : value == null ? 0 : 1;\n` +
-  `\n` +
-  `const runeAttrExists = (v) =>\n` +
-  `  v !== undefined && v !== null && !(Array.isArray(v) && v.length === 0);\n` +
-  `\n` +
-  `const runeToDate = (v) =>\n` +
-  `  typeof v === 'string' && /${TEMPORAL_CONVERSION_PATTERNS.date}/.test(v) ? v : undefined;\n` +
-  `\n` +
-  `const runeToTime = (v) =>\n` +
-  `  typeof v === 'string' && /${TEMPORAL_CONVERSION_PATTERNS.time}/.test(v) ? v : undefined;\n` +
-  `\n` +
-  `const runeToDateTime = (v) =>\n` +
-  `  typeof v === 'string' && /${TEMPORAL_CONVERSION_PATTERNS.dateTime}/.test(v) ? v : undefined;\n` +
-  `\n` +
-  `const runeToZonedDateTime = (v) =>\n` +
-  `  typeof v === 'string' && /${TEMPORAL_CONVERSION_PATTERNS.zonedDateTime}/.test(v)\n` +
-  `    ? v\n` +
-  `    : undefined;\n` +
-  `// --- end runtime helpers ---`;
+/** Compose inline, sidecar and executable runtimes before creating their shared namespace. */
+export function runtimeHelperSource(typescript: boolean, exported = false, metadata = false): string {
+  const prefix = exported ? 'export ' : '';
+  const type = (value: string) => (typescript ? value : '');
+  const scalar = [
+    `${prefix}const runeCheckOneOf = (values${type(': unknown[]')})${type(': boolean')} =>
+  values.filter((v) => v !== undefined && v !== null && !(Array.isArray(v) && v.length === 0)).length === 1;`,
+    `${prefix}const runeCount = (value${type(': unknown')})${type(': number')} => Array.isArray(value) ? value.length : value == null ? 0 : 1;`,
+    `${prefix}const runeAttrExists = ${type('<T>')}(v${type(': T')})${type(': v is NonNullable<T> & (T extends readonly (infer I)[] ? readonly [I, ...I[]] : unknown)')} =>
+  v !== undefined && v !== null && !(Array.isArray(v) && v.length === 0);`,
+    ...Object.entries(TEMPORAL_CONVERSION_PATTERNS).map(
+      ([kind, pattern]) =>
+        `${prefix}const runeTo${kind[0]!.toUpperCase() + kind.slice(1)} = (v${type(': unknown')})${type(': string | undefined')} =>
+  typeof v === 'string' && /${pattern}/.test(v) ? v : undefined;`
+    )
+  ].join('\n\n');
+  return [
+    '// --- rune-codegen runtime helpers (inlined) ---',
+    temporalRuntimeSource(typescript, exported),
+    functionDataRuntimeSource(typescript, exported),
+    binaryRuntimeSource(typescript, exported),
+    collectionRuntimeSource(typescript, exported),
+    scalar,
+    ...(metadata ? [metadataRuntimeSource(typescript, exported)] : []),
+    valueEqualitySource(typescript, exported, {
+      ...RUNTIME_NAMESPACE_MEMBERS,
+      ...(metadata ? METADATA_NAMESPACE_MEMBERS : {})
+    }),
+    '// --- end runtime helpers ---'
+  ].join('\n\n');
+}
+
+/** Source text inlined in emitted TypeScript and Zod modules. */
+export const RUNTIME_HELPER_SOURCE = runtimeHelperSource(true);
+/** Annotation-free counterpart used by the Studio execution worker. */
+export const RUNTIME_HELPER_JS_SOURCE = runtimeHelperSource(false, false, true);
 
 /**
  * Returns true iff exactly one value in the array is non-null and non-undefined.
@@ -159,85 +139,19 @@ export const runeToZonedDateTime = (v: unknown): string | undefined =>
   matchesTemporalWireFormat(v, 'zonedDateTime') ? v : undefined;
 
 /**
- * The z-free runtime helper names, in the fixed order they're
- * declared/imported everywhere (inlined source, sidecar exports, and the
- * `import { ... } from './runtime(.zod).js'` line emitted by both
- * `ts-emitter.ts` and `zod-emitter.ts` when `suppressBoilerplate: true`).
- *
- * Single source of truth for that ordering — used to build the import
- * line's name list and to recognize the header/body boundary when
- * concatenating per-namespace files into a single-file bundle.
+ * Core namespace and implementation names reserved during emission.
+ * The namespace is first because bundled headers use it to identify
+ * the runtime import boundary. Implementation exports remain available
+ * for existing runtime consumers.
  */
-export const RUNE_HELPER_NAMES = [
-  'runeList',
-  'runeSingle',
-  'runeBinary',
-  'runeCompare',
-  'runeOrder',
-  'runeParseZonedDateTime',
-  'runeDateField',
-  'runeDateConstruct',
-  'runeToFuncData',
-  'runeCheckOneOf',
-  'runeCount',
-  'rune',
-  'runeValueKey',
-  'runeAttrExists',
-  'runeToDate',
-  'runeToTime',
-  'runeToDateTime',
-  'runeToZonedDateTime'
-] as const;
+export const RUNE_HELPER_NAMES = ['rune', ...Object.values(RUNTIME_NAMESPACE_MEMBERS)] as const;
+
+/** Core sidecar declarations; target-specific helpers follow this block. */
+export const RUNTIME_SIDECAR_HELPER_LINES: readonly string[] = runtimeHelperSource(true, true).split('\n');
 
 /**
- * The z-free helpers' bodies as `export const` declarations, one blank
- * line between each — the shape shared by the TypeScript and Zod runtime
- * sidecars (`runtime.ts` / `runtime.zod.ts`). Each language profile
- * appends its own target-specific tail (TS: `isLeapYear`; Zod: the
- * `z`-dependent `runeExtendChoice`, from `zod-runtime-helpers.ts`).
- *
- * Kept as literal template lines (not derived from the plain-const
- * declarations above via reflection) so the emitted formatting stays
- * exact and independent of how this module's own source is written.
- */
-export const RUNTIME_SIDECAR_HELPER_LINES: readonly string[] = [
-  temporalRuntimeSource(true, true),
-  functionDataRuntimeSource(true, true),
-  binaryRuntimeSource(true, true),
-  collectionRuntimeSource(true, true),
-  valueEqualitySource(true, true),
-  '',
-  `export const runeCheckOneOf = (values: unknown[]): boolean =>`,
-  `  values.filter((v) => v !== undefined && v !== null && !(Array.isArray(v) && v.length === 0)).length === 1;`,
-  ``,
-  `export const runeCount = (value: unknown): number => Array.isArray(value) ? value.length : value == null ? 0 : 1;`,
-  ``,
-  `export const runeAttrExists = <T>(v: T): v is NonNullable<T> & (T extends readonly (infer I)[] ? readonly [I, ...I[]] : unknown) =>`,
-  `  v !== undefined && v !== null && !(Array.isArray(v) && v.length === 0);`,
-  ``,
-  `export const runeToDate = (v: unknown): string | undefined =>`,
-  `  typeof v === 'string' && /${TEMPORAL_CONVERSION_PATTERNS.date}/.test(v) ? v : undefined;`,
-  ``,
-  `export const runeToTime = (v: unknown): string | undefined =>`,
-  `  typeof v === 'string' && /${TEMPORAL_CONVERSION_PATTERNS.time}/.test(v) ? v : undefined;`,
-  ``,
-  `export const runeToDateTime = (v: unknown): string | undefined =>`,
-  `  typeof v === 'string' && /${TEMPORAL_CONVERSION_PATTERNS.dateTime}/.test(v) ? v : undefined;`,
-  ``,
-  `export const runeToZonedDateTime = (v: unknown): string | undefined =>`,
-  `  typeof v === 'string' &&`,
-  `  /${TEMPORAL_CONVERSION_PATTERNS.zonedDateTime}/.test(v)`,
-  `    ? v`,
-  `    : undefined;`
-];
-
-/**
- * The `import { runeCheckOneOf, ..., runeToZonedDateTime } from '<from>';`
- * line emitted at the top of per-namespace files when
- * `suppressBoilerplate: true` (bundled layouts import the sidecar
- * instead of inlining `RUNTIME_HELPER_SOURCE`). `extra` appends further
- * names (Zod also imports `runeExtendChoice`).
+ * Bundled modules import the namespace plus target-specific helpers and types.
  */
 export function buildRuntimeHelperImportLine(from: string, extra: readonly string[] = []): string {
-  return `import { ${[...RUNE_HELPER_NAMES, 'type RuneFuncData', ...extra].join(', ')} } from '${from}';`;
+  return `import { ${[RUNE_HELPER_NAMES[0], 'type RuneFuncData', ...extra].join(', ')} } from '${from}';`;
 }

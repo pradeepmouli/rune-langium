@@ -152,10 +152,10 @@ function assignmentLines(
   const root = roots.get(assignment.target ?? '');
   if (!root) throw new Error(`Unresolved Python assignment root '${assignment.target ?? ''}'`);
   const bounds = assignment.targetCardinality;
-  const normalized = `rune_assignment_value(${value}, ${pyString(expressionMetadataKind(expression) ?? 'value')}, ${pyString(assignment.metadataKind ?? 'value')}, ${pyBool(many)})`;
+  const normalized = `rune.assignmentValue(${value}, ${pyString(expressionMetadataKind(expression) ?? 'value')}, ${pyString(assignment.metadataKind ?? 'value')}, ${pyBool(many)})`;
   const path = assignment.path ?? [];
   if (!path.length)
-    return [`${root} = ${assignment.kind === 'add' ? `rune_list(${root}) + rune_list(${normalized})` : normalized}`];
+    return [`${root} = ${assignment.kind === 'add' ? `rune.list(${root}) + rune.list(${normalized})` : normalized}`];
   const segments = path.map(
     (segment) =>
       `{${[
@@ -168,12 +168,12 @@ function assignmentLines(
       ].join(', ')}}`
   );
   return [
-    `${root} = rune_assign(${root}, [${segments.join(', ')}], ${normalized}, ${pyBool(assignment.kind === 'add')}, ${pyBool(assignment.rootMany ?? false)}, ${pyString(assignment.rootMetadataKind ?? 'value')}, ${bounds?.lower ?? 0}, ${bounds?.upper ?? 'None'}, ${pyString(`Assignment '${assignment.target}'`)})`
+    `${root} = rune.assign(${root}, [${segments.join(', ')}], ${normalized}, ${pyBool(assignment.kind === 'add')}, ${pyBool(assignment.rootMany ?? false)}, ${pyString(assignment.rootMetadataKind ?? 'value')}, ${bounds?.lower ?? 0}, ${bounds?.upper ?? 'None'}, ${pyString(`Assignment '${assignment.target}'`)})`
   ];
 }
 
 function normalizeInput(inputs: readonly Attribute[], context: PythonProjectionContext): string {
-  return `input = rune_normalize_object(input, {${inputs.map((input) => `${pyString(input.name)}: ${pythonFieldNormalizer(input, context)}`).join(', ')}})`;
+  return `input = rune.normalizeObject(input, {${inputs.map((input) => `${pyString(input.name)}: ${pythonFieldNormalizer(input, context)}`).join(', ')}})`;
 }
 
 /** Complete implementation; the inverse Python lens retains its narrower expression contract. */
@@ -220,7 +220,7 @@ export function projectPythonFunction(func: RosettaFunction, context: PythonProj
   const lines: string[] = [normalizeInput(inputs, context)];
   for (const input of inputs)
     lines.push(
-      `input[${pyString(input.name)}] = rune_cardinality(input.get(${pyString(input.name)}), ${input.card.inf}, ${input.card.unbounded ? 'None' : (input.card.sup ?? 1)}, ${pyString(`Argument '${input.name}'`)})`
+      `input[${pyString(input.name)}] = rune.cardinality(input.get(${pyString(input.name)}), ${input.card.inf}, ${input.card.unbounded ? 'None' : (input.card.sup ?? 1)}, ${pyString(`Argument '${input.name}'`)})`
     );
   const outputType = pythonFieldType(output, context);
   const accumulatorType = outputMany || outputType.includes(' | None') ? outputType : `${outputType} | None`;
@@ -245,10 +245,10 @@ export function projectPythonFunction(func: RosettaFunction, context: PythonProj
     context.onConditionProjection?.(condition, guard.join('\n'));
   };
   func.conditions.forEach(check);
-  if (facts.isAbstract) lines.push(`${result} = rune_native(${pyString(qualified(func))}, input)`);
+  if (facts.isAbstract) lines.push(`${result} = rune.native(${pyString(qualified(func))}, input)`);
   else for (const assignment of facts.assignments) lines.push(...assignmentLines(assignment, renderContext, roots));
   lines.push(
-    `${result} = rune_cardinality(${result}, ${output.card.inf}, ${output.card.unbounded ? 'None' : (output.card.sup ?? 1)}, ${pyString(`Function '${func.name}' produced`)})`
+    `${result} = rune.cardinality(${result}, ${output.card.inf}, ${output.card.unbounded ? 'None' : (output.card.sup ?? 1)}, ${pyString(`Function '${func.name}' produced`)})`
   );
   func.postConditions.forEach(check);
   lines.push(`return ${result}`);
@@ -371,7 +371,7 @@ export function generatePythonModule(documents: readonly LangiumDocument[]): Pyt
       sections.push(`def ${name}(data=None):\n    return ${code}\n`);
     }
     if (node.$type === 'RosettaExternalFunction')
-      sections.push(`def ${context.name(node)}(*args):\n    return rune_native(${pyString(qualified(node))}, *args)\n`);
+      sections.push(`def ${context.name(node)}(*args):\n    return rune.native(${pyString(qualified(node))}, *args)\n`);
   }
   return { code: sections.join('\n\n'), projections, bindings };
 }

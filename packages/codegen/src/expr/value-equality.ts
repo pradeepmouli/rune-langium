@@ -2,7 +2,11 @@
 // Copyright (c) 2026 Pradeep Mouli
 
 /** Shared source for structural Rune value equality in TS and executable previews. */
-export function valueEqualitySource(typescript: boolean, exported = false): string {
+export function valueEqualitySource(
+  typescript: boolean,
+  exported = false,
+  members: Readonly<Record<string, string>> = {}
+): string {
   const prefix = exported ? 'export ' : '';
   const valueType = typescript ? ': unknown' : '';
   const fields = typescript ? ' as Record<string, unknown>' : '';
@@ -34,6 +38,9 @@ ${prefix}const rune = {
     return quantifier === 'all'
       ? (unequal || l.length === r.length) && l.every((a, i) => i >= r.length ? unequal : compare(a, r[i]))
       : (unequal && l.length !== r.length) || l.some((a, i) => i < r.length && compare(a, r[i]));
-  }
+  },
+${Object.entries(members)
+  .map(([name, implementation]) => `  ${name}: ${implementation}`)
+  .join(',\n')}
 };`;
 }

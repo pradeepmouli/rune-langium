@@ -36,7 +36,7 @@ runtime helpers and source-addressed function/condition fragments. Python 3.13
 uses standard-library `TypedDict` and `Literal`; optional fields use `NotRequired`,
 collection fields use lists, and Rune numeric values use binary64 floats. Functions
 retain ordered aliases, preconditions, set/add operations and postconditions.
-Native declarations require `rune_bind(qualifiedName, callable)` before execution;
+Native declarations require `rune.bind(qualifiedName, callable)` before execution;
 missing bindings raise an explicit error. Studio displays projections read-only
 and retains the narrower reverse-expression lens.
 
@@ -72,6 +72,15 @@ Scalar/list normalization is shared across functions, validators, and previews.
 multiple values. Arithmetic returns no value when an operand is absent or has more
 than one value. Ordered comparisons involving absent operands are false. Sorting
 places absent keys last; min/max choose populated keys when present.
+
+Generated expression runtime calls use `rune.*`: for example, `rune.exists(value)`,
+`rune.count(value)`, `rune.distinct(values)`, `rune.contains(left, right)` and
+`rune.toDate(value)`. Structural and collection equality uses `rune.equals`;
+metadata calls include `rune.withMeta`, `rune.toField` and `rune.toReference`.
+Native operators and standard-library calls remain compact where equivalent.
+Inline modules, shared runtime sidecars and executable previews use the same
+runtime source builder; namespace methods preserve generic types and type guards.
+Existing flat implementation exports remain available to runtime consumers.
 
 Studio function previews resolve inherited and dispatch input signatures.
 `normalizePreviewInputs` adapts plain form values to metadata wrappers using the

@@ -40,7 +40,7 @@ export function pythonType(call: TypeCall | undefined, context: PythonProjection
     {
       onPrimitive(name) {
         if (name === 'number' || name === 'int') return { annotation: 'float', normalize: 'float' };
-        if (name === 'boolean') return { annotation: 'bool', normalize: 'rune_identity' };
+        if (name === 'boolean') return { annotation: 'bool', normalize: 'rune.identity' };
         if (
           [
             'string',
@@ -54,10 +54,10 @@ export function pythonType(call: TypeCall | undefined, context: PythonProjection
             'calculation'
           ].includes(name)
         )
-          return { annotation: 'str', normalize: 'rune_identity' };
+          return { annotation: 'str', normalize: 'rune.identity' };
         throw new Error(`Python type binding required: ${name}`);
       },
-      onEnum: (node) => ({ annotation: context.name(node), normalize: 'rune_identity' }),
+      onEnum: (node) => ({ annotation: context.name(node), normalize: 'rune.identity' }),
       onData(node) {
         const name = context.name(node);
         return { annotation: name, normalize: `_rune_normalize_${name}` };
@@ -85,7 +85,7 @@ export function pythonFieldType(field: Attribute | ChoiceOption, context: Python
 export function pythonFieldNormalizer(field: Attribute | ChoiceOption, context: PythonProjectionContext): string {
   const type = pythonType(field.typeCall, context);
   const many = isAttribute(field) && (field.card.unbounded || (field.card.sup ?? 1) > 1);
-  return `lambda value: rune_normalize_attribute(value, ${pyString(fieldMetadataKind(field) ?? 'value')}, ${pyBool(many)}, ${type.normalize})`;
+  return `lambda value: rune.normalizeAttribute(value, ${pyString(fieldMetadataKind(field) ?? 'value')}, ${pyBool(many)}, ${type.normalize})`;
 }
 
 export function pythonTypedDict(
@@ -121,7 +121,7 @@ export function pythonTypeDeclarations(
     const fields = typeFeatures(node).filter((field) => isAttribute(field) || field.$type === 'ChoiceOption');
     return [
       pythonTypedDict(name, fields, context),
-      `def _rune_normalize_${name}(value):\n    return rune_normalize_object(value, {${fields.map((field) => `${pyString(featureName(field))}: ${pythonFieldNormalizer(field, context)}`).join(', ')}})`
+      `def _rune_normalize_${name}(value):\n    return rune.normalizeObject(value, {${fields.map((field) => `${pyString(featureName(field))}: ${pythonFieldNormalizer(field, context)}`).join(', ')}})`
     ];
   });
 }

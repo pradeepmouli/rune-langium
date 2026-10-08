@@ -36,7 +36,7 @@ export function normalizeCardinalityValue(
   label: string
 ): string {
   const many = cardinality.upper === null || cardinality.upper > 1;
-  value = `${many ? 'runeList' : 'runeSingle'}(${value})`;
+  value = `${many ? 'rune.list' : 'rune.single'}(${value})`;
   const checks = renderCardinalityChecks(
     'value',
     cardinality,

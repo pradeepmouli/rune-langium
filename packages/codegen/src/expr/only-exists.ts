@@ -51,7 +51,7 @@ export function renderOnlyExists(
   if (!selected) return undefined;
   const { parent, parentText, forbidden } = selected;
   const access = (name: string) => (parent ? `__parent?.[${JSON.stringify(name)}]` : renderAttribute(name));
-  const checks = forbidden.map((name) => `!runeAttrExists(${access(name)})`);
+  const checks = forbidden.map((name) => `!rune.exists(${access(name)})`);
   const predicate = checks.join(' && ') || 'true';
   return parent ? `((__parent) => ${predicate})(${parentText})` : `(${predicate})`;
 }

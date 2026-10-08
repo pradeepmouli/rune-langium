@@ -5,6 +5,7 @@
 import { z } from 'zod';
 
 // --- rune-codegen runtime helpers (inlined) ---
+
 import { Temporal } from '@js-temporal/polyfill';
 const runeParseZonedDateTime = (value: unknown): Temporal.ZonedDateTime => {
   const text = String(value);
@@ -31,6 +32,7 @@ const runeDateConstruct = (kind: 'date' | 'dateTime' | 'zonedDateTime', fields: 
   if (fields.timezone == null) return undefined;
   return dateTime.toZonedDateTime(fields.timezone === 'Z' ? 'UTC' : fields.timezone).toString();
 };
+
 type RuneFuncData<T> = T extends readonly (infer I)[]
   ? RuneFuncData<I>[]
   : T extends { readonly [Symbol.toStringTag]: `Temporal.${string}` }
@@ -59,6 +61,7 @@ const runeToFuncData = <T>(input: T): RuneFuncData<T> => {
   };
   return convert(input) as RuneFuncData<T>;
 };
+
 type RuneOperand<T> = T extends readonly (infer I)[] ? NonNullable<I> : NonNullable<T>;
 const runeBinary = <L, R, V>(left: L, right: R, operate: (a: RuneOperand<L>, b: RuneOperand<R>) => V): L extends readonly unknown[] | null | undefined ? V | undefined : R extends readonly unknown[] | null | undefined ? V | undefined : V => {
   const l = runeList(left).filter((value) => value != null);
@@ -76,6 +79,7 @@ const runeOrder = <T>(left: T, right: T, compare: (a: NonNullable<T>, b: NonNull
   if (right == null) return nullsLast ? -1 : 1;
   return compare(left, right);
 };
+
 const runeList = <T>(value: T): (T extends readonly (infer I)[] ? I : NonNullable<T>)[] => {
   if (value == null) return [];
   return (Array.isArray(value) ? value : [value]) as (T extends readonly (infer I)[] ? I : NonNullable<T>)[];
@@ -85,6 +89,44 @@ const runeSingle = <T>(value: T): T extends readonly (infer I)[] ? I | undefined
   if (values.length > 1) throw new Error('Expected at most one value');
   return values[0] as T extends readonly (infer I)[] ? I | undefined : T extends null | undefined ? undefined : T;
 };
+const runeContains = (left: unknown, right: unknown): boolean => {
+  const l = runeList(left), r = runeList(right);
+  const keys = new Set(l.map(runeValueKey));
+  return l.length > 0 && r.length > 0 && r.every((value) => keys.has(runeValueKey(value)));
+};
+const runeDisjoint = (left: unknown, right: unknown): boolean => {
+  const keys = new Set(runeList(right).map(runeValueKey));
+  return !runeList(left).some((value) => keys.has(runeValueKey(value)));
+};
+const runeDistinct = <T>(value: T, key: (item: T extends readonly (infer I)[] ? I : NonNullable<T>) => string = runeValueKey): (T extends readonly (infer I)[] ? I : NonNullable<T>)[] => {
+  const seen = new Set<string>();
+  return runeList(value).filter((item) => {
+    const identity = key(item);
+    if (seen.has(identity)) return false;
+    seen.add(identity);
+    return true;
+  });
+};
+
+const runeCheckOneOf = (values: unknown[]): boolean =>
+  values.filter((v) => v !== undefined && v !== null && !(Array.isArray(v) && v.length === 0)).length === 1;
+
+const runeCount = (value: unknown): number => Array.isArray(value) ? value.length : value == null ? 0 : 1;
+
+const runeAttrExists = <T>(v: T): v is NonNullable<T> & (T extends readonly (infer I)[] ? readonly [I, ...I[]] : unknown) =>
+  v !== undefined && v !== null && !(Array.isArray(v) && v.length === 0);
+
+const runeToDate = (v: unknown): string | undefined =>
+  typeof v === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(v) ? v : undefined;
+
+const runeToTime = (v: unknown): string | undefined =>
+  typeof v === 'string' && /^\d{2}:\d{2}:\d{2}(\.\d+)?$/.test(v) ? v : undefined;
+
+const runeToDateTime = (v: unknown): string | undefined =>
+  typeof v === 'string' && /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(\.\d+)?$/.test(v) ? v : undefined;
+
+const runeToZonedDateTime = (v: unknown): string | undefined =>
+  typeof v === 'string' && /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(\.\d+)?(Z|[+-]\d{2}:\d{2})(\[[^\]]+\])?$/.test(v) ? v : undefined;
 
 const runeValueKey = (value: unknown): string => {
   if (value == null) return 'null';
@@ -114,30 +156,29 @@ const rune = {
     return quantifier === 'all'
       ? (unequal || l.length === r.length) && l.every((a, i) => i >= r.length ? unequal : compare(a, r[i]))
       : (unequal && l.length !== r.length) || l.some((a, i) => i < r.length && compare(a, r[i]));
-  }
+  },
+  list: runeList,
+  single: runeSingle,
+  contains: runeContains,
+  disjoint: runeDisjoint,
+  distinct: runeDistinct,
+  binary: runeBinary,
+  compare: runeCompare,
+  order: runeOrder,
+  parseZonedDateTime: runeParseZonedDateTime,
+  dateField: runeDateField,
+  dateConstruct: runeDateConstruct,
+  toFuncData: runeToFuncData,
+  checkOneOf: runeCheckOneOf,
+  count: runeCount,
+  exists: runeAttrExists,
+  valueKey: runeValueKey,
+  toDate: runeToDate,
+  toTime: runeToTime,
+  toDateTime: runeToDateTime,
+  toZonedDateTime: runeToZonedDateTime
 };
 
-const runeCheckOneOf = (values: unknown[]): boolean =>
-  values.filter((v) => v !== undefined && v !== null && !(Array.isArray(v) && v.length === 0)).length === 1;
-
-const runeCount = (value: unknown): number => Array.isArray(value) ? value.length : value == null ? 0 : 1;
-
-const runeAttrExists = <T>(v: T): v is NonNullable<T> & (T extends readonly (infer I)[] ? readonly [I, ...I[]] : unknown) =>
-  v !== undefined && v !== null && !(Array.isArray(v) && v.length === 0);
-
-const runeToDate = (v: unknown): string | undefined =>
-  typeof v === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(v) ? v : undefined;
-
-const runeToTime = (v: unknown): string | undefined =>
-  typeof v === 'string' && /^\d{2}:\d{2}:\d{2}(\.\d+)?$/.test(v) ? v : undefined;
-
-const runeToDateTime = (v: unknown): string | undefined =>
-  typeof v === 'string' && /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(\.\d+)?$/.test(v) ? v : undefined;
-
-const runeToZonedDateTime = (v: unknown): string | undefined =>
-  typeof v === 'string' && /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(\.\d+)?(Z|[+-]\d{2}:\d{2})(\[[^\]]+\])?$/.test(v)
-    ? v
-    : undefined;
 // --- end runtime helpers ---
 
 const runeExtendChoice = <T extends z.ZodUnion<readonly z.ZodObject[]>>(choice: T, shape: z.ZodRawShape) =>
@@ -151,7 +192,7 @@ export type Trade = z.infer<typeof TradeSchema>;
 
 
 export const validateIsLargeTrade = TradeSchema.refine(
-  (data) => runeCompare(data.Trade?.notional, 1000000, (a, b) => a > b, "all"),
+  (data) => rune.compare(data.Trade?.notional, 1000000, (a, b) => a > b, "all"),
   'IsLargeTrade'
 );
 

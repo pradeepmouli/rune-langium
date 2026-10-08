@@ -21,10 +21,10 @@ export function pythonBind(value: string, name: string, body: string): string {
   return `(lambda ${name}: ${body})(${value})`;
 }
 export function pythonRead(value: string, names: readonly string[], many = false): string {
-  return `rune_get(${value}, [${names.map(pyString).join(', ')}]${many ? ', True' : ''})`;
+  return `rune.get(${value}, [${names.map(pyString).join(', ')}]${many ? ', True' : ''})`;
 }
 export function pythonUnwrap(value: string, kind: FieldMetadataKind | undefined, many = false): string {
-  return kind ? `rune_unwrap(${value}${many ? ', True' : ''})` : value;
+  return kind ? `rune.unwrap(${value}${many ? ', True' : ''})` : value;
 }
 export function pythonNormalize(
   value: string,
@@ -33,7 +33,7 @@ export function pythonNormalize(
 ): string {
   if (input === target) return value;
   if (!target) return pythonUnwrap(value, input);
-  return `rune_to_${target}(${value}, ${pyString(input ?? 'value')})`;
+  return `rune.to${target === 'reference' ? 'Reference' : 'Field'}(${value}, ${pyString(input ?? 'value')})`;
 }
 export function pythonArgument(
   value: string,
@@ -45,7 +45,7 @@ export function pythonArgument(
     input = argument ? expressionMetadataKind(argument) : context.implicit?.metadata;
   if (target) value = pythonNormalize(value, input, target);
   else if (input) value = pythonUnwrap(value, input, argument ? expressionIsMany(argument) : context.implicit?.many);
-  return `rune_cardinality(${value}, ${parameter.card.inf}, ${parameter.card.unbounded ? 'None' : (parameter.card.sup ?? 1)}, ${pyString(parameter.name)})`;
+  return `rune.cardinality(${value}, ${parameter.card.inf}, ${parameter.card.unbounded ? 'None' : (parameter.card.sup ?? 1)}, ${pyString(parameter.name)})`;
 }
 export function pythonInline(
   fn: InlineFunction | undefined,
@@ -81,12 +81,15 @@ export function pythonHelperDependencies(code: string): string[] {
     ])
   );
   for (const namespace of PYTHON_RUNTIME_SOURCE.matchAll(/^class (\w+):\n([^]*?)(?=^(?:def |class )|$(?![^]))/gm))
-    for (const method of namespace[2]!.matchAll(/^    def (\w+)\([^]*?(?=^    (?:@|def )|$(?![^]))/gm))
+    for (const method of namespace[2]!.matchAll(/^    def (\w+)\([^]*?(?=^    (?:@|def |\w+ =)|$(?![^]))/gm))
       bodies.set(`${namespace[1]}.${method[1]}`, method[0]);
+  for (const namespace of PYTHON_RUNTIME_SOURCE.matchAll(/^class (\w+):\n([^]*?)(?=^(?:def |class )|$(?![^]))/gm))
+    for (const alias of namespace[2]!.matchAll(/^    (\w+) = staticmethod\((rune_\w+)\)/gm))
+      bodies.set(`${namespace[1]}.${alias[1]}`, alias[2]!);
   const required = new Set<string>();
   function collect(text: string) {
     for (const name of bodies.keys())
-      if (new RegExp(`\\b${name.replace(/\./g, '\\.')}\\s*\\(`).test(text) && !required.has(name)) {
+      if (new RegExp(`\\b${name.replace(/\./g, '\\.')}\\b`).test(text) && !required.has(name)) {
         required.add(name);
         collect(bodies.get(name)!);
       }

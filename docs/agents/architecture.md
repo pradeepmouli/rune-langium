@@ -133,6 +133,17 @@ and executable previews use the same generated runtime source; Python exposes
 the same namespace and argument order. Name allocation keeps legal declarations,
 aliases and inline parameters named `rune` separate from the runtime namespace.
 
+Other expression runtime calls use the same namespace: `rune.exists`,
+`rune.count`, `rune.list`/`single`, conversions, calendar operations and metadata
+operations. `contains`, `disjoint` and `distinct` share runtime implementations
+instead of emitting per-expression closures. Native operators and standard-library
+calls remain inline where their behavior matches. A single runtime composition
+function builds TypeScript, JavaScript and sidecar sources, creating the namespace
+after its implementations; metadata members follow the existing metadata-use
+selection. Namespace aliases retain generic signatures and presence type guards.
+Python uses static aliases to its authoritative implementations; dependency
+discovery follows both namespace methods and helpers passed as callbacks.
+
 Python expression rendering lives in codegen's `projection/` backend and consumes
 the same linked declaration, cardinality, metadata and Choice-path facts. Shared
 scalar proofs, Data-selection facts and temporal wire formats serve both targets.

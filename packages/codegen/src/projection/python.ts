@@ -133,7 +133,7 @@ export function renderPythonExpression(expression: RosettaExpression, context: P
           throw new Error(`Function '${target.name}' requires a linked argument list of ${parameters.length} inputs`);
         const values = args.map((item, index) => {
           const text = item ? render(item, valueContext) : argument(false);
-          return parameters[index]!.isArray ? `rune_list(${text})` : `rune_single(${text})`;
+          return parameters[index]!.isArray ? `rune.list(${text})` : `rune.single(${text})`;
         });
         return `${context.name(target)}(${values.join(', ')})`;
       }
@@ -154,18 +154,18 @@ export function renderPythonExpression(expression: RosettaExpression, context: P
         rightType = expressionType(expression.right)?.name;
       const operation =
         leftType === 'date' && rightType === 'date' && expression.operator === '-'
-          ? '(rune_date_days(a) - rune_date_days(b))'
+          ? '(rune.dateDays(a) - rune.dateDays(b))'
           : leftType === 'date' && rightType === 'time' && expression.operator === '+'
-            ? 'rune_date_join(a, b)'
+            ? 'rune.dateJoin(a, b)'
             : expression.operator === '/'
-              ? 'rune_divide(a, b)'
+              ? 'rune.divide(a, b)'
               : `(a ${expression.operator} b)`;
       const scalar = nativeScalarOperands(expression.left, expression.right);
       if (scalar === 'number' || (scalar === 'string' && expression.operator === '+'))
         return expression.operator === '/'
-          ? `rune_divide(${left}, ${right})`
+          ? `rune.divide(${left}, ${right})`
           : `(${left} ${expression.operator} ${right})`;
-      return `rune_binary(${left}, ${right}, lambda a, b: ${operation})`;
+      return `rune.binary(${left}, ${right}, lambda a, b: ${operation})`;
     }
     case 'EqualityOperation': {
       const left = expression.left ? render(expression.left, valueContext) : argument(false),
@@ -191,40 +191,40 @@ export function renderPythonExpression(expression: RosettaExpression, context: P
       const type = expressionType(expression.left ?? arg)?.name;
       const temporal = type && ['date', 'time', 'dateTime', 'zonedDateTime'].includes(type);
       const compare = temporal
-        ? `rune_temporal_key(a, ${pyString(type)}) ${expression.operator} rune_temporal_key(b, ${pyString(type)})`
+        ? `rune.temporalKey(a, ${pyString(type)}) ${expression.operator} rune.temporalKey(b, ${pyString(type)})`
         : `a ${expression.operator} b`;
-      return `rune_compare(${left}, ${right}, lambda a, b: ${compare}, ${pyString(expression.cardMod ?? 'all')})`;
+      return `rune.compare(${left}, ${right}, lambda a, b: ${compare}, ${pyString(expression.cardMod ?? 'all')})`;
     }
     case 'LogicalOperation':
       return `(${expression.left ? render(expression.left, valueContext) : argument(false)} ${expression.operator} ${render(expression.right, valueContext)})`;
     case 'RosettaContainsExpression':
     case 'RosettaDisjointExpression':
-      return `rune_${expression.$type === 'RosettaContainsExpression' ? 'contains' : 'disjoint'}(${expression.left ? render(expression.left, valueContext) : argument(false)}, ${render(expression.right, valueContext)})`;
+      return `rune.${expression.$type === 'RosettaContainsExpression' ? 'contains' : 'disjoint'}(${expression.left ? render(expression.left, valueContext) : argument(false)}, ${render(expression.right, valueContext)})`;
     case 'RosettaExistsExpression': {
       const value = argument(false);
-      if (!expression.modifier) return `rune_exists(${value})`;
-      return `(len(rune_list(${value})) ${expression.modifier === 'single' ? '== 1' : '> 1'})`;
+      if (!expression.modifier) return `rune.exists(${value})`;
+      return `(len(rune.list(${value})) ${expression.modifier === 'single' ? '== 1' : '> 1'})`;
     }
     case 'RosettaAbsentExpression':
-      return `(not rune_exists(${argument(false)}))`;
+      return `(not rune.exists(${argument(false)}))`;
     case 'RosettaCountOperation':
-      return `len(rune_list(${argument(false)}))`;
+      return `len(rune.list(${argument(false)}))`;
     case 'RosettaOnlyElement':
-      return `rune_only(${argument()})`;
+      return `rune.only(${argument()})`;
     case 'FirstOperation':
     case 'LastOperation':
-      return `rune_edge(${argument()}, ${pyBool(expression.$type === 'LastOperation')})`;
+      return `rune.edge(${argument()}, ${pyBool(expression.$type === 'LastOperation')})`;
     case 'SumOperation':
-      return `sum(rune_list(${argument(false)}))`;
+      return `sum(rune.list(${argument(false)}))`;
     case 'FlattenOperation': {
       const item = pythonFresh(context, 'item'),
         child = pythonFresh(context, 'child');
-      return `[${child} for ${item} in rune_list(${argument()}) for ${child} in rune_list(${item})]`;
+      return `[${child} for ${item} in rune.list(${argument()}) for ${child} in rune.list(${item})]`;
     }
     case 'ReverseOperation':
-      return `list(reversed(rune_list(${argument()})))`;
+      return `list(reversed(rune.list(${argument()})))`;
     case 'DistinctOperation':
-      return `rune_distinct(${argument()}, ${pyBool(!!context.preserveMetadata && !!expressionMetadataKind(arg))})`;
+      return `rune.distinct(${argument()}, ${pyBool(!!context.preserveMetadata && !!expressionMetadataKind(arg))})`;
     case 'FilterOperation':
     case 'MapOperation': {
       const item = pythonFresh(context, 'item');
@@ -240,8 +240,8 @@ export function renderPythonExpression(expression: RosettaExpression, context: P
       const mapped = pythonFresh(context, 'mapped');
       const result =
         expression.$type === 'FilterOperation'
-          ? `[${item} for ${item} in rune_list(${input}) if ${body}]`
-          : `[${mapped} for ${item} in rune_list(${input}) for ${mapped} in rune_list(${body})]`;
+          ? `[${item} for ${item} in rune.list(${input}) if ${body}]`
+          : `[${mapped} for ${item} in rune.list(${input}) for ${mapped} in rune.list(${body})]`;
       return expression.$type === 'FilterOperation' && !context.preserveMetadata
         ? pythonUnwrap(result, expressionMetadataKind(arg), true)
         : result;
@@ -253,7 +253,7 @@ export function renderPythonExpression(expression: RosettaExpression, context: P
         kind = expressionMetadataKind(arg);
       const child = pythonInline(expression.function, valueContext, [item], arg);
       const key = expression.function ? render(expression.function.body, child) : pythonUnwrap(item, kind);
-      const result = `rune_ordered(${argument(!!kind || context.preserveMetadata)}, lambda ${item}: ${key}, ${pyString(expression.operator)})`;
+      const result = `rune.ordered(${argument(!!kind || context.preserveMetadata)}, lambda ${item}: ${key}, ${pyString(expression.operator)})`;
       return context.preserveMetadata ? result : pythonUnwrap(result, kind, expression.$type === 'SortOperation');
     }
     case 'ReduceOperation': {
@@ -266,7 +266,7 @@ export function renderPythonExpression(expression: RosettaExpression, context: P
         : item;
       const body = target ? pythonNormalize(result, expressionMetadataKind(expression.function?.body), target) : result;
       const first = pythonNormalize(item, expressionMetadataKind(arg), target);
-      return `rune_reduce(${argument(true)}, lambda ${accumulator}, ${item}: ${body}, lambda ${item}: ${first})`;
+      return `rune.reduce(${argument(true)}, lambda ${accumulator}, ${item}: ${body}, lambda ${item}: ${first})`;
     }
     case 'ThenOperation': {
       const item = pythonFresh(context, 'then');
@@ -295,7 +295,7 @@ export function renderPythonExpression(expression: RosettaExpression, context: P
       );
       const item = pythonFresh(context, 'item'),
         branch = pythonFresh(context, 'branch');
-      return `[${item} for ${branch} in [${values.join(', ')}] for ${item} in rune_list(${branch})${target ? ` if ${item} is not None` : ''}]`;
+      return `[${item} for ${branch} in [${values.join(', ')}] for ${item} in rune.list(${branch})${target ? ` if ${item} is not None` : ''}]`;
     }
     case 'RosettaConstructorExpression': {
       const target = expression.typeRef.$type === 'RosettaSymbolReference' ? expression.typeRef.symbol.ref : undefined;
@@ -315,24 +315,24 @@ export function renderPythonExpression(expression: RosettaExpression, context: P
       });
       const object = `{${values.join(', ')}}`;
       if (isRosettaRecordType(target) && ['date', 'dateTime', 'zonedDateTime'].includes(target.name))
-        return `rune_date_construct(${pyString(target.name)}, ${object})`;
+        return `rune.dateConstruct(${pyString(target.name)}, ${object})`;
       return isChoice(target) && !values.length ? 'None' : object;
     }
     case 'DefaultOperation': {
       const left = expression.left ? branch(expression.left) : argument(),
         right = branch(expression.right);
-      return `rune_default(${left}, lambda: ${right})`;
+      return `rune.default(${left}, lambda: ${right})`;
     }
     case 'JoinOperation': {
       const separator = expression.right ? render(expression.right, valueContext) : '""';
       const item = pythonFresh(context, 'item');
-      return `rune_string(${separator}).join("" if ${item} is None else rune_string(${item}) for ${item} in rune_list(${expression.left ? render(expression.left, valueContext) : argument(false)}))`;
+      return `rune.string(${separator}).join("" if ${item} is None else rune.string(${item}) for ${item} in rune.list(${expression.left ? render(expression.left, valueContext) : argument(false)}))`;
     }
     case 'ToStringOperation':
-      return `rune_to_string(${argument(false)})`;
+      return `rune.toString(${argument(false)})`;
     case 'ToNumberOperation':
     case 'ToIntOperation':
-      return `rune_number(${argument(false)}, ${pyBool(expression.$type === 'ToIntOperation')})`;
+      return `rune.number(${argument(false)}, ${pyBool(expression.$type === 'ToIntOperation')})`;
     case 'ToEnumOperation': {
       const enumeration = expression.enumeration.ref;
       if (!enumeration) throw new Error(`Unresolved enum '${expression.enumeration.$refText}'`);
@@ -356,10 +356,10 @@ export function renderPythonExpression(expression: RosettaExpression, context: P
         ToZonedDateTimeOperation: 'zonedDateTime'
       };
       const kind = kinds[expression.$type] as keyof typeof TEMPORAL_CONVERSION_PATTERNS;
-      return `rune_convert_temporal(${argument(false)}, ${pyString(TEMPORAL_CONVERSION_PATTERNS[kind])})`;
+      return `rune.convertTemporal(${argument(false)}, ${pyString(TEMPORAL_CONVERSION_PATTERNS[kind])})`;
     }
     case 'AsKeyOperation': {
-      const value = `rune_as_key(${argument(true)}, ${pyString(expressionMetadataKind(arg) ?? 'value')})`;
+      const value = `rune.asKey(${argument(true)}, ${pyString(expressionMetadataKind(arg) ?? 'value')})`;
       return context.preserveMetadata ? value : pythonUnwrap(value, 'reference', expressionIsMany(expression));
     }
     case 'WithMetaOperation': {
@@ -370,7 +370,7 @@ export function renderPythonExpression(expression: RosettaExpression, context: P
           : metadataPropertyPath(name).slice(-1)[0]!;
         return `${pyString(property)}: ${render(entry.value, valueContext)}`;
       });
-      const value = `rune_with_meta(${argument(true)}, {${entries.join(', ')}}, ${pyString(expressionMetadataKind(arg) ?? 'value')})`;
+      const value = `rune.withMeta(${argument(true)}, {${entries.join(', ')}}, ${pyString(expressionMetadataKind(arg) ?? 'value')})`;
       return context.preserveMetadata
         ? value
         : pythonUnwrap(value, expressionMetadataKind(expression), expressionIsMany(expression));
@@ -385,9 +385,9 @@ export function renderPythonExpression(expression: RosettaExpression, context: P
           : typeFeatures(type).map(featureName);
       const values = names.length
         ? `[${names.map((name) => pythonRead(root, [name])).join(', ')}]`
-        : `rune_list(${root})`;
+        : `rune.list(${root})`;
       const value = pythonFresh(context, 'value');
-      const count = `sum(1 for ${value} in ${values} if rune_exists(${value}))`;
+      const count = `sum(1 for ${value} in ${values} if rune.exists(${value}))`;
       const predicate = `${count} ${expression.$type === 'ChoiceOperation' && expression.necessity === 'optional' ? '<= 1' : '== 1'}`;
       return pythonBind(
         argument(false),

@@ -5,6 +5,7 @@ import { describe, expect, it } from 'vitest';
 import { parseExpression } from '@rune-langium/core';
 import { projectPythonExpression } from '../../src/projection/python.js';
 import { pythonContext, runPython, linkedExpressions } from './python-test-utils.js';
+import { pythonHelperDependencies } from '../../src/projection/python-operations.js';
 
 function project(text: string) {
   const parsed = parseExpression(text);
@@ -60,6 +61,20 @@ const semanticCases = [
 ] as const;
 
 describe('forward Python expression projections', () => {
+  it('reports namespace methods and callback dependencies without pulling unrelated helpers', () => {
+    expect(pythonHelperDependencies('rune.equals(left, right)')).toEqual([
+      'rune.equals',
+      'rune_list',
+      'rune_value_key'
+    ]);
+    expect(pythonHelperDependencies('rune.exists(value)')).toEqual(['rune.exists', 'rune_exists']);
+    expect(pythonHelperDependencies('rune.normalizeObject(value, {"name": rune.identity})')).toEqual([
+      'rune.identity',
+      'rune.normalizeObject',
+      'rune_identity',
+      'rune_normalize_object'
+    ]);
+  });
   it('executes parsed Rune expressions with grouping, laziness and collection semantics', async () => {
     const expressions = await linkedExpressions(semanticCases.map(([text]) => text));
     const output = runPython(

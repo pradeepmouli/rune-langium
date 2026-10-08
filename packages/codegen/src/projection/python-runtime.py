@@ -133,29 +133,6 @@ def rune_unwrap(value, many=False):
     return value.get("value") if isinstance(value, dict) else None
 
 
-class rune:
-    @staticmethod
-    def equals(left, right, quantifier=None, unequal=False):
-        if quantifier is None:
-            same = rune_value_key(left) == rune_value_key(right)
-            return not same if unequal else same
-        l, r = rune_list(left), rune_list(right)
-        left_array, right_array = isinstance(left, list), isinstance(right, list)
-        if not l or not r:
-            same = left_array == right_array and len(l) == len(r)
-            return not same if unequal else same
-        compare = lambda a, b: not rune.equals(a, b) if unequal else rune.equals(a, b)
-        predicate = all if quantifier == "all" else any
-        if not left_array:
-            return predicate(compare(left, b) for b in r)
-        if not right_array:
-            return predicate(compare(a, right) for a in l)
-        if quantifier == "all":
-            return (unequal or len(l) == len(r)) and all(
-                (unequal if i >= len(r) else compare(a, r[i])) for i, a in enumerate(l))
-        return (unequal and len(l) != len(r)) or any(compare(a, r[i]) for i, a in enumerate(l) if i < len(r))
-
-
 def rune_contains(left, right):
     l, r = rune_list(left), rune_list(right)
     keys = set(map(rune_value_key, l))
@@ -620,3 +597,80 @@ def rune_set(root, path, value, append, lower, upper, label):
     combined = rune_list(current.get(key)) + rune_list(value) if append else value
     current[key] = rune_cardinality(combined, lower, upper, label)
     return root
+
+
+class rune:
+    @staticmethod
+    def equals(left, right, quantifier=None, unequal=False):
+        if quantifier is None:
+            same = rune_value_key(left) == rune_value_key(right)
+            return not same if unequal else same
+        l, r = rune_list(left), rune_list(right)
+        left_array, right_array = isinstance(left, list), isinstance(right, list)
+        if not l or not r:
+            same = left_array == right_array and len(l) == len(r)
+            return not same if unequal else same
+        compare = lambda a, b: not rune.equals(a, b) if unequal else rune.equals(a, b)
+        predicate = all if quantifier == "all" else any
+        if not left_array:
+            return predicate(compare(left, b) for b in r)
+        if not right_array:
+            return predicate(compare(a, right) for a in l)
+        if quantifier == "all":
+            return (unequal or len(l) == len(r)) and all(
+                (unequal if i >= len(r) else compare(a, r[i])) for i, a in enumerate(l))
+        return (unequal and len(l) != len(r)) or any(compare(a, r[i]) for i, a in enumerate(l) if i < len(r))
+
+
+    bind = staticmethod(rune_bind)
+    native = staticmethod(rune_native)
+    identity = staticmethod(rune_identity)
+    assignmentValue = staticmethod(rune_assignment_value)
+    normalizeObject = staticmethod(rune_normalize_object)
+    normalizeAttribute = staticmethod(rune_normalize_attribute)
+    assign = staticmethod(rune_assign)
+    exists = staticmethod(rune_exists)
+    default = staticmethod(rune_default)
+    coalesce = staticmethod(rune_coalesce)
+    unwrap = staticmethod(rune_unwrap)
+    contains = staticmethod(rune_contains)
+    disjoint = staticmethod(rune_disjoint)
+    distinct = staticmethod(rune_distinct)
+    order = staticmethod(rune_order)
+    ordered = staticmethod(rune_ordered)
+    only = staticmethod(rune_only)
+    edge = staticmethod(rune_edge)
+    reduce = staticmethod(rune_reduce)
+    numberString = staticmethod(rune_number_string)
+    string = staticmethod(rune_string)
+    toString = staticmethod(rune_to_string)
+    number = staticmethod(rune_number)
+    temporal = staticmethod(rune_temporal)
+    iso = staticmethod(rune_iso)
+    timeText = staticmethod(rune_time_text)
+    clockParts = staticmethod(rune_clock_parts)
+    calendarParts = staticmethod(rune_calendar_parts)
+    calendarText = staticmethod(rune_calendar_text)
+    dateDays = staticmethod(rune_date_days)
+    calendarFromDays = staticmethod(rune_calendar_from_days)
+    offsetSeconds = staticmethod(rune_offset_seconds)
+    zonedParts = staticmethod(rune_zoned_parts)
+    dateJoin = staticmethod(rune_date_join)
+    temporalKey = staticmethod(rune_temporal_key)
+    convertTemporal = staticmethod(rune_convert_temporal)
+    dateField = staticmethod(rune_date_field)
+    dateConstruct = staticmethod(rune_date_construct)
+    withMeta = staticmethod(rune_with_meta)
+    list = staticmethod(rune_list)
+    single = staticmethod(rune_single)
+    binary = staticmethod(rune_binary)
+    compare = staticmethod(rune_compare)
+    valueKey = staticmethod(rune_value_key)
+    divide = staticmethod(rune_divide)
+    get = staticmethod(rune_get)
+    normalizeMetadata = staticmethod(rune_normalize_metadata)
+    toField = staticmethod(rune_to_field)
+    toReference = staticmethod(rune_to_reference)
+    asKey = staticmethod(rune_as_key)
+    cardinality = staticmethod(rune_cardinality)
+    set = staticmethod(rune_set)

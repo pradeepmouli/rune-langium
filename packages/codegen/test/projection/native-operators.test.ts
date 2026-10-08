@@ -55,7 +55,7 @@ func RequiredOutput:
           ['pending', 'pending']
         ])
       });
-      expect(expression).toContain('runeBinary');
+      expect(expression).toContain('rune.binary');
       const javascript = ts.transpileModule(
         `function run(result: unknown, pending: unknown) { return ${expression}; }`,
         { compilerOptions: { target: ts.ScriptTarget.ES2022 } }

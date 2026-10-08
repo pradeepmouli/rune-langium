@@ -8,17 +8,28 @@ import { PYTHON_RUNTIME_SOURCE } from '../../src/projection/python-runtime.js';
 import { RUNTIME_HELPER_JS_SOURCE } from '../../src/helpers.js';
 
 const cases = [
-  ['rune_list(None)', 'runeList(null)'],
-  ['rune_list(False)', 'runeList(false)'],
-  ['rune_list(0)', 'runeList(0)'],
-  ['rune_list("")', 'runeList("")'],
-  ['rune_single([])', 'runeSingle([])'],
-  ['rune_single([1, 2])', 'runeSingle([1, 2])'],
-  ['rune_binary([], [2], lambda a, b: a + b)', 'runeBinary([], [2], (a, b) => a + b)'],
-  ['rune_binary([1], [2], lambda a, b: a + b)', 'runeBinary([1], [2], (a, b) => a + b)'],
-  ['rune_compare([], [2], lambda a, b: a < b)', 'runeCompare([], [2], (a, b) => a < b)'],
-  ['rune_compare([1, 3], [2], lambda a, b: a < b, "any")', 'runeCompare([1, 3], [2], (a, b) => a < b, "any")'],
-  ['rune_compare([1, 3], [2], lambda a, b: a < b, "all")', 'runeCompare([1, 3], [2], (a, b) => a < b, "all")'],
+  ['rune.exists(None)', 'rune.exists(null)'],
+  ['rune.exists([])', 'rune.exists([])'],
+  ['rune.exists(False)', 'rune.exists(false)'],
+  ['rune.exists(0)', 'rune.exists(0)'],
+  ['rune.exists("")', 'rune.exists("")'],
+  ['rune.contains([], [])', 'rune.contains([], [])'],
+  ['rune.contains([{"a": 1, "b": None}], [{"a": 1}])', 'rune.contains([{a: 1, b: null}], [{a: 1}])'],
+  ['rune.disjoint([False], [0])', 'rune.disjoint([false], [0])'],
+  ['rune.disjoint([], [])', 'rune.disjoint([], [])'],
+  ['rune.distinct([{"a": 1}, {"a": 1, "b": None}, {"a": 2}])', 'rune.distinct([{a: 1}, {a: 1, b: null}, {a: 2}])'],
+  ['rune.distinct([])', 'rune.distinct([])'],
+  ['rune.list(None)', 'rune.list(null)'],
+  ['rune.list(False)', 'rune.list(false)'],
+  ['rune.list(0)', 'rune.list(0)'],
+  ['rune.list("")', 'rune.list("")'],
+  ['rune.single([])', 'rune.single([])'],
+  ['rune.single([1, 2])', 'rune.single([1, 2])'],
+  ['rune.binary([], [2], lambda a, b: a + b)', 'rune.binary([], [2], (a, b) => a + b)'],
+  ['rune.binary([1], [2], lambda a, b: a + b)', 'rune.binary([1], [2], (a, b) => a + b)'],
+  ['rune.compare([], [2], lambda a, b: a < b)', 'rune.compare([], [2], (a, b) => a < b)'],
+  ['rune.compare([1, 3], [2], lambda a, b: a < b, "any")', 'rune.compare([1, 3], [2], (a, b) => a < b, "any")'],
+  ['rune.compare([1, 3], [2], lambda a, b: a < b, "all")', 'rune.compare([1, 3], [2], (a, b) => a < b, "all")'],
   ['rune.equals(False, 0)', 'rune.equals(false, 0)'],
   ['rune.equals({"a": 1, "missing": None}, {"a": 1})', 'rune.equals({a: 1, missing: null}, {a: 1})'],
   ['rune.equals({"value": False}, {"value": 0})', 'rune.equals({value: false}, {value: 0})'],
@@ -43,7 +54,7 @@ const cases = [
       )
     )
   ),
-  ['rune_divide(1, 0)', '1 / 0'],
+  ['rune.divide(1, 0)', '1 / 0'],
   ...[
     0,
     -0,
@@ -58,44 +69,44 @@ const cases = [
     1.2345678901234567,
     5e-324,
     Number.MAX_VALUE
-  ].map((value) => [`rune_to_string(float(${String(value)}))`, `String(${String(value)})`] as const),
+  ].map((value) => [`rune.toString(float(${String(value)}))`, `String(${String(value)})`] as const),
   [
-    'rune_to_field({"value": 0, "meta": {"scheme": "x"}}, "field")',
-    'runeToField({value: 0, meta: {scheme: "x"}}, "field")'
+    'rune.toField({"value": 0, "meta": {"scheme": "x"}}, "field")',
+    'rune.toField({value: 0, meta: {scheme: "x"}}, "field")'
   ],
-  ['rune_to_field({"value": 7}, "value")', 'runeToField({value: 7}, "value")'],
+  ['rune.toField({"value": 7}, "value")', 'rune.toField({value: 7}, "value")'],
   [
-    'rune_to_reference({"externalReference": "id"}, "reference")',
-    'runeToReference({externalReference: "id"}, "reference")'
+    'rune.toReference({"externalReference": "id"}, "reference")',
+    'rune.toReference({externalReference: "id"}, "reference")'
   ],
-  ['rune_to_field({"externalReference": "id"}, "reference")', 'runeToField({externalReference: "id"}, "reference")'],
-  ['rune_as_key({"meta": {"externalKey": "id"}}, "value")', 'runeAsKey({meta: {externalKey: "id"}}, "value")'],
-  ['(1 if True else rune_single([1, 2]))', '(true ? 1 : runeSingle([1, 2]))'],
+  ['rune.toField({"externalReference": "id"}, "reference")', 'rune.toField({externalReference: "id"}, "reference")'],
+  ['rune.asKey({"meta": {"externalKey": "id"}}, "value")', 'rune.asKey({meta: {externalKey: "id"}}, "value")'],
+  ['(1 if True else rune.single([1, 2]))', '(true ? 1 : rune.single([1, 2]))'],
   [
-    'rune_with_meta(1, {"scheme":"x", "reference":"id"}, "value")',
-    'runeWithMeta(1, {scheme:"x", reference:"id"}, "value")'
-  ],
-  [
-    'rune_with_meta({"value":1,"reference":{"scope":"s"}}, {"address":"id"}, "reference")',
-    'runeWithMeta({value:1,reference:{scope:"s"}}, {address:"id"}, "reference")'
-  ],
-  ['rune_with_meta({"a":1}, {"key":"id"}, "value")', 'runeWithMeta({a:1}, {key:"id"}, "value")'],
-  ['rune_with_meta([None, 1], {"scheme":"x"}, "value")', 'runeWithMeta([null, 1], {scheme:"x"}, "value")'],
-  [
-    'rune_with_meta({"value":1,"externalReference":"id"}, {"scheme":"x"}, "reference")',
-    'runeWithMeta({value:1,externalReference:"id"}, {scheme:"x"}, "reference")'
+    'rune.withMeta(1, {"scheme":"x", "reference":"id"}, "value")',
+    'rune.withMeta(1, {scheme:"x", reference:"id"}, "value")'
   ],
   [
-    'rune_as_key({"value":{"meta":None},"meta":{"externalKey":"id"}}, "reference")',
-    'runeAsKey({value:{meta:null},meta:{externalKey:"id"}}, "reference")'
+    'rune.withMeta({"value":1,"reference":{"scope":"s"}}, {"address":"id"}, "reference")',
+    'rune.withMeta({value:1,reference:{scope:"s"}}, {address:"id"}, "reference")'
+  ],
+  ['rune.withMeta({"a":1}, {"key":"id"}, "value")', 'rune.withMeta({a:1}, {key:"id"}, "value")'],
+  ['rune.withMeta([None, 1], {"scheme":"x"}, "value")', 'rune.withMeta([null, 1], {scheme:"x"}, "value")'],
+  [
+    'rune.withMeta({"value":1,"externalReference":"id"}, {"scheme":"x"}, "reference")',
+    'rune.withMeta({value:1,externalReference:"id"}, {scheme:"x"}, "reference")'
   ],
   [
-    'rune_as_key({"value":{"meta":{}},"meta":{"externalKey":"id"}}, "reference")',
-    'runeAsKey({value:{meta:{}},meta:{externalKey:"id"}}, "reference")'
+    'rune.asKey({"value":{"meta":None},"meta":{"externalKey":"id"}}, "reference")',
+    'rune.asKey({value:{meta:null},meta:{externalKey:"id"}}, "reference")'
   ],
   [
-    'rune_as_key({"meta":{"globalKey":None},"globalReference":"id"}, "value")',
-    'runeAsKey({meta:{globalKey:null},globalReference:"id"}, "value")'
+    'rune.asKey({"value":{"meta":{}},"meta":{"externalKey":"id"}}, "reference")',
+    'rune.asKey({value:{meta:{}},meta:{externalKey:"id"}}, "reference")'
+  ],
+  [
+    'rune.asKey({"meta":{"globalKey":None},"globalReference":"id"}, "value")',
+    'rune.asKey({meta:{globalKey:null},globalReference:"id"}, "value")'
   ]
 ] as const;
 

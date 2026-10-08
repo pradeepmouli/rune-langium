@@ -14,7 +14,8 @@ import {
   type RosettaExpression
 } from '@rune-langium/core';
 import { URI } from 'langium';
-import { collectionRuntimeSource } from '../../src/expr/collection-runtime.js';
+import { RUNTIME_HELPER_SOURCE } from '../../src/helpers.js';
+import { createRequire } from 'node:module';
 import ts from 'typescript-classic';
 import { deepFeaturePaths, featureName, expressionIsMany, renderNavigation } from '../../src/expr/navigation.js';
 
@@ -81,7 +82,7 @@ async function parseFunctions() {
 }
 
 function compile(source: string, functionName: string): (input: Record<string, unknown>) => unknown {
-  source = collectionRuntimeSource(true) + '\n' + source;
+  source = RUNTIME_HELPER_SOURCE + '\n' + source;
   const fileName = new URL('./generated-navigation.ts', import.meta.url).pathname;
   const options: ts.CompilerOptions = {
     strict: true,
@@ -102,7 +103,7 @@ function compile(source: string, functionName: string): (input: Record<string, u
     compilerOptions: { target: ts.ScriptTarget.ES2022, module: ts.ModuleKind.CommonJS }
   }).outputText;
   const exports: Record<string, (input: Record<string, unknown>) => unknown> = {};
-  new Function('exports', js)(exports);
+  new Function('exports', 'require', js)(exports, createRequire(import.meta.url));
   return exports[functionName]!;
 }
 

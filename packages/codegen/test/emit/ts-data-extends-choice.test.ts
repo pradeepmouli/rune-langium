@@ -227,7 +227,7 @@ describe('ts-emitter — Data extends Choice: CLASS surface (generic child class
     // statically declare Choice option keys as members (real `tsc
     // --strict` rejects a direct `this.cash` — TS2339).
     expect(output.content).toContain(
-      'runeCheckOneOf([(this as unknown as Record<string, unknown>).cash, (this as unknown as Record<string, unknown>).commodity])'
+      'rune.checkOneOf([(this as unknown as Record<string, unknown>).cash, (this as unknown as Record<string, unknown>).commodity])'
     );
     expect(output.content).toContain("errors.push('Asset: exactly one of [Cash, Commodity] must be present");
   });

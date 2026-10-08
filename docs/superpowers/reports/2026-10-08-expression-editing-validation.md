@@ -47,6 +47,31 @@ scoped lint and authored-source formatting, generated Python runtime freshness,
 and `git diff --check` passed. Existing lint warnings remain. This follow-up is
 part of the open PR stack and has not been merged or deployed.
 
+## Other built-in emission follow-up
+
+Expression calls now use the `rune` namespace for presence, count, collection and
+cardinality helpers, temporal conversions/calendar fields and metadata operations.
+Native operators and standard-library calls retain their existing compact syntax.
+`contains`, `disjoint` and `distinct` moved from inline closures into the shared
+collection runtime; metadata-aware distinct retains its key selection and stable
+order. A single source composer now builds TypeScript, JavaScript and sidecar
+runtimes, with namespace aliases referencing the existing generic functions and
+presence type guard. Metadata definitions remain selected by the existing usage
+gate. Bundled imports use the namespace; flat implementation exports remain
+available to existing consumers. Python exposes corresponding static aliases,
+and helper discovery follows namespace methods and callbacks without including
+unrelated helpers.
+
+The missing `rune.exists` regression failed before implementation. Runtime parity
+checks cover empty lists, falsy scalars, structural membership/distinct and metadata;
+strict compilation covers namespace generic inference and generated imports in all
+layouts. The authoritative generator regenerated 63 TypeScript/Zod goldens.
+`pnpm --filter @rune-langium/codegen test` passes **2,222 tests**, with the existing
+one skip and eight todo. The three Studio worker/projection suites pass **74 tests**;
+`pnpm run verify:codegen-corpus` strictly compiles **132 pinned files**. Codegen build
+and type checks, scoped lint, formatting, runtime freshness and `git diff --check`
+pass. Existing lint warnings remain. No merge or deployment has occurred.
+
 ## One final review and fix pass
 
 A fresh reviewer examined the entire branch through `fcb1a567`, reporting six
