@@ -293,7 +293,7 @@ export class TsNamespaceEmitter extends BaseNamespaceEmitter {
 
   private typeName = (declaration: AstNode & { name: string }, exportedName = declaration.name): string => {
     const namespace = getElementNamespace(declaration) ?? this.model.namespace;
-    exportedName = this.callableNames.dataExported(namespace, exportedName);
+    exportedName = this.callableNames.declarationExported(namespace, declaration, exportedName);
     return this.singleFile || namespace !== this.model.namespace
       ? this.callableNames.bundled(namespace, exportedName)
       : exportedName;
@@ -506,7 +506,7 @@ export class TsNamespaceEmitter extends BaseNamespaceEmitter {
         symbols = new Set();
         imports.set(ns, symbols);
       }
-      const name = isData(typeRef) ? this.callableNames.dataExported(ns, symbolName) : symbolName;
+      const name = this.callableNames.declarationExported(ns, typeRef, symbolName);
       const exported = this.singleFile ? this.callableNames.bundled(ns, name) : name;
       const local = localName ?? this.typeName(typeRef, symbolName);
       symbols.add(exported === local ? exported : `${exported} as ${local}`);

@@ -134,6 +134,14 @@ func Libraries:
  output: result int (1..1)
  set result: alpha.Custom(value) + beta.Custom(value)
 `);
+      sources.push(`namespace annotations
+annotation rune:
+ tagValue string (0..1)
+type runeAnnotation:
+ value int (1..1)
+type runeAnnotation1Args:
+ value int (1..1)
+`);
       const docs = sources.map((source, index) =>
         RuneDsl.shared.workspace.LangiumDocumentFactory.fromString(
           source,
@@ -176,6 +184,8 @@ func Libraries:
         const require = createRequire(join(directory, 'entry.js'));
         const entry = layout === 'single-file' ? 'model' : layout === 'barrel' ? 'index' : 'caller';
         const funcs = require(`./${entry}.js`);
+        const annotations = layout === 'per-namespace' ? require('./annotations.js') : funcs;
+        expect(typeof annotations.runeAnnotation2({ tagValue: 'test' })).toBe('function');
         expect(funcs.CheckRuntimeNamespace({ a: { value: 1 }, b: { value: 1 } })).toBe(true);
         expect(funcs.CheckRuntimeNamespace({ a: { value: 1 }, b: { value: 2 } })).toBe(false);
         expect(funcs.CallRuntimeName({ a: 1, b: 1 })).toBe(true);

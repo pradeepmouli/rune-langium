@@ -3,10 +3,13 @@
 
 import {
   isRosettaRule,
+  isData,
+  isAnnotation,
   type RosettaFunction,
   type RosettaExternalFunction,
   type RosettaRule
 } from '@rune-langium/core';
+import type { AstNode } from 'langium';
 import type { NamespaceRegistry } from './namespace-registry.js';
 import { RUNE_HELPER_NAMES } from '../helpers.js';
 
@@ -21,6 +24,7 @@ export function callableExportName(declaration: CallableDeclaration): string {
 /** One name allocation shared by imports, calls, and bundled exports. */
 export class CallableNames {
   private readonly functionExports = new Map<string, string>();
+  private readonly annotationExports = new Map<string, string>();
   private readonly dataExports = new Map<string, string>();
   private readonly owners = new Map<string, Set<string>>();
   private readonly aliases = new Map<string, string>();
@@ -38,24 +42,28 @@ export class CallableNames {
         ...typeNames,
         ...manifest.exportedFuncNames,
         ...manifest.exportedLibraryFuncNames,
-        ...helpers
+        ...helpers,
+        ...[...manifest.exportedAnnotationNames].map((name) => `${name}Args`)
       ]);
-      for (const name of [...manifest.exportedFuncNames, ...manifest.exportedLibraryFuncNames].sort()) {
-        if (!typeNames.has(name) && !helpers.has(name)) continue;
-        const base = `${name}Function`;
+      const allocate = (name: string, suffix: string, exports: Map<string, string>, companions: string[] = []) => {
+        const base = `${name}${suffix}`;
         let exported = base;
-        for (let suffix = 1; reserved.has(exported); suffix++) exported = `${base}${suffix}`;
+        for (
+          let count = 1;
+          reserved.has(exported) || companions.some((suffix) => reserved.has(exported + suffix));
+          count++
+        )
+          exported = `${base}${count}`;
         reserved.add(exported);
-        this.functionExports.set(`${namespace}.${name}`, exported);
-      }
-      for (const name of [...manifest.exportedDataNames].sort()) {
-        if (!helpers.has(name)) continue;
-        const base = `${name}Data`;
-        let exported = base;
-        for (let suffix = 1; reserved.has(exported); suffix++) exported = `${base}${suffix}`;
-        reserved.add(exported);
-        this.dataExports.set(`${namespace}.${name}`, exported);
-      }
+        for (const suffix of companions) reserved.add(exported + suffix);
+        exports.set(`${namespace}.${name}`, exported);
+      };
+      for (const name of [...manifest.exportedFuncNames, ...manifest.exportedLibraryFuncNames].sort())
+        if (typeNames.has(name) || helpers.has(name)) allocate(name, 'Function', this.functionExports);
+      for (const name of [...manifest.exportedDataNames].sort())
+        if (helpers.has(name)) allocate(name, 'Data', this.dataExports);
+      for (const name of [...manifest.exportedAnnotationNames].sort())
+        if (helpers.has(name)) allocate(name, 'Annotation', this.annotationExports, ['Args']);
       const names = new Set([
         ...[...manifest.exportedDataNames].map((name) => this.dataExported(namespace, name)),
         ...[...manifest.exportedDataNames].flatMap((name) => [`${name}Shape`, `is${name}`]),
@@ -63,8 +71,8 @@ export class CallableNames {
         ...[...manifest.exportedEnumNames].flatMap((name) => [`${name}Values`, `${name}DisplayNames`]),
         ...[...manifest.exportedFuncNames].map((name) => this.exported(namespace, name)),
         ...manifest.exportedTypeAliasNames,
-        ...manifest.exportedAnnotationNames,
-        ...[...manifest.exportedAnnotationNames].map((name) => `${name}Args`),
+        ...[...manifest.exportedAnnotationNames].map((name) => this.annotationExported(namespace, name)),
+        ...[...manifest.exportedAnnotationNames].map((name) => `${this.annotationExported(namespace, name)}Args`),
         ...[...manifest.exportedLibraryFuncNames].map((name) => this.exported(namespace, name)),
         ...[...manifest.exportedRuleNames].flatMap((name) => [`extract${name}`, `validate${name}`]),
         ...(manifest.exportedRuleNames.size ? ['runeReportRules'] : [])
@@ -93,6 +101,19 @@ export class CallableNames {
 
   dataExported(namespace: string, name: string): string {
     return this.dataExports.get(`${namespace}.${name}`) ?? name;
+  }
+
+  annotationExported(namespace: string, name: string): string {
+    return this.annotationExports.get(`${namespace}.${name}`) ?? name;
+  }
+
+  declarationExported(namespace: string, declaration: AstNode & { name: string }, name = declaration.name): string {
+    if (isData(declaration)) return this.dataExported(namespace, name);
+    if (isAnnotation(declaration)) {
+      if (name === declaration.name) return this.annotationExported(namespace, name);
+      if (name === `${declaration.name}Args`) return `${this.annotationExported(namespace, declaration.name)}Args`;
+    }
+    return name;
   }
 
   alias(namespace: string, name: string): string {
