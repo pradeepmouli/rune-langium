@@ -168,3 +168,6 @@ export function generatePreviewSchemas(
 }
 
 export { emitStandaloneZodSchema } from './emit/standalone-schema.js';
+
+export { selectTypeScriptProjection } from './projection/typescript.js';
+export type { GeneratedProjection, ProjectionSubject, EmittedProjection } from './projection/types.js';

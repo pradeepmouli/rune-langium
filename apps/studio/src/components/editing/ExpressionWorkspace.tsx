@@ -16,12 +16,15 @@ import {
   type ExpressionRegion
 } from '@rune-langium/core';
 import type { WorkspaceFile, ParsedWorkspaceModel } from '../../services/workspace.js';
-import type { DocumentBinding, ExpressionDocument } from '../../services/expression-document.js';
+import type { DocumentBinding, DocumentEdit, ExpressionDocument } from '../../services/expression-document.js';
 import type { LspClientService } from '../../services/lsp-client.js';
 import { Button } from '@rune-langium/design-system/ui/button';
 import { pathToUri } from '../../utils/uri.js';
 import { ExpressionBuilderDialog } from './ExpressionBuilderDialog.js';
 import { RuneRegionEditor } from './RuneRegionEditor.js';
+import { GeneratedExpressionView } from './GeneratedExpressionView.js';
+import { useExpressionProjection } from './use-expression-projection.js';
+import { ForeignExpressionDialog } from './ForeignExpressionDialog.js';
 import { withInstrumentation } from '../../services/instrumentation/core.js';
 
 export interface ExpressionWorkspaceProps {
@@ -39,6 +42,7 @@ export interface ExpressionWorkspaceProps {
   sourceOwner?: RosettaFunction | Data | Dehydrated<RosettaFunction> | Dehydrated<Data>;
   loadScope?: (region: SourceRegion) => Promise<FunctionScope>;
   target?: ExpressionEditorSlotProps['target'];
+  dependencySnapshot?: readonly WorkspaceFile[];
 }
 
 export const ExpressionWorkspace = withInstrumentation(
@@ -56,7 +60,8 @@ export const ExpressionWorkspace = withInstrumentation(
     sourceError,
     sourceOwner,
     loadScope,
-    target
+    target,
+    dependencySnapshot
   }: ExpressionWorkspaceProps) {
     const [binding, setBinding] = useState<DocumentBinding | null>(null);
     const viewRef = useRef<EditorView | null>(null);
@@ -67,6 +72,11 @@ export const ExpressionWorkspace = withInstrumentation(
       scope: FunctionScope;
     } | null>(null);
     const [builderPending, setBuilderPending] = useState(false);
+    const [foreign, setForeign] = useState<{
+      binding: DocumentBinding;
+      region: SourceRegion;
+      language: 'typescript' | 'python';
+    } | null>(null);
     const [builderError, setBuilderError] = useState<string>();
     const requestRef = useRef(0);
     useEffect(
@@ -118,9 +128,16 @@ export const ExpressionWorkspace = withInstrumentation(
       binding.nodeId === nodeId
         ? binding
         : null;
-    const openBuilder = async () => {
-      if (!active || !file || !parsed || !parseCurrent || readOnly || file.readOnly || active.readOnly || !loadScope)
-        return;
+    const [language, setLanguage] = useState<'rune' | 'typescript' | 'python'>('rune');
+    const projection = useExpressionProjection(
+      language,
+      active,
+      Boolean(active && file && (readOnly || file.readOnly || (parseCurrent && parsed?.source === file.content))),
+      target ? 'condition' : 'function',
+      dependencySnapshot
+    );
+    const captureTarget = () => {
+      if (!active || !file || !parsed || !parseCurrent || readOnly || file.readOnly || active.readOnly) return;
       const owner = parsed.model.elements.find(
         (element) =>
           (element.$type === 'RosettaFunction' || element.$type === 'Data') && element.name === nameFromNodeId(nodeId)
@@ -136,6 +153,13 @@ export const ExpressionWorkspace = withInstrumentation(
       }
       const captured = documents.capture(active.uri, nodeId, active.region);
       if (!captured || captured.source !== parsed.source) return;
+      return { binding: captured, target: expression };
+    };
+    const openBuilder = async () => {
+      if (!loadScope) return;
+      const selected = captureTarget();
+      if (!selected) return;
+      const { binding: captured, target: expression } = selected;
       const request = ++requestRef.current;
       setBuilderPending(true);
       setBuilderError(undefined);
@@ -158,13 +182,48 @@ export const ExpressionWorkspace = withInstrumentation(
         if (request === requestRef.current) setBuilderPending(false);
       }
     };
+    const applyExpressionEdit = (edit: DocumentEdit) => {
+      const view = viewRef.current;
+      if (!view || view.state.doc.toString() !== edit.binding.source)
+        return { ok: false as const, reason: 'stale' as const };
+      return documents.applyDocumentEdit(edit, () =>
+        view.dispatch({
+          changes: { ...edit.region, insert: edit.replacement },
+          annotations: isolateHistory.of('full'),
+          userEvent: 'input.expression-dialog'
+        })
+      );
+    };
+    const returnFocus = () => requestAnimationFrame(() => viewRef.current?.focus());
     return (
       <section className="flex flex-col gap-1" aria-label={target ? 'Condition expression' : 'Function implementation'}>
-        <div className="flex min-h-6 items-center justify-between gap-1">
-          <span className="text-xs font-medium text-muted-foreground">
-            {target ? 'Expression' : 'Implementation'} · Rune
-          </span>
-          <div className="flex items-center gap-1">
+        <div className="flex min-h-6 flex-wrap items-center justify-between gap-1">
+          <span className="text-xs font-medium text-muted-foreground">{target ? 'Expression' : 'Implementation'}</span>
+          <div className="flex flex-wrap items-center gap-1">
+            {(['rune', 'typescript', 'python'] as const).map((choice) => (
+              <Button
+                key={choice}
+                variant="ghost"
+                size="xs"
+                aria-pressed={language === choice}
+                onClick={() => setLanguage(choice)}
+              >
+                {{ rune: 'Rune', typescript: 'TypeScript', python: 'Python' }[choice]}
+              </Button>
+            ))}
+            {language !== 'rune' && (
+              <Button
+                variant="ghost"
+                size="xs"
+                disabled={!active || !parseCurrent || readOnly || file?.readOnly || active?.readOnly}
+                onClick={() => {
+                  const selected = captureTarget();
+                  if (selected) setForeign({ binding: selected.binding, region: selected.target.region, language });
+                }}
+              >
+                Edit expression…
+              </Button>
+            )}
             <Button
               variant="ghost"
               size="xs"
@@ -186,25 +245,50 @@ export const ExpressionWorkspace = withInstrumentation(
             </Button>
           </div>
         </div>
-        {active && file ? (
-          <RuneRegionEditor
-            binding={{ ...active, readOnly: readOnly || Boolean(file.readOnly) || active.readOnly }}
-            path={file.path}
-            source={file.content}
-            onContentChange={onContentChange}
-            lspClient={lspClient}
-            lspReady={lspReady}
-            onViewCreated={(view) => {
-              viewRef.current = view;
-            }}
-            onSelectionChange={(range) => setSelection(range)}
-          />
-        ) : (
-          <p role="status" className="text-xs text-muted-foreground">
-            {sourceError ??
-              coordinateError ??
-              (file?.sourceLoaded === false ? 'Loading source…' : 'Waiting for the current Rune source to parse…')}
-          </p>
+        <div hidden={language !== 'rune'}>
+          {active && file ? (
+            <RuneRegionEditor
+              binding={{ ...active, readOnly: readOnly || Boolean(file.readOnly) || active.readOnly }}
+              path={file.path}
+              source={file.content}
+              onContentChange={onContentChange}
+              lspClient={lspClient}
+              lspReady={lspReady}
+              onViewCreated={(view) => {
+                viewRef.current = view;
+              }}
+              onSelectionChange={(range) => setSelection(range)}
+            />
+          ) : (
+            <p role="status" className="text-xs text-muted-foreground">
+              {sourceError ??
+                coordinateError ??
+                (file?.sourceLoaded === false ? 'Loading source…' : 'Waiting for the current Rune source to parse…')}
+            </p>
+          )}
+        </div>
+        {language !== 'rune' && (
+          <>
+            <p className="text-xs text-muted-foreground">Generated · read-only</p>
+            {'projection' in projection && projection.projection && (
+              <GeneratedExpressionView projection={projection.projection} />
+            )}
+            {projection.status === 'loading' && (
+              <p role="status" className="text-xs text-muted-foreground">
+                Generating…
+              </p>
+            )}
+            {projection.status === 'stale' && (
+              <p role="status" className="text-xs text-muted-foreground">
+                Showing the last valid source. The current Rune draft is pending or invalid.
+              </p>
+            )}
+            {projection.status === 'error' && (
+              <p role="alert" className="text-xs text-destructive">
+                {projection.error}
+              </p>
+            )}
+          </>
         )}
         {builderError && (
           <p role="alert" className="text-xs text-destructive">
@@ -216,18 +300,18 @@ export const ExpressionWorkspace = withInstrumentation(
             {...builder}
             onClose={() => {
               setBuilder(null);
-              requestAnimationFrame(() => viewRef.current?.focus());
+              returnFocus();
             }}
-            onApply={(edit) => {
-              const view = viewRef.current;
-              if (!view || view.state.doc.toString() !== edit.binding.source) return { ok: false, reason: 'stale' };
-              return documents.applyDocumentEdit(edit, () =>
-                view.dispatch({
-                  changes: { ...edit.region, insert: edit.replacement },
-                  annotations: isolateHistory.of('full'),
-                  userEvent: 'input.builder'
-                })
-              );
+            onApply={applyExpressionEdit}
+          />
+        )}
+        {foreign && (
+          <ForeignExpressionDialog
+            {...foreign}
+            onApply={applyExpressionEdit}
+            onClose={() => {
+              setForeign(null);
+              returnFocus();
             }}
           />
         )}

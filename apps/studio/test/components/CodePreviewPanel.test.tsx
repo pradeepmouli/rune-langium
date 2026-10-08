@@ -26,6 +26,7 @@ vi.mock('@codemirror/view', () => ({
     static updateListener = { of: vi.fn(() => []) };
     static domEventHandlers = vi.fn(() => []);
     static lineWrapping = [];
+    static editable = { of: vi.fn(() => []) };
     constructor({ parent }: { parent?: Element }) {
       if (parent) parent.appendChild(this.dom);
     }
@@ -36,9 +37,12 @@ vi.mock('@codemirror/view', () => ({
 }));
 
 vi.mock('@codemirror/state', () => ({
+  Annotation: { define: vi.fn(() => ({ of: vi.fn(() => ({})) })) },
   EditorState: {
     create: vi.fn(() => ({})),
-    readOnly: { of: vi.fn(() => []) }
+    readOnly: { of: vi.fn(() => []) },
+    lineSeparator: { of: vi.fn(() => []) },
+    transactionFilter: { of: vi.fn(() => []) }
   },
   Compartment: class {
     of = vi.fn(() => []);

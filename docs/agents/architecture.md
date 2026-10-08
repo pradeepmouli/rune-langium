@@ -105,3 +105,14 @@ editing Source makes an open draft stale. The parser worker exposes core's
 canonical expression scope, including dispatch signatures, inherited fields,
 earlier aliases and callable argument counts. The dialog's Text surface reuses
 SourceEditor with a private buffer and no live LSP owner.
+
+Generated expression views use codegen's recorded projection metadata and the
+existing preview worker/session client. TypeScript functions display the exact
+emitted declaration; condition fragments are captured during the same emitter
+traversal. Display coverage is independent of inverse-lens coverage. Reverse
+editing opens a private dialog, schema-validates and reparses the converted Rune
+AST, and applies only the captured region with revision guards. Generated whole
+functions remain read-only. Native scalar operators share the export emitter's
+linked type/cardinality proof; collections, metadata, missing values and structured
+equality retain their required runtime behavior. Preview file receipts acknowledge
+delivery; identical content preserves the linked/generation caches.

@@ -2,24 +2,14 @@
 // SPDX-License-Identifier: FSL-1.1-ALv2
 // Copyright (c) 2026 Pradeep Mouli
 
-import {
-  Annotation,
-  EditorState,
-  StateEffect,
-  StateField,
-  Transaction,
-  type Extension,
-  type ChangeSpec
-} from '@codemirror/state';
-import { Decoration, EditorView, keymap } from '@codemirror/view';
-import { basicSetup } from 'codemirror';
-import { defaultKeymap } from '@codemirror/commands';
+import { EditorState, StateEffect, StateField, Transaction, type Extension, type ChangeSpec } from '@codemirror/state';
+import { Decoration, EditorView } from '@codemirror/view';
 import type { SourceRegion } from '@rune-langium/core';
 import { runeDslLanguage } from './rune-dsl.js';
-import { studioEditorExtensions } from './editor-theme.js';
+import { editorExtensions, externalDocumentChange } from './editor-extensions.js';
 import { withInstrumentation } from '../services/instrumentation/core.js';
 
-export const externalDocumentChange = Annotation.define<boolean>();
+export { externalDocumentChange } from './editor-extensions.js';
 export const setProtectedRegion = StateEffect.define<SourceRegion>();
 export const protectedRegion = StateField.define<SourceRegion>({
   create: (state) => ({ from: 0, to: state.doc.length }),
@@ -39,19 +29,7 @@ export const protectedRegion = StateField.define<SourceRegion>({
 
 export const documentExtensions = withInstrumentation(
   function documentExtensions(region?: SourceRegion): Extension[] {
-    const extensions: Extension[] = [
-      EditorState.lineSeparator.of('\n'),
-      basicSetup,
-      keymap.of(defaultKeymap),
-      EditorView.lineWrapping,
-      ...studioEditorExtensions,
-      runeDslLanguage()
-    ];
-    extensions.push(
-      EditorState.transactionFilter.of((tr) =>
-        tr.docChanged && tr.startState.facet(EditorState.readOnly) && !tr.annotation(externalDocumentChange) ? [] : tr
-      )
-    );
+    const extensions = editorExtensions(runeDslLanguage());
     if (region) {
       extensions.push(
         protectedRegion.init(() => region),

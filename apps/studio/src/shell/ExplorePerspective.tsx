@@ -2006,6 +2006,7 @@ export const ExplorePerspective = withInstrumentation(
               : undefined
           }
           file={selectedExpressionFile}
+          dependencySnapshot={files}
           parsed={selectedParsedModel}
           loadScope={(region) =>
             requestExpressionScope(selectedExpressionFile!.path, nameFromNodeId(props.nodeId), region).then(
@@ -2029,6 +2030,7 @@ export const ExplorePerspective = withInstrumentation(
         workspaceId,
         selectedNodeData,
         selectedExpressionFile,
+        files,
         selectedParsedModel,
         expressionDocuments,
         selectedParseCurrent,
@@ -2055,6 +2057,7 @@ export const ExplorePerspective = withInstrumentation(
                 : undefined
             }
             file={selectedExpressionFile}
+            dependencySnapshot={files}
             parsed={selectedParsedModel}
             loadScope={(region) =>
               requestExpressionScope(selectedExpressionFile!.path, nameFromNodeId(props.target!.nodeId), region).then(
@@ -2080,6 +2083,7 @@ export const ExplorePerspective = withInstrumentation(
         workspaceId,
         selectedNodeData,
         selectedExpressionFile,
+        files,
         selectedParsedModel,
         expressionDocuments,
         selectedParseCurrent,

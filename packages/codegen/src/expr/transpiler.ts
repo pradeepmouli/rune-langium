@@ -58,7 +58,6 @@ import {
   isSwitchOperation,
   isRosettaSuperCall,
   isAttribute,
-  isRosettaRecordFeature,
   isRosettaRecordType,
   isChoiceOption,
   type Attribute,
@@ -101,6 +100,7 @@ import { renderResolvedFunctionCall } from './function-call.js';
 import { renderCollectionOperation } from './collection-operations.js';
 import { callableExportName, type CallableDeclaration } from '../emit/callable-names.js';
 import type { GeneratorDiagnostic } from '../types.js';
+import { nativeEqualityOperands, nativeScalarOperands } from './scalar-operators.js';
 
 // ---------------------------------------------------------------------------
 // Operator precedence table — copied from expression-node-to-dsl.ts (prior art).
@@ -129,6 +129,8 @@ const PRECEDENCE: Record<string, number> = {
  * Not exposed in the public API. Per data-model §7.
  */
 export interface ExpressionTranspilerContext {
+  /** Capture an emitted condition without repeating resolution or rendering. */
+  onConditionProjection?: (condition: Condition, code: string) => void;
   /**
    * The name of the `this` value in the emitted predicate.
    * In superRefine mode: `data` (the `.superRefine((data, ctx) =>` parameter).
@@ -866,6 +868,9 @@ export function transpileArithmetic(expr: RosettaExpression, ctx: ExpressionTran
   }
   const left = transpileExpression(expr.left, ctx);
   const right = transpileExpression(expr.right, ctx);
+  const scalar = nativeScalarOperands(expr.left, expr.right);
+  if (scalar === 'number' || (scalar === 'string' && expr.operator === '+'))
+    return `(${left} ${expr.operator} ${right})`;
   const leftType = expressionType(expr.left)?.name;
   const rightType = expressionType(expr.right)?.name;
   const operation =
@@ -887,11 +892,15 @@ export function transpileComparison(expr: RosettaExpression, ctx: ExpressionTran
   if (isEqualityOperation(expr)) {
     const left = expr.left ? transpileExpression(expr.left, ctx) : ctx.selfName;
     const right = transpileExpression(expr.right, ctx);
+    if (nativeEqualityOperands(expr.left, expr.right))
+      return `(${left} ${expr.operator === '<>' ? '!==' : '==='} ${right})`;
     return `${expr.operator === '<>' ? '!' : ''}runeValueEquals(${left}, ${right})`;
   }
   if (isComparisonOperation(expr)) {
     const left = expr.left ? transpileExpression(expr.left, ctx) : ctx.selfName;
     const right = transpileExpression(expr.right, ctx);
+    const scalar = nativeScalarOperands(expr.left, expr.right);
+    if (scalar === 'number' || scalar === 'string') return `(${left} ${expr.operator} ${right})`;
     const temporal = {
       date: 'PlainDate',
       time: 'PlainTime',

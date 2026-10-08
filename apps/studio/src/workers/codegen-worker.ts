@@ -42,13 +42,14 @@ import {
   generatePreviewSchemas,
   emitStandaloneZodSchema,
   RUNTIME_HELPER_JS_SOURCE,
-  normalizePreviewInputs
+  normalizePreviewInputs,
+  selectTypeScriptProjection
 } from '@rune-langium/codegen/export';
 import type { Target, FormPreviewSchema, GeneratorOutput, GeneratorDiagnostic } from '@rune-langium/codegen/export';
 import { findDataNode, getActiveConditionPredicates } from '@rune-langium/codegen/instances';
 import type { ValidationDiagnostic } from '@rune-langium/codegen/instances';
 import { qualifiedNameFromNodeId } from '@rune-langium/visual-editor/identifiers';
-import type { PreviewWorkerRequest } from '../services/codegen-service.js';
+import type { PreviewWorkerRequest, ProjectionRequest } from '../services/codegen-service.js';
 import { z } from 'zod';
 import { isWorkerGlobalScope } from './runtime-guards.js';
 import { installInstrumentationWorkerSink } from '../services/instrumentation/worker-sink.js';
@@ -118,6 +119,7 @@ type WorkerInboundMessage =
   | PreviewWorkerRequest
   | PreviewExecuteMessage
   | InstanceValidateMessage
+  | ProjectionRequest
   | InstanceGenerateSchemaMessage;
 
 // ---------------------------------------------------------------------------
@@ -136,6 +138,7 @@ let lastPreviewTargetId: string | undefined;
 let lastPreviewRequestId: string | undefined;
 let previewFilesVersion = 0;
 let previewFilesRevision = 0;
+let previewVersionStartRevision = 0;
 const documentsCache = new Map<string, VersionedEntry<LangiumDocument[]>>();
 const previewSchemaCache = new Map<string, VersionedEntry<FormPreviewSchema[]>>();
 const previewGenerateCache = new Map<string, VersionedEntry<GeneratorOutput[]>>();
@@ -856,6 +859,35 @@ function createGeneratedModuleLoader(outputs: readonly GeneratorOutput[]): {
 // Function execution
 // ---------------------------------------------------------------------------
 
+async function runProjection(request: ProjectionRequest): Promise<void> {
+  const scope = self as unknown as DedicatedWorkerGlobalScope;
+  try {
+    const current = () =>
+      request.filesRevision >= previewVersionStartRevision &&
+      request.filesRevision <= previewFilesRevision &&
+      currentPreviewFiles.some((file) => file.uri === request.subject.uri && file.content === request.source);
+    if (!current()) throw new Error('The source changed. Refresh the generated view.');
+    const { version, value: documents } = await buildDocuments();
+    if (request.language !== 'typescript') throw new Error('Python generation is not available yet.');
+    const { value: outputs } = await getOrComputeAsync(
+      previewGenerateCache,
+      'generate:typescript',
+      () => version,
+      () => generate(documents, { target: 'typescript' })
+    );
+    if (version !== previewFilesVersion || !current())
+      throw new Error('The source changed. Refresh the generated view.');
+    const projection = selectTypeScriptProjection(outputs, request.subject, request.kind);
+    scope.postMessage({ type: 'projection:result', requestId: request.requestId, projection });
+  } catch (error) {
+    scope.postMessage({
+      type: 'projection:error',
+      requestId: request.requestId,
+      error: error instanceof Error ? error.message : String(error)
+    });
+  }
+}
+
 async function executeFunction(funcName: string, inputs: Record<string, unknown>, requestId: string): Promise<void> {
   const scope = self as unknown as DedicatedWorkerGlobalScope;
   const functionFqn = qualifiedNameFromNodeId(funcName);
@@ -1059,9 +1091,23 @@ if (isWorkerGlobalScope()) {
         }
         runCodegen(lastTarget, lastCodegenRequestId).catch(console.error);
       } else if (msg.type === 'preview:setFiles') {
+        const changed =
+          msg.files.length !== currentPreviewFiles.length ||
+          msg.files.some((file, index) => {
+            const previous = currentPreviewFiles[index];
+            return (
+              !previous ||
+              previous.uri !== file.uri ||
+              previous.content !== file.content ||
+              previous.serializedModelJson !== file.serializedModelJson
+            );
+          });
         hydrateCuratedDocuments(msg.files);
         currentPreviewFiles = msg.files;
-        previewFilesVersion++;
+        if (changed) {
+          previewFilesVersion++;
+          previewVersionStartRevision = msg.filesRevision;
+        }
         // The provider owns this monotonic sequence. Echo the exact revision
         // that installed so a readiness waiter cannot resolve from another
         // dispatch's receipt.
@@ -1085,6 +1131,8 @@ if (isWorkerGlobalScope()) {
       } else if (msg.type === 'preview:execute') {
         const { funcName, inputs, requestId } = msg;
         executeFunction(funcName, inputs, requestId).catch(console.error);
+      } else if (msg.type === 'projection:generate') {
+        runProjection(msg).catch(console.error);
       } else if (msg.type === 'instance:validate') {
         const { typeFqn, data, requestId } = msg;
         validateInstance(typeFqn, data, requestId).catch(console.error);

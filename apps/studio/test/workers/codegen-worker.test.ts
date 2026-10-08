@@ -11,6 +11,13 @@ const fromStringMock = vi.fn((content: string, uri: string) => ({
   parseResult: { value: { uri, content }, lexerErrors: [], parserErrors: [] }
 }));
 const generateMock = vi.fn(() => []);
+const selectProjectionMock = vi.fn((_outputs, subject) => ({
+  language: 'typescript',
+  subject,
+  code: 'export function F(): number { return 1; }',
+  sourceMap: [],
+  requiredHelpers: []
+}));
 const generatePreviewSchemasMock = vi.fn(() => []);
 const emitStandaloneZodSchemaMock = vi.fn(() => ({ code: '', diagnostics: [] }));
 // 019 Task #88 follow-up — curated entries hit `RuneDsl.serializer.JsonSerializer.deserialize`
@@ -108,6 +115,7 @@ vi.mock('@rune-langium/core', () => {
 
 vi.mock('@rune-langium/codegen/export', () => ({
   generate: generateMock,
+  selectTypeScriptProjection: selectProjectionMock,
   generatePreviewSchemas: generatePreviewSchemasMock,
   emitStandaloneZodSchema: emitStandaloneZodSchemaMock,
   RUNTIME_HELPER_JS_SOURCE: 'const runeToField = undefined; const runeToReference = undefined;',
@@ -168,6 +176,72 @@ async function flushWorker() {
 }
 
 describe('codegen-worker preview messages', () => {
+  it('reuses generation for identical receipts and invalidates when a dependency changes', async () => {
+    const { scope, dispatch } = await loadWorkerModule();
+    const files = [
+      { uri: 'file:///f.rosetta', content: 'namespace f\nfunc F: output: result int (1..1) set result: 1' },
+      { uri: 'file:///dep.rosetta', content: 'namespace dep\ntype D:' }
+    ];
+    const request = {
+      type: 'projection:generate',
+      language: 'typescript',
+      kind: 'function',
+      source: files[0].content,
+      subject: { uri: files[0].uri, nodeId: 'f.F#RosettaFunction', region: { from: 0, to: 20 } },
+      filesRevision: 1
+    };
+    dispatch({ type: 'preview:setFiles', files, filesRevision: 1 });
+    dispatch({ ...request, requestId: 'project:first' });
+    await flushWorker();
+    expect(generateMock).toHaveBeenCalledOnce();
+    dispatch({ type: 'preview:setFiles', files: structuredClone(files), filesRevision: 2 });
+    dispatch({ ...request, filesRevision: 2, requestId: 'project:again' });
+    await flushWorker();
+    expect(generateMock).toHaveBeenCalledOnce();
+    expect(scope.postMessage).toHaveBeenCalledWith(
+      expect.objectContaining({ type: 'projection:result', requestId: 'project:again' })
+    );
+    dispatch({
+      type: 'preview:setFiles',
+      files: [files[0], { ...files[1], content: 'namespace dep\ntype Changed:' }],
+      filesRevision: 3
+    });
+    dispatch({ ...request, filesRevision: 3, requestId: 'project:dependency' });
+    await flushWorker();
+    expect(generateMock).toHaveBeenCalledTimes(2);
+  });
+  it('rejects a generation reply superseded by another source snapshot', async () => {
+    const { scope, dispatch } = await loadWorkerModule();
+    let release;
+    generateMock.mockImplementationOnce(
+      () =>
+        new Promise((resolve) => {
+          release = resolve;
+        })
+    );
+    const file = { uri: 'file:///f.rosetta', content: 'namespace f\nfunc F:' };
+    dispatch({ type: 'preview:setFiles', files: [file], filesRevision: 1 });
+    dispatch({
+      type: 'projection:generate',
+      requestId: 'project:late',
+      language: 'typescript',
+      kind: 'function',
+      filesRevision: 1,
+      source: file.content,
+      subject: { uri: file.uri, nodeId: 'f.F#RosettaFunction', region: { from: 0, to: 10 } }
+    });
+    await flushWorker();
+    dispatch({ type: 'preview:setFiles', files: [{ ...file, content: file.content + '\n' }], filesRevision: 2 });
+    release([]);
+    await flushWorker();
+    expect(scope.postMessage).toHaveBeenCalledWith(
+      expect.objectContaining({
+        type: 'projection:error',
+        requestId: 'project:late',
+        error: expect.stringContaining('source changed')
+      })
+    );
+  });
   it('acknowledges the exact installed preview file revision', async () => {
     const { scope, dispatch } = await loadWorkerModule();
     dispatch({
@@ -392,7 +466,7 @@ describe('codegen-worker preview messages', () => {
     expect(secondCallDocuments).toBe(firstCallDocuments);
   });
 
-  it('invalidates the documents cache after preview:setFiles, even when file content is unchanged', async () => {
+  it('reuses documents for another receipt of unchanged file contents', async () => {
     generatePreviewSchemasMock.mockReturnValue([
       {
         schemaVersion: 1,
@@ -411,20 +485,15 @@ describe('codegen-worker preview messages', () => {
     dispatch({ type: 'preview:generate', targetId: 'beta.Trade', requestId: 'inval:2' });
     await flushWorker();
 
-    // Resend the IDENTICAL file content — must still invalidate the cache.
-    // previewFilesVersion bumps unconditionally on every preview:setFiles
-    // call, not on a content diff (see the design doc's Decision #1).
+    // A readiness receipt acknowledges delivery; only changed content invalidates.
     dispatch({ type: 'preview:setFiles', filesRevision: 1, files: [...files], requestId: 'inval:3' });
     await flushWorker();
     dispatch({ type: 'preview:generate', targetId: 'beta.Trade', requestId: 'inval:4' });
     await flushWorker();
 
-    expect(fromStringMock).toHaveBeenCalledTimes(2);
-    expect(buildMock).toHaveBeenCalledTimes(2);
-
-    const firstCallDocuments = generatePreviewSchemasMock.mock.calls[0]![0];
-    const secondCallDocuments = generatePreviewSchemasMock.mock.calls[1]![0];
-    expect(secondCallDocuments).not.toBe(firstCallDocuments);
+    expect(fromStringMock).toHaveBeenCalledOnce();
+    expect(buildMock).toHaveBeenCalledOnce();
+    expect(generatePreviewSchemasMock).toHaveBeenCalledOnce();
   });
 
   it('does not let a build suspended across a preview:setFiles poison the cache with stale documents', async () => {
@@ -957,7 +1026,7 @@ describe('codegen-worker previewGenerateCache (executeFunction)', () => {
     dispatch({
       type: 'preview:setFiles',
       filesRevision: 1,
-      files: [{ uri: 'file:///trade.rosetta', content: 'namespace "alpha"' }],
+      files: [{ uri: 'file:///trade.rosetta', content: 'namespace "alpha"\n// dependency snapshot changed' }],
       requestId: 'inv:3'
     });
     await flushWorker();
@@ -1605,7 +1674,7 @@ describe('codegen-worker previewSchemaCache (shared across preview/instance hand
     dispatch({
       type: 'preview:setFiles',
       filesRevision: 1,
-      files: [{ uri: 'file:///trade.rosetta', content: 'namespace "beta"' }],
+      files: [{ uri: 'file:///trade.rosetta', content: 'namespace "beta"\n// dependency snapshot changed' }],
       requestId: 'inv:3'
     });
     await flushWorker();

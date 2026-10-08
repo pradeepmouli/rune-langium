@@ -28,6 +28,8 @@ import {
   type TypeCall,
   getElementNamespace
 } from '@rune-langium/core';
+import { emittedTypeScriptProjection } from '../projection/typescript.js';
+import type { EmittedProjection } from '../projection/types.js';
 import { expressionIsMany, featureIsMany, typeFeatures } from '../expr/navigation.js';
 import { expressionMetadataKind } from '../expr/metadata-type.js';
 import { groupFuncDispatches, renderFuncDispatchGroup } from './func-dispatch.js';
@@ -259,6 +261,7 @@ export class TsNamespaceEmitter extends BaseNamespaceEmitter {
   private readonly sections: string[] = [];
   private readonly relativePath: string;
   private readonly generatedFuncs: GeneratedFunc[] = [];
+  private readonly projections: EmittedProjection[] = [];
   private readonly callableNames: CallableNames;
   private readonly singleFile: boolean;
   private readonly localCallableAliases = new Map<string, string>();
@@ -412,7 +415,9 @@ export class TsNamespaceEmitter extends BaseNamespaceEmitter {
       const funcCtx = {
         ...TsNamespaceEmitter.buildFuncBodyContext(func, callGraph, this.ctx.diagnostics),
         callableName: this.callableName,
-        typeNameResolver: this.typeName
+        typeNameResolver: this.typeName,
+        onConditionProjection: (condition: Condition, code: string) =>
+          this.recordProjection(condition.expression, code, 'condition')
       };
       const group = groupsByName.get(func.name)!.map((variant) => ({
         ...variant,
@@ -429,21 +434,39 @@ export class TsNamespaceEmitter extends BaseNamespaceEmitter {
                 TsNamespaceEmitter.emitFuncBody(variant, {
                   ...TsNamespaceEmitter.buildFuncBodyContext(variant, callGraph, this.ctx.diagnostics),
                   callableName: this.callableName,
-                  typeNameResolver: this.typeName
+                  typeNameResolver: this.typeName,
+                  onConditionProjection: (condition: Condition, code: string) =>
+                    this.recordProjection(condition.expression, code, 'condition')
                 })
             });
 
       this.sections.push('');
+      const outputLine = this.sections.join('\n').split('\n').length;
       this.sections.push(funcText);
+      const sources = group.flatMap((variant) => {
+        const fragment = variant.source ? this.recordProjection(variant.source, funcText, 'function') : undefined;
+        return fragment ? fragment.sourceMap : [];
+      });
+      this.ctx.sourceMap.push(...sources.map((entry) => ({ ...entry, outputLine: outputLine + entry.outputLine })));
 
       this.generatedFuncs.push({
         name: func.name,
         exportName: group[0]!.name,
         relativePath: this.relativePath,
         fileContents: funcText,
-        sourceMap: []
+        sourceMap: sources
       });
     }
+  }
+
+  private recordProjection(
+    node: AstNode,
+    code: string,
+    kind: EmittedProjection['kind']
+  ): EmittedProjection | undefined {
+    const projection = emittedTypeScriptProjection(node, code, kind);
+    if (projection) this.projections.push(projection);
+    return projection;
   }
 
   finalize(): GeneratorOutput {
@@ -458,7 +481,8 @@ export class TsNamespaceEmitter extends BaseNamespaceEmitter {
         ) + '\n',
       sourceMap: this.ctx.sourceMap,
       diagnostics: this.ctx.diagnostics,
-      funcs: this.generatedFuncs
+      funcs: this.generatedFuncs,
+      projections: this.projections
     };
   }
 
@@ -1368,6 +1392,7 @@ export class TsNamespaceEmitter extends BaseNamespaceEmitter {
         `  }`
       ].join('\n');
 
+      this.recordProjection(cond.expression, method, 'condition');
       methodBlocks.push(method);
     }
 
@@ -1959,6 +1984,7 @@ export class TsNamespaceEmitter extends BaseNamespaceEmitter {
         .split('\n')
         .map((line) => `  ${line}`)
         .join('\n');
+      ctx.onConditionProjection?.(condNode, throwForm);
       lines.push(throwForm);
     }
     return lines;
