@@ -25,6 +25,10 @@ class RuneReference[T](TypedDict):
     meta: NotRequired[dict[str, Any]]
 
 
+class _RuneMetadataValue(dict):
+    pass
+
+
 _rune_native_bindings = {}
 
 
@@ -67,27 +71,33 @@ def rune_normalize_attribute(value, kind, many, normalize, scalar):
         return None
     if many and isinstance(value, list):
         return [rune_normalize_attribute(item, kind, False, normalize, scalar) for item in value]
-    wrapped = scalar and kind != "value" and isinstance(value, dict) and any(
-        key in value for key in ("value", "externalReference", "globalReference", "reference"))
+    wrapped = kind != "value" and (isinstance(value, _RuneMetadataValue) or (scalar and isinstance(value, dict) and any(
+        key in value for key in ("value", "externalReference", "globalReference", "reference"))))
     if wrapped:
-        result = dict(value)
+        result = _RuneMetadataValue(value)
         if result.get("value") is not None:
             result["value"] = normalize(result["value"])
         if result.get("meta") == {}:
             result.pop("meta")
         return result
     normalized = normalize(value)
-    return {"value": normalized} if kind != "value" else normalized
+    return _RuneMetadataValue(value=normalized) if kind != "value" else normalized
+
+
+def rune_empty_object(kind):
+    if kind == "field":
+        return _RuneMetadataValue(meta={})
+    return _RuneMetadataValue() if kind != "value" else {}
 
 
 def rune_assign(root, segments, value, append, root_many, root_kind, lower, upper, label):
     if root is None:
-        root = [] if root_many else ({"meta": {}} if root_kind == "field" else {})
+        root = [] if root_many else rune_empty_object(root_kind)
     current, many, kind = root, root_many, root_kind
     for index, segment in enumerate(segments):
         if many:
             if not current:
-                current.append({"meta": {}} if kind == "field" else {})
+                current.append(rune_empty_object(kind))
             current = current[0]
         metadata = segment.get("metadata")
         if metadata:
@@ -109,7 +119,7 @@ def rune_assign(root, segments, value, append, root_many, root_kind, lower, uppe
         else:
             next_many, next_kind = segment["many"], segment["kind"]
             if current.get(name) is None:
-                current[name] = [] if next_many else ({"meta": {}} if next_kind == "field" else {})
+                current[name] = [] if next_many else rune_empty_object(next_kind)
             current, many, kind = current[name], next_many, next_kind
     return root
 
@@ -474,10 +484,10 @@ def rune_with_meta(value, entries, input_kind="value"):
             result["externalReference"] = reference_meta["reference"]
         if field_meta:
             result["meta"] = {**((wrapper or {}).get("meta") or {}), **field_meta}
-        return result
+        return _RuneMetadataValue(result)
     if field_meta:
-        return {**(wrapper or {}), "value": raw, "meta": {**((wrapper or {}).get("meta") or {}), **field_meta}}
-    return dict(wrapper, value=raw) if wrapper is not None else raw
+        return _RuneMetadataValue({**(wrapper or {}), "value": raw, "meta": {**((wrapper or {}).get("meta") or {}), **field_meta}})
+    return _RuneMetadataValue(wrapper, value=raw) if wrapper is not None else raw
 
 
 def rune_list(value):
@@ -543,10 +553,10 @@ def rune_normalize_metadata(value, input_kind, target_kind):
     existing = value if input_kind != "value" and value is not None else None
     raw = existing.get("value") if existing is not None else value
     if target_kind == "reference":
-        return dict(existing) if existing is not None else {"value": raw}
+        return _RuneMetadataValue(existing) if existing is not None else _RuneMetadataValue(value=raw)
     if input_kind == "reference" and raw is None:
         raise ValueError("Cannot convert reference metadata to field metadata without a value")
-    return {"value": raw, "meta": existing.get("meta", {}) if existing is not None else {}}
+    return _RuneMetadataValue(value=raw, meta=existing.get("meta", {}) if existing is not None else {})
 
 
 def rune_to_field(value, input_kind="value"):
@@ -571,7 +581,7 @@ def rune_as_key(value, input_kind="value"):
     global_key = meta.get("globalKey")
     if global_key is None:
         global_key = candidate.get("globalReference")
-    return {key: item for key, item in (("externalReference", external), ("globalReference", global_key)) if item is not None}
+    return _RuneMetadataValue({key: item for key, item in (("externalReference", external), ("globalReference", global_key)) if item is not None})
 
 
 def rune_cardinality(value, lower, upper, label):

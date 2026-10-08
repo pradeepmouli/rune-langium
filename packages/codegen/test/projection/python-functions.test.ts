@@ -515,6 +515,11 @@ func Read:
   [metadata scheme]
  output: result number (1..1)
  set result: object -> value
+func Forward:
+ inputs: object PayloadAlias (1..1)
+  [metadata scheme]
+ output: result number (1..1)
+ set result: Read(object)
 func ReadMany:
  inputs: objects Payload (0..*)
   [metadata reference]
@@ -533,12 +538,17 @@ func ReadMany:
     expect(
       execute(module.code, [
         { expression: `${module.bindings.get('python.rawPayload.Read')}(data)`, data },
+        { expression: `${module.bindings.get('python.rawPayload.Forward')}(data)`, data },
+        {
+          expression: `${module.bindings.get('python.rawPayload.Read')}(dict(object=rune.toField(data["object"])))`,
+          data
+        },
         {
           expression: `${module.bindings.get('python.rawPayload.ReadMany')}(data)`,
           data: { objects: [{ value: 0 }, { value: 2 }] }
         }
       ])
-    ).toEqual([{ value: 1 }, { value: [0, 2] }]);
+    ).toEqual([{ value: 1 }, { value: 1 }, { value: 1 }, { value: [0, 2] }]);
   });
 
   it('normalizes raw metadata inputs before choosing a dispatch branch', async () => {
