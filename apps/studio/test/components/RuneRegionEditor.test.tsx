@@ -10,7 +10,7 @@ import { RuneRegionEditor } from '../../src/components/editing/RuneRegionEditor.
 import { SourceEditor } from '../../src/components/SourceEditor.js';
 import { parse, getFunctionImplementationRegion, type RosettaFunction } from '@rune-langium/core';
 import { EditorState, Transaction } from '@codemirror/state';
-import { undo, redo } from '@codemirror/commands';
+import { insertNewline, undo, redo } from '@codemirror/commands';
 import {
   documentExtensions,
   protectedRegion,
@@ -192,5 +192,36 @@ describe('real region editor', () => {
         .update({ changes: { from: source.indexOf('1'), to: source.indexOf('1') + 1, insert: '42' } })
         .state.doc.toString()
     ).toBe(source.replace('1', '42'));
+  });
+
+  it.each([false, true])('keeps Enter, paste and undo consistently CRLF (protected: %s)', (protectedBody) => {
+    const source = 'namespace test\r\nfunc F:\r\n  set value: 1\r\n';
+    const from = source.indexOf('  set');
+    let state = EditorState.create({
+      doc: source,
+      extensions: documentExtensions(protectedBody ? { from, to: source.length } : undefined)
+    });
+    // CodeMirror's line end is after the retained CR, immediately before the LF.
+    state = state.update({ selection: { anchor: state.doc.lineAt(source.indexOf('1')).to } }).state;
+    const target = {
+      get state() {
+        return state;
+      },
+      dispatch: (tr: Transaction) => {
+        state = tr.state;
+      }
+    };
+    expect(insertNewline(target)).toBe(true);
+    const entered = source + '\r\n';
+    expect(state.doc.toString()).toBe(entered);
+    if (protectedBody) expect(state.field(protectedRegion)).toEqual({ from, to: entered.length });
+    expect(undo(target)).toBe(true);
+    expect(state.doc.toString()).toBe(source);
+    expect(redo(target)).toBe(true);
+    expect(state.doc.toString()).toBe(entered);
+    state = state.update({ changes: { from, insert: '  alias a: 1\n  alias b: 2\r\n' } }).state;
+    expect(state.doc.toString()).toBe(
+      entered.slice(0, from) + '  alias a: 1\r\n  alias b: 2\r\n' + entered.slice(from)
+    );
   });
 });
