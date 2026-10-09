@@ -37,7 +37,9 @@ function execute(source: string, cases: readonly { expression: string; data?: un
   return JSON.parse(result.stdout) as Array<{ value?: unknown; error?: string }>;
 }
 
-async function executableFunctions(source: string) {
+async function executableFunctions<T extends Record<string, unknown> = Record<string, (data: object) => unknown>>(
+  source: string
+) {
   const funcs = await linkedFunctions(source);
   const document = AstUtils.getDocument(funcs[0]!);
   const python = generatePythonModule([document]);
@@ -46,7 +48,7 @@ async function executableFunctions(source: string) {
     strict: true,
     typescript: { layout: 'single-file' }
   });
-  const exports: Record<string, (data: object) => unknown> = {};
+  const exports = {} as T;
   const javascript = ts.transpileModule(typescript!.content, {
     compilerOptions: { target: ts.ScriptTarget.ES2022, module: ts.ModuleKind.CommonJS }
   }).outputText;
@@ -55,6 +57,199 @@ async function executableFunctions(source: string) {
 }
 
 describe('complete Python function projections', () => {
+  it.each(['one-of', 'required choice scalar, many, flag', 'flag only exists'])(
+    'reads metadata payloads in inherited root Data condition %s',
+    async (predicate) => {
+      const { python, exports } = await executableFunctions<{
+        Terms: new (data: object) => { validateSelection(): { valid: boolean } };
+      }>(`namespace python.root_metadata
+annotation metadata:
+ reference string (0..1)
+metaType reference string
+type Parent:
+ scalar number (0..1)
+  [metadata reference]
+ many number (0..*)
+  [metadata reference]
+type Terms extends Parent:
+ flag boolean (0..1)
+ condition Selection: ${predicate}
+func Identity:
+ inputs: terms Terms (1..1)
+ output: result Terms (1..1)
+ set result: terms
+`);
+      const condition = python.projections.find((entry) => entry.kind === 'condition')!;
+      const name = /^def (\w+)/.exec(condition.code)![1]!;
+      const inputs = [
+        {},
+        { scalar: { externalReference: 'id' } },
+        { many: [{ externalReference: 'id' }] },
+        { flag: false, scalar: { externalReference: 'id' }, many: [{ externalReference: 'id' }] },
+        { scalar: { value: 0 } },
+        { many: [{ value: 0 }] },
+        { flag: false, scalar: { value: 0 } }
+      ];
+      const expected = inputs.map((data) => new exports.Terms(data).validateSelection().valid);
+      expect(expected).toEqual(
+        predicate === 'flag only exists'
+          ? [true, true, true, true, false, false, false]
+          : [false, false, false, true, true, true, false]
+      );
+      expect(
+        execute(
+          python.code,
+          inputs.map((data) => ({ expression: `${name}(data)`, data }))
+        )
+      ).toEqual(expected.map((value) => ({ value })));
+    }
+  );
+
+  it.each(['condition', 'post-condition'])('reads metadata root locals in function %s one-of', async (kind) => {
+    const { python, exports } = await executableFunctions(`namespace python.local_metadata
+annotation metadata:
+ reference string (0..1)
+metaType reference string
+func Build:
+ inputs:
+  scalar number (0..1)
+   [metadata reference]
+  flag boolean (0..1)
+ output: result number (0..1)
+ ${kind === 'condition' ? 'condition Selection: one-of' : ''}
+ set result: 0
+ ${kind === 'post-condition' ? 'post-condition Selection: one-of' : ''}
+`);
+    const inputs = [
+      { scalar: { externalReference: 'id' } },
+      { scalar: { externalReference: 'id' }, flag: false },
+      { scalar: { value: 0 } }
+    ];
+    const results = execute(
+      python.code,
+      inputs.map((data) => ({
+        expression: `${python.bindings.get('python.local_metadata.Build')}(data)`,
+        data
+      }))
+    );
+    inputs.forEach((data, index) => {
+      const valid = kind === 'condition' ? index !== 0 : index === 0;
+      if (valid) {
+        expect(exports.Build!(data)).toBe(0);
+        expect(results[index]).toEqual({ value: 0 });
+      } else {
+        expect(() => exports.Build!(data)).toThrow(/Selection/);
+        expect(results[index]?.error).toContain('Selection');
+      }
+    });
+  });
+
+  it('ignores reference-only output payloads in only-exists postconditions', async () => {
+    const { python, exports } = await executableFunctions(`namespace python.only_metadata
+annotation metadata:
+ reference string (0..1)
+metaType reference string
+func Build:
+ inputs: flag boolean (0..1)
+ output: result number (0..1)
+  [metadata reference]
+ set result: empty with-meta {reference: "id"}
+ post-condition Selection: flag only exists
+`);
+    const data = { flag: false };
+    const expected = JSON.parse(JSON.stringify(exports.Build!(data), (_key, value) => value ?? null));
+    expect(
+      execute(python.code, [
+        {
+          expression: `${python.bindings.get('python.only_metadata.Build')}(data)`,
+          data
+        }
+      ])
+    ).toEqual([{ value: expected }]);
+  });
+
+  it.each(['<', '<=', '>', '>='])('uses UTF-16 ordering for scalar and lifted string %s', async (operator) => {
+    const declarations = ['1..1', '0..1', '0..*']
+      .map(
+        (card, index) => `func Compare${index}:
+ inputs:
+  left string (${card})
+  right string (${card})
+ output: result boolean (1..1)
+ set result: left ${operator} right`
+      )
+      .join('\n');
+    const { python, exports } = await executableFunctions('namespace python.string_order\n' + declarations);
+    const pairs = [
+      ['𐀀', '\ue000'],
+      ['\ue000', '𐀀'],
+      ['𐀀', '𐀀'],
+      ['a', 'aa'],
+      ['\ud800', '\udc00']
+    ];
+    const cases = ['Compare0', 'Compare1', 'Compare2'].flatMap((name) =>
+      pairs.map(([left, right]) => ({
+        name,
+        data: name === 'Compare2' ? { left: [left], right: [right] } : { left, right }
+      }))
+    );
+    const expected = cases.map(({ name, data }) => ({ value: exports[name]!(data) }));
+    expect(
+      execute(
+        python.code,
+        cases.map(({ name, data }) => ({
+          expression: `${python.bindings.get('python.string_order.' + name)}(data)`,
+          data
+        }))
+      )
+    ).toEqual(expected);
+  });
+
+  it('uses UTF-16 keys for sort, min, max and constructed string equality', async () => {
+    const { python, exports } = await executableFunctions(`namespace python.string_keys
+func Sort:
+ inputs: values string (0..*)
+ output: result string (0..*)
+ set result: values sort
+func Min:
+ inputs: values string (0..*)
+ output: result string (0..1)
+ set result: values min
+func Max:
+ inputs: values string (0..*)
+ output: result string (0..1)
+ set result: values max
+func Equal:
+ inputs:
+  left string (1..1)
+  right string (1..1)
+  joined string (1..1)
+ output: result boolean (1..1)
+ set result: (left + right) = joined
+`);
+    const cases = ['Sort', 'Min', 'Max'].map((name) => ({ name, data: { values: ['\ue000', '𐀀', 'a'] } }));
+    const expected = cases.map(({ name, data }) => ({ value: exports[name]!(data) }));
+    expect(
+      execute(
+        python.code,
+        cases.map(({ name, data }) => ({
+          expression: `${python.bindings.get('python.string_keys.' + name)}(data)`,
+          data
+        }))
+      )
+    ).toEqual(expected);
+    const data = { left: '\ud800', right: '\udc00', joined: '𐀀' };
+    expect(exports.Equal!(data)).toBe(true);
+    expect(
+      execute(python.code, [
+        {
+          expression: `${python.bindings.get('python.string_keys.Equal')}(data)`,
+          data
+        }
+      ])
+    ).toEqual([{ value: true }]);
+  });
+
   it.each(['value default 1', 'if choose then value else 1'])(
     'uses payload values from %s in arithmetic',
     async (expression) => {

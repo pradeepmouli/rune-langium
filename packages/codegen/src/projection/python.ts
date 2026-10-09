@@ -27,11 +27,13 @@ import {
   pythonArgument,
   pythonBind,
   pythonDeclarationValue,
+  pythonComparison,
   pythonFresh,
   pythonHelperDependencies,
   pythonInline,
   pythonNormalize,
   pythonRead,
+  pythonReadField,
   pythonRootFields,
   pythonUnwrap,
   pyBool,
@@ -183,7 +185,12 @@ export function renderPythonExpression(expression: RosettaExpression, context: P
       );
       if (!expression.cardMod && !many && !optional) {
         if (nativeEqualityOperands(expression.left, expression.right))
-          return `(${left} ${expression.operator === '=' ? '==' : '!='} ${right})`;
+          return pythonComparison(
+            left,
+            right,
+            expression.operator === '=' ? '==' : '!=',
+            nativeScalarOperands(expression.left, expression.right) === 'string'
+          );
         return `${expression.operator === '<>' ? 'not ' : ''}rune.equals(${left}, ${right})`;
       }
       return `rune.equals(${left}, ${right}, ${pyString(expression.cardMod ?? (expression.operator === '<>' ? 'any' : 'all'))}${expression.operator === '<>' ? ', True' : ''})`;
@@ -193,12 +200,15 @@ export function renderPythonExpression(expression: RosettaExpression, context: P
         right = render(expression.right, valueContext);
       const scalar = nativeScalarOperands(expression.left, expression.right);
       if (!expression.cardMod && (scalar === 'number' || scalar === 'string'))
-        return `(${left} ${expression.operator} ${right})`;
+        return pythonComparison(left, right, expression.operator, scalar === 'string');
       const type = expressionType(expression.left ?? arg)?.name;
       const temporal = type && ['date', 'time', 'dateTime', 'zonedDateTime'].includes(type);
-      const compare = temporal
-        ? `rune.temporalKey(a, ${pyString(type)}) ${expression.operator} rune.temporalKey(b, ${pyString(type)})`
-        : `a ${expression.operator} b`;
+      const compare = pythonComparison(
+        temporal ? `rune.temporalKey(a, ${pyString(type)})` : 'a',
+        temporal ? `rune.temporalKey(b, ${pyString(type)})` : 'b',
+        expression.operator,
+        type === 'string'
+      );
       return `rune.compare(${left}, ${right}, lambda a, b: ${compare}, ${pyString(expression.cardMod ?? 'all')})`;
     }
     case 'LogicalOperation':
@@ -405,14 +415,21 @@ export function renderPythonExpression(expression: RosettaExpression, context: P
       const root = pythonFresh(context, 'choice'),
         type = arg ? expressionType(arg) : context.implicit?.type;
       const fields = arg ? typeFeatures(type) : pythonRootFields(context);
-      const bindings = new Map(fields.map((field) => [featureName(field), context.locals.get(field)]));
+      const bindings = new Map(fields.map((field) => [featureName(field), field]));
       const names =
         expression.$type === 'ChoiceOperation'
           ? expression.attributes.map((ref) => (isChoiceOption(ref.ref) ? featureName(ref.ref) : ref.$refText))
           : fields.map(featureName);
       const values =
         names.length || !arg
-          ? `[${names.map((name) => (!arg ? (bindings.get(name) ?? pythonRead(root, [name])) : pythonRead(root, [name]))).join(', ')}]`
+          ? `[${names
+              .map((name) => {
+                const field = bindings.get(name);
+                return !arg && field
+                  ? pythonReadField(root, field, context.locals.get(field))
+                  : pythonRead(root, [name]);
+              })
+              .join(', ')}]`
           : `rune.list(${root})`;
       const value = pythonFresh(context, 'value');
       const count = `sum(1 for ${value} in ${values} if rune.exists(${value}))`;

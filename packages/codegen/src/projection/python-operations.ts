@@ -37,6 +37,20 @@ export function pythonRead(value: string, names: readonly string[], many = false
 export function pythonUnwrap(value: string, kind: FieldMetadataKind | undefined, many = false): string {
   return kind ? `rune.unwrap(${value}${many ? ', True' : ''})` : value;
 }
+export function pythonReadField(
+  receiver: string,
+  field: ReturnType<typeof typeFeatures>[number],
+  binding?: string
+): string {
+  return pythonUnwrap(
+    binding ?? pythonRead(receiver, [featureName(field)]),
+    'annotations' in field ? fieldMetadataKind(field) : undefined
+  );
+}
+export function pythonComparison(left: string, right: string, operator: string, strings = false): string {
+  const key = (value: string) => (strings ? `rune.stringKey(${value})` : value);
+  return `(${key(left)} ${operator} ${key(right)})`;
+}
 export function pythonNormalize(
   value: string,
   input: FieldMetadataKind | undefined,

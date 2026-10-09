@@ -164,6 +164,10 @@ def rune_distinct(value, wrapped=False):
     return result
 
 
+def rune_string_key(value):
+    return value.encode("utf-16-be", "surrogatepass")
+
+
 def rune_order(left, right, nulls_last=True):
     if left is None and right is None:
         return 0
@@ -171,6 +175,8 @@ def rune_order(left, right, nulls_last=True):
         return 1 if nulls_last else -1
     if right is None:
         return -1 if nulls_last else 1
+    if isinstance(left, str) and isinstance(right, str):
+        left, right = rune_string_key(left), rune_string_key(right)
     return -1 if left < right else 1 if left > right else 0
 
 
@@ -553,7 +559,7 @@ def rune_value_key(value):
     if isinstance(value, (int, float)):
         return ("number", "NaN" if math.isnan(value) else value)
     if isinstance(value, str):
-        return ("string", value)
+        return ("string", rune_string_key(value))
     if isinstance(value, list):
         return ("array", tuple(rune_value_key(item) for item in value))
     return ("object", tuple((key, rune_value_key(value[key])) for key in sorted(value) if value[key] is not None))
@@ -676,6 +682,7 @@ class rune:
     contains = staticmethod(rune_contains)
     disjoint = staticmethod(rune_disjoint)
     distinct = staticmethod(rune_distinct)
+    stringKey = staticmethod(rune_string_key)
     order = staticmethod(rune_order)
     ordered = staticmethod(rune_ordered)
     only = staticmethod(rune_only)

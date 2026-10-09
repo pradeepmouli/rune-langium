@@ -277,6 +277,20 @@ regressions failed before the fixes. Afterward, the focused function/runtime
 suites and all 2,256 codegen tests passed, with the existing skip/todo cases.
 Generator build, codegen types, scoped lint and full formatting checks passed.
 
+Root `one-of`/`choice`/`only-exists` predicates share a metadata-aware field
+read based on authoritative declaration metadata. Reference-only wrappers are
+absent while zero/false payloads remain present. Eleven failing-then-passing
+execution regressions cover inherited Data and function pre/postconditions,
+scalar/lifted UTF-16 comparisons, sorting, min/max and equality of constructed
+surrogate pairs. The authoritative Python UTF-16 key serves those string
+operations; helper dependency discovery includes it transitively for equality.
+The first full run passed 2,266 tests and failed only the old dependency-list
+expectation, which was updated for this new required helper. All 164 function
+projection tests and 25 Studio workspace/projection/scope tests passed.
+The corrected full codegen run passed 2,267 tests (the existing one skip/eight
+todos remained); build, codegen types, scoped lint, formatting and runtime
+generation freshness also passed.
+
 Correctness fixes had failing behavioral regressions followed by passing ones; fixture provenance was reviewed separately.
 The standalone #577 broad gates passed 327 core, 1,536 visual-editor, 2,022 codegen
 and 1,654 Studio tests. Existing skips/todo cases were retained. The middle branch

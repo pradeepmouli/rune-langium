@@ -67,6 +67,7 @@ describe('forward Python expression projections', () => {
     expect(pythonHelperDependencies('rune.equals(left, right)')).toEqual([
       'rune.equals',
       'rune_list',
+      'rune_string_key',
       'rune_value_key'
     ]);
     expect(pythonHelperDependencies('rune.exists(value)')).toEqual(['rune.exists', 'rune_exists']);

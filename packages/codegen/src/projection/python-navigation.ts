@@ -29,6 +29,7 @@ import {
   pythonBind,
   pythonFresh,
   pythonRead,
+  pythonReadField,
   pythonRootFields,
   pythonUnwrap,
   pythonNormalize,
@@ -148,7 +149,10 @@ export function pythonOnlyExists(
     const fields = new Map(rootFields.map((field) => [featureName(field), field]));
     return (
       selected.forbidden
-        .map((name) => `not rune.exists(${context.locals.get(fields.get(name)!) ?? pythonRead(context.self, [name])})`)
+        .map((name) => {
+          const field = fields.get(name)!;
+          return `not rune.exists(${pythonReadField(context.self, field, context.locals.get(field))})`;
+        })
         .join(' and ') || pyBool(true)
     );
   }
