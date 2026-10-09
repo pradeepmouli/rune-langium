@@ -4,6 +4,7 @@
 import { spawnSync } from 'node:child_process';
 import { readFileSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
+import { Temporal } from '@js-temporal/polyfill';
 import { PYTHON_RUNTIME_SOURCE } from '../../src/projection/python-runtime.js';
 import { RUNTIME_HELPER_JS_SOURCE } from '../../src/helpers.js';
 
@@ -110,7 +111,61 @@ const cases = [
   ]
 ] as const;
 
+function expectRuntimeParity(expressions: readonly string[]) {
+  const expected = expressions.map((expression) => ({
+    value: new Function('Temporal', RUNTIME_HELPER_JS_SOURCE + '\nreturn ' + expression)(Temporal)
+  }));
+  const result = spawnSync(
+    process.env.PYTHON_BINARY ?? 'python3',
+    [new URL('python-runtime-check.py', import.meta.url).pathname],
+    {
+      input: JSON.stringify({
+        source: PYTHON_RUNTIME_SOURCE,
+        cases: expressions.map((expression) => ({ expression }))
+      }),
+      encoding: 'utf8'
+    }
+  );
+  expect(result.status, result.error?.message ?? result.stderr).toBe(0);
+  expect(JSON.parse(result.stdout)).toEqual(expected);
+}
+
 describe('Python runtime contracts', () => {
+  it.each([
+    ['0000-02-29', '12:00:00.123456789', 'America/New_York'],
+    ['-000001-12-31', '12:00:00', 'Europe/Paris'],
+    ['0001-01-01', '00:00:00', 'Asia/Tokyo'],
+    ['9999-12-31', '23:59:59', 'America/New_York'],
+    ['+010000-07-01', '12:00:00', 'America/New_York'],
+    ['+010000-01-01', '12:00:00', 'America/New_York'],
+    ['1850-02-28', '12:00:00', 'Europe/Paris'],
+    ['2026-03-08', '02:30:00.123456789', 'America/New_York'],
+    ['2026-11-01', '01:30:00', 'America/New_York']
+  ])('constructs and reads named-zone %s %s %s like Temporal', (date, time, timezone) => {
+    const fields = { date, time, timezone };
+    const construct = `rune.dateConstruct("zonedDateTime", ${JSON.stringify(fields)})`;
+    const value = new Function('Temporal', RUNTIME_HELPER_JS_SOURCE + '\nreturn ' + construct)(Temporal) as string;
+    const expressions = [
+      construct,
+      ...['year', 'date', 'time', 'timezone'].map(
+        (field) => `rune.dateField(${JSON.stringify(value)}, "zonedDateTime", "${field}")`
+      )
+    ];
+    expectRuntimeParity(expressions);
+  });
+
+  it.each([
+    '0000-01-01T00:00:00Z[America/New_York]',
+    '-000001-12-31T12:00:00+00:09:21[Europe/Paris]',
+    '2026-11-01T01:30:00-05:00[America/New_York]'
+  ])('reads instant rollovers and explicit overlap/second offsets in %s', (value) => {
+    expectRuntimeParity(
+      ['year', 'date', 'time', 'timezone'].map(
+        (field) => `rune.dateField(${JSON.stringify(value)}, "zonedDateTime", "${field}")`
+      )
+    );
+  });
+
   it('embeds exactly the authoritative Python file and regenerates deterministically', () => {
     expect(PYTHON_RUNTIME_SOURCE).toBe(
       readFileSync(new URL('../../src/projection/python-runtime.py', import.meta.url), 'utf8')

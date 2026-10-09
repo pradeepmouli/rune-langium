@@ -289,10 +289,20 @@ def rune_temporal(value, kind):
             name = zone.rstrip("]")
             target = ZoneInfo(name)
             if parsed.tzinfo:
-                local = parsed.astimezone(target)
-                if not base.endswith("Z") and local.replace(tzinfo=None) != parsed.replace(tzinfo=None):
-                    raise ValueError("Offset does not match timezone")
-                parsed = local
+                if base.endswith("Z"):
+                    parsed = parsed.astimezone(target)
+                else:
+                    wall = parsed.replace(tzinfo=None)
+                    supplied = int(parsed.utcoffset().total_seconds())
+                    minute_precision = re.search(r"[+-]\d{2}:\d{2}$", base) is not None
+                    candidates = [wall.replace(tzinfo=target, fold=fold).astimezone(timezone.utc).astimezone(target)
+                                  for fold in (0, 1)]
+                    parsed = next((candidate for candidate in candidates
+                                   if candidate.replace(tzinfo=None) == wall and
+                                   (int(candidate.utcoffset().total_seconds()) == supplied or
+                                    (minute_precision and rune_offset_minutes(int(candidate.utcoffset().total_seconds())) * 60 == supplied))), None)
+                    if parsed is None:
+                        raise ValueError("Offset does not match timezone")
             else:
                 parsed = parsed.replace(tzinfo=target).astimezone(timezone.utc).astimezone(target)
         if parsed.tzinfo is None:
@@ -377,6 +387,22 @@ def rune_offset_seconds(text):
     return (1 if match[1] == "+" else -1) * (int(match[2]) * 3600 + int(match[3]) * 60)
 
 
+def rune_offset_minutes(seconds):
+    return (1 if seconds >= 0 else -1) * ((abs(seconds) + 30) // 60)
+
+
+def rune_named_zoned_parts(base, zone):
+    parts, clock = rune_calendar_parts(base), rune_clock_parts(base)
+    year, month, day = parts
+    # The Gregorian cycle preserves weekdays/leap days for TZif's prehistory and recurring future rules.
+    proxy_year = 400 + year % 400 if year <= 1 else 2400 + year % 400 if year >= 9999 else year
+    proxy = re.sub(r"^[+-]?\d{4,6}", f"{proxy_year:04d}", base)
+    parsed = rune_temporal(proxy + "[" + zone + "]", "zonedDateTime")
+    day_shift = (parsed.date() - date(proxy_year, month, day)).days
+    parts = rune_calendar_from_days(rune_date_days(base) + day_shift)
+    return parts, (parsed.hour, parsed.minute, parsed.second, clock[3]), int(parsed.utcoffset().total_seconds())
+
+
 def rune_zoned_parts(value):
     text = str(value)
     base, _, annotation = text.partition("[")
@@ -391,8 +417,7 @@ def rune_zoned_parts(value):
         supplied = offset_match[1]
         offset = rune_offset_seconds(supplied)
     else:
-        parsed = rune_temporal(text, "zonedDateTime")
-        return (parsed.year, parsed.month, parsed.day), (parsed.hour, parsed.minute, parsed.second, rune_clock_parts(text)[3]), int(parsed.utcoffset().total_seconds())
+        return rune_named_zoned_parts(base, zone)
     parts, clock = rune_calendar_parts(base), rune_clock_parts(base)
     if supplied == "Z" and offset:
         day_shift, seconds = divmod(clock[0] * 3600 + clock[1] * 60 + clock[2] + offset, 86400)
@@ -457,10 +482,13 @@ def rune_date_construct(kind, fields):
     if zone == "UTC" or re.fullmatch(r"[+-]\d{2}:\d{2}", zone):
         rune_offset_seconds(zone)
         return combined + ("+00:00" if zone == "UTC" else zone) + "[" + zone + "]"
-    parsed = rune_temporal(combined + "[" + zone + "]", "zonedDateTime")
-    combined = parsed.date().isoformat() + "T" + rune_time_text(combined + "[" + zone + "]", "zonedDateTime")
-    offset = parsed.strftime("%z")
-    offset = offset[:3] + ":" + offset[3:]
+    parts, clock, seconds = rune_named_zoned_parts(combined, zone)
+    hour, minute, second, nano = clock
+    combined = rune_calendar_text(*parts) + f"T{hour:02d}:{minute:02d}:{second:02d}"
+    if nano:
+        combined += "." + f"{nano:09d}".rstrip("0")
+    minutes = rune_offset_minutes(seconds)
+    offset = ("+" if minutes >= 0 else "-") + f"{abs(minutes) // 60:02d}:{abs(minutes) % 60:02d}"
     return combined + offset + "[" + zone + "]"
 
 

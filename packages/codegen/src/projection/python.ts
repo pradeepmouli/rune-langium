@@ -78,7 +78,10 @@ export function renderPythonExpression(expression: RosettaExpression, context: P
     arg
       ? render(arg, { ...context, preserveMetadata: preserve })
       : pythonUnwrap(context.self, preserve ? undefined : context.implicit?.metadata, context.implicit?.many);
-  const branch = (child: RosettaExpression, target = expressionMetadataKind(expression)) => {
+  const branch = (
+    child: RosettaExpression,
+    target = context.preserveMetadata ? expressionMetadataKind(expression) : undefined
+  ) => {
     const text = render(child, { ...context, preserveMetadata: !!target });
     if (child.$type === 'ListLiteral' && !child.elements.length && !expressionIsMany(expression)) return 'None';
     return target ? pythonNormalize(text, expressionMetadataKind(child), target) : text;
@@ -262,14 +265,27 @@ export function renderPythonExpression(expression: RosettaExpression, context: P
     case 'ReduceOperation': {
       const accumulator = pythonFresh(context, 'acc'),
         item = pythonFresh(context, 'item');
-      const target = context.preserveMetadata ? expressionMetadataKind(expression) : undefined;
+      const inputKind = expressionMetadataKind(arg),
+        resultKind = expressionMetadataKind(expression.function?.body);
       const child = pythonInline(expression.function, context, [accumulator, item], arg);
+      const localMetadata = new Map(child.localMetadata);
+      const parameter = expression.function?.parameters[0];
+      if (parameter) localMetadata.set(parameter, resultKind);
       const result = expression.function
-        ? render(expression.function.body, { ...child, preserveMetadata: !!target })
+        ? render(expression.function.body, {
+            ...child,
+            localMetadata,
+            preserveMetadata: !!resultKind,
+            implicit: { ...child.implicit!, metadata: resultKind }
+          })
         : item;
-      const body = target ? pythonNormalize(result, expressionMetadataKind(expression.function?.body), target) : result;
-      const first = pythonNormalize(item, expressionMetadataKind(arg), target);
-      return `rune.reduce(${argument(true)}, lambda ${accumulator}, ${item}: ${body}, lambda ${item}: ${first})`;
+      const first = pythonNormalize(item, inputKind, resultKind);
+      const input =
+        inputKind === 'reference' && !resultKind
+          ? `[${item} for ${item} in rune.list(${argument(true)}) if rune.unwrap(${item}) is not None]`
+          : argument(true);
+      const reduced = `rune.reduce(${input}, lambda ${accumulator}, ${item}: ${result}, lambda ${item}: ${first})`;
+      return pythonUnwrap(reduced, context.preserveMetadata ? undefined : resultKind);
     }
     case 'ThenOperation': {
       const item = pythonFresh(context, 'then');

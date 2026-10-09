@@ -119,7 +119,10 @@ export function pythonDeclarationValue(
   context: PythonRenderContext,
   expression: RosettaExpression
 ): string {
-  return context.preserveMetadata
-    ? value
-    : pythonUnwrap(value, expressionMetadataKind(expression), expressionIsMany(expression));
+  const target = expression.$type === 'RosettaSymbolReference' ? expression.symbol.ref : undefined;
+  const kind =
+    target && context.localMetadata?.has(target)
+      ? context.localMetadata.get(target)
+      : expressionMetadataKind(expression);
+  return context.preserveMetadata ? value : pythonUnwrap(value, kind, expressionIsMany(expression));
 }

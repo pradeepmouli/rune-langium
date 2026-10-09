@@ -21,6 +21,7 @@ export interface PythonProjectionContext {
     many?: boolean;
     type?: ExpressionType;
   };
+  localMetadata?: ReadonlyMap<AstNode, FieldMetadataKind | undefined>;
   preserveMetadata?: boolean;
   resultMode?: 'function' | 'condition';
   superFunction?: RosettaFunction;

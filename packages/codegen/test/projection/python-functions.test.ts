@@ -37,7 +37,143 @@ function execute(source: string, cases: readonly { expression: string; data?: un
   return JSON.parse(result.stdout) as Array<{ value?: unknown; error?: string }>;
 }
 
+async function executableFunctions(source: string) {
+  const funcs = await linkedFunctions(source);
+  const document = AstUtils.getDocument(funcs[0]!);
+  const python = generatePythonModule([document]);
+  const [typescript] = await generate([document], {
+    target: 'typescript',
+    strict: true,
+    typescript: { layout: 'single-file' }
+  });
+  const exports: Record<string, (data: object) => unknown> = {};
+  const javascript = ts.transpileModule(typescript!.content, {
+    compilerOptions: { target: ts.ScriptTarget.ES2022, module: ts.ModuleKind.CommonJS }
+  }).outputText;
+  new Function('require', 'exports', javascript)(createRequire(import.meta.url), exports);
+  return { python, exports };
+}
+
 describe('complete Python function projections', () => {
+  it.each(['value default 1', 'if choose then value else 1'])(
+    'uses payload values from %s in arithmetic',
+    async (expression) => {
+      const { python, exports } = await executableFunctions(`namespace python.branch_values
+annotation metadata:
+ reference string (0..1)
+metaType reference string
+func Build:
+ inputs:
+  value number (0..1)
+   [metadata reference]
+  choose boolean (1..1)
+ output: result number (0..1)
+ set result: (${expression}) + 1
+`);
+      const inputs = [
+        { value: { value: 0, externalReference: 'id' }, choose: true },
+        { value: { value: 4, externalReference: 'id' }, choose: true },
+        { value: { externalReference: 'id' }, choose: true },
+        { choose: true },
+        { value: { value: 4, externalReference: 'id' }, choose: false }
+      ];
+      const expected = inputs.map((data) => exports.Build!(data) ?? null);
+      expect(expected).toEqual(expression.startsWith('value') ? [1, 5, 2, 2, 5] : [1, 5, null, null, 2]);
+      expect(
+        execute(
+          python.code,
+          inputs.map((data) => ({
+            expression: `${python.bindings.get('python.branch_values.Build')}(data)`,
+            data
+          }))
+        )
+      ).toEqual(expected.map((value) => ({ value })));
+    }
+  );
+
+  it('reduces payload values without losing reference-only metadata results', async () => {
+    const { python, exports } = await executableFunctions(`namespace python.reduce_values
+annotation metadata:
+ reference string (0..1)
+metaType reference string
+func Sum:
+ inputs:
+  values number (0..*)
+   [metadata reference]
+ output: result number (0..1)
+ set result: values reduce a, b [a + b]
+func First:
+ inputs:
+  values number (0..*)
+   [metadata reference]
+ output: result number (0..1)
+  [metadata reference]
+ set result: values reduce a, b [a]
+func FirstValue:
+ inputs:
+  values number (0..*)
+   [metadata reference]
+ output: result number (0..1)
+ set result: (values reduce a, b [a]) + 1
+`);
+    const inputs = [
+      { values: [] },
+      { values: [{ externalReference: 'id' }] },
+      { values: [{ externalReference: 'id' }, { externalReference: 'other' }] },
+      { values: [{ externalReference: 'id' }, { value: 0 }, { value: 4 }] },
+      { values: [{ value: 0 }, { externalReference: 'id' }, { value: 4 }] }
+    ];
+    const expected = ['Sum', 'First', 'FirstValue'].flatMap((name) =>
+      inputs.map((data) => ({
+        value: JSON.parse(JSON.stringify(exports[name]!(structuredClone(data)) ?? null))
+      }))
+    );
+    expect(expected.slice(0, 5)).toEqual([null, null, null, 4, 4].map((value) => ({ value })));
+    expect(
+      execute(
+        python.code,
+        ['Sum', 'First', 'FirstValue'].flatMap((name) =>
+          inputs.map((data) => ({
+            expression: `${python.bindings.get('python.reduce_values.' + name)}(data)`,
+            data
+          }))
+        )
+      )
+    ).toEqual(expected);
+  });
+
+  it('projects a year-zero named-zone constructor with its temporal fields', async () => {
+    const { python, exports } = await executableFunctions(`namespace python.proleptic_zone
+type Result:
+ value zonedDateTime (1..1)
+ date date (1..1)
+ time time (1..1)
+func Build:
+ inputs:
+  date date (1..1)
+  time time (1..1)
+  timezone string (1..1)
+ output: result Result (1..1)
+ alias stamp: zonedDateTime {date: date, time: time, timezone: timezone}
+ set result: Result {value: stamp, date: stamp -> date, time: stamp -> time}
+`);
+    const data = { date: '0000-02-29', time: '12:00:00.123456789', timezone: 'America/New_York' };
+    const expected = JSON.parse(JSON.stringify(exports.Build!(data)));
+    expect(expected).toEqual({
+      value: '0000-02-29T12:00:00.123456789-04:56[America/New_York]',
+      date: data.date,
+      time: data.time
+    });
+    expect(
+      execute(python.code, [
+        {
+          expression: `${python.bindings.get('python.proleptic_zone.Build')}(data)`,
+          data
+        }
+      ])
+    ).toEqual([{ value: expected }]);
+  });
+
   it.each([
     { entry: 'reference', expected: { value: null, externalReference: 'id' } },
     { entry: 'address', expected: { value: null, reference: { reference: 'id' } } },

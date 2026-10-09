@@ -261,6 +261,22 @@ tests and 2,240 codegen tests passed after the fixes, with existing skip/todo ca
 retained. The rebuilt generator, type checks and scoped lint passed; its shared
 helper has a portable return type derived from `typeFeatures`.
 
+Metadata default/conditional branches respect value contexts, and reductions
+mirror TypeScript's separate input/result metadata kinds and accumulator local
+overrides. Reference-only items are skipped for value reductions while metadata
+results retain them. Paired emitted functions cover absent/zero/populated inputs,
+metadata-returning reductions and a year-zero named-zone constructor.
+Named-zone construction/accessors reuse proleptic calendar arithmetic and
+`ZoneInfo`, retaining nanoseconds, historical second offsets, both overlap
+candidates and UTC date rollovers. Gregorian-cycle proxy years let timezone
+resolution avoid `datetime`'s bounds while preserving the actual Rune year;
+minute-rounded offsets match Temporal's serialized strings. Runtime comparisons
+use the actual Temporal implementation for year zero, negative/future/boundary
+years, historical Paris/New York offsets and DST gaps/overlaps. Ten new paired
+regressions failed before the fixes. Afterward, the focused function/runtime
+suites and all 2,256 codegen tests passed, with the existing skip/todo cases.
+Generator build, codegen types, scoped lint and full formatting checks passed.
+
 Correctness fixes had failing behavioral regressions followed by passing ones; fixture provenance was reviewed separately.
 The standalone #577 broad gates passed 327 core, 1,536 visual-editor, 2,022 codegen
 and 1,654 Studio tests. Existing skips/todo cases were retained. The middle branch
