@@ -9,10 +9,66 @@ import {
   isRosettaModel,
   isRosettaFunction,
   getFunctionInputs,
-  getFunctionOutput
+  getFunctionOutput,
+  getExpressionScope,
+  getEnumValues,
+  isRosettaEnumeration,
+  isRosettaSymbolReference
 } from '../../src/index.js';
 
 describe('inherited function expression scope', () => {
+  it('links and exposes effective output enum members for inherited and dispatch functions', async () => {
+    const { RuneDsl } = createRuneDslServices();
+    const colors = RuneDsl.shared.workspace.LangiumDocumentFactory.fromString(
+      `namespace scope.colors
+enum OtherColor:
+ Red
+ Blue
+enum BaseColor:
+ Red
+enum Color extends BaseColor:
+ Blue
+`,
+      URI.parse('inmemory:///colors.rosetta')
+    );
+    const document = RuneDsl.shared.workspace.LangiumDocumentFactory.fromString(
+      `namespace scope.callables
+import scope.colors.Color
+enum Kind:
+ Cash
+func Parent:
+ output: result Color (1..1)
+ set result: Red
+func Child extends Parent:
+ set result: Blue
+func Grandchild extends Child:
+ set result: Red
+func Compute:
+ inputs: kind Kind (1..1)
+ output: result Color (1..1)
+ set result: Red
+func Compute(kind: Kind -> Cash):
+ set result: Blue
+`,
+      URI.parse('inmemory:///output-enums.rosetta')
+    );
+    await RuneDsl.shared.workspace.DocumentBuilder.build([colors, document]);
+    expect(colors.parseResult.parserErrors).toEqual([]);
+    expect(document.parseResult.parserErrors).toEqual([]);
+    expect(document.references.flatMap((ref) => (ref.error ? [ref.error.message] : []))).toEqual([]);
+    if (!isRosettaModel(document.parseResult.value)) throw new Error('Expected model');
+    for (const func of document.parseResult.value.elements.filter(isRosettaFunction)) {
+      const expression = func.operations[0]!.expression;
+      const outputEnum = getFunctionOutput(func)?.typeCall.type.ref;
+      if (!isRosettaEnumeration(outputEnum) || !isRosettaSymbolReference(expression))
+        throw new Error('Expected enum output');
+      expect(getEnumValues(outputEnum)).toContain(expression.symbol.ref);
+      const entries = getExpressionScope(expression, RuneDsl);
+      expect(entries).toContainEqual(expect.objectContaining({ name: 'Red' }));
+      expect(entries).toContainEqual(expect.objectContaining({ name: 'Blue' }));
+    }
+  });
+
   it('links parent input/output identities through multiple levels of inheritance', async () => {
     const { RuneDsl } = createRuneDslServices();
     const basics = RuneDsl.shared.workspace.LangiumDocumentFactory.fromString(

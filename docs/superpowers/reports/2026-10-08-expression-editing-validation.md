@@ -196,6 +196,12 @@ Core passed 329 tests and the focused Studio ownership checks passed 22 tests.
 Builder scope permits syntax errors in unrelated files while rejecting owner errors
 and failed snapshot builds. A failing unrelated-draft regression turned green;
 all 12 snapshot/service/scope tests, Studio type checks and scoped lint passed.
+Effective output enum scope also covers inherited and dispatch functions. The
+simple bare-member example linked through global fallback, but a same-named
+member from another enum reproduced a wrong-target binding. A declaration-identity
+regression failed before the shared signature fix and passed afterward. The final
+core suite passed 331 tests; 139 affected Python projection tests, 12 Studio scope
+tests, workspace type checks and scoped lint passed against forced core exports.
 
 The Python branch preserves signed zero, unwraps implicit metadata feature
 bindings, narrows collections element by element and shares declaration-based

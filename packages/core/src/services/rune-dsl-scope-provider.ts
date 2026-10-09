@@ -1087,17 +1087,17 @@ export class RuneDslScopeProvider extends DefaultScopeProvider {
 
     const func = AstUtils.getContainerOfType(node, isRosettaFunction);
     const constructorField = AstUtils.getContainerOfType(node, isConstructorKeyValuePair)?.key.ref;
+    const signature = func ? this.dispatchSignature(func) : undefined;
+    const output = signature ? getFunctionOutput(signature) : undefined;
     const fieldEnum =
       constructorField && 'typeCall' in constructorField ? constructorField.typeCall.type.ref : undefined;
     if (isRosettaEnumeration(fieldEnum))
       extra.push(...getEnumValues(fieldEnum).map((value) => this.createDescription(value, value.name)));
-    const outputEnum = func?.output?.typeCall?.type?.ref;
+    const outputEnum = output?.typeCall?.type?.ref;
     if (isRosettaEnumeration(outputEnum)) {
       extra.push(...getEnumValues(outputEnum).map((value) => this.createDescription(value, value.name)));
     }
-    if (func && (func.dispatchAttribute || func.superFunction)) {
-      const signature = this.dispatchSignature(func);
-      const output = getFunctionOutput(signature);
+    if (signature && (func?.dispatchAttribute || func?.superFunction)) {
       const attributes = [...getFunctionInputs(signature), ...(output ? [output] : []), ...signature.shortcuts];
       for (const attribute of attributes) {
         const existing = baseScope.getElement(attribute.name)?.node;
