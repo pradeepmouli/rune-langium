@@ -224,6 +224,7 @@ type runeAnnotation1Args:
       } finally {
         rmSync(directory, { recursive: true, force: true });
       }
-    }
+    },
+    30_000
   );
 });

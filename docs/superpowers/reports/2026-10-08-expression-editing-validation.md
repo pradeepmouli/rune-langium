@@ -396,3 +396,12 @@ setup-hook convention. The preview test retains its 60-second budget, real
 TradeState target and populated-schema assertions. Full root coverage again
 passed 2,790 tests with the same coverage totals and unchanged thresholds;
 codegen type checking, scoped lint and formatting passed.
+
+CI confirmed the real CDM smoke case passes with separate corpus setup. Its
+next sole coverage failure was the first strict TypeScript namespace runtime
+case reaching the default five-second test deadline; the other two layouts
+passed. Those three compile-and-execute cases now have an explicit 30-second
+integration budget, retaining all strict diagnostics and runtime assertions.
+The package invocation passes all three cases; full root coverage again passes
+2,790 tests at the same coverage totals and thresholds. Scoped lint, formatting
+and codegen type checking pass.
