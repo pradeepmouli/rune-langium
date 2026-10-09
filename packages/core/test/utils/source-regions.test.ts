@@ -29,6 +29,28 @@ const implementation = `
 const neighbor = '\n\nfunc Neighbor:\n  output:\n    result int (1..1)\n  set result: 7\n';
 
 describe('source regions', () => {
+  it.each([
+    ['func Inline: output: result int (1..1) ', '/* inline */\n  set result: 1'],
+    ['func Multiline: output: result int (1..1) ', '/* inline\n     continuation */\n  set result: 1'],
+    ['func Line: output: result int (1..1) ', '// inline\n  set result: 1'],
+    ['func CommentOnly: ', '/* comment-only */'],
+    ['func LineOnly: ', '// comment-only'],
+    ['func EmptyNextLine:\n', '  /* comment-only */'],
+    ['func Trailing: output: result int (1..1)\n', '  set result: 1\n  // trailing']
+  ])('keeps implementation trivia after %s', async (signature, body) => {
+    for (const newline of ['\n', '\r\n']) {
+      const source = ('namespace test.regions\n' + signature + body + neighbor).replaceAll('\n', newline);
+      const parsed = await parse(source);
+      expect(parsed.parserErrors).toEqual([]);
+      const func = parsed.value.elements.find(isRosettaFunction)!;
+      const range = getFunctionImplementationRegion(func, source);
+      expect(source.slice(range.from, range.to)).toBe(body.replaceAll('\n', newline));
+      const services = createRuneDslServices();
+      const serialized = JSON.parse(serializeRuneModel(services.RuneDsl.serializer.JsonSerializer, parsed.value));
+      expect(getFunctionImplementationRegion(serialized.elements[0], source)).toEqual(range);
+    }
+  });
+
   it('resolves same-named owners by kind and rejects ambiguous legacy identities', async () => {
     const { value } = await parse(
       'namespace test\ntype Shared:\n amount int (1..1)\nfunc Shared:\n output: out int (1..1)\n set out: 1'
