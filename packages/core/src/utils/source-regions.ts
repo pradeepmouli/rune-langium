@@ -13,7 +13,7 @@ export type ExpressionRegion = Readonly<{
   expression: RosettaExpression | Dehydrated<RosettaExpression>;
 }>;
 
-/** Resolve an expression owner by declaration identity; ambiguous kindless names fail closed. */
+/** Resolve declaration identity, using the unique base for a function dispatch group. */
 export function findExpressionOwner(
   model: Pick<RosettaModel, 'elements'>,
   identity: { name: string; kind?: string }
@@ -24,7 +24,10 @@ export function findExpressionOwner(
       element.name === identity.name &&
       (identity.kind === undefined || element.$type === identity.kind)
   );
-  return matches.length === 1 ? matches[0] : undefined;
+  if (matches.length === 1) return matches[0];
+  if (!matches.every((element) => element.$type === 'RosettaFunction')) return undefined;
+  const bases = matches.filter((element) => !element.dispatchAttribute);
+  return bases.length === 1 ? bases[0] : undefined;
 }
 
 type LocatedNode = {

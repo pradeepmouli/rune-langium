@@ -43,6 +43,44 @@ async function context() {
 }
 
 describe('source-bound expression workspace', () => {
+  it.each([false, true])('binds the dispatch base implementation with serialized=%s', async (serialized) => {
+    const text =
+      'namespace test\nenum Kind:\n Cash\nfunc Compute(kind: Kind -> Cash):\n set result: amount + 1\nfunc Compute:\n inputs: kind Kind (1..1)\n          amount int (1..1)\n output: result int (1..1)\n set result: amount\n';
+    const parsed = await parse(text);
+    expect(parsed.parserErrors).toEqual([]);
+    const services = createRuneDslServices();
+    const model = serialized
+      ? JSON.parse(serializeRuneModel(services.RuneDsl.serializer.JsonSerializer, parsed.value))
+      : parsed.value;
+    const { props } = await context();
+    const file = { ...props.file, content: text };
+    const writes = vi.fn();
+    const documents = new ExpressionDocument({ getGeneration: () => 1, getFile: () => file, onContentChange: writes });
+    const loadScope = vi.fn(async () => ({ inputs: [], aliases: [], output: null }));
+    const host = render(
+      <ExpressionWorkspace
+        {...props}
+        nodeId={makeNodeId('test', 'Compute', 'RosettaFunction')}
+        file={file}
+        documents={documents}
+        onContentChange={writes}
+        parsed={{ filePath: file.path, model, source: text }}
+        loadScope={loadScope}
+      />
+    );
+    const editor = await host.findByTestId('implementation-editor');
+    const view = EditorView.findFromDOM(editor.querySelector('.cm-editor')!)!;
+    const from = text.lastIndexOf('amount\n');
+    act(() => view.dispatch({ selection: { anchor: from } }));
+    fireEvent.click(host.getByRole('button', { name: 'Builder' }));
+    await host.findByRole('dialog');
+    expect(loadScope).toHaveBeenCalledExactlyOnceWith({ from, to: from + 'amount'.length });
+    fireEvent.click(host.getByTestId('tab-text'));
+    const draft = EditorView.findFromDOM(host.getByTestId('text-editor').querySelector('.cm-editor')!)!;
+    expect(draft.state.doc.toString()).toBe('amount');
+    expect(writes).not.toHaveBeenCalled();
+  });
+
   it.each(['function-body', 'function-condition', 'data-condition'] as const)(
     'binds the correct same-named declaration for %s',
     async (mode) => {

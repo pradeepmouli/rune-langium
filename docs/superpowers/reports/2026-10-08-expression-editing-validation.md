@@ -315,3 +315,13 @@ Full Studio runs exclude the ignored local reproduction under
 `test/prod-ux/report/**`, which asserts the former bug; every tracked Studio suite
 is included. Review fixes are delivered through the existing open PR stack;
 the user subsequently authorized top-down integration using merge commits after fresh review and CI checks. This validation does not claim a production deployment.
+
+The integrated middle-branch review exposed dispatch-group owner ambiguity.
+Core now resolves the unique base declaration for both Studio editor and
+parser-worker scope requests, without relying on containers missing from JSON.
+Five regressions failed before the fix and passed afterward: base-first and
+base-last owner lookup over parsed/serialized models, both editor model forms,
+and real worker Builder scope. Duplicate bases, missing bases and mixed-kind
+legacy identities still fail closed. The complete core suite passed 343 tests;
+28 Studio editor/projection/scope tests passed. Forced core build and scoped
+lint passed.

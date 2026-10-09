@@ -22,6 +22,44 @@ afterEach(() => {
   vi.unstubAllGlobals();
 });
 
+it('opens the dispatch base Builder scope through the parser worker', async () => {
+  const harness = createParserWorkerHarness();
+  class HarnessWorker extends EventTarget {
+    postMessage(request: WorkerRequest) {
+      void harness.send(request).then((data) => this.dispatchEvent(new MessageEvent('message', { data })));
+    }
+    terminate() {}
+  }
+  vi.stubGlobal('Worker', HarnessWorker);
+  vi.stubGlobal('fetch', vi.fn().mockRejectedValue(new Error('offline')));
+  const file = createWorkspaceFile(
+    'dispatch.rosetta',
+    `namespace browser.scope
+enum Kind:
+ Cash
+func Compute(kind: Kind -> Cash):
+ set result: amount + 1
+func Compute:
+ inputs: kind Kind (1..1)
+          amount int (1..1)
+ output: result int (1..1)
+ set result: amount
+`
+  );
+  const parsed = await parseWorkspaceFiles([file]);
+  const owner = parsed.models[0]!.elements.find((node) => node.$type === 'RosettaFunction' && !node.dispatchAttribute)!;
+  if (owner.$type !== 'RosettaFunction') throw new Error('fixture dispatch base');
+  const scope = await requestExpressionScope(
+    file.path,
+    makeNodeId('browser.scope', 'Compute', 'RosettaFunction'),
+    getExpressionRegions(owner)[0]!.region,
+    [file]
+  );
+  expect(scope).toContainEqual(expect.objectContaining({ name: 'kind', kind: 'input' }));
+  expect(scope).toContainEqual(expect.objectContaining({ name: 'amount', kind: 'input' }));
+  expect(scope).toContainEqual(expect.objectContaining({ name: 'result', kind: 'output' }));
+});
+
 it('links the pinned ten-operation browser fixture with all of its original dependencies', async () => {
   const { RuneDsl } = createRuneDslServices();
   const factory = RuneDsl.shared.workspace.LangiumDocumentFactory;

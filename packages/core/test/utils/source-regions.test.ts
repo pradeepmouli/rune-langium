@@ -82,6 +82,34 @@ describe('source regions', () => {
     expect(findExpressionOwner({ elements: [value.elements[1]!] }, { name: 'Shared' })?.$type).toBe('RosettaFunction');
   });
 
+  it.each([false, true])('resolves a dispatch group to its base with base first=%s', async (baseFirst) => {
+    const base =
+      'func Compute:\n inputs: kind Kind (1..1)\n          amount int (1..1)\n output: result int (1..1)\n set result: amount\n';
+    const variants =
+      'func Compute(kind: Kind -> Cash):\n set result: amount + 1\nfunc Compute(kind: Kind -> Credit):\n set result: amount + 2\n';
+    const { value, parserErrors } = await parse(
+      'namespace test\nenum Kind:\n Cash\n Credit\n' + (baseFirst ? base + variants : variants + base)
+    );
+    expect(parserErrors).toEqual([]);
+    const services = createRuneDslServices();
+    const serialized: typeof value = JSON.parse(serializeRuneModel(services.RuneDsl.serializer.JsonSerializer, value));
+    for (const model of [value, serialized]) {
+      const functions = model.elements.filter(isRosettaFunction);
+      const baseFunction = functions.find((func) => !func.dispatchAttribute)!;
+      expect(findExpressionOwner(model, { name: 'Compute', kind: 'RosettaFunction' })).toBe(baseFunction);
+      expect(findExpressionOwner(model, { name: 'Compute' })).toBe(baseFunction);
+      expect(
+        findExpressionOwner({ elements: functions.filter((func) => func.dispatchAttribute) }, { name: 'Compute' })
+      ).toBeUndefined();
+      expect(findExpressionOwner({ elements: [...functions, baseFunction] }, { name: 'Compute' })).toBeUndefined();
+      const data = (await parse('namespace test\ntype Compute:\n amount int (1..1)')).value.elements[0]!;
+      const mixed = { elements: [...functions, data] };
+      expect(findExpressionOwner(mixed, { name: 'Compute' })).toBeUndefined();
+      expect(findExpressionOwner(mixed, { name: 'Compute', kind: 'Data' })).toBe(data);
+      expect(findExpressionOwner(mixed, { name: 'Compute', kind: 'RosettaFunction' })).toBe(baseFunction);
+    }
+  });
+
   it('does not skip a body placed on the same line as its signature', async () => {
     const source =
       'namespace test.regions\nversion "test"\nfunc Compact: output: result int (1..1) set result: 1' + neighbor;
