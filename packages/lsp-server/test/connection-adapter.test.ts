@@ -7,6 +7,8 @@
 
 import { describe, it, expect, vi } from 'vitest';
 import { createConnectionAdapter } from '../src/connection-adapter.js';
+import { ResponseError as VscodeResponseError } from 'vscode-languageserver';
+import { ResponseError } from '@lspeasy/core';
 
 /** Minimal mock of an LSPServer (just the methods the adapter touches) */
 function createMockServer() {
@@ -32,6 +34,26 @@ function createMockServer() {
 }
 
 describe('createConnectionAdapter', () => {
+  it.each(['returned', 'thrown'] as const)(
+    'converts %s Langium cancellation errors for every request surface',
+    async (mode) => {
+      const server = createMockServer();
+      const conn = createConnectionAdapter(server as any);
+      const error = new VscodeResponseError(-32800, 'Request cancelled', { reason: 'new edit' });
+      const handler = () => {
+        if (mode === 'thrown') throw error;
+        return error;
+      };
+      conn.onCompletion(handler);
+      conn.onRequest('textDocument/hover', handler);
+      conn.languages.semanticTokens.on(handler);
+      for (const method of ['textDocument/completion', 'textDocument/hover', 'textDocument/semanticTokens/full']) {
+        const result = server.requestHandlers.get(method)!({}, {});
+        await expect(result).rejects.toBeInstanceOf(ResponseError);
+        await expect(result).rejects.toMatchObject({ code: -32800, message: error.message, data: error.data });
+      }
+    }
+  );
   it('should forward onRequest with string method', () => {
     const server = createMockServer();
     const conn = createConnectionAdapter(server as any);

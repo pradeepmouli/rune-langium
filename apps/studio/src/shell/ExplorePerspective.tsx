@@ -96,7 +96,7 @@ import {
 import { Maximize2, LayoutGrid, Network } from 'lucide-react';
 import { useStudioToast } from '../components/StudioToastProvider.js';
 import { DockShell } from './DockShell.js';
-import { linkDocument, requestExpressionScope } from '../services/workspace.js';
+import { isUserWorkspaceFile, linkDocument, requestExpressionScope } from '../services/workspace.js';
 import { useLspDiagnosticsBridge } from '../hooks/useLspDiagnosticsBridge.js';
 import { useDiagnosticsStore } from '../store/diagnostics-store.js';
 import { CodePreviewPanel } from '../components/CodePreviewPanel.js';
@@ -985,14 +985,17 @@ export const ExplorePerspective = withInstrumentation(
     const sourceChangeRef = useLatestRef(handleSourceChange);
 
     const namespaceToFile = useMemo(() => {
+      const writablePaths = new Set(files.filter(isUserWorkspaceFile).map((file) => file.path));
       const map = new Map<string, string>();
       for (const entry of resolvedModelFiles) {
         const model = entry.model as { name?: unknown };
         const ns = namespaceFromModelName(model.name) ?? 'unknown';
+        const existingPath = map.get(ns);
+        if (existingPath && writablePaths.has(existingPath) && !writablePaths.has(entry.filePath)) continue;
         map.set(ns, entry.filePath);
       }
       return map;
-    }, [resolvedModelFiles]);
+    }, [resolvedModelFiles, files]);
 
     // Invert namespaceToFile against the current file content so the CST-reuse
     // serializer has the original source text to slice for clean subtrees.
@@ -1001,7 +1004,7 @@ export const ExplorePerspective = withInstrumentation(
       const map = new Map<string, string>();
       for (const [ns, filePath] of namespaceToFile) {
         const file = fileByPath.get(filePath);
-        if (file && (!file.refOnly || file.sourceLoaded || file.content.length > 0)) map.set(ns, file.content);
+        if (file && !file.readOnly && !file.refOnly) map.set(ns, file.content);
       }
       return map;
     }, [files, namespaceToFile]);
@@ -1456,6 +1459,7 @@ export const ExplorePerspective = withInstrumentation(
         // full merged file text — no separate mergeSerializedIntoSource step.
         const filesAtStart = filesRef.current;
         const merged = filesAtStart.map((f) => {
+          if (f.readOnly || f.refOnly) return f;
           for (const [ns, text] of serialized) {
             if (namespaceToFile.get(ns) !== f.path) continue;
             if (text === f.content) return f;
@@ -2126,7 +2130,10 @@ export const ExplorePerspective = withInstrumentation(
             renderExpressionEditor={renderExpressionEditor}
             renderFunctionBodyEditor={renderFunctionBodyEditor}
             structuralEditsDisabled={
-              (selectedNodeType === 'RosettaFunction' || selectedNodeType === 'Data') && !selectedParseCurrent
+              !selectedNodeIsRefOnly &&
+              !selectedExpressionFile?.readOnly &&
+              (selectedNodeType === 'RosettaFunction' || selectedNodeType === 'Data') &&
+              !selectedParseCurrent
             }
             compactConditions
             onClose={() => {
@@ -2151,6 +2158,7 @@ export const ExplorePerspective = withInstrumentation(
         renderFunctionBodyEditor,
         selectedNodeType,
         selectedParseCurrent,
+        selectedExpressionFile,
         navigateToNode
       ]
     );

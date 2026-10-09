@@ -1,47 +1,16 @@
 // SPDX-License-Identifier: FSL-1.1-ALv2
 // Copyright (c) 2026 Pradeep Mouli
 
-import { test, expect, type Page } from '@playwright/test';
+import { test, expect } from '@playwright/test';
 import AxeBuilder from '@axe-core/playwright';
-import { expressionReferenceFiles, referenceFiles } from '../../../../packages/codegen/test/helpers/cdm-reference.js';
+import { expressionReferenceFiles } from '../../../../packages/codegen/test/helpers/cdm-reference.js';
 import { typeNavigationButton } from '../helpers/type-navigation.js';
-
-async function loadPinnedFunction(page: Page) {
-  await page.goto('./');
-  await page.locator('input[type="file"][accept=".rosetta"]').setInputFiles(
-    referenceFiles().map(({ uri, content }) => ({
-      name: uri.split('/').at(-1)!,
-      mimeType: 'text/plain',
-      buffer: Buffer.from(content)
-    }))
-  );
-  await expect(page.getByTestId('explore-workbench')).toBeVisible({ timeout: 15000 });
-  await page.getByTestId('namespace-search').fill('Abs');
-  await typeNavigationButton(page, 'cdm.base.math.Abs', 'RosettaFunction').click();
-  await page.getByRole('button', { name: 'Inspector', exact: true }).click();
-  // Local LSP/router notices are dismissible; they must not trap keyboard focus during editing.
-  while (await page.getByRole('button', { name: 'Dismiss notification', exact: true }).count())
-    await page.getByRole('button', { name: 'Dismiss notification', exact: true }).first().click();
-  await expect(page.getByTestId('implementation-editor')).toBeVisible();
-}
-
-async function openBuilder(page: Page) {
-  await page.getByTestId('implementation-editor').locator('.cm-content').press('ControlOrMeta+End');
-  await page
-    .getByRole('region', { name: 'Function implementation' })
-    .getByRole('button', { name: 'Builder', exact: true })
-    .click();
-  const dialog = page.getByRole('dialog', { name: 'Expression builder' });
-  await expect(dialog).toBeVisible();
-  await expect
-    .poll(() =>
-      dialog.evaluate((el) =>
-        el.getAnimations({ subtree: true }).every((animation) => animation.playState !== 'running')
-      )
-    )
-    .toBe(true);
-  return dialog;
-}
+import {
+  loadPinnedFunction,
+  openBuilder,
+  expectCenterPaneBounds,
+  enlargeDialogText
+} from '../helpers/expression-workspace.js';
 
 for (const baseFirst of [false, true]) {
   test(`split-file dispatch edits and projects the base with base first=${baseFirst}`, async ({ page }) => {
@@ -209,7 +178,11 @@ test('Source and Inspector send each edit once through the real network LSP', as
   await editor.press('Space');
   await expect.poll(() => changes().length).toBe(before + 1);
   await implementation.getByRole('button', { name: 'Open in Source', exact: true }).click();
-  const source = page.getByTestId('source-editor').filter({ visible: true }).locator('.cm-content');
+  const source = page
+    .getByTestId('center-stack')
+    .locator('[data-pane="source"]')
+    .getByTestId('source-editor')
+    .locator('.cm-content');
   await expect(source).toBeVisible();
   before = changes().length;
   await source.press('ControlOrMeta+End');
@@ -258,7 +231,9 @@ test('pinned function display, private builder draft, Apply and one undo stay co
   await rune.locator('.cm-content').press('ControlOrMeta+z');
   await expect(rune).toContainText('-1 * arg');
   await implementation.getByRole('button', { name: 'Open in Source', exact: true }).click();
-  await expect(page.getByTestId('source-editor').filter({ visible: true })).toBeVisible();
+  await expect(
+    page.getByTestId('center-stack').locator('[data-pane="source"]').getByTestId('source-editor')
+  ).toBeVisible();
 });
 
 for (const width of [1280, 800]) {
@@ -273,8 +248,10 @@ for (const width of [1280, 800]) {
     const implementation = page.getByRole('region', { name: 'Function implementation' });
     await implementation.getByRole('button', { name: 'Builder', exact: true }).scrollIntoViewIfNeeded();
     await expect(implementation.getByRole('button', { name: 'Builder', exact: true })).toBeInViewport();
+    await expectCenterPaneBounds(page);
     await page.screenshot({ path: testInfo.outputPath(`inspector-${width}.png`) });
     const dialog = await openBuilder(page);
+    await enlargeDialogText(page, dialog);
     const issues = await new AxeBuilder({ page }).include('[role="dialog"]').withTags(['wcag2a', 'wcag2aa']).analyze();
     expect(issues.violations).toEqual([]);
     const bounds = await dialog.boundingBox();

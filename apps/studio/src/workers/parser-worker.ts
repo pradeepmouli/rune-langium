@@ -174,6 +174,8 @@ export type WorkerResponse =
 // Populated by handleParseWorkspace, consumed lazily by RuneDslLinker.loadAstNode
 // when Langium resolves cross-references during handleLinkDocument.
 const deferredModelJson = new Map<string, string>();
+// User models are already published in the routed parse response.
+const publishedUserModelUris = new Set<string>();
 
 // Initialised after createRuneDslServices() below — safe because getModel is only
 // called during build(), which happens inside handleLinkDocument (post-init).
@@ -189,7 +191,7 @@ const deferredProvider: DeferredModelProvider = {
     const json = deferredModelJson.get(uri);
     if (json === undefined) return undefined;
     const model = serializer.deserialize<RosettaModel>(json);
-    newModelsAccumulator.push(model);
+    if (!publishedUserModelUris.has(uri)) newModelsAccumulator.push(model);
     return model;
   },
   consume(uri: string): void {
@@ -322,6 +324,7 @@ async function resetWorkspace(): Promise<void> {
   );
   for (const uri of indexedUris.values()) indexManager.remove(uri);
   deferredModelJson.clear();
+  publishedUserModelUris.clear();
 }
 
 // See handleParse's comment above — exported via the grouped statement below.
@@ -477,7 +480,7 @@ const handleLinkDocument = withInstrumentation(
           deferredModelJson.get(targetUri.toString())!,
           { register: 'always' }
         );
-        newModelsAccumulator.push(model);
+        if (!publishedUserModelUris.has(targetUri.toString())) newModelsAccumulator.push(model);
         doc = document;
         deferredModelJson.delete(targetUri.toString());
       } else if (activeLangiumDocs.hasDocument(targetUri)) {
@@ -537,6 +540,7 @@ async function handleHydrate(req: HydrateRequest): Promise<HydrateResponse> {
     // always agree on the key.
     for (const doc of req.documents) {
       const uri = URI.parse(doc.uri);
+      if (!doc.bundleId) publishedUserModelUris.add(uri.toString());
       deferredModelJson.set(uri.toString(), doc.serializedModel);
       if (doc.exports?.length) {
         const descriptions: AstNodeDescription[] = doc.exports.map((e) => ({
