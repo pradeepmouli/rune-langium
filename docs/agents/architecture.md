@@ -127,7 +127,11 @@ emitted declaration; condition fragments are captured during the same emitter
 traversal. Display coverage is independent of inverse-lens coverage. Reverse
 editing opens a private dialog, schema-validates and reparses the converted Rune
 AST, and applies only the captured region with revision guards. Generated whole
-functions remain read-only. Native scalar operators share the export emitter's
+functions remain read-only. Function provenance includes trailing implementation
+comments through core's source-region helper. The projection worker resolves the
+canonical owner and validates the current body binding against source before
+selecting its declaration range, including hydrated models without document text;
+responses retain the original editor binding. Native scalar operators share the export emitter's
 linked type/cardinality proof; collections, metadata, missing values and structured
 equality retain their required runtime behavior. Preview file receipts acknowledge
 delivery; identical content preserves the linked/generation caches.

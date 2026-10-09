@@ -78,6 +78,12 @@ const deleteDocumentMock = vi.fn((uri: string) => {
 const { hydrateModelDocuments: realHydrateModelDocuments } =
   await import('../../../../packages/core/dist/serializer/hydrate-model-document.js');
 
+const projectionOwner = {
+  $type: 'RosettaFunction',
+  name: 'F',
+  $document: { uri: 'file:///f.rosetta', parseResult: { value: { name: 'f' } } }
+};
+
 vi.mock('@rune-langium/core', () => {
   return {
     createRuneDslServices: () => ({
@@ -117,7 +123,13 @@ vi.mock('@rune-langium/core', () => {
       }
       return { model, document };
     },
-    hydrateModelDocuments: realHydrateModelDocuments
+    hydrateModelDocuments: realHydrateModelDocuments,
+    getExpressionOwners: () => [projectionOwner],
+    getFunctionImplementationRegion: () => ({ from: 0, to: 20 }),
+    getNodeSourceRegion: () => ({ from: 0, to: 20 }),
+    isRosettaFunction: (node: { $type: string }) => node.$type === 'RosettaFunction',
+    namespaceFromModelName: (name: string) => name,
+    qualifiedExportPath: (namespace: string, name: string) => `${namespace}.${name}`
   };
 });
 
@@ -141,6 +153,7 @@ vi.mock('@rune-langium/codegen/instances', () => ({
 }));
 
 vi.mock('langium', () => ({
+  AstUtils: { getDocument: (node: { $document: unknown }) => node.$document },
   URI: {
     parse: (value: string) => value
   }
@@ -245,7 +258,7 @@ describe('codegen-worker preview messages', () => {
         kind: 'function',
         filesRevision: 1,
         source: file.content,
-        subject: { uri: file.uri, nodeId: 'f.F#RosettaFunction', region: { from: 0, to: 10 } }
+        subject: { uri: file.uri, nodeId: 'f.F#RosettaFunction', region: { from: 0, to: 20 } }
       });
       await flushWorker();
       dispatch({ type: 'preview:setFiles', files: [{ ...file, content: file.content + '\n' }], filesRevision: 2 });

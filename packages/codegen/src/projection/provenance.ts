@@ -2,7 +2,12 @@
 // Copyright (c) 2026 Pradeep Mouli
 
 import { AstUtils, type AstNode } from 'langium';
-import { getNodeSourceRegion, isCondition } from '@rune-langium/core';
+import {
+  getNodeSourceRegion,
+  getFunctionImplementationRegion,
+  isCondition,
+  isRosettaFunction
+} from '@rune-langium/core';
 import type { EmittedProjection, ProjectionSubject } from './types.js';
 
 /** Record original source identity alongside authoritative generated text. */
@@ -16,6 +21,9 @@ export function recordedProjection(
   try {
     document = AstUtils.getDocument(sourceNode);
     region = getNodeSourceRegion(sourceNode);
+    if (kind === 'function' && isRosettaFunction(sourceNode)) {
+      region = { ...region, to: getFunctionImplementationRegion(sourceNode, document.textDocument.getText()).to };
+    }
   } catch {
     return undefined;
   }

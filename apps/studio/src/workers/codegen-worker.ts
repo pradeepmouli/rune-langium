@@ -34,9 +34,18 @@ import { Temporal } from '@js-temporal/polyfill';
  */
 
 import type { LangiumDocument } from 'langium';
-import { URI } from 'langium';
+import { URI, AstUtils } from 'langium';
 import { transform } from 'sucrase';
-import { createRuneDslServices, hydrateModelDocuments } from '@rune-langium/core';
+import {
+  createRuneDslServices,
+  hydrateModelDocuments,
+  getExpressionOwners,
+  getFunctionImplementationRegion,
+  getNodeSourceRegion,
+  isRosettaFunction,
+  namespaceFromModelName,
+  type RosettaModel
+} from '@rune-langium/core';
 import {
   generate,
   generatePreviewSchemas,
@@ -56,7 +65,7 @@ import type {
 } from '@rune-langium/codegen/export';
 import { findDataNode, getActiveConditionPredicates } from '@rune-langium/codegen/instances';
 import type { ValidationDiagnostic } from '@rune-langium/codegen/instances';
-import { qualifiedNameFromNodeId } from '@rune-langium/visual-editor/identifiers';
+import { qualifiedNameFromNodeId, makeNodeId } from '@rune-langium/visual-editor/identifiers';
 import type { PreviewWorkerRequest, ProjectionRequest } from '../services/codegen-service.js';
 import { z } from 'zod';
 import { isWorkerGlobalScope } from './runtime-guards.js';
@@ -877,6 +886,23 @@ async function runProjection(request: ProjectionRequest): Promise<void> {
       currentPreviewFiles.some((file) => file.uri === request.subject.uri && file.content === request.source);
     if (!current()) throw new Error('The source changed. Refresh the generated view.');
     const { version, value: documents } = await buildDocuments();
+    let subject = request.subject;
+    if (request.kind === 'function') {
+      const owner = getExpressionOwners(documents.map((doc) => doc.parseResult.value as RosettaModel)).find((node) => {
+        const doc = AstUtils.getDocument(node);
+        const namespace = namespaceFromModelName((doc.parseResult.value as RosettaModel).name) ?? 'unknown';
+        return (
+          isRosettaFunction(node) &&
+          doc.uri.toString() === subject.uri &&
+          makeNodeId(namespace, node.name, node.$type) === subject.nodeId
+        );
+      });
+      if (!owner || !isRosettaFunction(owner)) throw new Error('The function owner is unavailable.');
+      const body = getFunctionImplementationRegion(owner, request.source);
+      if (body.from !== subject.region.from || body.to !== subject.region.to)
+        throw new Error('The function source region changed. Refresh the generated view.');
+      subject = { ...subject, region: getNodeSourceRegion(owner) };
+    }
     if (request.language === 'python') {
       const { value: module } = await getOrComputeAsync(
         previewPythonCache,
@@ -889,7 +915,7 @@ async function runProjection(request: ProjectionRequest): Promise<void> {
       scope.postMessage({
         type: 'projection:result',
         requestId: request.requestId,
-        projection: selectPythonProjection(module, request.subject, request.kind)
+        projection: { ...selectPythonProjection(module, subject, request.kind), subject: request.subject }
       });
       return;
     }
@@ -901,7 +927,7 @@ async function runProjection(request: ProjectionRequest): Promise<void> {
     );
     if (version !== previewFilesVersion || !current())
       throw new Error('The source changed. Refresh the generated view.');
-    const projection = selectTypeScriptProjection(outputs, request.subject, request.kind);
+    const projection = { ...selectTypeScriptProjection(outputs, subject, request.kind), subject: request.subject };
     scope.postMessage({ type: 'projection:result', requestId: request.requestId, projection });
   } catch (error) {
     scope.postMessage({
