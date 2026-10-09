@@ -202,6 +202,12 @@ member from another enum reproduced a wrong-target binding. A declaration-identi
 regression failed before the shared signature fix and passed afterward. The final
 core suite passed 331 tests; 139 affected Python projection tests, 12 Studio scope
 tests, workspace type checks and scoped lint passed against forced core exports.
+Core implementation ranges retain same-line and comment-only bodies as well as
+trailing comments, for parsed and serialized models and both LF/CRLF sources.
+All five original comment regressions failed before the fix. The expanded
+source-range suite passed 16 tests; the final core suite passed 338 tests and
+22 affected Studio workspace/projection tests passed. Workspace types and scoped
+lint passed against forced core exports.
 
 The Python branch preserves signed zero, unwraps implicit metadata feature
 bindings, narrows collections element by element and shares declaration-based
