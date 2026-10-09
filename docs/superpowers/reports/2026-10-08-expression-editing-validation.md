@@ -157,7 +157,7 @@ did not pass and package publication needs that separate configuration repair.
 
 ## PR review follow-up
 
-Eighteen actionable findings across #576–#578 have regression fixes. The
+Actionable correctness findings across #576–#578 have regression fixes. The
 correctness branch forwards the complete indexed-operation action through the
 Studio adapter, and its operation regression uses an original MIT `Summarize`
 fixture. The separately pinned CDM browser fixture and its dependency cohort remain
@@ -181,6 +181,13 @@ model stubs remain deferred. Source and Inspector preserve CRLF through actual
 Enter, paste and undo/redo commands while retaining full-file offsets. Unfilled
 Builder slots use an invalid preview marker, so Apply rejects them even after
 switching to Text; the real identifier `___` remains valid.
+
+Parse and hydration now share complete workspace replacement cleanup. A removed
+file's enums and Choices disappear from an unchanged owner's scope; parsed and
+unmaterialized exports are cleared for empty snapshots too. Three failing
+real-worker regressions passed after the shared reset, and all 20 parser/scope
+checks passed. The Python-tab finding on the middle PR is fulfilled by integrating
+the implemented projection from the top PR.
 
 The Python branch preserves signed zero, unwraps implicit metadata feature
 bindings, narrows collections element by element and shares declaration-based
@@ -211,7 +218,7 @@ codegen corpus strictly compiled 132 emitted TypeScript files. Workspace type
 checks, lint, package builds and generated Python runtime freshness passed;
 existing lint warnings remain. The latest standalone workspace gates passed
 328 core, 71 LSP, 1,537 visual-editor and 1,657 Studio tests, with two intentional
-Studio skips. The final combined Studio suite passed 1,668 tests with the same
+Studio skips. The final combined Studio suite passed 1,671 tests with the same
 two intentional skips; all tracked suites were included. Workspace type checks,
 lint, changed-source formatting, package builds and runtime freshness passed.
 
