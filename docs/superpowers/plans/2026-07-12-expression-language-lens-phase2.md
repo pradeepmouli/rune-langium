@@ -1,5 +1,9 @@
 # Expression Language Lens — Phase 2 (Function-Body Lens) Implementation Plan
 
+Superseded for body editing and display by the [continuous expression editing
+plan](2026-10-08-expression-editing.md). The inverse lens remains a selected,
+guarded expression-editing action; reversibility no longer gates generated views.
+
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
 **Goal:** Prove — and close any real gaps in — the TypeScript lens's support for Rune `func` operation bodies (User Story 3 of the spec), given that Phase 1 (merged, PR #386, `master@7ff8ed07`) already provides this incidentally.

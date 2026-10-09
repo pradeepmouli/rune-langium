@@ -18,7 +18,7 @@ export function expressionNodeToDsl(tree: ExpressionNode): string {
   return renderExpression(expressionNodeToDehydrated(tree, { allowPlaceholders: false }) as never);
 }
 
-/** Serialize with placeholders rendered as `___` (for previews). */
+/** Serialize with placeholders rendered as `<?>` (for previews). */
 export function expressionNodeToDslPreview(tree: ExpressionNode): string {
   return renderExpression(expressionNodeToDehydrated(tree, { allowPlaceholders: true }) as never);
 }

@@ -48,7 +48,8 @@ import type {
   SourceRefOption,
   EditorFormActions,
   TypeGraphNode,
-  ExpressionEditorSlotProps
+  ExpressionEditorSlotProps,
+  FunctionBodyEditorSlotProps
 } from '../../types.js';
 import { resolveNodeKind } from '../../adapters/model-helpers.js';
 
@@ -157,6 +158,9 @@ export interface EditorFormPanelProps {
    * When omitted, FunctionForm renders a plain `<Textarea>` fallback.
    */
   renderExpressionEditor?: (props: ExpressionEditorSlotProps) => ReactNode;
+  renderFunctionBodyEditor?: (props: FunctionBodyEditorSlotProps) => ReactNode;
+  structuralEditsDisabled?: boolean;
+  compactConditions?: boolean;
   /** Called when the panel requests to close (e.g., Escape key). */
   onClose?: () => void;
   /** Called when a type reference is clicked to navigate to that type's definition. */
@@ -183,6 +187,9 @@ const EditorFormPanel = memo(function EditorFormPanel({
   allNodes = EMPTY_NODES,
   nodeRepository,
   renderExpressionEditor,
+  renderFunctionBodyEditor,
+  structuralEditsDisabled = false,
+  compactConditions,
   onClose,
   onNavigateToNode
 }: EditorFormPanelProps) {
@@ -324,6 +331,8 @@ const EditorFormPanel = memo(function EditorFormPanel({
             actions={actions}
             allNodes={allNodes}
             renderExpressionEditor={renderExpressionEditor}
+            compactConditions={compactConditions}
+            structuralEditsDisabled={structuralEditsDisabled}
             onNavigateToNode={onNavigateToNode}
             allNodeIds={allNodeIds}
             readOnly={readOnly}
@@ -377,6 +386,8 @@ const EditorFormPanel = memo(function EditorFormPanel({
             actions={actions}
             inheritedGroups={inheritedGroups}
             renderExpressionEditor={renderExpressionEditor}
+            renderFunctionBodyEditor={renderFunctionBodyEditor}
+            structuralEditsDisabled={structuralEditsDisabled}
             onNavigateToNode={onNavigateToNode}
             allNodeIds={allNodeIds}
             readOnly={readOnly}

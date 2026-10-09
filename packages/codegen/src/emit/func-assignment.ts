@@ -18,7 +18,7 @@ export function renderFuncAssignment(
   let target = root;
   const lines: string[] = [];
   const targetMany = assignment.targetMany ?? (path.length === 0 && ctx.outputAccumulator === 'array');
-  let expr = `${targetMany ? 'runeList' : 'runeSingle'}(${renderExpression(assignment.exprNode)})`;
+  let expr = `${targetMany ? 'rune.list' : 'rune.single'}(${renderExpression(assignment.exprNode)})`;
   const bounds = assignment.targetCardinality;
   const checksFor = (value: string, arraySize?: string) =>
     bounds
@@ -36,7 +36,7 @@ export function renderFuncAssignment(
     if (checks.length) expr = `((value) => { ${checks.join(' ')} return value; })(${expr})`;
   }
   if (assignment.metadataKind) {
-    const helper = assignment.metadataKind === 'reference' ? 'runeToReference' : 'runeToField';
+    const helper = assignment.metadataKind === 'reference' ? 'rune.toReference' : 'rune.toField';
     const sourceKind = isRosettaExpression(assignment.exprNode)
       ? expressionMetadataKind(assignment.exprNode)
       : undefined;

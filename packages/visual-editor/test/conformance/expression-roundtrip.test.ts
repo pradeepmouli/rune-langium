@@ -13,6 +13,7 @@ import { describe, it, expect } from 'vitest';
 import { parse, parseExpression } from '@rune-langium/core';
 import { astToExpressionNode } from '../../src/adapters/ast-to-expression-node.js';
 import { expressionNodeToDsl } from '../../src/adapters/expression-node-to-dsl.js';
+import { createExpressionStore } from '../../src/store/expression-store.js';
 import { FUNCTION_MODEL_SOURCE } from '../helpers/fixture-loader.js';
 
 /** Extract all function expression AST nodes from a parsed model. */
@@ -58,7 +59,7 @@ describe('Expression round-trip (T029)', () => {
       // ExpressionNode → DSL text
       const dslText = expressionNodeToDsl(exprNode);
       expect(dslText).toBeTruthy();
-      expect(dslText).not.toBe('___'); // Not a placeholder
+      expect(dslText).not.toBe('<?>'); // Not a placeholder
     }
   });
 
@@ -92,6 +93,23 @@ describe('Expression round-trip (T029)', () => {
     expect(dsl).toContain('if');
     expect(dsl).toContain('then');
     expect(dsl).toContain('else');
+  });
+
+  it('preserves an opaque CST subtree exactly when a supported sibling is edited', () => {
+    const raw = '1 + Known(2 /* retained */)';
+    const parsed = parseExpression(raw);
+    expect(parsed.hasErrors).toBe(false);
+    // Simulate a grammar extension unknown to the visual builder.
+    const ast = parsed.value as unknown as { right: { $type: string } };
+    ast.right.$type = 'FutureCallExpression';
+    const tree = astToExpressionNode(parsed.value, raw);
+    if (tree.$type !== 'ArithmeticOperation') throw new Error('fixture root');
+    const store = createExpressionStore(tree, { inputs: [], aliases: [], output: null });
+    store.getState().replaceNode(tree.left.id, { $type: 'RosettaIntLiteral', id: 'edited', value: 3n });
+    expect(tree.right).toMatchObject({ $type: 'Unsupported', rawText: 'Known(2 /* retained */)' });
+    const rendered = expressionNodeToDsl(store.getState().tree);
+    expect(rendered).toBe('3 + (Known(2 /* retained */))');
+    expect(parseExpression(rendered).hasErrors).toBe(false);
   });
 
   // Acceptance criteria for the reverse-converter gap fix (B1 Minor 2):

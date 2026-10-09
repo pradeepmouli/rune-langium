@@ -48,7 +48,7 @@ vi.mock('@rune-langium/core', () => ({
       shared: {
         workspace: {
           LangiumDocumentFactory: { fromString: fromStringMock, fromModel: fromModelMock },
-          DocumentBuilder: { build: buildMock },
+          DocumentBuilder: { build: buildMock, update: vi.fn(async () => undefined) },
           LangiumDocuments: {
             addDocument: addDocumentMock,
             hasDocument: hasDocumentMock,
@@ -56,7 +56,7 @@ vi.mock('@rune-langium/core', () => ({
             deleteDocument: vi.fn(),
             all: { toArray: () => [] }
           },
-          IndexManager: { registerExports: registerExportsMock }
+          IndexManager: { registerExports: registerExportsMock, allElements: () => [], remove: vi.fn() }
         }
       }
     }
@@ -84,6 +84,27 @@ async function loadParserWorkerModule() {
 }
 
 describe('parser-worker', () => {
+  it('propagates a failed scope snapshot build and allows the next queued request', async () => {
+    const { dispatchWorkerRequest } = await loadParserWorkerModule();
+    buildMock.mockRejectedValueOnce(new Error('Snapshot build failed'));
+    const result = await dispatchWorkerRequest({
+      type: 'expressionScope',
+      id: 'failed-scope',
+      uri: 'file:///scope.rosetta',
+      name: 'Calc',
+      region: { from: 0, to: 1 },
+      files: [{ name: 'file:///scope.rosetta', content: 'namespace test' }]
+    });
+    expect(result).toMatchObject({
+      type: 'expressionScopeResult',
+      entries: [],
+      error: expect.stringContaining('Snapshot build failed')
+    });
+    expect(buildMock).toHaveBeenCalledTimes(1);
+    expect(await dispatchWorkerRequest({ type: 'parse', id: 'next-request', content: 'namespace next' })).toMatchObject(
+      { type: 'parseResult', id: 'next-request', errors: [] }
+    );
+  });
   beforeEach(() => {
     buildMock.mockReset();
     buildMock.mockImplementation(async () => undefined);

@@ -32,6 +32,7 @@ import { buildTypeReferenceGraph, findCyclicTypes } from './cycle-detector.js';
 import { resolveTypeCallTarget } from './emit/type-ref-resolver.js';
 import { functionInputs, functionOutput, functionSignature } from './types/func.js';
 import { fieldMetadataKind, type FieldMetadataKind } from './expr/metadata-runtime.js';
+import { isMetadataInputEnvelope, metadataPayloadShape } from './expr/metadata-input.js';
 
 function humanizeLabel(name: string): string {
   return name
@@ -1520,24 +1521,13 @@ export function normalizePreviewInputs(
         (value: unknown) => {
           if (value == null) return undefined;
           const kind = fieldMetadataKind(attr);
+          const shape = kind ? metadataPayloadShape(attr.typeCall, typeIndex) : null;
           const normalizeItem = (item: unknown) => {
             if (item == null) return undefined;
-            // A primitive/enum cannot have an object payload. Its declared metadata
-            // wrapper can therefore be retained without guessing at data shapes.
-            if (kind && typeof item === 'object' && !Array.isArray(item) && 'value' in item) {
-              const primitive = resolveTypeCallTarget(
-                attr.typeCall,
-                typeIndex,
-                {
-                  onPrimitive: () => true,
-                  onEnum: () => true,
-                  onData: () => false,
-                  onChoice: () => false,
-                  onUnresolved: () => false
-                },
-                ''
-              );
-              if (primitive) return { ...item, value: normalizeType(attr.typeCall, item.value) };
+            if (kind && isMetadataInputEnvelope(item, shape)) {
+              return Object.prototype.hasOwnProperty.call(item, 'value')
+                ? { ...item, value: normalizeType(attr.typeCall, item.value) }
+                : { ...item };
             }
             const normalized = normalizeType(attr.typeCall, item);
             return kind ? wrappers[kind](normalized) : normalized;

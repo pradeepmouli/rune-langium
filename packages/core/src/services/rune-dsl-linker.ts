@@ -36,7 +36,8 @@ export class RuneDslLinker extends DefaultLinker {
     this.factory = services.shared.workspace.LangiumDocumentFactory;
   }
 
-  protected override loadAstNode(nodeDescription: AstNodeDescription): AstNode | undefined {
+  /** Resolve a description through the same deferred-document path used by linking. */
+  override loadAstNode(nodeDescription: AstNodeDescription): AstNode | undefined {
     if (nodeDescription.node) return nodeDescription.node;
 
     const uri = nodeDescription.documentUri;

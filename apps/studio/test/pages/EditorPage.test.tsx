@@ -60,7 +60,8 @@ const {
     hydrationNonce: 0,
     requestNamespaceHydration: vi.fn(),
     markNamespacesHydrated: vi.fn(),
-    resetHydration: vi.fn()
+    resetHydration: vi.fn(),
+    updateExpression: vi.fn()
   };
 
   const useEditorStore = ((selector: (state: typeof editorStoreState) => unknown) =>
@@ -196,7 +197,7 @@ function stubResizeObserver(): void {
   );
 }
 
-const { sourceEditorMockState, dockShellMockState, diagnosticsPanelMockState } = vi.hoisted(() => ({
+const { sourceEditorMockState, dockShellMockState, diagnosticsPanelMockState, inspectorMockState } = vi.hoisted(() => ({
   sourceEditorMockState: {
     latestProps: undefined as
       | {
@@ -211,6 +212,9 @@ const { sourceEditorMockState, dockShellMockState, diagnosticsPanelMockState } =
           focusPanel?: { component: string; nonce: number } | null;
         }
       | undefined
+  },
+  inspectorMockState: {
+    actions: undefined as import('@rune-langium/visual-editor').EditorFormActions | undefined
   },
   diagnosticsPanelMockState: {
     latestProps: undefined as
@@ -286,7 +290,10 @@ vi.mock('@rune-langium/visual-editor', async () => ({
     structureViewMockState.latestProps = props;
     return React.createElement('div', { 'data-testid': 'structure-view-mock' });
   },
-  EditorFormPanel: () => React.createElement('div'),
+  EditorFormPanel: (props: { actions: import('@rune-langium/visual-editor').EditorFormActions }) => {
+    inspectorMockState.actions = props.actions;
+    return React.createElement('div');
+  },
   ExpressionBuilder: () => React.createElement('div'),
   // Cell components: exported as the sentinel functions so EditorPage's
   // structureCellComponents memo captures the exact same references.
@@ -612,6 +619,31 @@ describe('EditorPage preview target identity', () => {
     setRuneStudioTestApi(() => undefined);
     vi.unstubAllGlobals();
     cleanup();
+  });
+
+  it('forwards the selected function operation through the Inspector adapter', async () => {
+    editorStoreState.nodes = [
+      {
+        id: 'preview.alpha.Calculate#RosettaFunction',
+        data: { namespace: 'preview.alpha', name: 'Calculate', $type: 'RosettaFunction' },
+        meta: { namespace: 'preview.alpha', errors: [], hasExternalRefs: false }
+      }
+    ];
+    editorStoreState.selectedNodeId = editorStoreState.nodes[0]!.id;
+    inspectorMockState.actions = undefined;
+    renderEditorPage({
+      models: [],
+      files: [
+        { name: 'calculate.rosetta', path: 'calculate.rosetta', content: 'namespace preview.alpha', dirty: false }
+      ]
+    });
+    await waitFor(() => expect(inspectorMockState.actions).toBeDefined());
+    act(() => inspectorMockState.actions!.updateExpression(editorStoreState.selectedNodeId!, '42', 1));
+    expect(editorStoreState.updateExpression).toHaveBeenCalledExactlyOnceWith(
+      'preview.alpha.Calculate#RosettaFunction',
+      '42',
+      1
+    );
   });
 
   it('posts preview:generate using the selected node kind-aware id when display names collide', async () => {

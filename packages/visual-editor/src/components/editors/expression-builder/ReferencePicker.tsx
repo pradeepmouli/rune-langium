@@ -26,15 +26,24 @@ export function ReferencePicker({ open, scope, onSelect, onClose }: ReferencePic
   const allEntries = [
     ...scope.inputs.map((e) => ({ ...e, origin: 'input' as const })),
     ...(scope.output ? [{ ...scope.output, origin: 'output' as const }] : []),
-    ...scope.aliases.map((e) => ({ ...e, origin: 'alias' as const }))
-  ];
+    ...scope.aliases.map((e) => ({ ...e, origin: 'alias' as const })),
+    ...(scope.attributes ?? []).map((e) => ({ ...e, origin: 'attribute' as const })),
+    ...(scope.references ?? []).map((e) => ({ ...e, origin: e.kind ?? 'callable' }))
+  ].filter((entry) => entry.origin !== 'callable' || entry.argumentCount !== undefined);
   const handleValueChange = (value: string) => {
     const entry: FunctionScopeEntry | undefined = allEntries.find(({ origin, name }) => `${origin}:${name}` === value);
     if (!entry) return;
+    let rawArgs: ExpressionNode[] | undefined;
+    if (entry.kind === 'callable') {
+      const count = entry.argumentCount;
+      if (count === undefined) return;
+      rawArgs = Array.from({ length: count }, () => ({ $type: 'Placeholder', id: crypto.randomUUID() }));
+    }
     onSelect({
       $type: 'RosettaSymbolReference',
       id: crypto.randomUUID(),
-      symbol: entry.name
+      symbol: entry.name,
+      ...(rawArgs ? { explicitArguments: true, rawArgs } : {})
     } as unknown as ExpressionNode);
   };
 

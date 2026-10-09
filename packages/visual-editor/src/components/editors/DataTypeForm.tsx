@@ -78,6 +78,8 @@ export interface DataTypeFormProps {
   allNodes?: TypeGraphNode[];
   /** Optional render-prop for a rich expression editor. */
   renderExpressionEditor?: (props: ExpressionEditorSlotProps) => ReactNode;
+  compactConditions?: boolean;
+  structuralEditsDisabled?: boolean;
   /** Callback to navigate to a type's graph node. */
   onNavigateToNode?: NavigateToNodeCallback;
   /** All loaded graph node IDs for resolving type name to node ID. */
@@ -117,6 +119,8 @@ function DataTypeForm({
   actions,
   allNodes = EMPTY_NODES,
   renderExpressionEditor,
+  compactConditions,
+  structuralEditsDisabled = false,
   onNavigateToNode,
   allNodeIds,
   readOnly: readOnlyProp,
@@ -166,11 +170,12 @@ function DataTypeForm({
 
   const commitName = useCallback(
     (newName: string) => {
+      if (structuralEditsDisabled || readOnlyProp || nodeMeta.isReadOnly) return;
       if (newName && newName.trim() && newName !== committedRef.current.name) {
         actions.renameType(nodeId, newName.trim());
       }
     },
-    [nodeId, actions]
+    [nodeId, actions, structuralEditsDisabled, readOnlyProp, nodeMeta.isReadOnly]
   );
 
   const debouncedName = useAutoSave(commitName, 500);
@@ -289,7 +294,8 @@ function DataTypeForm({
 
   // ---- Compute isReadOnly before ghost rows so it is in scope for the memo --
 
-  const isReadOnly = Boolean(readOnlyProp || nodeMeta.isReadOnly);
+  const sourceReadOnly = Boolean(readOnlyProp || nodeMeta.isReadOnly);
+  const isReadOnly = sourceReadOnly || structuralEditsDisabled;
 
   // ---- Inherited rows as ghost-row primitives (US4 / R6) -------------------
   // Per upstream `arrayConfig.before` (zod-to-form/core: `GhostRow[]`), build
@@ -338,8 +344,15 @@ function DataTypeForm({
         readOnly={isReadOnly}
         synonymSourceOptions={synonymSourceOptions}
         renderExpressionEditor={renderExpressionEditor}
+        compactConditions={compactConditions}
+        sourceReadOnly={sourceReadOnly}
       >
         <div data-slot="data-type-form" className="flex flex-col min-h-0 h-full gap-4 p-4">
+          {structuralEditsDisabled && (
+            <p role="status" className="text-xs text-muted-foreground">
+              Structural editing waits for the current Rune draft to parse.
+            </p>
+          )}
           {/* Header: Namespace + Name + Badge — always visible above tabs */}
           <TypeHeader
             kind="data"

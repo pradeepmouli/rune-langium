@@ -15,13 +15,12 @@
 import React, { useEffect, useRef, useCallback, useMemo, useState } from 'react';
 import { EditorView } from '@codemirror/view';
 import { EditorState } from '@codemirror/state';
-import { basicSetup } from 'codemirror';
 import { javascript } from '@codemirror/lang-javascript';
 import { json } from '@codemirror/lang-json';
 import type { Target } from '@rune-langium/codegen/export';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@rune-langium/design-system/ui/select';
 import { nameFromNodeId, useLatestRef } from '@rune-langium/visual-editor';
-import { studioEditorExtensions } from '../lang/editor-theme.js';
+import { editorExtensions, externalDocumentChange } from '../lang/editor-extensions.js';
 import {
   downloadTargetViaRouter,
   CodegenDownloadError,
@@ -250,11 +249,7 @@ export const CodePreviewPanel = withInstrumentation(
       const state = EditorState.create({
         doc: '',
         extensions: [
-          basicSetup,
-          EditorState.readOnly.of(true),
-          EditorView.lineWrapping,
-          langExtension,
-          ...studioEditorExtensions,
+          ...editorExtensions(langExtension, true),
           EditorView.domEventHandlers({
             click: (event, view) => {
               const pos = view.posAtCoords({ x: event.clientX, y: event.clientY });
@@ -282,7 +277,8 @@ export const CodePreviewPanel = withInstrumentation(
       const current = view.state.doc.toString();
       if (current === nextContent) return;
       view.dispatch({
-        changes: { from: 0, to: current.length, insert: nextContent }
+        changes: { from: 0, to: current.length, insert: nextContent },
+        annotations: externalDocumentChange.of(true)
       });
     }, [activeFile]);
 

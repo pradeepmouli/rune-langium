@@ -1603,9 +1603,6 @@ html {
 /* ---------- CodeMirror Editor (T043) — dark theme ---------- */
 .studio-editor-page__source .cm-editor {
   height: 100%;
-  font-family: var(--font-mono);
-  font-size: var(--text-base);
-  line-height: 1.5;
   background: color-mix(in srgb, var(--card) 78%, var(--background));
   color: var(--foreground);
 }

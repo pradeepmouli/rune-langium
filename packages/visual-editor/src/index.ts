@@ -87,6 +87,7 @@ export type {
   EdgeData,
   ValidationError,
   ExpressionEditorSlotProps,
+  FunctionBodyEditorSlotProps,
   TypeOption,
   SourceRefOption,
   CommonFormActions,
@@ -226,3 +227,5 @@ export { TypePickerCell } from './components/editors/structure/TypePickerCell.js
 export type { TypePickerCellProps } from './components/editors/structure/TypePickerCell.js';
 export { InheritanceCell } from './components/editors/structure/InheritanceCell.js';
 export type { InheritanceCellProps } from './components/editors/structure/InheritanceCell.js';
+
+export { expressionScopeFromEntries } from './adapters/expression-scope.js';

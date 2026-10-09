@@ -18,7 +18,60 @@
  * @see specs/011-export-code-cf/contracts/http-generate.md (hosted)
  */
 
-import type { FormPreviewSchema } from '@rune-langium/codegen/export';
+import type { FormPreviewSchema, GeneratedProjection, ProjectionSubject } from '@rune-langium/codegen/export';
+
+export interface ProjectionRequest {
+  type: 'projection:generate';
+  requestId: string;
+  language: GeneratedProjection['language'];
+  subject: ProjectionSubject;
+  kind: 'function' | 'condition';
+  source: string;
+  filesRevision: number;
+}
+
+export const isProjectionResultMessage = withInstrumentation(
+  function isProjectionResultMessage(
+    value: unknown
+  ): value is { type: 'projection:result'; requestId: string; projection: GeneratedProjection } {
+    if (
+      !isRecord(value) ||
+      value.type !== 'projection:result' ||
+      typeof value.requestId !== 'string' ||
+      !isRecord(value.projection)
+    )
+      return false;
+    const projection = value.projection;
+    return (
+      (projection.language === 'typescript' || projection.language === 'python') &&
+      typeof projection.code === 'string' &&
+      isRecord(projection.subject) &&
+      typeof projection.subject.uri === 'string' &&
+      typeof projection.subject.nodeId === 'string' &&
+      isRecord(projection.subject.region) &&
+      Number.isSafeInteger(projection.subject.region.from) &&
+      Number.isSafeInteger(projection.subject.region.to) &&
+      Array.isArray(projection.sourceMap) &&
+      Array.isArray(projection.requiredHelpers) &&
+      projection.requiredHelpers.every((name) => typeof name === 'string')
+    );
+  },
+  { op: 'isProjectionResultMessage' }
+);
+
+export const isProjectionErrorMessage = withInstrumentation(
+  function isProjectionErrorMessage(
+    value: unknown
+  ): value is { type: 'projection:error'; requestId: string; error: string } {
+    return (
+      isRecord(value) &&
+      value.type === 'projection:error' &&
+      typeof value.requestId === 'string' &&
+      typeof value.error === 'string'
+    );
+  },
+  { op: 'isProjectionErrorMessage' }
+);
 import type {
   CodeGenerationRequest,
   CodeGenerationResult,

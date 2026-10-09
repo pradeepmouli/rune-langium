@@ -31,6 +31,7 @@ import {
   NamespaceExplorerPanel,
   EditorFormPanel,
   ExpressionBuilder,
+  expressionScopeFromEntries,
   StructureView,
   NameCell,
   CardinalityCell,
@@ -58,6 +59,7 @@ import type {
   EditorFormActions,
   ExpressionEditorSlotProps,
   FunctionScope,
+  FunctionBodyEditorSlotProps,
   LayoutDirection,
   AdapterChoiceOption,
   AdapterDocument,
@@ -68,6 +70,9 @@ import { useStructureViewStore } from '../store/structure-view-store.js';
 import type { RosettaModel } from '@rune-langium/core';
 import { namespaceFromModelName } from '@rune-langium/core';
 import { SourceEditor } from '../components/SourceEditor.js';
+import { ExpressionWorkspace } from '../components/editing/ExpressionWorkspace.js';
+import { ExpressionDocument } from '../services/expression-document.js';
+import { buildExpressionOwnerFiles } from './expression-owner-files.js';
 import type { SourceEditorRef } from '../components/SourceEditor.js';
 import { ConnectionStatus } from '../components/ConnectionStatus.js';
 import { LspConnectionBadge } from '../components/LspConnectionBadge.js';
@@ -75,7 +80,6 @@ import { DiagnosticsPanel } from '../components/DiagnosticsPanel.js';
 import { ExportDialog } from '../components/ExportDialog.js';
 import { ImportDialog } from '../components/ImportDialog.js';
 import { ModelLoader } from '../components/ModelLoader.js';
-import { LanguageLensEditor } from '../components/LanguageLensEditor.js';
 import { JsonSchemaImportOptionsFormAdapter } from '../codegen-forms/JsonSchemaImportOptionsFormAdapter.js';
 import { OpenApiImportOptionsFormAdapter } from '../codegen-forms/OpenApiImportOptionsFormAdapter.js';
 import { SqlImportOptionsFormAdapter } from '../codegen-forms/SqlImportOptionsFormAdapter.js';
@@ -92,7 +96,7 @@ import {
 import { Maximize2, LayoutGrid, Network } from 'lucide-react';
 import { useStudioToast } from '../components/StudioToastProvider.js';
 import { DockShell } from './DockShell.js';
-import { linkDocument } from '../services/workspace.js';
+import { linkDocument, requestExpressionScope } from '../services/workspace.js';
 import { useLspDiagnosticsBridge } from '../hooks/useLspDiagnosticsBridge.js';
 import { useDiagnosticsStore } from '../store/diagnostics-store.js';
 import { CodePreviewPanel } from '../components/CodePreviewPanel.js';
@@ -468,6 +472,7 @@ export const ExplorePerspective = withInstrumentation(
     const activeEditorFile = useExploreFileNavStore((s) => s.activeEditorFile);
     const setActiveEditorFile = useExploreFileNavStore((s) => s.setActiveEditorFile);
     const storeOpenFileInSource = useExploreFileNavStore((s) => s.openFileInSource);
+    const requestSourceFile = useExploreFileNavStore((s) => s.requestSourceFile);
     const [inspectorFocusNonce, setInspectorFocusNonce] = useState(0);
     const pendingRevealRef = useRef<{ line: number; filePath: string } | null>(null);
     const linkDocumentTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -653,6 +658,8 @@ export const ExplorePerspective = withInstrumentation(
         return file ? [{ filePath: file.path, model }] : [];
       });
     }, [files, models, parsedModels]);
+
+    const expressionOwnerFiles = useMemo(() => buildExpressionOwnerFiles(resolvedModelFiles), [resolvedModelFiles]);
 
     useEffect(() => {
       workspaceIdRef.current = workspaceId;
@@ -928,41 +935,7 @@ export const ExplorePerspective = withInstrumentation(
       };
     }, [selectedNodeData]);
 
-    // Lightweight per-session UI toggle (component state only — not a
-    // persisted user setting, and not wired into the shared AppHeader /
-    // perspective-chrome registry). 'builder' stays the default; the small
-    // toggle below flips a condition's expression editor to the TypeScript
-    // lens for manual QA and everyday use.
-    const [expressionEditorMode, setExpressionEditorMode] = useState<'builder' | 'lens'>('builder');
-
-    const renderExpressionEditor = useCallback(
-      (props: ExpressionEditorSlotProps) => (
-        <div className="flex flex-col gap-1">
-          <div className="flex justify-end">
-            <Button
-              type="button"
-              variant="link"
-              size="xs"
-              className="h-auto p-0 text-muted-foreground"
-              onClick={() => setExpressionEditorMode((m) => (m === 'lens' ? 'builder' : 'lens'))}
-            >
-              {expressionEditorMode === 'lens' ? 'Use builder' : 'Try TypeScript view'}
-            </Button>
-          </div>
-          {expressionEditorMode === 'lens' ? (
-            <LanguageLensEditor {...props} />
-          ) : (
-            <ExpressionBuilder {...props} scope={functionScope} />
-          )}
-        </div>
-      ),
-      [functionScope, expressionEditorMode]
-    );
-
-    const filesRef = useRef(files);
-    useEffect(() => {
-      filesRef.current = files;
-    }, [files]);
+    const filesRef = useLatestRef(files);
 
     useEffect(() => {
       if (files.length === 0) {
@@ -981,13 +954,35 @@ export const ExplorePerspective = withInstrumentation(
       });
     }, [files]);
 
+    const [documentGeneration, setDocumentGeneration] = useState({ workspaceId, value: 0 });
+    if (documentGeneration.workspaceId !== workspaceId)
+      setDocumentGeneration({ workspaceId, value: documentGeneration.value + 1 });
+    const documentGenerationRef = useLatestRef(documentGeneration.value);
+    const expressionDocumentsRef = useRef<ExpressionDocument | null>(null);
+    if (!expressionDocumentsRef.current)
+      expressionDocumentsRef.current = new ExpressionDocument({
+        getGeneration: () => documentGenerationRef.current,
+        getFile: (path) => {
+          const file = filesRef.current.find((candidate) => pathToUri(candidate.path) === path);
+          return file ? { ...file, readOnly: Boolean(file.readOnly || file.refOnly) } : undefined;
+        },
+        onContentChange: (path, content) => sourceChangeRef.current(path, content)
+      });
+    const expressionDocuments = expressionDocumentsRef.current;
+    useEffect(() => {
+      for (const file of files) expressionDocuments.observe(pathToUri(file.path));
+    }, [files, expressionDocuments]);
+
     const handleSourceChange = useCallback(
       (path: string, content: string) => {
         const updatedFiles = filesRef.current.map((f) => (f.path === path ? { ...f, content, dirty: true } : f));
+        filesRef.current = updatedFiles;
+        expressionDocuments.observe(pathToUri(path));
         onFilesChange?.(updatedFiles);
       },
-      [onFilesChange]
+      [onFilesChange, expressionDocuments]
     );
+    const sourceChangeRef = useLatestRef(handleSourceChange);
 
     const namespaceToFile = useMemo(() => {
       const map = new Map<string, string>();
@@ -1022,8 +1017,12 @@ export const ExplorePerspective = withInstrumentation(
         for (const element of model.elements ?? []) {
           const name = element.name ?? 'unknown';
           const nodeId = makeNodeId(ns, name, element.$type);
+          if (expressionOwnerFiles.has(nodeId)) continue;
           if (!map.has(nodeId)) map.set(nodeId, entry.filePath);
         }
+      }
+      for (const [nodeId, entry] of expressionOwnerFiles) {
+        if (entry) map.set(nodeId, entry.filePath);
       }
       // Include deferred corpus entries so linkDocument can resolve their file paths.
       for (const entry of deferredExports) {
@@ -1034,11 +1033,15 @@ export const ExplorePerspective = withInstrumentation(
         }
       }
       return map;
-    }, [resolvedModelFiles, deferredExports]);
+    }, [resolvedModelFiles, deferredExports, expressionOwnerFiles]);
 
     const resolveNodeFile = useCallback(
       (nodeData: AnyGraphNode, meta: GraphNodeMeta | undefined): string | undefined => {
         const d = nodeData as any;
+        if (meta?.namespace) {
+          const nodeId = makeNodeId(meta.namespace, d.name, d.$type);
+          if (expressionOwnerFiles.has(nodeId)) return expressionOwnerFiles.get(nodeId)?.filePath;
+        }
         const docPath = d.$container?.$document?.uri?.path as string | undefined;
         if (docPath) {
           const match = files.find((f) => f.path === docPath || f.path.endsWith(docPath) || docPath.endsWith(f.path));
@@ -1053,7 +1056,7 @@ export const ExplorePerspective = withInstrumentation(
         const nodeId = makeNodeId(meta.namespace, d.name, typeof d.$type === 'string' ? d.$type : undefined);
         return nodeIdToFilePath.get(nodeId);
       },
-      [files, nodeIdToFilePath]
+      [files, nodeIdToFilePath, expressionOwnerFiles]
     );
     // Ref for the full deferredExports list so the hydration relink effect can
     // link ALL files for the selected namespace, not just the one the per-type
@@ -1072,35 +1075,36 @@ export const ExplorePerspective = withInstrumentation(
       files
     );
     useEffect(() => {
-      const sourcePath = activeEditorFile ?? selectedSourceFilePath;
-      const file = files.find((candidate) => candidate.path === sourcePath);
-      const namespace = file?.namespace ?? selectedNodeMeta?.namespace;
-      if (
-        !file?.refOnly ||
-        file.sourceLoaded ||
-        file.content.length > 0 ||
-        !file.bundleId ||
-        !file.bundleVersion ||
-        !namespace
-      ) {
-        return;
+      for (const sourcePath of new Set([activeEditorFile, selectedSourceFilePath])) {
+        const file = files.find((candidate) => candidate.path === sourcePath);
+        const namespace = file?.namespace ?? selectedNodeMeta?.namespace;
+        if (
+          !file?.refOnly ||
+          file.sourceLoaded ||
+          file.content.length > 0 ||
+          !file.bundleId ||
+          !file.bundleVersion ||
+          !namespace
+        ) {
+          continue;
+        }
+        if (!file.artifactKey && sourcePath === activeEditorFile) {
+          pendingSourceNavigationRef.current = { bundleId: file.bundleId, namespace, path: file.path };
+          useEditorStore.getState().requestNamespaceHydration(namespace);
+        }
+        const key = `${file.bundleId}:${file.bundleVersion}:${namespace}:${file.artifactKey ?? ''}`;
+        if (pendingSourceRequestsRef.current.has(key)) continue;
+        pendingSourceRequestsRef.current.add(key);
+        setSourceLoadError(null);
+        void loadCuratedSource(file.bundleId, file.bundleVersion, namespace, file.artifactKey)
+          .catch((error: unknown) => {
+            setSourceLoadError({
+              path: file.path,
+              message: error instanceof Error ? error.message : String(error)
+            });
+          })
+          .finally(() => pendingSourceRequestsRef.current.delete(key));
       }
-      if (!file.artifactKey) {
-        pendingSourceNavigationRef.current = { bundleId: file.bundleId, namespace, path: file.path };
-        useEditorStore.getState().requestNamespaceHydration(namespace);
-      }
-      const key = `${file.bundleId}:${file.bundleVersion}:${namespace}:${file.artifactKey ?? ''}`;
-      if (pendingSourceRequestsRef.current.has(key)) return;
-      pendingSourceRequestsRef.current.add(key);
-      setSourceLoadError(null);
-      void loadCuratedSource(file.bundleId, file.bundleVersion, namespace, file.artifactKey)
-        .catch((error: unknown) => {
-          setSourceLoadError({
-            path: file.path,
-            message: error instanceof Error ? error.message : String(error)
-          });
-        })
-        .finally(() => pendingSourceRequestsRef.current.delete(key));
     }, [files, activeEditorFile, selectedSourceFilePath, selectedNodeMeta?.namespace, loadCuratedSource]);
     useEffect(() => {
       const pending = pendingSourceNavigationRef.current;
@@ -1651,7 +1655,7 @@ export const ExplorePerspective = withInstrumentation(
         updateOutputType: (nodeId, type) => s().updateOutputType(nodeId, type),
         setFunctionParent: (nodeId, parentId) => s().setFunctionParent(nodeId, parentId),
         updateTypeAliasType: (nodeId, type) => s().updateTypeAliasType(nodeId, type),
-        updateExpression: (nodeId, expr) => s().updateExpression(nodeId, expr),
+        updateExpression: (...args) => s().updateExpression(...args),
         addAnnotation: (nodeId, name) => s().addAnnotation(nodeId, name),
         removeAnnotation: (nodeId, index) => s().removeAnnotation(nodeId, index),
         addCondition: (nodeId, condition) => s().addCondition(nodeId, condition),
@@ -1996,6 +2000,115 @@ export const ExplorePerspective = withInstrumentation(
       return !!(namespace && refOnlyNamespaces.has(namespace));
     }, [selectedNodeMeta, refOnlyNamespaces]);
 
+    const selectedExpressionFile = files.find((file) => file.path === selectedSourceFilePath);
+    const selectedParsedModel = parsedModels?.find((entry) => entry.filePath === selectedSourceFilePath);
+    const selectedParseCurrent = Boolean(
+      selectedExpressionFile &&
+      selectedParsedModel?.source === selectedExpressionFile.content &&
+      !parseErrors.get(selectedExpressionFile.path)?.length
+    );
+    const renderFunctionBodyEditor = useCallback(
+      (props: FunctionBodyEditorSlotProps) => (
+        <ExpressionWorkspace
+          key={`${workspaceId}:${props.nodeId}`}
+          {...props}
+          sourceOwner={
+            selectedNodeData?.$type === 'RosettaFunction' || selectedNodeData?.$type === 'Data'
+              ? selectedNodeData
+              : undefined
+          }
+          file={selectedExpressionFile}
+          dependencySnapshot={files}
+          parsed={selectedParsedModel}
+          loadScope={(region) =>
+            requestExpressionScope(selectedExpressionFile!.path, props.nodeId, region, files).then(
+              expressionScopeFromEntries
+            )
+          }
+          documents={expressionDocuments}
+          parseCurrent={selectedParseCurrent}
+          onContentChange={handleSourceChange}
+          onOpenSource={() => {
+            if (selectedSourceFilePath) requestSourceFile(selectedSourceFilePath);
+          }}
+          lspClient={lspClient}
+          lspReady={lspReady}
+          sourceError={
+            sourceLoadError && sourceLoadError.path === selectedSourceFilePath ? sourceLoadError.message : undefined
+          }
+        />
+      ),
+      [
+        workspaceId,
+        selectedNodeData,
+        selectedExpressionFile,
+        files,
+        selectedParsedModel,
+        expressionDocuments,
+        selectedParseCurrent,
+        handleSourceChange,
+        selectedSourceFilePath,
+        requestSourceFile,
+        lspClient,
+        lspReady,
+        sourceLoadError
+      ]
+    );
+
+    const renderExpressionEditor = useCallback(
+      (props: ExpressionEditorSlotProps) =>
+        props.target ? (
+          <ExpressionWorkspace
+            key={`${workspaceId}:${props.target.nodeId}:${props.target.kind}:${props.target.index}`}
+            nodeId={props.target.nodeId}
+            target={props.target}
+            readOnly={Boolean(props.readOnly)}
+            sourceOwner={
+              selectedNodeData?.$type === 'RosettaFunction' || selectedNodeData?.$type === 'Data'
+                ? selectedNodeData
+                : undefined
+            }
+            file={selectedExpressionFile}
+            dependencySnapshot={files}
+            parsed={selectedParsedModel}
+            loadScope={(region) =>
+              requestExpressionScope(selectedExpressionFile!.path, props.target!.nodeId, region, files).then(
+                expressionScopeFromEntries
+              )
+            }
+            documents={expressionDocuments}
+            parseCurrent={selectedParseCurrent}
+            onContentChange={handleSourceChange}
+            onOpenSource={() => {
+              if (selectedSourceFilePath) requestSourceFile(selectedSourceFilePath);
+            }}
+            lspClient={lspClient}
+            lspReady={lspReady}
+            sourceError={
+              sourceLoadError && sourceLoadError.path === selectedSourceFilePath ? sourceLoadError.message : undefined
+            }
+          />
+        ) : (
+          <ExpressionBuilder {...props} scope={functionScope} />
+        ),
+      [
+        workspaceId,
+        selectedNodeData,
+        selectedExpressionFile,
+        files,
+        selectedParsedModel,
+        expressionDocuments,
+        selectedParseCurrent,
+        handleSourceChange,
+        selectedSourceFilePath,
+        requestSourceFile,
+        lspClient,
+        lspReady,
+        sourceLoadError,
+        functionScope
+      ]
+    );
+
     const renderInspectorPane = useCallback(
       () => (
         <div className="studio-scroll flex flex-col min-h-0 h-full overflow-auto">
@@ -2011,6 +2124,11 @@ export const ExplorePerspective = withInstrumentation(
             allNodes={storeNodes}
             nodeRepository={nodeRepository}
             renderExpressionEditor={renderExpressionEditor}
+            renderFunctionBodyEditor={renderFunctionBodyEditor}
+            structuralEditsDisabled={
+              (selectedNodeType === 'RosettaFunction' || selectedNodeType === 'Data') && !selectedParseCurrent
+            }
+            compactConditions
             onClose={() => {
               /* pane visibility handled by paneswitch */
             }}
@@ -2030,6 +2148,9 @@ export const ExplorePerspective = withInstrumentation(
         storeNodes,
         nodeRepository,
         renderExpressionEditor,
+        renderFunctionBodyEditor,
+        selectedNodeType,
+        selectedParseCurrent,
         navigateToNode
       ]
     );

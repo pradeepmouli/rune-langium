@@ -11,6 +11,7 @@ This file is the shared instruction source for Codex, Claude, Copilot, and other
 - Keep public API docs concise; test public behavior and shared architecture seams.
 - When architecture, scripts, workflows, or agent configuration change, update the relevant documentation and durable repository context in the same change.
 - New source files must use the directory's SPDX header: `packages/` is MIT; `apps/studio/` is FSL-1.1-ALv2. Describe Studio as source-available.
+- Pinned upstream test corpora belong in [test/fixtures/third-party](test/fixtures/third-party/README.md). Preserve upstream source headers, licenses, notices, provenance and integrity hashes; these test inputs retain their upstream licenses.
 
 ## Setup and Verification
 

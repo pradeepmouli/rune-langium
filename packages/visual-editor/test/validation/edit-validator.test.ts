@@ -138,10 +138,18 @@ describe('detectDuplicateEnumValue', () => {
 });
 
 // ---------------------------------------------------------------------------
-// validateExpression (balanced parentheses)
+// validateExpression (Rune syntax)
 // ---------------------------------------------------------------------------
 
 describe('validateExpression', () => {
+  it.each(['foo +', 'foo(,)', 'x y', '"unfinished'])('rejects malformed Rune %s', (text) => {
+    expect(validateExpression(text).valid).toBe(false);
+  });
+
+  it.each(['"("', '")"', '"text ( inside"', '1 // ('])('accepts Rune literals and comments %s', (text) => {
+    expect(validateExpression(text)).toEqual({ valid: true });
+  });
+
   it('accepts valid expression with balanced parens', () => {
     expect(validateExpression('foo(bar(x))')).toEqual({ valid: true });
   });
@@ -164,13 +172,13 @@ describe('validateExpression', () => {
   it('rejects unbalanced open parenthesis', () => {
     const result = validateExpression('foo(bar');
     expect(result.valid).toBe(false);
-    expect(result.error).toContain('missing');
+    expect(result.error).toBeTruthy();
   });
 
   it('rejects unbalanced close parenthesis', () => {
     const result = validateExpression('foo)bar(');
     expect(result.valid).toBe(false);
-    expect(result.error).toContain('unexpected');
+    expect(result.error).toBeTruthy();
   });
 
   it('rejects nested unbalanced parens', () => {

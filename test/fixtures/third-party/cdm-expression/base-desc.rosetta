@@ -1,0 +1,11 @@
+// SPDX-License-Identifier: Apache-2.0
+// Copyright FINOS contributors. Extracted from the pinned sources in sources.json.
+
+namespace cdm.base : <"Basic concepts used across the model: date, time, math, static data.">
+version "${project.version}"
+
+body Organisation ISDA
+
+corpus Scheme FpML_Coding_Scheme
+
+segment schemeLocation

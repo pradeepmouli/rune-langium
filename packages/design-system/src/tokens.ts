@@ -57,8 +57,8 @@ export const colors = {
     navigation: { DEFAULT: '#00D4AA', bg: 'rgba(0, 212, 170, 0.12)' },
     collection: { DEFAULT: '#E8913A', bg: 'rgba(232, 145, 58, 0.12)' },
     control: { DEFAULT: '#C792EA', bg: 'rgba(199, 146, 234, 0.12)' },
-    literal: { DEFAULT: '#8A8A96', bg: 'rgba(138, 138, 150, 0.12)' },
-    reference: { DEFAULT: '#8B7BF4', bg: 'rgba(139, 123, 244, 0.12)' },
+    literal: { DEFAULT: '#B8C7CC', bg: 'rgba(138, 138, 150, 0.12)' },
+    reference: { DEFAULT: '#BEB8FF', bg: 'rgba(139, 123, 244, 0.12)' },
     placeholder: { DEFAULT: '#5C5C6A', bg: 'rgba(92, 92, 106, 0.10)' }
   }
 } as const;

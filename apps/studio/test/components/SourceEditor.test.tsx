@@ -45,6 +45,7 @@ vi.mock('@codemirror/view', () => {
     focus = mockEditorViewFocus;
     destroy = mockEditorViewDestroy;
     static updateListener = { of: vi.fn().mockReturnValue([]) };
+    static contentAttributes = { of: vi.fn().mockReturnValue([]) };
     static domEventHandlers = vi.fn().mockReturnValue([]);
     static theme = vi.fn().mockReturnValue([]);
     static scrollIntoView = vi.fn((anchor: number) => ({ anchor }));
@@ -64,6 +65,7 @@ vi.mock('@codemirror/view', () => {
 });
 
 vi.mock('@codemirror/state', () => ({
+  Transaction: { addToHistory: { of: () => ({}) } },
   EditorState: {
     create: vi.fn().mockReturnValue({
       doc: { toString: () => '' }
@@ -78,6 +80,13 @@ vi.mock('@codemirror/state', () => ({
       return ext;
     }
   }
+}));
+
+vi.mock('../../src/lang/document-extensions.js', () => ({
+  documentExtensions: () => [],
+  externalDocumentChange: { of: () => ({}) },
+  minimalDocumentChange: (before: string, after: string) => ({ from: 0, to: before.length, insert: after }),
+  setProtectedRegion: { of: () => ({}) }
 }));
 
 vi.mock('codemirror', () => ({

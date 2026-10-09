@@ -142,6 +142,13 @@ export interface ExpressionEditorSlotProps {
   placeholder?: string;
   /** Raw AST expression object — enables direct tree conversion without reparsing text. */
   expressionAst?: unknown;
+  readOnly?: boolean;
+  target?: { nodeId: string; kind: 'precondition' | 'postcondition'; index: number };
+}
+
+export interface FunctionBodyEditorSlotProps {
+  nodeId: string;
+  readOnly: boolean;
 }
 
 // ---------------------------------------------------------------------------
@@ -269,7 +276,7 @@ export interface FuncFormActions extends CommonFormActions {
   ): void;
   reorderInputParam(nodeId: string, fromIndex: number, toIndex: number): void;
   updateOutputType(nodeId: string, typeName: string): void;
-  updateExpression(nodeId: string, expressionText: string): void;
+  updateExpression(nodeId: string, expressionText: string, operationIndex?: number): void;
   /** Set (or clear, with `null`) a Function's `superFunction` parent reference. */
   setFunctionParent(nodeId: string, parentId: string | null): void;
 }
