@@ -34,21 +34,40 @@ import { Temporal } from '@js-temporal/polyfill';
  */
 
 import type { LangiumDocument } from 'langium';
-import { URI } from 'langium';
+import { URI, AstUtils } from 'langium';
 import { transform } from 'sucrase';
-import { createRuneDslServices, hydrateModelDocuments } from '@rune-langium/core';
+import {
+  createRuneDslServices,
+  hydrateModelDocuments,
+  getExpressionOwners,
+  getFunctionImplementationRegion,
+  getNodeSourceRegion,
+  isRosettaFunction,
+  namespaceFromModelName,
+  type RosettaModel
+} from '@rune-langium/core';
 import {
   generate,
   generatePreviewSchemas,
   emitStandaloneZodSchema,
   RUNTIME_HELPER_JS_SOURCE,
-  normalizePreviewInputs
+  normalizePreviewInputs,
+  selectTypeScriptProjection,
+  resolveExportSelection,
+  generatePythonModule,
+  selectPythonProjection
 } from '@rune-langium/codegen/export';
-import type { Target, FormPreviewSchema, GeneratorOutput, GeneratorDiagnostic } from '@rune-langium/codegen/export';
+import type {
+  Target,
+  FormPreviewSchema,
+  GeneratorOutput,
+  GeneratorDiagnostic,
+  PythonModule
+} from '@rune-langium/codegen/export';
 import { findDataNode, getActiveConditionPredicates } from '@rune-langium/codegen/instances';
 import type { ValidationDiagnostic } from '@rune-langium/codegen/instances';
-import { qualifiedNameFromNodeId } from '@rune-langium/visual-editor/identifiers';
-import type { PreviewWorkerRequest } from '../services/codegen-service.js';
+import { qualifiedNameFromNodeId, makeNodeId } from '@rune-langium/visual-editor/identifiers';
+import type { PreviewWorkerRequest, ProjectionRequest } from '../services/codegen-service.js';
 import { z } from 'zod';
 import { isWorkerGlobalScope } from './runtime-guards.js';
 import { installInstrumentationWorkerSink } from '../services/instrumentation/worker-sink.js';
@@ -118,6 +137,7 @@ type WorkerInboundMessage =
   | PreviewWorkerRequest
   | PreviewExecuteMessage
   | InstanceValidateMessage
+  | ProjectionRequest
   | InstanceGenerateSchemaMessage;
 
 // ---------------------------------------------------------------------------
@@ -136,9 +156,11 @@ let lastPreviewTargetId: string | undefined;
 let lastPreviewRequestId: string | undefined;
 let previewFilesVersion = 0;
 let previewFilesRevision = 0;
+let previewVersionStartRevision = 0;
 const documentsCache = new Map<string, VersionedEntry<LangiumDocument[]>>();
 const previewSchemaCache = new Map<string, VersionedEntry<FormPreviewSchema[]>>();
 const previewGenerateCache = new Map<string, VersionedEntry<GeneratorOutput[]>>();
+const previewPythonCache = new Map<string, VersionedEntry<PythonModule>>();
 let codegenFilesVersion = 0;
 const codegenGenerateCache = new Map<string, VersionedEntry<GeneratorOutput[]>>();
 const standaloneValidatorCache = new Map<string, VersionedEntry<StandaloneValidatorResult>>();
@@ -856,6 +878,76 @@ function createGeneratedModuleLoader(outputs: readonly GeneratorOutput[]): {
 // Function execution
 // ---------------------------------------------------------------------------
 
+async function runProjection(request: ProjectionRequest): Promise<void> {
+  const scope = self as unknown as DedicatedWorkerGlobalScope;
+  try {
+    const current = () =>
+      request.filesRevision >= previewVersionStartRevision &&
+      request.filesRevision <= previewFilesRevision &&
+      currentPreviewFiles.some((file) => file.uri === request.subject.uri && file.content === request.source);
+    if (!current()) throw new Error('The source changed. Refresh the generated view.');
+    const { version, value: documents } = await buildDocuments();
+    let subject = { ...request.subject, uri: URI.parse(request.subject.uri).toString() };
+    if (request.kind === 'function') {
+      const owner = getExpressionOwners(documents.map((doc) => doc.parseResult.value as RosettaModel)).find((node) => {
+        const doc = AstUtils.getDocument(node);
+        const namespace = namespaceFromModelName((doc.parseResult.value as RosettaModel).name) ?? 'unknown';
+        return (
+          isRosettaFunction(node) &&
+          doc.uri.toString() === subject.uri &&
+          makeNodeId(namespace, node.name, node.$type) === subject.nodeId
+        );
+      });
+      if (!owner || !isRosettaFunction(owner)) throw new Error('The function owner is unavailable.');
+      const body = getFunctionImplementationRegion(owner, request.source);
+      if (body.from !== subject.region.from || body.to !== subject.region.to)
+        throw new Error('The function source region changed. Refresh the generated view.');
+      subject = { ...subject, region: getNodeSourceRegion(owner) };
+    }
+    const fqn = qualifiedNameFromNodeId(subject.nodeId);
+    const separator = fqn.lastIndexOf('.');
+    const selectedDocuments = resolveExportSelection(documents, {
+      declarations: [
+        { namespace: fqn.slice(0, separator), name: fqn.slice(separator + 1), kind: subject.nodeId.split('#')[1]! }
+      ],
+      namespaces: []
+    }).documents;
+    const cacheKey = JSON.stringify(['projection', request.language, subject.nodeId]);
+    if (request.language === 'python') {
+      const { value: module } = await getOrComputeAsync(
+        previewPythonCache,
+        cacheKey,
+        () => version,
+        () => Promise.resolve(generatePythonModule(selectedDocuments))
+      );
+      if (version !== previewFilesVersion || !current())
+        throw new Error('The source changed. Refresh the generated view.');
+      scope.postMessage({
+        type: 'projection:result',
+        requestId: request.requestId,
+        projection: { ...selectPythonProjection(module, subject, request.kind), subject: request.subject }
+      });
+      return;
+    }
+    const { value: outputs } = await getOrComputeAsync(
+      previewGenerateCache,
+      cacheKey,
+      () => version,
+      () => generate(selectedDocuments, { target: 'typescript' })
+    );
+    if (version !== previewFilesVersion || !current())
+      throw new Error('The source changed. Refresh the generated view.');
+    const projection = { ...selectTypeScriptProjection(outputs, subject, request.kind), subject: request.subject };
+    scope.postMessage({ type: 'projection:result', requestId: request.requestId, projection });
+  } catch (error) {
+    scope.postMessage({
+      type: 'projection:error',
+      requestId: request.requestId,
+      error: error instanceof Error ? error.message : String(error)
+    });
+  }
+}
+
 async function executeFunction(funcName: string, inputs: Record<string, unknown>, requestId: string): Promise<void> {
   const scope = self as unknown as DedicatedWorkerGlobalScope;
   const functionFqn = qualifiedNameFromNodeId(funcName);
@@ -1059,9 +1151,23 @@ if (isWorkerGlobalScope()) {
         }
         runCodegen(lastTarget, lastCodegenRequestId).catch(console.error);
       } else if (msg.type === 'preview:setFiles') {
+        const changed =
+          msg.files.length !== currentPreviewFiles.length ||
+          msg.files.some((file, index) => {
+            const previous = currentPreviewFiles[index];
+            return (
+              !previous ||
+              previous.uri !== file.uri ||
+              previous.content !== file.content ||
+              previous.serializedModelJson !== file.serializedModelJson
+            );
+          });
         hydrateCuratedDocuments(msg.files);
         currentPreviewFiles = msg.files;
-        previewFilesVersion++;
+        if (changed) {
+          previewFilesVersion++;
+          previewVersionStartRevision = msg.filesRevision;
+        }
         // The provider owns this monotonic sequence. Echo the exact revision
         // that installed so a readiness waiter cannot resolve from another
         // dispatch's receipt.
@@ -1085,6 +1191,8 @@ if (isWorkerGlobalScope()) {
       } else if (msg.type === 'preview:execute') {
         const { funcName, inputs, requestId } = msg;
         executeFunction(funcName, inputs, requestId).catch(console.error);
+      } else if (msg.type === 'projection:generate') {
+        runProjection(msg).catch(console.error);
       } else if (msg.type === 'instance:validate') {
         const { typeFqn, data, requestId } = msg;
         validateInstance(typeFqn, data, requestId).catch(console.error);

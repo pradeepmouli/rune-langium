@@ -11,6 +11,11 @@
  */
 
 import {
+  getExpressionScope,
+  getExpressionRegions,
+  findExpressionOwner,
+  type ExpressionScopeEntry,
+  type SourceRegion,
   createRuneDslServices,
   RuneDslIndexManager,
   namespaceFromSource,
@@ -71,6 +76,22 @@ export interface LinkDocumentResponse {
   newModels: RosettaModel[];
 }
 
+export interface ExpressionScopeRequest {
+  type: 'expressionScope';
+  id: string;
+  uri: string;
+  name: string;
+  kind?: string;
+  region: SourceRegion;
+  files?: ParseWorkspaceRequest['files'];
+}
+export interface ExpressionScopeResponse {
+  type: 'expressionScopeResult';
+  id: string;
+  entries: ExpressionScopeEntry[];
+  error?: string;
+}
+
 export interface HydrateRequest {
   type: 'hydrate';
   id: string;
@@ -104,7 +125,12 @@ export interface HydrateResponse {
   error?: string;
 }
 
-export type WorkerRequest = ParseRequest | ParseWorkspaceRequest | LinkDocumentRequest | HydrateRequest;
+export type WorkerRequest =
+  | ParseRequest
+  | ParseWorkspaceRequest
+  | LinkDocumentRequest
+  | HydrateRequest
+  | ExpressionScopeRequest;
 
 export interface ParseResponse {
   type: 'parseResult';
@@ -137,12 +163,19 @@ export interface ParseWorkspaceResponse {
   curatedRefOnlyFiles?: Record<string, import('../types/model-types.js').CachedFile[]>;
 }
 
-export type WorkerResponse = ParseResponse | ParseWorkspaceResponse | LinkDocumentResponse | HydrateResponse;
+export type WorkerResponse =
+  | ParseResponse
+  | ParseWorkspaceResponse
+  | LinkDocumentResponse
+  | HydrateResponse
+  | ExpressionScopeResponse;
 
 // Deferred corpus model map: URI string → raw JSON (never deserialized until needed).
 // Populated by handleParseWorkspace, consumed lazily by RuneDslLinker.loadAstNode
 // when Langium resolves cross-references during handleLinkDocument.
 const deferredModelJson = new Map<string, string>();
+// User models are already published in the routed parse response.
+const publishedUserModelUris = new Set<string>();
 
 // Initialised after createRuneDslServices() below — safe because getModel is only
 // called during build(), which happens inside handleLinkDocument (post-init).
@@ -158,7 +191,7 @@ const deferredProvider: DeferredModelProvider = {
     const json = deferredModelJson.get(uri);
     if (json === undefined) return undefined;
     const model = serializer.deserialize<RosettaModel>(json);
-    newModelsAccumulator.push(model);
+    if (!publishedUserModelUris.has(uri)) newModelsAccumulator.push(model);
     return model;
   },
   consume(uri: string): void {
@@ -279,21 +312,25 @@ const handleParse = withInstrumentation(
   }
 );
 
+async function resetWorkspace(): Promise<void> {
+  const documents = RuneDsl.shared.workspace.LangiumDocuments.all.toArray();
+  const indexedUris = new Map(
+    indexManager.allElements().map((description) => [description.documentUri.toString(), description.documentUri])
+  );
+  // The builder owns parsed-document cleanup; deferred stubs have no document.
+  await builder.update(
+    [],
+    documents.map((document) => document.uri)
+  );
+  for (const uri of indexedUris.values()) indexManager.remove(uri);
+  deferredModelJson.clear();
+  publishedUserModelUris.clear();
+}
+
 // See handleParse's comment above — exported via the grouped statement below.
 const handleParseWorkspace = withInstrumentation(
   async function handleParseWorkspace(req: ParseWorkspaceRequest): Promise<ParseWorkspaceResponse> {
     const errors: Record<string, string[]> = {};
-    if (req.files.length === 0) {
-      return {
-        type: 'parseWorkspaceResult',
-        id: req.id,
-        models: [],
-        parsedModels: [],
-        errors,
-        deferredExports: []
-      };
-    }
-
     try {
       const langiumDocs = RuneDsl.shared.workspace.LangiumDocuments;
       const userDocs: LangiumDocument<AstNode>[] = [];
@@ -301,15 +338,7 @@ const handleParseWorkspace = withInstrumentation(
       const parsedModels: Array<{ filePath: string; model: RosettaModel; serializedModelJson?: string }> = [];
       const deferredExports: DeferredExportEntry[] = [];
 
-      // Drop all corpus JSON from the previous workspace load.
-      deferredModelJson.clear();
-
-      // Clear previously registered documents (prevents "already present" collision).
-      if (langiumDocs.all) {
-        for (const doc of langiumDocs.all.toArray()) {
-          langiumDocs.deleteDocument(doc.uri);
-        }
-      }
+      await resetWorkspace();
 
       for (const file of req.files) {
         const uri = URI.parse(file.name);
@@ -451,7 +480,7 @@ const handleLinkDocument = withInstrumentation(
           deferredModelJson.get(targetUri.toString())!,
           { register: 'always' }
         );
-        newModelsAccumulator.push(model);
+        if (!publishedUserModelUris.has(targetUri.toString())) newModelsAccumulator.push(model);
         doc = document;
         deferredModelJson.delete(targetUri.toString());
       } else if (activeLangiumDocs.hasDocument(targetUri)) {
@@ -504,27 +533,14 @@ const handleLinkDocument = withInstrumentation(
 
 async function handleHydrate(req: HydrateRequest): Promise<HydrateResponse> {
   try {
-    // Hydrate has REPLACEMENT semantics (mirror handleParseWorkspace's reset).
-    // Without this, switching/reloading workspaces leaves stale entries in
-    // deferredModelJson, the symbol index, and LangiumDocuments — and
-    // linkDocument can still resolve symbols for files that disappeared from
-    // the workspace. Reset state first, then register the new set.
-    const langiumDocs = RuneDsl.shared.workspace.LangiumDocuments;
-    if (langiumDocs.all) {
-      for (const doc of langiumDocs.all.toArray()) {
-        langiumDocs.deleteDocument(doc.uri);
-      }
-    }
-    for (const previousUri of deferredModelJson.keys()) {
-      indexManager.clearExports(URI.parse(previousUri));
-    }
-    deferredModelJson.clear();
+    await resetWorkspace();
 
     // Register each document using a single canonical URI for both the deferred-model
     // store and the symbol index, so deferredProvider.getModel() and registerExports()
     // always agree on the key.
     for (const doc of req.documents) {
       const uri = URI.parse(doc.uri);
+      if (!doc.bundleId) publishedUserModelUris.add(uri.toString());
       deferredModelJson.set(uri.toString(), doc.serializedModel);
       if (doc.exports?.length) {
         const descriptions: AstNodeDescription[] = doc.exports.map((e) => ({
@@ -547,22 +563,68 @@ async function handleHydrate(req: HydrateRequest): Promise<HydrateResponse> {
   }
 }
 
+async function handleExpressionScope(req: ExpressionScopeRequest): Promise<ExpressionScopeResponse> {
+  try {
+    if (req.files) {
+      const parsed = await handleParseWorkspace({ type: 'parseWorkspace', id: req.id, files: req.files });
+      const uri = URI.parse(req.uri).toString();
+      const errors = Object.entries(parsed.errors).flatMap(([file, errors]) =>
+        file === '__worker__' || URI.parse(file).toString() === uri ? errors : []
+      );
+      if (errors.length) throw new Error(errors.join('\n'));
+    }
+    const linked = await handleLinkDocument({ type: 'linkDocument', id: req.id, uri: req.uri });
+    if (!linked.linked) throw new Error('The expression document is not loaded.');
+    const doc = activeLangiumDocs.getDocument(URI.parse(req.uri));
+    const model = doc?.parseResult.value as RosettaModel | undefined;
+    const owner = model && findExpressionOwner(model, req);
+    if (!owner || (owner.$type !== 'RosettaFunction' && owner.$type !== 'Data'))
+      throw new Error('The expression owner is unavailable.');
+    const target = getExpressionRegions(owner).find(
+      (entry) => entry.region.from === req.region.from && entry.region.to === req.region.to
+    );
+    if (!target) throw new Error('The expression source changed. Reopen the builder.');
+    return {
+      type: 'expressionScopeResult',
+      id: req.id,
+      entries: getExpressionScope(target.expression as import('@rune-langium/core').RosettaExpression, RuneDsl)
+    };
+  } catch (error) {
+    return {
+      type: 'expressionScopeResult',
+      id: req.id,
+      entries: [],
+      error: error instanceof Error ? error.message : String(error)
+    };
+  }
+}
+
 // ---------------------------------------------------------------------------
 // Exported dispatcher — testable in Node without spinning up a Web Worker
 // ---------------------------------------------------------------------------
 
+// Langium's document/index services are mutable. A complete request, including
+// scope's parse/link/read sequence, must own them until its response is captured.
+let requestQueue: Promise<unknown> = Promise.resolve();
 export const dispatchWorkerRequest = withInstrumentation(
   async function dispatchWorkerRequest(req: WorkerRequest): Promise<WorkerResponse> {
-    switch (req.type) {
-      case 'parse':
-        return handleParse(req);
-      case 'parseWorkspace':
-        return handleParseWorkspace(req);
-      case 'linkDocument':
-        return handleLinkDocument(req);
-      case 'hydrate':
-        return handleHydrate(req);
-    }
+    const run = async (): Promise<WorkerResponse> => {
+      switch (req.type) {
+        case 'parse':
+          return handleParse(req);
+        case 'parseWorkspace':
+          return handleParseWorkspace(req);
+        case 'linkDocument':
+          return handleLinkDocument(req);
+        case 'hydrate':
+          return handleHydrate(req);
+        case 'expressionScope':
+          return handleExpressionScope(req);
+      }
+    };
+    const response = requestQueue.then(run);
+    requestQueue = response.catch(() => undefined);
+    return response;
     // Delegates to already-instrumented handlers above (each with its own
     // tailored sanitizer) — capturing here too would be redundant and riskier
     // (this dispatcher sees every request/response shape generically).

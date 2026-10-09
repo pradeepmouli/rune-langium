@@ -14,9 +14,16 @@ import { HighlightStyle, syntaxHighlighting } from '@codemirror/language';
 import { tags as t } from '@lezer/highlight';
 import { syntax } from '@rune-langium/design-system/tokens';
 
+const editorTextStyle = {
+  fontFamily: 'var(--font-mono, "JetBrains Mono", monospace)',
+  fontSize: '13px',
+  lineHeight: '1.45'
+};
+
 export const studioEditorTheme = EditorView.theme(
   {
     '&': {
+      ...editorTextStyle,
       backgroundColor: 'var(--background)',
       color: 'var(--foreground)',
       height: '100%'
@@ -26,9 +33,8 @@ export const studioEditorTheme = EditorView.theme(
     },
     '.cm-content': {
       caretColor: 'var(--primary)',
-      fontFamily: 'var(--font-mono, "JetBrains Mono", monospace)',
-      fontSize: '13px',
-      lineHeight: '1.6'
+      ...editorTextStyle,
+      padding: '2px 0'
     },
     '.cm-cursor, .cm-dropCursor': {
       borderLeftColor: 'var(--primary)'
@@ -46,9 +52,7 @@ export const studioEditorTheme = EditorView.theme(
       // NOT inherit the content font — without this it falls back to the body
       // UI font (Inter), rendering proportional and misaligned against the
       // JetBrains Mono content.
-      fontFamily: 'var(--font-mono, "JetBrains Mono", monospace)',
-      fontSize: '13px',
-      lineHeight: '1.6',
+      ...editorTextStyle,
       backgroundColor: 'color-mix(in srgb, var(--card) 92%, var(--background))',
       color: 'var(--muted-foreground)',
       border: 'none',
@@ -59,15 +63,17 @@ export const studioEditorTheme = EditorView.theme(
       color: 'var(--muted-foreground)'
     },
     '.cm-lineNumbers .cm-gutterElement': {
-      padding: '0 8px 0 16px'
+      padding: '0 4px 0 6px'
     },
+    '.cm-line': { padding: '0 4px' },
+    '.cm-foldGutter': { width: '14px' },
     '.cm-foldGutter .cm-gutterElement': {
       color: 'var(--muted-foreground)'
     },
     '.cm-tooltip': {
       backgroundColor: 'color-mix(in srgb, var(--card) 88%, var(--background))',
       border: '1px solid var(--border)',
-      borderRadius: '8px'
+      borderRadius: '4px'
     },
     '.cm-tooltip-autocomplete': {
       '& > ul > li[aria-selected]': {
@@ -90,7 +96,9 @@ export const studioEditorTheme = EditorView.theme(
       color: 'var(--foreground)'
     },
     '.cm-panel.cm-search': {
-      backgroundColor: 'var(--popover)'
+      backgroundColor: 'var(--popover)',
+      padding: '2px 6px',
+      fontSize: '12px'
     }
   },
   { dark: true }

@@ -78,6 +78,32 @@ describe('StudioWorkspace', () => {
     expect(client.didClose).not.toHaveBeenCalled();
   });
 
+  it('closing an inactive Source view leaves the Inspector tracked and does not flush stale text', () => {
+    const client = makeFakeClient();
+    const ws = new StudioWorkspace(client as unknown as LSPClient);
+    const source = makeFakeView('old', { unsyncedChanges: { empty: false }, clear: vi.fn() });
+    const inspector = makeFakeView('latest');
+    ws.openFile('file:///a.rosetta', 'rosetta', source);
+    ws.openFile('file:///a.rosetta', 'rosetta', inspector);
+    ws.closeFile('file:///a.rosetta', source);
+    expect(ws.getFile('file:///a.rosetta')?.view).toBe(inspector);
+    expect(client.notification).not.toHaveBeenCalled();
+  });
+
+  it('focus handoffs flush final edits with increasing versions', () => {
+    const client = makeFakeClient();
+    const ws = new StudioWorkspace(client as unknown as LSPClient);
+    for (const text of ['first edit', 'second edit']) {
+      const view = makeFakeView(text, { unsyncedChanges: { empty: false }, clear: vi.fn() });
+      ws.openFile('file:///a.rosetta', 'rosetta', view);
+      ws.closeFile('file:///a.rosetta', view);
+    }
+    const calls = client.notification.mock.calls;
+    expect(calls).toHaveLength(2);
+    expect(calls[1]![1].textDocument.version).toBeGreaterThan(calls[0]![1].textDocument.version);
+    expect(calls[1]![1].contentChanges).toEqual([{ text: 'second edit' }]);
+  });
+
   it('closing an unopened URI is a no-op, not an error', () => {
     const client = makeFakeClient();
     const ws = new StudioWorkspace(client as unknown as LSPClient);

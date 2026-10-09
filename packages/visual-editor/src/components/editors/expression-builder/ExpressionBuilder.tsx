@@ -13,7 +13,7 @@
  * @module
  */
 
-import { useState, useCallback, useRef } from 'react';
+import { useState, useCallback, useRef, type ReactNode } from 'react';
 import type { ExpressionEditorSlotProps } from '../../../types.js';
 import type { ExpressionNode } from '../../../schemas/expression-node-schema.js';
 import type { FunctionScope } from '../../../store/expression-store.js';
@@ -21,7 +21,6 @@ import { BlockRenderer } from './BlockRenderer.js';
 import { DslPreview } from './DslPreview.js';
 import { OperatorPalette } from './OperatorPalette.js';
 import { ReferencePicker } from './ReferencePicker.js';
-import { expressionNodeToDslPreview } from '../../../adapters/expression-node-to-dsl.js';
 import { useContextFilter } from '../../../hooks/useContextFilter.js';
 import { useExpressionBuilder } from '../../../hooks/useExpressionBuilder.js';
 import { useKeyboardNavigation } from '../../../hooks/useKeyboardNavigation.js';
@@ -35,6 +34,8 @@ export interface ExpressionBuilderProps extends ExpressionEditorSlotProps {
   onDragNode?: (draggedNodeId: string, targetNodeId: string) => void;
   /** Optional raw AST expression object — when provided, used directly instead of parsing value text. */
   expressionAst?: unknown;
+  /** Host text surface; the standalone embedder retains its textarea fallback. */
+  renderTextEditor?: (props: { value: string; onChange(text: string): void; onBlur(): void }) => ReactNode;
 }
 
 export function ExpressionBuilder({
@@ -46,11 +47,20 @@ export function ExpressionBuilder({
   error,
   defaultMode = 'builder',
   onDragNode,
-  expressionAst
+  expressionAst,
+  renderTextEditor
 }: ExpressionBuilderProps) {
   // Convert AST directly if available, otherwise fall back to text parsing
   const initialTree = expressionAst ? astToExpressionNode(expressionAst, value ?? '') : parseExpression(value ?? '');
 
+  const [textValue, setTextValue] = useState(value ?? '');
+  const handleBuilderChange = useCallback(
+    (text: string) => {
+      setTextValue(text);
+      onChange?.(text);
+    },
+    [onChange]
+  );
   const {
     tree,
     mode,
@@ -63,17 +73,17 @@ export function ExpressionBuilder({
     openPalette,
     closePalette,
     handleBlur,
+    setTreeFromText,
     store
   } = useExpressionBuilder({
     value: value ?? '',
-    onChange: onChange ?? (() => {}),
+    onChange: handleBuilderChange,
     onBlur,
     scope,
     initialTree,
     defaultMode
   });
 
-  const [textValue, setTextValue] = useState(value ?? '');
   const [referencePickerOpen, setReferencePickerOpen] = useState(false);
   const [parseError, setParseError] = useState<string | null>(null);
   const containerRef = useRef<HTMLDivElement>(null);
@@ -84,29 +94,21 @@ export function ExpressionBuilder({
   const handleModeSwitch = useCallback(
     (newMode: 'builder' | 'text') => {
       if (newMode === mode) return;
-      if (newMode === 'text') {
-        // Serialize tree to text
-        try {
-          const dsl = expressionNodeToDslPreview(tree);
-          setTextValue(dsl);
-          setParseError(null);
-        } catch {
-          setTextValue(value ?? '');
-        }
-      } else {
-        // Parse text back to builder - just update the value
-        onChange?.(textValue);
-        setParseError(null);
-      }
+      if (newMode === 'builder') setTreeFromText(parseExpression(textValue));
+      setParseError(null);
       setMode(newMode);
     },
-    [mode, tree, value, textValue, onChange, setMode]
+    [mode, textValue, setTreeFromText, setMode]
   );
 
-  const handleTextChange = useCallback((e: React.ChangeEvent<HTMLTextAreaElement>) => {
-    const newText = e.target.value;
-    setTextValue(newText);
-  }, []);
+  const handleTextChange = useCallback(
+    (e: React.ChangeEvent<HTMLTextAreaElement>) => {
+      const newText = e.target.value;
+      setTextValue(newText);
+      onChange?.(newText);
+    },
+    [onChange]
+  );
 
   const handleTextBlur = useCallback(() => {
     onChange?.(textValue);
@@ -181,7 +183,11 @@ export function ExpressionBuilder({
       {/* Builder mode */}
       {mode === 'builder' && (
         <>
-          <div className="relative min-h-8 rounded border border-border/50 bg-background/50 p-2">
+          <div
+            className="relative min-h-8 rounded border border-border/50 bg-background/50 p-2"
+            role="tree"
+            aria-label="Expression blocks"
+          >
             <BlockRenderer
               node={tree}
               selectedNodeId={selectedNodeId}
@@ -208,16 +214,26 @@ export function ExpressionBuilder({
       )}
 
       {/* Text mode */}
-      {mode === 'text' && (
-        <textarea
-          className="min-h-20 w-full rounded border border-input bg-background p-2 font-mono text-xs text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-1 focus:ring-ring"
-          value={textValue}
-          onChange={handleTextChange}
-          onBlur={handleTextBlur}
-          placeholder={placeholder}
-          data-testid="text-editor"
-        />
-      )}
+      {mode === 'text' &&
+        (renderTextEditor ? (
+          renderTextEditor({
+            value: textValue,
+            onChange: (text) => {
+              setTextValue(text);
+              onChange?.(text);
+            },
+            onBlur: handleTextBlur
+          })
+        ) : (
+          <textarea
+            className="min-h-20 w-full rounded border border-input bg-background p-2 font-mono text-xs text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-1 focus:ring-ring"
+            value={textValue}
+            onChange={handleTextChange}
+            onBlur={handleTextBlur}
+            placeholder={placeholder}
+            data-testid="text-editor"
+          />
+        ))}
 
       {/* Scope info */}
       {scope.inputs.length > 0 && (

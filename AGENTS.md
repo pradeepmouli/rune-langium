@@ -11,10 +11,11 @@ This file is the shared instruction source for Codex, Claude, Copilot, and other
 - Keep public API docs concise; test public behavior and shared architecture seams.
 - When architecture, scripts, workflows, or agent configuration change, update the relevant documentation and durable repository context in the same change.
 - New source files must use the directory's SPDX header: `packages/` is MIT; `apps/studio/` is FSL-1.1-ALv2. Describe Studio as source-available.
+- Pinned upstream test corpora belong in [test/fixtures/third-party](test/fixtures/third-party/README.md). Preserve upstream source headers, licenses, notices, provenance and integrity hashes; these test inputs retain their upstream licenses.
 
 ## Setup and Verification
 
-- `package.json` and `pnpm-workspace.yaml` are authoritative for versions, scripts, overrides, and patches. Currently: Node >=22.13.0, pnpm >=11, package manager `pnpm@11.5.0`.
+- `package.json` and `pnpm-workspace.yaml` are authoritative for versions, scripts, overrides, and patches. Currently: Node ^22.22.2 || ^24.15.0 || >=26.0.0, pnpm >=11, package manager `pnpm@11.5.0`.
 - Install: `pnpm install`; build: `pnpm run build`; development: `pnpm dev`.
 - Check code changes with `pnpm run lint`, `pnpm test`, `pnpm run format:check`, and `pnpm run type-check`, scoped to the affected packages when appropriate.
 - Codegen-only changes: `pnpm --filter @rune-langium/codegen test` and `pnpm --filter @rune-langium/codegen run type-check`. Rebuild codegen after render changes; Studio and visual-editor consume its dist output.

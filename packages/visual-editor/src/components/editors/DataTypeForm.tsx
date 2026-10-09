@@ -19,7 +19,7 @@
  */
 
 import { useCallback, useMemo } from 'react';
-import { FormProvider, useFieldArray, type Control } from 'react-hook-form';
+import { useFieldArray, type Control } from 'react-hook-form';
 import type { GhostRow, GhostRowContext } from '@zod-to-form/core';
 import { FieldGroup, FieldLegend, FieldSet } from '@rune-langium/design-system/ui/field';
 import { Button } from '@rune-langium/design-system/ui/button';
@@ -36,6 +36,9 @@ import { getRefText, parseCardinality } from '../../adapters/model-helpers.js';
 import { useAutoSave } from '../../hooks/useAutoSave.js';
 import { useLatestRef } from '../../hooks/useLatestRef.js';
 import { useZodForm, useExternalSync } from '@zod-to-form/react';
+import { EditorFormProvider as FormProvider } from '../forms/EditorFormProvider.js';
+import { editorOptimization } from '../forms/editor-optimization.js';
+
 import { DataSchema } from '../../generated/zod-schemas.js';
 import { formRegistry } from '../forms/rows/index.js';
 import { formValuesProjection } from './identity-projection.js';
@@ -75,6 +78,8 @@ export interface DataTypeFormProps {
   allNodes?: TypeGraphNode[];
   /** Optional render-prop for a rich expression editor. */
   renderExpressionEditor?: (props: ExpressionEditorSlotProps) => ReactNode;
+  compactConditions?: boolean;
+  structuralEditsDisabled?: boolean;
   /** Callback to navigate to a type's graph node. */
   onNavigateToNode?: NavigateToNodeCallback;
   /** All loaded graph node IDs for resolving type name to node ID. */
@@ -114,6 +119,8 @@ function DataTypeForm({
   actions,
   allNodes = EMPTY_NODES,
   renderExpressionEditor,
+  compactConditions,
+  structuralEditsDisabled = false,
   onNavigateToNode,
   allNodeIds,
   readOnly: readOnlyProp,
@@ -127,6 +134,7 @@ function DataTypeForm({
   // there is no projection layer and no reshape bridge.
 
   const { form } = useZodForm(DataSchema, {
+    optimization: editorOptimization,
     defaultValues: formValuesProjection<typeof DataSchema>(data, nodeMeta),
     mode: 'onChange',
     formRegistry,
@@ -162,11 +170,12 @@ function DataTypeForm({
 
   const commitName = useCallback(
     (newName: string) => {
+      if (structuralEditsDisabled || readOnlyProp || nodeMeta.isReadOnly) return;
       if (newName && newName.trim() && newName !== committedRef.current.name) {
         actions.renameType(nodeId, newName.trim());
       }
     },
-    [nodeId, actions]
+    [nodeId, actions, structuralEditsDisabled, readOnlyProp, nodeMeta.isReadOnly]
   );
 
   const debouncedName = useAutoSave(commitName, 500);
@@ -285,7 +294,8 @@ function DataTypeForm({
 
   // ---- Compute isReadOnly before ghost rows so it is in scope for the memo --
 
-  const isReadOnly = Boolean(readOnlyProp || nodeMeta.isReadOnly);
+  const sourceReadOnly = Boolean(readOnlyProp || nodeMeta.isReadOnly);
+  const isReadOnly = sourceReadOnly || structuralEditsDisabled;
 
   // ---- Inherited rows as ghost-row primitives (US4 / R6) -------------------
   // Per upstream `arrayConfig.before` (zod-to-form/core: `GhostRow[]`), build
@@ -327,15 +337,22 @@ function DataTypeForm({
   // ---- Render --------------------------------------------------------------
 
   return (
-    <FormProvider {...form}>
+    <FormProvider {...form} schema={DataSchema}>
       <EditorActionsProvider
         nodeId={nodeId}
         actions={actions}
         readOnly={isReadOnly}
         synonymSourceOptions={synonymSourceOptions}
         renderExpressionEditor={renderExpressionEditor}
+        compactConditions={compactConditions}
+        sourceReadOnly={sourceReadOnly}
       >
         <div data-slot="data-type-form" className="flex flex-col min-h-0 h-full gap-4 p-4">
+          {structuralEditsDisabled && (
+            <p role="status" className="text-xs text-muted-foreground">
+              Structural editing waits for the current Rune draft to parse.
+            </p>
+          )}
           {/* Header: Namespace + Name + Badge — always visible above tabs */}
           <TypeHeader
             kind="data"

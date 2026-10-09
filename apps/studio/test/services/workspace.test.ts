@@ -65,6 +65,28 @@ type Foo:
 // parseWorkspaceFiles
 // ---------------------------------------------------------------------------
 describe('parseWorkspaceFiles', () => {
+  it('associates a parsed model with the exact source captured before asynchronous parsing', async () => {
+    const source =
+      'namespace test.snapshot\nversion "test"\nfunc Original:\n  output:\n    result int (1..1)\n  set result: 1';
+    const file = createWorkspaceFile('snapshot.rosetta', source);
+    let rejectNetwork!: (error: Error) => void;
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(
+        () =>
+          new Promise((_resolve, reject) => {
+            rejectNetwork = reject;
+          })
+      )
+    );
+    const pending = parseWorkspaceFiles([file]);
+    file.content =
+      'namespace test.snapshot\nversion "test"\nfunc Newer:\n  output:\n    result int (1..1)\n  set result: 2';
+    rejectNetwork(new Error('offline'));
+    const result = await pending;
+    expect(result.parsedModels[0]!.model.elements[0]!.name).toBe('Original');
+    expect(result.parsedModels[0]!.source).toBe(source);
+  });
   it('should parse multiple files', async () => {
     const files: WorkspaceFile[] = [
       {

@@ -51,10 +51,10 @@ describe('RosettaOnlyExistsExpression — paren-tuple form `(a, b) only exists`'
   it('allows absent listed fields and rejects other populated fields', () => {
     const expr = parse('(a, b) only exists');
     const ctx = makeCtx();
-    const evaluate = Function('data', 'runeAttrExists', `return ${transpileExpression(expr, ctx)}`);
-    expect(evaluate({ a: 1, b: 2 }, runeAttrExists)).toBe(true);
-    expect(evaluate({ a: 1 }, runeAttrExists)).toBe(true);
-    expect(evaluate({ a: 1, b: 2, c: 3 }, runeAttrExists)).toBe(false);
+    const evaluate = Function('data', 'rune', `return ${transpileExpression(expr, ctx)}`);
+    expect(evaluate({ a: 1, b: 2 }, { exists: runeAttrExists })).toBe(true);
+    expect(evaluate({ a: 1 }, { exists: runeAttrExists })).toBe(true);
+    expect(evaluate({ a: 1, b: 2, c: 3 }, { exists: runeAttrExists })).toBe(false);
   });
 
   it('reads forbidden Choice arms using their emitted field names', () => {
@@ -67,9 +67,9 @@ describe('RosettaOnlyExistsExpression — paren-tuple form `(a, b) only exists`'
       ]),
       attrAccessorNames: new Map([['Cash', 'cash']])
     });
-    const evaluate = Function('data', 'runeAttrExists', `return ${transpileExpression(expr, ctx)}`);
-    expect(evaluate({}, runeAttrExists)).toBe(true);
-    expect(evaluate({ cash: {} }, runeAttrExists)).toBe(false);
+    const evaluate = Function('data', 'rune', `return ${transpileExpression(expr, ctx)}`);
+    expect(evaluate({}, { exists: runeAttrExists })).toBe(true);
+    expect(evaluate({ cash: {} }, { exists: runeAttrExists })).toBe(false);
   });
 
   it('does not fall through to DIAGNOSTIC', () => {
@@ -81,9 +81,9 @@ describe('RosettaOnlyExistsExpression — paren-tuple form `(a, b) only exists`'
   it('all attrs listed: no fields are required', () => {
     const expr = parse('(a, b, c) only exists');
     const ctx = makeCtx();
-    const evaluate = Function('data', 'runeAttrExists', `return ${transpileExpression(expr, ctx)}`);
-    expect(evaluate({}, runeAttrExists)).toBe(true);
-    expect(evaluate({ a: 1, b: 2, c: 3 }, runeAttrExists)).toBe(true);
+    const evaluate = Function('data', 'rune', `return ${transpileExpression(expr, ctx)}`);
+    expect(evaluate({}, { exists: runeAttrExists })).toBe(true);
+    expect(evaluate({ a: 1, b: 2, c: 3 }, { exists: runeAttrExists })).toBe(true);
   });
 
   it('allows absent fields when no declared fields are forbidden', () => {
@@ -94,9 +94,9 @@ describe('RosettaOnlyExistsExpression — paren-tuple form `(a, b) only exists`'
         ['b', 'string']
       ])
     });
-    const evaluate = Function('data', 'runeAttrExists', `return ${transpileExpression(expr, ctx)}`);
-    expect(evaluate({}, runeAttrExists)).toBe(true);
-    expect(evaluate({ a: 1, b: 2, c: 3 }, runeAttrExists)).toBe(true);
+    const evaluate = Function('data', 'rune', `return ${transpileExpression(expr, ctx)}`);
+    expect(evaluate({}, { exists: runeAttrExists })).toBe(true);
+    expect(evaluate({ a: 1, b: 2, c: 3 }, { exists: runeAttrExists })).toBe(true);
   });
 
   it('multiple forbidden attrs are ANDed together', () => {
@@ -110,10 +110,10 @@ describe('RosettaOnlyExistsExpression — paren-tuple form `(a, b) only exists`'
         ['e', 'string']
       ])
     });
-    const evaluate = Function('data', 'runeAttrExists', `return ${transpileExpression(expr, ctx)}`);
-    expect(evaluate({ a: 1, b: 2, c: 3 }, runeAttrExists)).toBe(true);
-    expect(evaluate({ a: 1, b: 2, c: 3, d: 4 }, runeAttrExists)).toBe(false);
-    expect(evaluate({ a: 1, b: 2, c: 3, e: 4 }, runeAttrExists)).toBe(false);
+    const evaluate = Function('data', 'rune', `return ${transpileExpression(expr, ctx)}`);
+    expect(evaluate({ a: 1, b: 2, c: 3 }, { exists: runeAttrExists })).toBe(true);
+    expect(evaluate({ a: 1, b: 2, c: 3, d: 4 }, { exists: runeAttrExists })).toBe(false);
+    expect(evaluate({ a: 1, b: 2, c: 3, e: 4 }, { exists: runeAttrExists })).toBe(false);
   });
 });
 
@@ -123,6 +123,6 @@ describe('RosettaOnlyExistsExpression — nested (non-top-level) position', () =
     const ctx = makeCtx();
     const out = transpileExpression(expr, ctx);
     expect(out).not.toContain('DIAGNOSTIC');
-    expect(out).toContain('!runeAttrExists(data.c)');
+    expect(out).toContain('!rune.exists(data.c)');
   });
 });

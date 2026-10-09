@@ -5,6 +5,7 @@
 import { z } from 'zod';
 
 // --- rune-codegen runtime helpers (inlined) ---
+
 import { Temporal } from '@js-temporal/polyfill';
 const runeParseZonedDateTime = (value: unknown): Temporal.ZonedDateTime => {
   const text = String(value);
@@ -31,6 +32,7 @@ const runeDateConstruct = (kind: 'date' | 'dateTime' | 'zonedDateTime', fields: 
   if (fields.timezone == null) return undefined;
   return dateTime.toZonedDateTime(fields.timezone === 'Z' ? 'UTC' : fields.timezone).toString();
 };
+
 type RuneFuncData<T> = T extends readonly (infer I)[]
   ? RuneFuncData<I>[]
   : T extends { readonly [Symbol.toStringTag]: `Temporal.${string}` }
@@ -59,6 +61,7 @@ const runeToFuncData = <T>(input: T): RuneFuncData<T> => {
   };
   return convert(input) as RuneFuncData<T>;
 };
+
 type RuneOperand<T> = T extends readonly (infer I)[] ? NonNullable<I> : NonNullable<T>;
 const runeBinary = <L, R, V>(left: L, right: R, operate: (a: RuneOperand<L>, b: RuneOperand<R>) => V): L extends readonly unknown[] | null | undefined ? V | undefined : R extends readonly unknown[] | null | undefined ? V | undefined : V => {
   const l = runeList(left).filter((value) => value != null);
@@ -76,6 +79,7 @@ const runeOrder = <T>(left: T, right: T, compare: (a: NonNullable<T>, b: NonNull
   if (right == null) return nullsLast ? -1 : 1;
   return compare(left, right);
 };
+
 const runeList = <T>(value: T): (T extends readonly (infer I)[] ? I : NonNullable<T>)[] => {
   if (value == null) return [];
   return (Array.isArray(value) ? value : [value]) as (T extends readonly (infer I)[] ? I : NonNullable<T>)[];
@@ -85,17 +89,24 @@ const runeSingle = <T>(value: T): T extends readonly (infer I)[] ? I | undefined
   if (values.length > 1) throw new Error('Expected at most one value');
   return values[0] as T extends readonly (infer I)[] ? I | undefined : T extends null | undefined ? undefined : T;
 };
-
-const runeValueKey = (value: unknown): string => {
-  if (value == null) return 'null';
-  if (typeof value !== 'object') return typeof value + ':' + String(value);
-  if (Array.isArray(value)) return 'array:' + JSON.stringify(value.map(runeValueKey));
-  const tag = Object.prototype.toString.call(value);
-  if (/^\[object Temporal\.(PlainDate|PlainTime|PlainDateTime|ZonedDateTime|Instant|PlainYearMonth|PlainMonthDay|Duration)\]$/.test(tag)) return tag + ':' + String(value);
-  const fields = value as Record<string, unknown>;
-  return 'object:' + JSON.stringify(Object.keys(fields).sort().filter((key) => fields[key] != null).map((key) => [key, runeValueKey(fields[key])]));
+const runeContains = (left: unknown, right: unknown): boolean => {
+  const l = runeList(left), r = runeList(right);
+  const keys = new Set(l.map(runeValueKey));
+  return l.length > 0 && r.length > 0 && r.every((value) => keys.has(runeValueKey(value)));
 };
-const runeValueEquals = (left: unknown, right: unknown): boolean => runeValueKey(left) === runeValueKey(right);
+const runeDisjoint = (left: unknown, right: unknown): boolean => {
+  const keys = new Set(runeList(right).map(runeValueKey));
+  return !runeList(left).some((value) => keys.has(runeValueKey(value)));
+};
+const runeDistinct = <T>(value: T, key: (item: T extends readonly (infer I)[] ? I : NonNullable<T>) => string = runeValueKey): (T extends readonly (infer I)[] ? I : NonNullable<T>)[] => {
+  const seen = new Set<string>();
+  return runeList(value).filter((item) => {
+    const identity = key(item);
+    if (seen.has(identity)) return false;
+    seen.add(identity);
+    return true;
+  });
+};
 
 const runeCheckOneOf = (values: unknown[]): boolean =>
   values.filter((v) => v !== undefined && v !== null && !(Array.isArray(v) && v.length === 0)).length === 1;
@@ -115,9 +126,59 @@ const runeToDateTime = (v: unknown): string | undefined =>
   typeof v === 'string' && /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(\.\d+)?$/.test(v) ? v : undefined;
 
 const runeToZonedDateTime = (v: unknown): string | undefined =>
-  typeof v === 'string' && /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(\.\d+)?(Z|[+-]\d{2}:\d{2})(\[[^\]]+\])?$/.test(v)
-    ? v
-    : undefined;
+  typeof v === 'string' && /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(\.\d+)?(Z|[+-]\d{2}:\d{2})(\[[^\]]+\])?$/.test(v) ? v : undefined;
+
+const runeValueKey = (value: unknown): string => {
+  if (value == null) return 'null';
+  if (typeof value !== 'object') return typeof value + ':' + String(value);
+  if (Array.isArray(value)) return 'array:' + JSON.stringify(value.map(runeValueKey));
+  const tag = Object.prototype.toString.call(value);
+  if (/^\[object Temporal\.(PlainDate|PlainTime|PlainDateTime|ZonedDateTime|Instant|PlainYearMonth|PlainMonthDay|Duration)\]$/.test(tag)) return tag + ':' + String(value);
+  const fields = value as Record<string, unknown>;
+  return 'object:' + JSON.stringify(Object.keys(fields).sort().filter((key) => fields[key] != null).map((key) => [key, runeValueKey(fields[key])]));
+};
+const rune = {
+  equals: (left: unknown, right: unknown, quantifier?: 'all' | 'any', unequal = false): boolean => {
+    if (quantifier == null) {
+      const same = runeValueKey(left) === runeValueKey(right);
+      return unequal ? !same : same;
+    }
+    const leftArray = Array.isArray(left), rightArray = Array.isArray(right);
+    const l = leftArray ? left : left == null ? [] : [left];
+    const r = rightArray ? right : right == null ? [] : [right];
+    if (l.length === 0 || r.length === 0) {
+      const same = leftArray === rightArray && l.length === r.length;
+      return unequal ? !same : same;
+    }
+    const compare = (a: unknown, b: unknown) => unequal ? !rune.equals(a, b) : rune.equals(a, b);
+    if (!leftArray) return quantifier === 'all' ? r.every((b) => compare(left, b)) : r.some((b) => compare(left, b));
+    if (!rightArray) return quantifier === 'all' ? l.every((a) => compare(a, right)) : l.some((a) => compare(a, right));
+    return quantifier === 'all'
+      ? (unequal || l.length === r.length) && l.every((a, i) => i >= r.length ? unequal : compare(a, r[i]))
+      : (unequal && l.length !== r.length) || l.some((a, i) => i < r.length && compare(a, r[i]));
+  },
+  list: runeList,
+  single: runeSingle,
+  contains: runeContains,
+  disjoint: runeDisjoint,
+  distinct: runeDistinct,
+  binary: runeBinary,
+  compare: runeCompare,
+  order: runeOrder,
+  parseZonedDateTime: runeParseZonedDateTime,
+  dateField: runeDateField,
+  dateConstruct: runeDateConstruct,
+  toFuncData: runeToFuncData,
+  checkOneOf: runeCheckOneOf,
+  count: runeCount,
+  exists: runeAttrExists,
+  valueKey: runeValueKey,
+  toDate: runeToDate,
+  toTime: runeToTime,
+  toDateTime: runeToDateTime,
+  toZonedDateTime: runeToZonedDateTime
+};
+
 // --- end runtime helpers ---
 
 const runeExtendChoice = <T extends z.ZodUnion<readonly z.ZodObject[]>>(choice: T, shape: z.ZodRawShape) =>
@@ -130,21 +191,21 @@ export const WithLiteralsSchema = z
     active: z.boolean().optional()
   })
   .superRefine((data, ctx) => {
-    if (!runeValueEquals(data.score, 42)) {
+    if (!rune.equals(data.score, 42)) {
       ctx.addIssue({
         code: 'custom',
         message: 'ScoreCheck: condition failed in WithLiterals',
         path: ['ScoreCheck']
       });
     }
-    if (!runeValueEquals(data.name, 'hello')) {
+    if (!rune.equals(data.name, 'hello')) {
       ctx.addIssue({
         code: 'custom',
         message: 'NameCheck: condition failed in WithLiterals',
         path: ['NameCheck']
       });
     }
-    if (!runeValueEquals(data.active, true)) {
+    if (!rune.equals(data.active, true)) {
       ctx.addIssue({
         code: 'custom',
         message: 'ActiveCheck: condition failed in WithLiterals',

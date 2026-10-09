@@ -108,6 +108,27 @@ function makeFakeProvider(transport = makeFakeTransport()) {
 }
 
 describe('createLspClientService', () => {
+  it('transfers a single document plugin on focus and keeps the survivor when another pane closes', async () => {
+    const provider = makeFakeProvider();
+    mockCreateProvider.mockReturnValue(provider as never);
+    const service = createLspClientService();
+    await service.connect();
+    const source = { dom: document.createElement('div') };
+    const inspector = { dom: document.createElement('div') };
+    const configureSource = vi.fn();
+    const configureInspector = vi.fn();
+    const releaseSource = service.claimDocumentView('file:///a.rosetta', source as never, configureSource);
+    const releaseInspector = service.claimDocumentView('file:///a.rosetta', inspector as never, configureInspector);
+    expect(configureSource).toHaveBeenLastCalledWith([]);
+    expect(configureInspector).not.toHaveBeenCalled();
+    inspector.dom.dispatchEvent(new FocusEvent('focusin'));
+    expect(configureSource).toHaveBeenLastCalledWith(null);
+    expect(configureInspector).toHaveBeenLastCalledWith([]);
+    releaseSource();
+    expect(configureInspector).toHaveBeenLastCalledWith([]);
+    releaseInspector();
+    expect(configureInspector).toHaveBeenLastCalledWith(null);
+  });
   beforeEach(() => {
     vi.clearAllMocks();
   });

@@ -9,7 +9,8 @@
  * the editable variant, or `name` for the read-only variant.
  */
 import * as React from 'react';
-import { Controller, type Control } from 'react-hook-form';
+import { type Control } from 'react-hook-form';
+import { EditorController as Controller } from './forms/EditorFormProvider.js';
 import { Crosshair } from 'lucide-react';
 import { Field, FieldError } from '@rune-langium/design-system/ui/field';
 import { Input } from '@rune-langium/design-system/ui/input';

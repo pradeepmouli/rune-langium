@@ -46,15 +46,6 @@ export function renderCardinalityOperation(
 
   const left = binary.left ? render(binary.left, ctx) : ctx.selfName;
   const right = render(binary.right, ctx);
-  const op = binary.operator;
-  const compare = (left: string, right: string) => `${op === '<>' ? '!' : ''}runeValueEquals(${left}, ${right})`;
   const quantifier = binary.cardMod ?? (binary.operator === '<>' ? 'any' : 'all');
-  // Compare paired items or broadcast a scalar, evaluating each operand once.
-  const result =
-    quantifier === 'all'
-      ? `(!Array.isArray(__l) ? r.every((b) => ${compare('__l', 'b')}) : !Array.isArray(__r) ? l.every((a) => ${compare('a', '__r')}) : ${op === '<>' ? 'l.every((a,i) => i >= r.length || ' + compare('a', 'r[i]') + ')' : 'l.length === r.length && l.every((a,i) => ' + compare('a', 'r[i]') + ')'})`
-      : `(!Array.isArray(__l) ? r.some((b) => ${compare('__l', 'b')}) : !Array.isArray(__r) ? l.some((a) => ${compare('a', '__r')}) : ${op === '<>' ? 'l.length !== r.length || ' : ''}l.some((a,i) => i < r.length && ${compare('a', 'r[i]')}))`;
-  const emptyEqual = 'Array.isArray(__l) === Array.isArray(__r) && l.length === r.length';
-  const emptyResult = op === '<>' ? `!(${emptyEqual})` : emptyEqual;
-  return `((__l, __r) => { const l = Array.isArray(__l) ? __l : __l == null ? [] : [__l]; const r = Array.isArray(__r) ? __r : __r == null ? [] : [__r]; if (l.length === 0 || r.length === 0) return ${emptyResult}; return ${result}; })(${left}, ${right})`;
+  return `rune.equals(${left}, ${right}, ${JSON.stringify(quantifier)}${binary.operator === '<>' ? ', true' : ''})`;
 }

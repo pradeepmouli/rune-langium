@@ -241,6 +241,54 @@ describe('EditorPage — Structure-mode source sync (regression fix/inspector-so
     cleanup();
   });
 
+  it.each([
+    ['readOnly', false],
+    ['readOnly', true],
+    ['refOnly', false],
+    ['refOnly', true]
+  ] as const)('syncs edits with %s files in the same namespace (reference first=%s)', async (flag, referenceFirst) => {
+    const referenceSources = [
+      `namespace ${NS}\ntype First:\n value int (1..1)\n`,
+      `namespace ${NS}\ntype Second:\n value string (1..1)\n`
+    ];
+    const user = await parse(ROSETTA_SOURCE, `inmemory:///${FILE_PATH}`);
+    const references = await Promise.all(
+      referenceSources.map((source, index) => parse(source, `system://reference/${index}.rosetta`))
+    );
+    const referenceFiles = referenceSources.map((content, index) => ({
+      name: `${index}.rosetta`,
+      path: `system://reference/${index}.rosetta`,
+      content,
+      dirty: false,
+      [flag]: true
+    }));
+    const userFile = { name: FILE_PATH, path: FILE_PATH, content: ROSETTA_SOURCE, dirty: false };
+    const referenceModels = references.map(({ value }) => value);
+    const files = referenceFirst ? [...referenceFiles, userFile] : [userFile, ...referenceFiles];
+    const models = referenceFirst ? [...referenceModels, user.value] : [user.value, ...referenceModels];
+    const onFilesChange = vi.fn();
+    renderEditorPage({
+      models,
+      parsedModels: models.map((model, index) => ({ model, filePath: files[index]!.path })),
+      files,
+      onFilesChange
+    });
+    await act(async () => {
+      await new Promise((resolve) => setTimeout(resolve, 0));
+    });
+    const order = useEditorStore.getState().nodes.find((node) => node.data.name === 'Order')!;
+    act(() => useEditorStore.getState().updateCardinality(order.id, 'quantity', '(0..*)'));
+    await waitFor(() => expect(onFilesChange).toHaveBeenCalled());
+    for (const [updated] of onFilesChange.mock.calls) {
+      for (const reference of referenceFiles) {
+        expect(updated.find((file: { path: string }) => file.path === reference.path)).toBe(reference);
+      }
+    }
+    const updatedUser = onFilesChange.mock.calls.at(-1)![0].find((file: { path: string }) => file.path === FILE_PATH);
+    expect(updatedUser.dirty).toBe(true);
+    expect(updatedUser.content).toMatch(/quantity\s+int\s+\(?0\.\.\*\)?/);
+  });
+
   it('fires onFilesChange with changed content when an attribute is edited in Structure mode (graph pane NOT mounted)', async () => {
     // 1. Parse a real Rosetta source so loadModels produces real TypeGraphNodes.
     const parseResult = await parse(ROSETTA_SOURCE, `inmemory:///${FILE_PATH}`);

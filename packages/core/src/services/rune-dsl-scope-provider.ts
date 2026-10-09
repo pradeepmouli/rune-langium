@@ -3,7 +3,13 @@
 
 import type { AstNode, AstNodeDescription, ReferenceInfo, Scope, LangiumCoreServices } from 'langium';
 import { AstUtils, EMPTY_SCOPE, DefaultScopeProvider, MapScope, stream } from 'langium';
-import { getFunctionSignature, getOperationArgument, resolveOperationType } from '../utils/expression-utils.js';
+import {
+  getFunctionSignature,
+  getFunctionInputs,
+  getFunctionOutput,
+  getOperationArgument,
+  resolveOperationType
+} from '../utils/expression-utils.js';
 import { getEnumValues } from '../utils/enum-utils.js';
 import { qualifiedExportPath } from '../naming/qualified-export-path.js';
 import { getChoiceOptionPaths, choiceOptionFieldName } from '../utils/choice-utils.js';
@@ -12,6 +18,7 @@ import {
   isEqualityOperation,
   isData,
   isRosettaFunction,
+  isRosettaRule,
   isRosettaEnumeration,
   isRosettaEnumValue,
   isRosettaBasicType,
@@ -964,10 +971,11 @@ export class RuneDslScopeProvider extends DefaultScopeProvider {
     if (func.output) addAttr(func.output);
     for (const shortcut of func.shortcuts) addAttr(shortcut);
 
-    if (func.dispatchAttribute) {
+    if (func.dispatchAttribute || func.superFunction) {
       const signature = this.dispatchSignature(func);
-      for (const input of signature.inputs) addAttr(input);
-      if (signature.output) addAttr(signature.output);
+      for (const input of getFunctionInputs(signature)) addAttr(input);
+      const output = getFunctionOutput(signature);
+      if (output) addAttr(output);
       for (const shortcut of signature.shortcuts) addAttr(shortcut);
     }
 
@@ -1009,6 +1017,12 @@ export class RuneDslScopeProvider extends DefaultScopeProvider {
       }
     }
     const extra: AstNodeDescription[] = [];
+
+    const rule = AstUtils.getContainerOfType(node, isRosettaRule);
+    const ruleInput = rule && this.resolveTypeCallToData(rule.input);
+    if (ruleInput)
+      for (const field of this.buildTypedScope(ruleInput, node).getAllElements())
+        if (baseScope.getElement(field.name)?.type !== 'ClosureParameter') extra.push(field);
 
     // (a) Inherited attributes from the enclosing Data type's supertype chain
     const dataOwner = AstUtils.getContainerOfType(node, isData);
@@ -1080,17 +1094,18 @@ export class RuneDslScopeProvider extends DefaultScopeProvider {
 
     const func = AstUtils.getContainerOfType(node, isRosettaFunction);
     const constructorField = AstUtils.getContainerOfType(node, isConstructorKeyValuePair)?.key.ref;
+    const signature = func ? this.dispatchSignature(func) : undefined;
+    const output = signature ? getFunctionOutput(signature) : undefined;
     const fieldEnum =
       constructorField && 'typeCall' in constructorField ? constructorField.typeCall.type.ref : undefined;
     if (isRosettaEnumeration(fieldEnum))
       extra.push(...getEnumValues(fieldEnum).map((value) => this.createDescription(value, value.name)));
-    const outputEnum = func?.output?.typeCall?.type?.ref;
+    const outputEnum = output?.typeCall?.type?.ref;
     if (isRosettaEnumeration(outputEnum)) {
       extra.push(...getEnumValues(outputEnum).map((value) => this.createDescription(value, value.name)));
     }
-    if (func?.dispatchAttribute) {
-      const signature = this.dispatchSignature(func);
-      const attributes = [...signature.inputs, ...(signature.output ? [signature.output] : []), ...signature.shortcuts];
+    if (signature && (func?.dispatchAttribute || func?.superFunction)) {
+      const attributes = [...getFunctionInputs(signature), ...(output ? [output] : []), ...signature.shortcuts];
       for (const attribute of attributes) {
         const existing = baseScope.getElement(attribute.name)?.node;
         if (!existing || AstUtils.getContainerOfType(existing, isRosettaFunction) !== func) {
@@ -1458,7 +1473,11 @@ export class RuneDslScopeProvider extends DefaultScopeProvider {
     }
     // Fall back to enclosing Data type
     const data = AstUtils.getContainerOfType(node, isData);
-    if (!data) return EMPTY_SCOPE;
+    if (!data) {
+      const rule = AstUtils.getContainerOfType(node, isRosettaRule);
+      const input = rule && this.resolveTypeCallToData(rule.input);
+      return input ? this.buildTypedScope(input, node) : EMPTY_SCOPE;
+    }
     const attrs = this.collectDataAttributes(data);
     if (attrs.length === 0) return EMPTY_SCOPE;
     const descriptions = attrs.map((a) => this.createDescription(a, a.name));

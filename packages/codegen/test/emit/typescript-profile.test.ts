@@ -65,9 +65,7 @@ describe('TypeScript LanguageProfile (019 Phase 0.5.3)', () => {
     expect(paths).toEqual(['bar.ts', 'foo.ts', 'index.ts', 'runtime.ts']);
 
     const fooOutput = outputs.find((o) => o.relativePath === 'foo.ts');
-    expect(fooOutput?.content).toContain(
-      `import { runeList, runeSingle, runeBinary, runeCompare, runeOrder, runeParseZonedDateTime, runeDateField, runeDateConstruct, runeToFuncData, runeCheckOneOf, runeCount, runeValueEquals, runeValueKey, runeAttrExists, runeToDate, runeToTime, runeToDateTime, runeToZonedDateTime, type RuneFuncData } from './runtime.js';`
-    );
+    expect(fooOutput?.content).toContain(`import { rune, type RuneFuncData } from './runtime.js';`);
     expect(fooOutput?.content).not.toContain('// --- rune-codegen runtime helpers (inlined) ---');
 
     const indexOutput = outputs.find((o) => o.relativePath === 'index.ts');
@@ -101,6 +99,25 @@ describe('TypeScript LanguageProfile (019 Phase 0.5.3)', () => {
     expect(model?.content).toContain('Party');
     // No leftover per-namespace header lines after strip.
     expect((model?.content.match(/^\/\/ Source namespace:/gm) ?? []).length).toBe(0);
+  });
+
+  it('does not expose namespace-relative function metadata in a concatenated artifact', async () => {
+    const { RuneDsl } = createRuneDslServices();
+    const docs = [SOURCE_A, SOURCE_B].map((source, i) =>
+      RuneDsl.shared.workspace.LangiumDocumentFactory.fromString(
+        `${source}\nfunc Fn${i}:\n output: result int (1..1)\n set result: 1`,
+        URI.parse(`file:///bundle-${i}.rosetta`)
+      )
+    );
+    await RuneDsl.shared.workspace.DocumentBuilder.build(docs, { validation: false });
+    const perNamespace = await generate(docs, { target: 'typescript' });
+    expect(perNamespace.flatMap((output) => output.funcs)).toHaveLength(2);
+    const bundled = await generate(docs, { target: 'typescript', typescript: { layout: 'single-file' } });
+    const model = bundled.find((output) => output.relativePath === 'model.ts')!;
+    expect(model.content).toContain('export function Fn0');
+    expect(model.content).toContain('export function Fn1');
+    expect(model.funcs).toEqual([]);
+    expect(model.projections).toHaveLength(2);
   });
 
   it('single-file layout fires the size guardrail when maxNamespaces is exceeded', async () => {

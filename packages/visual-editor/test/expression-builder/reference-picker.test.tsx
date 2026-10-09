@@ -13,6 +13,7 @@
 import { describe, it, expect, vi } from 'vitest';
 import { render, screen, fireEvent } from '@testing-library/react';
 import { ReferencePicker } from '../../src/components/editors/expression-builder/ReferencePicker.js';
+import { expressionScopeFromEntries } from '../../src/adapters/expression-scope.js';
 import type { FunctionScope } from '../../src/store/expression-store.js';
 
 const testScope: FunctionScope = {
@@ -93,5 +94,61 @@ describe('ReferencePicker', () => {
     render(<ReferencePicker open={true} scope={emptyScope} onSelect={vi.fn()} onClose={vi.fn()} />);
     const picker = document.body.querySelector('[data-testid="reference-picker"]')!;
     expect(picker.textContent).toContain('No variables in scope');
+  });
+  it('offers inherited attributes and creates callable argument placeholders', () => {
+    const onSelect = vi.fn();
+    const scope: FunctionScope = {
+      inputs: [],
+      aliases: [],
+      output: null,
+      attributes: [{ name: 'inherited', kind: 'attribute', declarationId: 'file:///base#attribute' }],
+      references: [{ name: 'Combine', kind: 'callable', argumentCount: 2, declarationId: 'file:///helper#function' }]
+    };
+    render(<ReferencePicker open scope={scope} onSelect={onSelect} onClose={vi.fn()} />);
+    expect(screen.getByTestId('ref-option-inherited')).toBeVisible();
+    fireEvent.pointerDown(screen.getByTestId('ref-option-Combine'), { pointerType: 'mouse' });
+    fireEvent.click(screen.getByTestId('ref-option-Combine'));
+    expect(onSelect).toHaveBeenCalledWith(
+      expect.objectContaining({
+        symbol: 'Combine',
+        explicitArguments: true,
+        rawArgs: [expect.objectContaining({ $type: 'Placeholder' }), expect.objectContaining({ $type: 'Placeholder' })]
+      })
+    );
+  });
+  it('offers Choice symbols through the canonical scope adapter', () => {
+    const onSelect = vi.fn();
+    const scope = expressionScopeFromEntries([
+      { name: 'Asset', kind: 'choice', declarationId: 'file:///model#choice' }
+    ]);
+    render(<ReferencePicker open scope={scope} onSelect={onSelect} onClose={vi.fn()} />);
+    const option = screen.getByTestId('ref-option-Asset');
+    expect(option).toHaveTextContent('choice');
+    fireEvent.pointerDown(option, { pointerType: 'mouse' });
+    fireEvent.click(option);
+    expect(onSelect).toHaveBeenCalledWith(
+      expect.objectContaining({ $type: 'RosettaSymbolReference', symbol: 'Asset' })
+    );
+    expect(onSelect.mock.calls[0][0]).not.toHaveProperty('explicitArguments');
+  });
+  it('omits unresolved callable arity while retaining confirmed zero-input calls', () => {
+    const onSelect = vi.fn();
+    const scope: FunctionScope = {
+      inputs: [],
+      aliases: [],
+      output: null,
+      references: [
+        { name: 'Deferred', kind: 'callable' },
+        { name: 'Zero', kind: 'callable', argumentCount: 0 }
+      ]
+    };
+    render(<ReferencePicker open scope={scope} onSelect={onSelect} onClose={vi.fn()} />);
+    expect(screen.queryByTestId('ref-option-Deferred')).toBeNull();
+    const option = screen.getByTestId('ref-option-Zero');
+    fireEvent.pointerDown(option, { pointerType: 'mouse' });
+    fireEvent.click(option);
+    expect(onSelect).toHaveBeenCalledWith(
+      expect.objectContaining({ symbol: 'Zero', explicitArguments: true, rawArgs: [] })
+    );
   });
 });

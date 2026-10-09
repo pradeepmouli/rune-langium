@@ -11,6 +11,7 @@
  */
 
 import { describe, it, expect } from 'vitest';
+import { parseExpression } from '@rune-langium/core';
 import { expressionNodeToDsl, expressionNodeToDslPreview } from '../../src/adapters/expression-node-to-dsl.js';
 import type { ExpressionNode } from '../../src/schemas/expression-node-schema.js';
 
@@ -338,13 +339,26 @@ describe('expressionNodeToDsl', () => {
 });
 
 describe('expressionNodeToDslPreview', () => {
-  it('replaces placeholder with ___', () => {
+  it('replaces placeholder with <?>', () => {
     const n = node('ArithmeticOperation', {
       operator: '+',
       left: node('RosettaIntLiteral', { value: 1n }, 'l'),
       right: node('Placeholder', {} as any, 'p')
     });
-    expect(expressionNodeToDslPreview(n)).toBe('1 + ___');
+    expect(expressionNodeToDslPreview(n)).toBe('1 + (<?>)');
+    expect(parseExpression(expressionNodeToDslPreview(n)).hasErrors).toBe(true);
+  });
+
+  it('keeps unfinished callable arguments unparsable without reserving real identifiers', () => {
+    const call = node('RosettaSymbolReference', {
+      symbol: 'Compute',
+      explicitArguments: true,
+      rawArgs: [node('Placeholder', {}, 'argument')]
+    });
+    expect(parseExpression(expressionNodeToDslPreview(call)).hasErrors).toBe(true);
+    const reference = node('RosettaSymbolReference', { symbol: '___', explicitArguments: false });
+    expect(expressionNodeToDsl(reference)).toBe('___');
+    expect(parseExpression(expressionNodeToDslPreview(reference)).hasErrors).toBe(false);
   });
 
   it('handles complete expression same as expressionNodeToDsl', () => {
@@ -362,6 +376,6 @@ describe('expressionNodeToDslPreview', () => {
       left: node('Placeholder', {} as any, 'p1'),
       right: node('Placeholder', {} as any, 'p2')
     });
-    expect(expressionNodeToDslPreview(n)).toBe('___ + ___');
+    expect(expressionNodeToDslPreview(n)).toBe('(<?>) + (<?>)');
   });
 });

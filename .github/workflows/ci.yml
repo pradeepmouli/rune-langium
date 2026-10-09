@@ -32,6 +32,11 @@ jobs:
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
 
+      - name: Use Python 3.13 for projection execution tests
+        uses: actions/setup-python@v7
+        with:
+          python-version: '3.13'
+
       - name: Determine CDM fixture cache key
         id: fixture-versions
         run: |
@@ -64,6 +69,12 @@ jobs:
 
       - name: Type check
         run: pnpm run type-check
+
+      - name: Validate design-sync previews and generated contracts
+        run: |
+          pnpm exec tsc --project .design-sync/tsconfig.json
+          node --test .design-sync/prepare-config.test.mjs
+          pnpm --filter @rune-langium/visual-editor exec vitest run --config ../../.design-sync/vitest.config.ts
 
       - name: Lint
         run: pnpm run lint

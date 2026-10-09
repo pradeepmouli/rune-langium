@@ -232,6 +232,8 @@ export interface GeneratedFunc {
  * FR-001 (output structure).
  */
 export interface GeneratorOutput {
+  /** Source-bound implementation fragments recorded by the target emitter. */
+  projections?: import('./projection/types.js').EmittedProjection[];
   /** Relative path of the emitted file (e.g. 'cdm/base/math.zod.ts'). */
   relativePath: string;
   /** Full text content of the emitted file. */

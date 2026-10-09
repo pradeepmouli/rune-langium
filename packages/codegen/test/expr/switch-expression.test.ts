@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: MIT
 // Copyright (c) 2026 Pradeep Mouli
 
-import { describe, expect, it } from 'vitest';
+import { beforeAll, describe, expect, it } from 'vitest';
 import {
   createRuneDslServices,
   isRosettaFeatureCall,
@@ -126,6 +126,12 @@ function emittedFunction(functionNode: { name: string; operations: Array<{ expre
 }
 
 describe('linked switch expression rendering', () => {
+  let functions: Awaited<ReturnType<typeof parseFunctions>>;
+
+  beforeAll(async () => {
+    functions = await parseFunctions();
+  });
+
   it.each([false, true])('distinguishes same-named types across namespaces (reverse=%s)', async (reverse) => {
     const sources = [
       `namespace alpha
@@ -168,8 +174,7 @@ func Parent:
     expect(compare({ foo: { shared: 4, own: 'child' } })).toEqual([0, 1, 1]);
   });
 
-  it('selects Choice option paths and binds item for plain-object runtime shapes', async () => {
-    const functions = await parseFunctions();
+  it('selects Choice option paths and binds item for plain-object runtime shapes', () => {
     const node = functions.find((func) => func.name === 'PickChoice')!;
     const pick = execute(emittedFunction(node as never), 'PickChoice');
     expect(pick({ instrument: { loan: { details: { amount: 7 } } } })).toBe(7);
@@ -177,14 +182,16 @@ func Parent:
     expect(pick({ instrument: {} })).toBe(0);
   });
 
-  it('uses structural Data guards and preserves enum guard equality', async () => {
-    const functions = await parseFunctions();
+  it('uses structural Data guards', () => {
     const data = functions.find((func) => func.name === 'PickData')!;
-    const enumFunc = functions.find((func) => func.name === 'PickEnum')!;
     const pickData = execute(emittedFunction(data as never), 'PickData');
-    const pickEnum = execute(emittedFunction(enumFunc as never), 'PickEnum');
     expect(pickData({ loan: { details: { amount: 4 } } })).toBe(4);
     expect(pickData({ loan: {} })).toBe(0);
+  });
+
+  it('preserves enum guard equality', () => {
+    const enumFunc = functions.find((func) => func.name === 'PickEnum')!;
+    const pickEnum = execute(emittedFunction(enumFunc as never), 'PickEnum');
     expect(pickEnum({ kind: 'Cash' })).toBe(1);
     expect(pickEnum({ kind: 'Credit' })).toBe(2);
     expect(pickEnum({ kind: 'Other' })).toBe(0);

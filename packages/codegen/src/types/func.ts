@@ -3,13 +3,16 @@
 
 import type { AstNode } from 'langium';
 import { isMetadataFeature, fieldMetadataKind, type FieldMetadataKind } from '../expr/metadata-runtime.js';
-import { featureName } from '../expr/navigation.js';
+import { expressionIsMany, featureName } from '../expr/navigation.js';
+import { expressionMetadataKind } from '../expr/metadata-type.js';
 import {
   getFunctionSignature as functionSignature,
+  getFunctionInputs as functionInputs,
   getFunctionOutput,
   isRosettaModel,
   isRosettaFunction,
   isAttribute,
+  isShortcutDeclaration,
   isData,
   isChoice,
   isChoiceOption,
@@ -492,6 +495,14 @@ export function extractFuncs(
       const assignments = node.operations.map((operation): RuneFuncAssignment => {
         const path: RuneFuncAssignmentPathSegment[] = [];
         const root = operation.assignRoot.ref ?? functionAttribute(signature, operation.assignRoot.$refText);
+        const rootMany = isAttribute(root)
+          ? root.card.unbounded || (root.card.sup ?? 1) > 1
+          : isShortcutDeclaration(root) && expressionIsMany(root.expression);
+        const rootMetadataKind = isAttribute(root)
+          ? fieldMetadataKind(root)
+          : isShortcutDeclaration(root)
+            ? expressionMetadataKind(root.expression)
+            : undefined;
         let target: AstNode | undefined = root;
         for (let segment = operation.path; segment; segment = segment.next) {
           target = segment.feature.ref;
@@ -509,8 +520,8 @@ export function extractFuncs(
           kind: operation.add ? 'add' : 'set',
           exprNode: operation.expression,
           target: operation.assignRoot.ref?.name ?? operation.assignRoot.$refText,
-          rootMany: isAttribute(root) && (root.card.unbounded || (root.card.sup ?? 1) > 1),
-          rootMetadataKind: isAttribute(root) ? fieldMetadataKind(root) : undefined,
+          rootMany,
+          rootMetadataKind,
           metadataKind: isAttribute(target) || isChoiceOption(target) ? fieldMetadataKind(target) : undefined,
           targetMany: isAttribute(target) ? target.card.unbounded || (target.card.sup ?? 1) > 1 : undefined,
           ...(path.length > 0 && (isAttribute(target) || isChoiceOption(target))
@@ -542,19 +553,11 @@ export function extractFuncs(
   return funcs;
 }
 
-export function functionInputs(node: RosettaFunction, seen: Set<RosettaFunction> = new Set()): Attribute[] {
-  if (node.inputs.length > 0 || seen.has(node)) return node.inputs;
-  seen.add(node);
-  const parent = node.superFunction?.ref;
-  const signature = functionSignature(node);
-  return parent ? functionInputs(parent, seen) : signature !== node ? functionInputs(signature, seen) : [];
-}
-
 export function functionOutput(node: RosettaFunction, seen: Set<RosettaFunction> = new Set()): Attribute | undefined {
   return getFunctionOutput(node, seen);
 }
 
-export { functionSignature };
+export { functionSignature, functionInputs };
 
 /** Resolve a signature attribute, including inherited inputs and output. */
 export function functionAttribute(func: RosettaFunction, name: string): Attribute | undefined {

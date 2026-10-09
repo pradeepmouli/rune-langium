@@ -255,9 +255,9 @@ export function renderCalendarField(feature: unknown, receiver: () => string, ma
   )
     return undefined;
   const read = (value: string) =>
-    `runeDateField(${value}, ${JSON.stringify(feature.$container.name)}, ${JSON.stringify(feature.name)})`;
+    `rune.dateField(${value}, ${JSON.stringify(feature.$container.name)}, ${JSON.stringify(feature.name)})`;
   const value = receiver();
-  return many ? `runeList(${value}).flatMap((value) => runeList(${read('value')}))` : read(value);
+  return many ? `rune.list(${value}).flatMap((value) => rune.list(${read('value')}))` : read(value);
 }
 
 export function deepFeaturePaths(
@@ -327,7 +327,7 @@ export function renderFeaturePath(receiver: string, path: readonly string[], man
       result = `((__value) => ${access})(${result})`;
       continue;
     }
-    result = `runeList(${result}).flatMap((__value) => runeList(${access}))`;
+    result = `rune.list(${result}).flatMap((__value) => rune.list(${access}))`;
   }
   return result;
 }

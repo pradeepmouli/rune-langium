@@ -6,17 +6,18 @@ Read root and affected-package `package.json` scripts before choosing commands.
 Use the pinned pnpm version and preserve overrides/patches in
 `pnpm-workspace.yaml` during dependency changes.
 
-- The pre-commit hook runs `lint-staged`, formatting staged JS/TS/JSON-family files with oxfmt. The pre-push hook runs type checking. Prefer the existing `simple-git-hooks` / `lint-staged` setup for hook changes.
+- The pre-commit hook runs `lint-staged`, applying Oxlint fixes before formatting staged JS/TS files with oxfmt; JSON-family files are formatted directly. Formatting runs last so import rewrites cannot leave CI style drift. The pre-push hook runs type checking. Prefer the existing `simple-git-hooks` / `lint-staged` setup for hook changes.
 - `SKIP_SIMPLE_GIT_HOOKS=1` bypasses hooks; report skipped verification when relevant.
 - After codegen render changes, run `pnpm --filter @rune-langium/codegen run build` so consumers receive updated dist output.
+- After switching stacked branches, force affected TypeScript builds with `pnpm --filter <package> exec tsc -b --force` before testing consumers. Incremental build caches can leave `dist` from the previous branch; source-only tests do not verify those exports.
 - The Cloudflare combined build rebuilds `@rune-langium/instrumentation-core` and `@rune-langium/core` before bundling Studio and Pages Functions; both consumers resolve those packages through their compiled exports.
 - For temporary Pages diagnostics, set the non-secret `INSTRUMENTATION_*` values in the build environment. The combined build writes only those values to the generated root `wrangler.toml`; rebuild and redeploy to enable or remove them. Keep secrets in Cloudflare.
 
 ## Form Dependencies
 
-`@zod-to-form/react@0.12.0` exports the shared `SectionRenderer` used by custom Inspector layouts, from [zod-to-form PR #222](https://github.com/pradeepmouli/zod-to-form/pull/222). Use that public export directly. Keep exact core/React package declarations and workspace overrides aligned, and recheck configured Inspector sections when upgrading.
+`@zod-to-form/react@0.13.0` exports the shared `SectionRenderer` used by custom Inspector layouts, from [zod-to-form PR #222](https://github.com/pradeepmouli/zod-to-form/pull/222). Use that public export directly. Keep exact core/React package declarations and workspace overrides aligned, and recheck configured Inspector sections when upgrading.
 
-Keep `@zod-to-form/vite` exactly pinned to `0.4.8` in Studio and visual-editor. Version `0.4.9` upgrades to Babel 8, whose Node requirement excludes the workspace’s supported Node 22.13–22.17 versions. The plugin pin is independent of the React runtime release; reconsider it when deliberately updating the documented Node floor.
+Keep `@zod-to-form/vite` exactly pinned to `0.5.0` in Studio and visual-editor for the unified configuration contract. Babel 8 requires Node `^22.18.0 || >=24.11.0`; the current jsdom 30.1 test toolchain requires the higher range `^22.22.2 || ^24.15.0 || >=26.0.0`. Workspace and package engine declarations use that combined supported range. Older Node 22/24 releases and Node 23/25 are unsupported. The previous `0.4.8` plugin compatibility pin applied to the old Node 22.13 floor.
 
 ## Dependency Compatibility and Audit Exceptions
 
@@ -29,6 +30,8 @@ Run `node --test scripts/braces-patch.test.mjs` after install or dependency chan
 The audit still identifies the patched package as version 3.0.3, so `auditConfig.ignoreGhsas` remains limited to `GHSA-vfj7-8cjw-p6xm`. This version-based exception accompanies a local runtime mitigation; it does not mean npm has published a fixed release. [Issue #572](https://github.com/pradeepmouli/rune-langium/issues/572) tracks replacing the backport and removing the exception when that release is available. Use `pnpm audit --prod` to check the production tree separately.
 
 Keep TypeScript `6.0.3` in docs and the `typescript-classic` alias in codegen: TypeDoc's peer range and codegen's compiler API need that release, while normal workspace compilation uses TypeScript 7.
+
+After CodeMirror updates, run `pnpm dedupe` and check `pnpm why -r @codemirror/state @codemirror/view`. Studio and its LSP client must resolve the same state/view classes; duplicate copies make editor extensions and workspace overrides incompatible. Force affected TypeScript builds afterward to invalidate cached module resolutions.
 
 ## Generated Sources
 
@@ -48,7 +51,7 @@ Run only the generators affected by the change.
 Domain generation applies the same safe lint fixes as the commit hook before
 formatting, so its type-only imports reproduce in CI.
 The current Langium CLI's JSON-schema validation fails with `Invalid URL` on
-Node 24/26. Node 22.13.0 was verified for grammar generation. When the CLI asks
+Node 24/26. Node 22.13.0 was historically verified for grammar generation, before the current Node 22.22.2 floor. When the CLI asks
 whether to delete additional generated files, retain `domain.ts` and
 `zod-schemas.ts`; their separate generators own them.
 `langium-zod` is exactly pinned in workspace overrides and core/visual-editor
@@ -60,10 +63,20 @@ SQL node types derive from the exactly pinned `@l1xnan/tree-sitter-sql` grammar.
 - Use Vitest for public APIs and shared architecture seams. Prefer focused package checks for isolated changes; broaden for affected consumers.
 - Full TypeScript corpus verification: build core, curated-schema, and codegen, then run `pnpm run verify:codegen-corpus`. The check pins upstream commits in `scripts/fixtures/codegen-corpus.json`, reuses the production artifact builder and cached archives, and strictly compiles every generated file. To check a browser download, run `pnpm run verify:codegen-corpus --zip /absolute/path/typescript-output.zip`. Dependencies must be installed; the check uses the real Temporal package. Caches and serialized artifacts stay under ignored `dist/`.
 - Real CDM/Rune/FpML fixtures live under hidden `.resources/`. Prefer them for corpus repros, and guard or skip corpus-dependent tests when absent.
+- Hermetic upstream test slices live in [test/fixtures/third-party](../../test/fixtures/third-party/README.md), with their pinned licenses, notices and integrity manifests. Studio's expression cohort uses the existing `referenceFiles` integrity loader through `expressionReferenceFiles`; keep its source bytes unchanged when relocating it.
 - Verify fixture revisions before claiming upstream parity. The September 12 refresh found a February Rune reference checkout; current production CDM/FpML needed `as` narrowing and schema declarations. A successful parse or ZIP download does not establish that the entire generated corpus passes strict TypeScript compilation.
 - Studio Playwright tests must wait for visible readiness, not `networkidle`, when workers or LSP traffic remain active.
+- Expression editing: `pnpm --filter @rune-langium/studio exec playwright test test/e2e/expression-workspace.spec.ts --retries=0` checks the pinned CDM function and Data-condition slices, generated views, builder draft/undo, dialog accessibility and narrow layouts at the largest pane font setting. The portal dialog additionally receives 125% root text scaling, with computed-size proof before bounds and axe scans. Source/Inspector network ownership additionally requires `PLAYWRIGHT_EXPRESSION_LSP=1` and a local LSP Worker, with Studio's `VITE_LSP_SESSION_URL` and `VITE_LSP_WS_URL` pointing at it. That case skips explicitly without the Worker; unit tests still cover read-only, stale revision and workspace-change guards. Hosted curated read-only and the production J10 journey require a deployed build and are separate from local acceptance.
 - Production smoke: `pnpm --filter @rune-langium/studio run test:prod-smoke`. Endpoint and fuller UX checks are documented in [TESTING.md](../TESTING.md).
 - Tailwind IntelliSense uses `.vscode/settings.json`: `tailwindCSS.experimental.configFile` maps `apps/studio/src/app.css` to Studio, design-system, and visual-editor source trees.
+
+## Claude Design Sync
+
+- `.design-sync/` holds the inputs for syncing `@rune-langium/design-system` (plus visual-editor presentational pieces) to the claude.ai/design project "Daikonic Studio Components" via the `/design-sync` skill: `config.json`, authored `previews/<Name>.tsx` (story source: the prod-ux journeys), the `conventions.md` header the design agent reads, and the Tailwind entry compiled by `build-css.mjs`.
+- Read `.design-sync/NOTES.md` before re-syncing — it records the build steps, composition gotchas, and re-sync risks. Staged converter scripts (`.ds-sync/`), build output (`ds-bundle/`), and grades (`.design-sync/.cache/`) are ignored.
+- Build from the repo root with `node .design-sync/build.mjs` after staging the converter. The wrapper derives visual-editor prop declarations from TypeScript component signatures into ignored `.design-sync/.cache/config.json` before invoking the converter. Do not maintain handwritten `dtsPropsFor` in the tracked configuration.
+- CI type-checks every authored preview and checks generated/source prop assignability plus Command filtering and selection. The commands in `.design-sync/NOTES.md` also cover local bundle rendering.
+- When a design-system component's API, class vocabulary, or tokens change, re-sync so the design agent's `.d.ts`, previews, and conventions stay true.
 
 ## Shared Agent Configuration
 
@@ -173,3 +186,38 @@ Validate workflow changes with `node --test scripts/lib/dependency-automerge.tes
 and a workflow syntax checker. An old failed auto-approval run (such as #551) needs a fresh PR event after
 the fix lands, for example a bot refresh/rebase. Rerunning the old run preserves
 its original workflow revision. The finalizer never ignores failed checks.
+
+## Unified zod-to-form Migration Verification
+
+The migration uses published core **0.12.0**, React **0.13.0**, codegen **0.11.0**, Vite **0.5.0**, and Zod **4.6.5**. The registry lockfile resolves those npm releases.
+
+Verified on the supported Node **22.22.2** floor:
+
+- `pnpm install --frozen-lockfile --engine-strict`.
+- Studio config tests: 6 pass, including real Excel defaults/rejection parity with compilation off/on.
+- Visual-editor editor/section tests: 183 pass.
+- Studio production bundle and visual-editor build.
+
+Full workspace type checks and explicit bundler-resolution TypeScript checks of both config files also pass. Rebuild Studio's dependencies before type checking when their compiled exports are stale.
+
+Compilation remains disabled. All five hand-authored EditorForms enable L1 through a shared policy and schema-derived Controller validation bridge. Regression checks cover canonical identifier unions, optional values, independent field validation, and array reorder/remove/add. Safe L2 adoption is tracked in [issue #574](https://github.com/pradeepmouli/rune-langium/issues/574).
+
+## Python projection checks
+
+Codegen builds regenerate the browser-safe runtime string from
+`packages/codegen/src/projection/python-runtime.py`. Edit that Python source;
+never hand-edit `projection/generated/python-runtime-source.ts`.
+`pnpm --filter @rune-langium/codegen run generate:python-runtime` regenerates it;
+`node packages/codegen/scripts/generate-python-runtime.mjs --check` verifies it.
+Python projection tests require Python >=3.13 and fail explicitly if it is absent.
+Set `PYTHON_BINARY` to the supported interpreter when the shell's `python3` is older.
+The standard-library driver checks Python 3.13 syntax and compares runtime behavior
+with the shared TypeScript helpers; it does not run Python inside Studio.
+
+The `Python Projections` workflow runs the grammar census, syntax/runtime tests,
+pinned CDM execution battery and both inverse round-trip suites on every PR; it
+has no path filter. Main CI also installs Python 3.13 before package tests.
+The staged corpus scan reuses core's fixture loader and links all three bundles
+together. Its ignored `packages/codegen/dist/python-projection-coverage.json`
+records versions, content hashes, counts and syntax/linking exclusions. The
+checked-in census and execution battery remain required when `.resources` is absent.

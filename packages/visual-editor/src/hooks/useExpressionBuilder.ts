@@ -74,6 +74,18 @@ export function useExpressionBuilder({
     }
   }, [tree, onChange]);
 
+  const setTreeFromText = useCallback(
+    (next: ExpressionNode) => {
+      prevTreeRef.current = next;
+      store.getState().setTree(next);
+    },
+    [store]
+  );
+
+  useEffect(() => {
+    store.setState({ scope });
+  }, [store, scope]);
+
   const handleBlur = useCallback(() => {
     onBlur?.();
   }, [onBlur]);
@@ -92,6 +104,7 @@ export function useExpressionBuilder({
     openPalette,
     closePalette,
     setTree,
+    setTreeFromText,
     handleBlur,
     store
   };

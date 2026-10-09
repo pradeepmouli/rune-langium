@@ -8,7 +8,8 @@
  * PassThrough streams to talk to a real LSP server in-process.
  */
 
-import { describe, it, expect, beforeAll, afterAll } from 'vitest';
+import { describe, it, expect, beforeAll, afterAll, vi } from 'vitest';
+import { OperationCancelled } from 'langium';
 import { PassThrough } from 'node:stream';
 import { StdioTransport } from '@lspeasy/core/node';
 import { LSPClient } from '@lspeasy/client';
@@ -102,6 +103,31 @@ describe('Rune DSL LSP Server', () => {
   });
 
   // ── Document lifecycle ────────────────────────────────────────────────
+
+  it('sends a cancelled Langium completion as a JSON-RPC error over the wire', async () => {
+    const uri = 'file:///cancelled-completion.rosetta';
+    const diagnostics = client.waitForNotification('textDocument/publishDiagnostics', {
+      timeout: 10000,
+      filter: (p) => p.uri === uri
+    });
+    await client.sendNotification('textDocument/didOpen', {
+      textDocument: { uri, languageId: 'rune-dsl', version: 1, text: SAMPLE_CONTENT }
+    });
+    await diagnostics;
+    const completion = vi
+      .spyOn(lsp.services.lsp.CompletionProvider!, 'getCompletion')
+      .mockRejectedValueOnce(OperationCancelled);
+    try {
+      await expect(
+        client.sendRequest('textDocument/completion', {
+          textDocument: { uri },
+          position: { line: 0, character: 0 }
+        })
+      ).rejects.toThrow('The request has been cancelled. (code: -32800)');
+    } finally {
+      completion.mockRestore();
+    }
+  });
 
   it('should accept textDocument/didOpen and produce diagnostics', async () => {
     const diagnosticsPromise = client.waitForNotification('textDocument/publishDiagnostics', {

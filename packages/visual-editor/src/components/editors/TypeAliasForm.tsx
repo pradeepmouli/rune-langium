@@ -31,7 +31,7 @@
  */
 
 import { useCallback } from 'react';
-import { FormProvider, useWatch } from 'react-hook-form';
+import { useWatch } from 'react-hook-form';
 import { FieldLegend, FieldSet } from '@rune-langium/design-system/ui/field';
 import { Badge } from '@rune-langium/design-system/ui/badge';
 import { TypeHeader, INSPECTOR_FORM_HEADER_CLASS } from '../TypeHeader.js';
@@ -41,6 +41,9 @@ import { TypeReferenceField } from './TypeReferenceField.js';
 import { useAutoSave } from '../../hooks/useAutoSave.js';
 import { useLatestRef } from '../../hooks/useLatestRef.js';
 import { useZodForm, useExternalSync } from '@zod-to-form/react';
+import { EditorFormProvider as FormProvider } from '../forms/EditorFormProvider.js';
+import { editorOptimization } from '../forms/editor-optimization.js';
+
 import { RosettaTypeAliasSchema } from '../../generated/zod-schemas.js';
 import { EditorActionsProvider } from '../forms/sections/EditorActionsContext.js';
 import { formValuesProjection } from './identity-projection.js';
@@ -115,6 +118,7 @@ function TypeAliasForm({
   // z.looseObject so any graph-only keys are accepted as extras).
 
   const { form } = useZodForm(RosettaTypeAliasSchema, {
+    optimization: editorOptimization,
     // RosettaTypeAliasSchema is z.looseObject — extra graph-only keys
     // are accepted as extras. `formValuesProjection` covers the typed gap
     // between the AnyGraphNode runtime shape and z2f's parameterised
@@ -200,7 +204,7 @@ function TypeAliasForm({
 
   return (
     <EditorActionsProvider nodeId={nodeId} actions={actions} readOnly={isReadOnly}>
-      <FormProvider {...form}>
+      <FormProvider {...form} schema={RosettaTypeAliasSchema}>
         <div data-slot="type-alias-form" className="flex flex-col gap-4 p-4">
           {/* Header: Namespace + Name + Badge */}
           <TypeHeader

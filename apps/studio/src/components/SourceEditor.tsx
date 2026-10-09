@@ -15,6 +15,7 @@
 
 import {
   useState,
+  useId,
   useRef,
   useEffect,
   useCallback,
@@ -24,16 +25,19 @@ import {
   type ForwardedRef,
   type KeyboardEvent
 } from 'react';
-import { EditorView, keymap } from '@codemirror/view';
-import { Compartment, EditorState, type Extension } from '@codemirror/state';
-import { basicSetup } from 'codemirror';
-import { defaultKeymap } from '@codemirror/commands';
-import { runeDslLanguage } from '../lang/rune-dsl.js';
-import { studioEditorExtensions } from '../lang/editor-theme.js';
+import { EditorView } from '@codemirror/view';
+import { Compartment, EditorState, Transaction, type Extension } from '@codemirror/state';
+import type { SourceRegion } from '@rune-langium/core';
+import {
+  documentExtensions,
+  externalDocumentChange,
+  minimalDocumentChange,
+  setProtectedRegion
+} from '../lang/document-extensions.js';
 import type { LspClientService } from '../services/lsp-client.js';
 import { pathToUri } from '../utils/uri.js';
 import { cn } from '@rune-langium/design-system/utils';
-import { isTypeRefPayload, makeNodeId, TYPE_REF_PAYLOAD_MIME } from '@rune-langium/visual-editor';
+import { isTypeRefPayload, makeNodeId, TYPE_REF_PAYLOAD_MIME, useLatestRef } from '@rune-langium/visual-editor';
 import { withInstrumentation, Capture } from '../services/instrumentation/core.js';
 
 // Re-export pathToUri for backward compatibility
@@ -88,6 +92,11 @@ export interface SourceEditorProps {
   /** When true, suppress the internal tab strip. Use when the parent (e.g. topbar
    * FileTabStrip) already provides file-tab navigation. */
   hideTabs?: boolean;
+  /** Display/edit a protected region, retaining the full document internally. */
+  region?: SourceRegion;
+  /** Source snapshot from which region coordinates were calculated. */
+  regionSource?: string;
+  onSelectionChange?: (selection: SourceRegion, view: EditorView) => void;
 }
 
 /** Imperative handle exposed by SourceEditor for programmatic navigation. */
@@ -274,13 +283,21 @@ const renderSourceEditor = withInstrumentation(
       lspReady,
       onNavigateToNode,
       onEditorViewCreated,
-      hideTabs
+      hideTabs,
+      region,
+      regionSource,
+      onSelectionChange
     }: SourceEditorProps,
     ref: ForwardedRef<SourceEditorRef>
   ) {
     const [selectedPath, setSelectedPath] = useState<string>(activeFile ?? files[0]?.path ?? '');
     const editorContainerRef = useRef<HTMLDivElement>(null);
     const editorViewRef = useRef<EditorView | null>(null);
+    const editorId = useId();
+    const tabId = useCallback((path: string) => `${editorId}-${getTabId(path)}`, [editorId]);
+    const panelId = `${editorId}-panel`;
+    const regionRef = useLatestRef(region);
+    const onSelectionChangeRef = useLatestRef(onSelectionChange);
     // Holds the Compartment reserved for the LSP plugin slot in the CURRENTLY
     // MOUNTED EditorView (recreated alongside it — see the editor-creation
     // effect below). Lets the LSP plugin be late-bound via a dispatched
@@ -380,11 +397,13 @@ const renderSourceEditor = withInstrumentation(
       }
     }, [files]);
 
+    const currentFile = useMemo(() => files.find((f) => f.path === selectedPath), [files, selectedPath]);
+
     // Handle external content updates (e.g., from graph → source sync)
     useEffect(() => {
       const view = editorViewRef.current;
       if (!view) return;
-      const file = files.find((f) => f.path === selectedPath);
+      const file = currentFile;
       if (!file) return;
       const editorContent = view.state.doc.toString();
       const mapContent = contentMapRef.current.get(file.path);
@@ -392,12 +411,20 @@ const renderSourceEditor = withInstrumentation(
       if (file.content !== editorContent && file.content !== mapContent) {
         contentMapRef.current.set(file.path, file.content);
         view.dispatch({
-          changes: { from: 0, to: editorContent.length, insert: file.content }
+          changes: minimalDocumentChange(editorContent, file.content),
+          annotations: [externalDocumentChange.of(true), Transaction.addToHistory.of(false)]
         });
       }
-    }, [files, selectedPath]);
+      // A cursor/dialog rerender may provide a new files array containing the
+      // same snapshot. Only a changed source value can be an external edit.
+    }, [currentFile?.content, selectedPath]);
 
-    const currentFile = useMemo(() => files.find((f) => f.path === selectedPath), [files, selectedPath]);
+    useEffect(() => {
+      const view = editorViewRef.current;
+      if (view && region && regionSource === view.state.doc.toString()) {
+        view.dispatch({ effects: setProtectedRegion.of(region), annotations: externalDocumentChange.of(true) });
+      }
+    }, [region?.from, region?.to, regionSource, currentFile?.content]);
 
     const handleFileSelect = useCallback(
       (path: string) => {
@@ -439,32 +466,35 @@ const renderSourceEditor = withInstrumentation(
         const nextFile = files[nextIndex];
         if (nextFile) {
           handleFileSelect(nextFile.path);
-          const nextTab = document.getElementById(getTabId(nextFile.path));
+          const nextTab = document.getElementById(tabId(nextFile.path));
           if (nextTab instanceof HTMLButtonElement) {
             nextTab.focus();
           }
         }
       },
-      [files, handleFileSelect]
+      [files, handleFileSelect, tabId]
     );
 
     // Build extensions — uses refs for callbacks to keep extensions stable
     const buildExtensions = useCallback(
       (filePath: string, isReadOnly: boolean, lspCompartment: Compartment): Extension[] => {
-        const exts: Extension[] = [
-          basicSetup,
-          keymap.of(defaultKeymap),
-          EditorView.lineWrapping,
-          ...studioEditorExtensions,
-          runeDslLanguage()
-        ];
+        const exts: Extension[] = documentExtensions(regionRef.current);
+        exts.push(
+          EditorView.contentAttributes.of({ 'aria-label': 'Rune source editor' }),
+          EditorView.updateListener.of((update) => {
+            if (update.selectionSet || update.docChanged) {
+              const selection = update.state.selection.main;
+              onSelectionChangeRef.current?.({ from: selection.from, to: selection.to }, update.view);
+            }
+          })
+        );
 
         if (isReadOnly) {
           exts.push(EditorState.readOnly.of(true));
         } else {
           exts.push(
             EditorView.updateListener.of((update) => {
-              if (update.docChanged) {
+              if (update.docChanged && !update.transactions.every((tr) => tr.annotation(externalDocumentChange))) {
                 const content = update.state.doc.toString();
                 contentMapRef.current.set(filePath, content);
                 onContentChangeRef.current?.(filePath, content);
@@ -553,6 +583,7 @@ const renderSourceEditor = withInstrumentation(
 
       const state = EditorState.create({
         doc: content,
+        selection: regionRef.current ? { anchor: regionRef.current.from } : undefined,
         extensions: buildExtensions(currentFile.path, currentFile.readOnly ?? false, lspCompartment)
       });
 
@@ -576,7 +607,7 @@ const renderSourceEditor = withInstrumentation(
       // Only recreate editor when file path changes (tab switch).
       // Content updates are handled by the updateListener extension, NOT by recreating.
       // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [currentFile?.path, buildExtensions]);
+    }, [currentFile?.path, currentFile?.readOnly, buildExtensions]);
 
     // Late-bind the LSP plugin once the async LSP connection finishes,
     // reconfiguring the reserved compartment in the already-mounted
@@ -600,11 +631,15 @@ const renderSourceEditor = withInstrumentation(
       const view = editorViewRef.current;
       const compartment = lspCompartmentRef.current;
       if (!view || !compartment) return;
-      const lspPlugin = lspClient.getPlugin(pathToUri(currentFile.path));
-      if (!lspPlugin) return;
-      view.dispatch({ effects: compartment.reconfigure(lspPlugin) });
+      const configure = (plugin: Extension | null) => {
+        if (editorViewRef.current === view) view.dispatch({ effects: compartment.reconfigure(plugin ?? []) });
+      };
+      if (lspClient.claimDocumentView) return lspClient.claimDocumentView(pathToUri(currentFile.path), view, configure);
+      // Compatibility for older externally supplied service implementations.
+      configure(lspClient.getPlugin(pathToUri(currentFile.path)));
+      return () => configure(null);
       // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [lspReady, lspClient, currentFile?.path]);
+    }, [lspReady, lspClient, currentFile?.path, currentFile?.readOnly]);
 
     // Empty state
     if (files.length === 0) {
@@ -636,10 +671,10 @@ const renderSourceEditor = withInstrumentation(
               >
                 <button
                   type="button"
-                  id={getTabId(file.path)}
+                  id={tabId(file.path)}
                   role="tab"
                   aria-selected={file.path === selectedPath}
-                  aria-controls="editor-tabpanel"
+                  aria-controls={panelId}
                   tabIndex={file.path === selectedPath ? 0 : -1}
                   className={cn(
                     'studio-source-editor__tab',
@@ -698,10 +733,11 @@ const renderSourceEditor = withInstrumentation(
 
         {/* Editor container */}
         <div
-          id="editor-tabpanel"
+          id={panelId}
           className="flex-1 overflow-hidden"
-          role="tabpanel"
-          aria-labelledby={selectedPath ? getTabId(selectedPath) : undefined}
+          role={hideTabs ? 'region' : 'tabpanel'}
+          aria-label={hideTabs ? 'Rune source editor' : undefined}
+          aria-labelledby={!hideTabs && selectedPath ? tabId(selectedPath) : undefined}
           data-testid="source-editor-container"
           ref={editorContainerRef}
         />

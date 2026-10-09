@@ -17,6 +17,14 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { render, screen, fireEvent, act } from '@testing-library/react';
 import { FunctionForm } from '../../src/components/editors/FunctionForm.js';
+import { readFileSync } from 'node:fs';
+import { fileURLToPath } from 'node:url';
+import { dirname, resolve } from 'node:path';
+import { parse } from '@rune-langium/core';
+import { renderModel } from '@rune-langium/codegen/rosetta';
+import { modelsToAst } from '../../src/adapters/model-to-ast.js';
+import { createEditorStore } from '../../src/store/editor-store.js';
+import { ExpressionBuilder } from '../../src/components/editors/expression-builder/ExpressionBuilder.js';
 import type { AnyGraphNode, TypeOption, EditorFormActions } from '../../src/types.js';
 import { testMeta } from '../helpers/node-meta.js';
 import { TYPE_REF_PAYLOAD_MIME, typeRefMimeForKind } from '../../src/types/structure-view.js';
@@ -107,6 +115,56 @@ function makeFuncData(overrides: Partial<AnyGraphNode> = {}): AnyGraphNode {
   } as AnyGraphNode;
 }
 
+describe('continuous implementation host', () => {
+  it('does not flush a queued signature edit over a newer invalid body draft', async () => {
+    vi.useFakeTimers();
+    const data = makeFuncData();
+    const actions = makeActions();
+    const props = {
+      nodeId: 'test.model.CalculateNotional',
+      data,
+      meta: testMeta(),
+      actions,
+      availableTypes: AVAILABLE_TYPES
+    };
+    const { rerender, unmount } = render(<FunctionForm {...props} />);
+    fireEvent.change(screen.getByLabelText('Function type name'), { target: { value: 'Renamed' } });
+    rerender(<FunctionForm {...props} structuralEditsDisabled />);
+    await act(async () => {
+      vi.advanceTimersByTime(600);
+    });
+    expect(actions.renameType).not.toHaveBeenCalled();
+    unmount();
+    vi.useRealTimers();
+  });
+  it('mounts one host instead of operation cards and duplicate conditions', () => {
+    const data = makeFuncData({
+      operations: [{ $type: 'Operation', expression: { $type: 'RosettaIntLiteral', value: 1 } }],
+      conditions: [{ $type: 'Condition', name: 'Good', expression: { $type: 'RosettaBooleanLiteral', value: true } }]
+    });
+    const host = vi.fn(({ nodeId, readOnly }) => (
+      <div data-testid="body-host">
+        {nodeId}:{String(readOnly)}
+      </div>
+    ));
+    render(
+      <FunctionForm
+        nodeId="test.model.CalculateNotional"
+        data={data}
+        meta={testMeta()}
+        actions={makeActions()}
+        availableTypes={AVAILABLE_TYPES}
+        renderFunctionBodyEditor={host}
+        structuralEditsDisabled
+      />
+    );
+    expect(screen.getAllByTestId('body-host')).toHaveLength(1);
+    expect(screen.queryByLabelText('Function operation 1')).toBeNull();
+    expect(screen.queryByText('Good')).toBeNull();
+    expect(host).toHaveBeenLastCalledWith({ nodeId: 'test.model.CalculateNotional', readOnly: false });
+  });
+});
+
 // ---------------------------------------------------------------------------
 // Tests
 // ---------------------------------------------------------------------------
@@ -179,7 +237,7 @@ describe('FunctionForm', () => {
     fireEvent.change(textarea, { target: { value: '(trade -> price' } });
     fireEvent.blur(textarea);
 
-    expect(screen.getByText(/Unbalanced parentheses/)).toBeInTheDocument();
+    expect(screen.getByText(/expecting|unexpected/i)).toBeInTheDocument();
     expect(actions.updateExpression).not.toHaveBeenCalled();
   });
 
@@ -200,11 +258,11 @@ describe('FunctionForm', () => {
     // Produce error
     fireEvent.change(textarea, { target: { value: '(' } });
     fireEvent.blur(textarea);
-    expect(screen.getByText(/Unbalanced parentheses/)).toBeInTheDocument();
+    expect(screen.getByText(/expecting|unexpected/i)).toBeInTheDocument();
 
     // Resume typing — error should clear
     fireEvent.change(textarea, { target: { value: '(trade)' } });
-    expect(screen.queryByText(/Unbalanced parentheses/)).not.toBeInTheDocument();
+    expect(screen.queryByText(/expecting|unexpected/i)).not.toBeInTheDocument();
   });
 
   it('commits valid expression on blur', () => {
@@ -353,6 +411,104 @@ describe('FunctionForm', () => {
     });
 
     expect(actions.reorderInputParam).toHaveBeenCalledWith('fn1', 0, 1);
+  });
+});
+
+describe('FunctionForm operation locality', () => {
+  it.each([
+    { draft: 'foo +', valid: false },
+    { draft: '"("', valid: true }
+  ])('validates operation 1 draft $draft before serializing it', async ({ draft, valid }) => {
+    const parsed = await parse(`namespace test.operation_draft
+func Format:
+ output: result string (1..1)
+ set result: "first"
+ set result: "second"
+`);
+    expect(parsed.hasErrors).toBe(false);
+    const store = createEditorStore();
+    store.getState().loadModels(parsed.value);
+    const node = store.getState().nodes.find((entry) => entry.data.name === 'Format')!;
+    const before = (node.data as any).operations;
+    render(
+      <FunctionForm nodeId={node.id} meta={node.meta} data={node.data} availableTypes={[]} actions={store.getState()} />
+    );
+    const editor = screen.getByLabelText('Function operation 2');
+    fireEvent.change(editor, { target: { value: draft } });
+    fireEvent.blur(editor);
+    expect(editor).toHaveValue(draft);
+    const state = store.getState();
+    const after = (state.nodes.find((entry) => entry.id === node.id)!.data as any).operations;
+    expect(after[0]).toEqual(before[0]);
+    if (valid) expect(after[1].expression.text).toBe(draft);
+    else expect(after).toEqual(before);
+    const text = renderModel(modelsToAst(state.nodes, state.edges)[0]!);
+    expect((await parse(text)).hasErrors).toBe(false);
+    if (valid) expect(text).toContain(draft);
+    else expect(text).not.toContain(draft);
+  });
+
+  it('editing operation 1 leaves operation 0 and sibling operations unchanged', async () => {
+    const source = readFileSync(
+      resolve(dirname(fileURLToPath(import.meta.url)), '../fixtures/function-multi-operation.rosetta'),
+      'utf8'
+    );
+    const parsed = await parse(source);
+    expect(parsed.parserErrors).toEqual([]);
+    const store = createEditorStore();
+    store.getState().loadModels(parsed.value);
+    const node = store.getState().nodes.find((n) => n.data.name === 'Summarize')!;
+    const before = (node.data as any).operations;
+    expect(before).toHaveLength(10);
+    render(
+      <FunctionForm
+        nodeId={node.id}
+        meta={node.meta}
+        data={node.data}
+        availableTypes={[]}
+        actions={store.getState()}
+        renderExpressionEditor={(props) => (
+          <ExpressionBuilder {...props} scope={{ inputs: [], output: null, aliases: [] }} />
+        )}
+      />
+    );
+    fireEvent.click(screen.getAllByTestId('tab-text')[1]!);
+    fireEvent.change(screen.getByTestId('text-editor'), { target: { value: '42' } });
+    fireEvent.blur(screen.getByTestId('text-editor'));
+    const after = (store.getState().nodes.find((n) => n.id === node.id)!.data as any).operations;
+    expect(after[0]).toEqual(before[0]);
+    expect(after[1].expression.text).toBe('42');
+    expect(after[1].path).toEqual(before[1].path);
+    expect(after.slice(2)).toEqual(before.slice(2));
+    expect(screen.getByText('set result -> average')).toBeVisible();
+  });
+
+  it('keeps independent operation drafts and validation errors', () => {
+    const operations = ['1', '2'].map((text) => ({
+      $type: 'Operation',
+      add: false,
+      assignRoot: { $refText: 'result' },
+      expression: { $type: 'RawDsl', text }
+    }));
+    const actions = makeActions();
+    render(
+      <FunctionForm
+        nodeId="fn1"
+        meta={testMeta('test.model')}
+        data={makeFuncData({ operations } as any)}
+        availableTypes={[]}
+        actions={actions}
+      />
+    );
+    const editors = screen.getAllByRole('textbox').filter((e) => e.tagName === 'TEXTAREA');
+    fireEvent.change(editors[0]!, { target: { value: '(1' } });
+    fireEvent.blur(editors[0]!);
+    fireEvent.change(editors[1]!, { target: { value: '42' } });
+    fireEvent.blur(editors[1]!);
+    expect(editors[0]).toHaveValue('(1');
+    expect(actions.updateExpression).toHaveBeenCalledExactlyOnceWith('fn1', '42', 1);
+    expect(actions.updateExpression).not.toHaveBeenCalledWith('fn1', '(1', 0);
+    expect(screen.getByText(/expecting|unexpected/i)).toBeVisible();
   });
 });
 

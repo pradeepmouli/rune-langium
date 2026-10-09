@@ -66,3 +66,10 @@ reference-design/daikonic-mark.svg
 reference-design/uploads/Image 1.png.2026_06_04_12_57_53.0.svg
 reference-design/ux-functionality-differential-2026-06-05.md
 .dev.vars
+
+# design-sync (claude.ai/design) — staged converter, build output, machine state
+.ds-sync/
+ds-bundle/
+.design-sync/.cache/
+.design-sync/learnings/
+.design-sync/node_modules

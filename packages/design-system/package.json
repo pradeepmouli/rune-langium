@@ -4,6 +4,7 @@
   "private": true,
   "description": "Shared design tokens, theme, and UI primitives for Rune DSL tooling",
   "type": "module",
+  "types": "./dist/ui/index.d.ts",
   "exports": {
     "./theme.css": "./src/theme.css",
     "./tokens.css": "./src/tokens.css",

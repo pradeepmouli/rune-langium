@@ -1252,6 +1252,51 @@ describe('EditorStore — condition and expression operations', () => {
   });
 
   describe('updateExpression', () => {
+    it('preserves add, nested targets and other operations when editing an explicit index, including undo', async () => {
+      const funcStore = createEditorStore();
+      const parsed = await parse(`namespace test.operations
+version "test"
+type Result:
+  values int (0..*)
+func MyFunc:
+  output:
+    result Result (1..1)
+  set result -> values: 1
+  add result -> values: 2
+  add result -> values: 3
+`);
+      expect(parsed.parserErrors).toEqual([]);
+      funcStore.getState().loadModels(parsed.value);
+      const node = funcStore.getState().nodes.find((n) => n.data.name === 'MyFunc')!;
+      const before = (node.data as any).operations;
+      funcStore.getState().updateExpression(node.id, '42', 1);
+      const after = (funcStore.getState().nodes.find((n) => n.id === node.id)!.data as any).operations;
+      expect(after[0]).toEqual(before[0]);
+      expect(after[2]).toEqual(before[2]);
+      expect(after[1]).toMatchObject({
+        add: true,
+        assignRoot: before[1].assignRoot,
+        path: before[1].path,
+        expression: { $type: RAW_DSL_TYPE, text: '42' }
+      });
+      funcStore.temporal.getState().undo();
+      expect((funcStore.getState().nodes.find((n) => n.id === node.id)!.data as any).operations).toEqual(before);
+      funcStore.temporal.getState().redo();
+      expect((funcStore.getState().nodes.find((n) => n.id === node.id)!.data as any).operations).toEqual(after);
+    });
+
+    it.each([-1, 1, 1.5, NaN])('rejects invalid explicit operation index %s without mutations', async (index) => {
+      const funcStore = createEditorStore();
+      const parsed = await parse(FUNCTION_MODEL_SOURCE);
+      funcStore.getState().loadModels(parsed.value);
+      const node = funcStore.getState().nodes.find((n) => n.data.$type === 'RosettaFunction')!;
+      const state = funcStore.getState();
+      const historyLength = funcStore.temporal.getState().pastStates.length;
+      expect(() => funcStore.getState().updateExpression(node.id, '42', index)).toThrow(RangeError);
+      expect(funcStore.getState()).toBe(state);
+      expect(funcStore.temporal.getState().pastStates).toHaveLength(historyLength);
+    });
+
     it('updates the function body expression via operations', async () => {
       const funcStore = createEditorStore();
       const funcResult = await parse(`

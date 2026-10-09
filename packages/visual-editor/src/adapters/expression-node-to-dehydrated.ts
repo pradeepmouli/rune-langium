@@ -8,7 +8,7 @@
  * Inverse of ast-to-expression-node: string refs become `{$refText}`; the
  * synthetic `id` is dropped (renderExpression ignores extra fields, so ids
  * are simply not copied); the two UI-only variants map to the RawDsl leaf:
- *   Placeholder  → { $type: 'RawDsl', text: '___' } (preview only — throws otherwise)
+ *   Placeholder  → { $type: 'RawDsl', text: '<?>' } (preview only — throws otherwise)
  *   Unsupported  → { $type: 'RawDsl', text: rawText }
  *
  * REF_FIELDS/REF_ARRAY_FIELDS are the inverse of ast-to-expression-node.ts's
@@ -21,7 +21,7 @@
 import { RAW_DSL_TYPE } from '@rune-langium/codegen/rosetta';
 import type { ExpressionNode } from '../schemas/expression-node-schema.js';
 
-const PLACEHOLDER_MARKER = '___';
+const PLACEHOLDER_MARKER = '<?>';
 
 /** Fields that hold a string ref in ExpressionNode but {$refText} in the AST. */
 const REF_FIELDS = new Set(['symbol', 'feature', 'enumeration', 'key', 'referenceGuard', 'parameter']);

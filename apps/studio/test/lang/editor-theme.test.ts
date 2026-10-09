@@ -93,7 +93,8 @@ describe('studio editor theme uses design-system syntax tokens', () => {
   // its font, so it must set the mono font itself — otherwise line numbers
   // fall back to the body UI font (Inter) and render proportional/misaligned.
   it('the .cm-gutters block sets the mono font', () => {
-    expect(THEME_SRC).toMatch(/'\.cm-gutters':\s*\{[\s\S]*?font-mono/);
+    expect(THEME_SRC).toMatch(/const editorTextStyle =\s*\{[\s\S]*?font-mono/);
+    expect(THEME_SRC).toMatch(/'\.cm-gutters':\s*\{[\s\S]*?\.\.\.editorTextStyle/);
   });
 
   // Only use tokens defined in the BASE palette so the theme resolves under

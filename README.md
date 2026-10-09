@@ -8,7 +8,7 @@
   <a href="https://github.com/pradeepmouli/rune-langium/actions/workflows/ci.yml"><img src="https://img.shields.io/github/actions/workflow/status/pradeepmouli/rune-langium/ci.yml?style=flat-square" alt="ci" /></a>
   <img src="https://img.shields.io/badge/core-MIT-blue?style=flat-square" alt="core license" />
   <img src="https://img.shields.io/badge/studio-FSL--1.1--ALv2-orange?style=flat-square" alt="studio license" />
-  <img src="https://img.shields.io/badge/node-%3E%3D22.13.0-brightgreen?style=flat-square" alt="node" />
+  <img src="https://img.shields.io/badge/node-%5E22.22.2%20%7C%7C%20%5E24.15.0%20%7C%7C%20%3E%3D26.0.0-brightgreen?style=flat-square" alt="Node ^22.22.2 || ^24.15.0 || >=26.0.0" />
   <img src="https://img.shields.io/badge/TypeScript-7-3178C6?style=flat-square&logo=typescript&logoColor=white" alt="ts" />
 </p>
 
@@ -91,7 +91,7 @@ pnpm add @rune-langium/core
 pnpm add @rune-langium/cli @rune-langium/codegen @rune-langium/lsp-server
 ```
 
-Requires **Node.js ≥ 22.13.0** and **pnpm ≥ 11** for local development. Use the
+Requires **Node.js `^22.22.2 || ^24.15.0 || >=26.0.0`** and **pnpm ≥ 11** for local development. Use the
 `packageManager` version in `package.json` (currently `pnpm@11.5.0`).
 
 ## Quick Start
@@ -222,6 +222,7 @@ This repository uses a split licensing model:
 The core grammar, language server, codegen, CLI, visual editor, and design-system packages are and will remain MIT-licensed. Rune Studio is **source-available**, not open source.
 
 See [NOTICE](./NOTICE) for third-party attribution.
+Pinned [third-party test fixtures](./test/fixtures/third-party/README.md) retain their upstream licenses.
 
 ## Contributing
 

@@ -12,6 +12,26 @@ import {
   runeToZonedDateTime,
   RUNTIME_HELPER_SOURCE
 } from '../src/helpers.js';
+import ts from 'typescript-classic';
+
+describe('emitted runtime namespace', () => {
+  it('preserves falsy values and empty collection semantics through namespaced built-ins', () => {
+    const javascript = ts.transpileModule(RUNTIME_HELPER_SOURCE.replace(/^import .*;\n/gm, ''), {
+      compilerOptions: { target: ts.ScriptTarget.ES2022 }
+    }).outputText;
+    const evaluate = new Function(
+      'value',
+      `${javascript}\nreturn {
+      exists: rune.exists(value), count: rune.count(value), list: rune.list(value),
+      oneOf: rune.checkOneOf([value, null]), date: rune.toDate('2026-10-08')
+    };`
+    );
+    for (const value of [false, 0, '']) {
+      expect(evaluate(value)).toEqual({ exists: true, count: 1, list: [value], oneOf: true, date: '2026-10-08' });
+    }
+    expect(evaluate([])).toEqual({ exists: false, count: 0, list: [], oneOf: false, date: '2026-10-08' });
+  });
+});
 
 describe('runeCheckOneOf', () => {
   it('returns false for all-undefined values', () => {

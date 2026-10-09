@@ -28,7 +28,7 @@ describe('DslPreview', () => {
     expect(container.textContent).toContain('42');
   });
 
-  it('shows placeholder markers as ___', () => {
+  it('shows placeholder markers as <?>', () => {
     const tree = mkNode({
       $type: 'ArithmeticOperation',
       id: 'n1',
@@ -37,7 +37,7 @@ describe('DslPreview', () => {
       right: { $type: 'RosettaIntLiteral', id: 'l1', value: 1 }
     });
     const { container } = render(<DslPreview tree={tree} />);
-    expect(container.textContent).toContain('___');
+    expect(container.textContent).toContain('<?>');
     expect(container.textContent).toContain('+');
   });
 

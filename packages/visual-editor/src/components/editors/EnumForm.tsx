@@ -30,7 +30,7 @@
  */
 
 import { useCallback, useMemo, useState } from 'react';
-import { FormProvider, useFieldArray, type Control } from 'react-hook-form';
+import { useFieldArray, type Control } from 'react-hook-form';
 import { FieldGroup, FieldLegend, FieldSet } from '@rune-langium/design-system/ui/field';
 import { Button } from '@rune-langium/design-system/ui/button';
 import { Badge } from '@rune-langium/design-system/ui/badge';
@@ -43,6 +43,9 @@ import { useEffectiveMembers } from '../../hooks/useInheritedMembers.js';
 import { useAutoSave } from '../../hooks/useAutoSave.js';
 import { useLatestRef } from '../../hooks/useLatestRef.js';
 import { useZodForm, useExternalSync } from '@zod-to-form/react';
+import { EditorFormProvider as FormProvider } from '../forms/EditorFormProvider.js';
+import { editorOptimization } from '../forms/editor-optimization.js';
+
 import { RosettaEnumerationSchema } from '../../generated/zod-schemas.js';
 import { formRegistry } from '../forms/rows/index.js';
 import { formValuesProjection } from './identity-projection.js';
@@ -127,6 +130,7 @@ function EnumForm({
   // Phase 8 (US6) wires the row as a custom renderer via formRegistry.
 
   const { form } = useZodForm(RosettaEnumerationSchema, {
+    optimization: editorOptimization,
     // The graph node is a union (`AnyGraphNode`); the host narrows by
     // `$type` upstream. `formValuesProjection` covers the typed gap between
     // the discriminated union and z2f's `Partial<output<Schema>>` constraint.
@@ -255,7 +259,7 @@ function EnumForm({
   // ---- Render --------------------------------------------------------------
 
   return (
-    <FormProvider {...form}>
+    <FormProvider {...form} schema={RosettaEnumerationSchema}>
       <EditorActionsProvider {...editorActionsValue}>
         <div data-slot="enum-form" className="flex flex-col gap-4 p-4">
           {/* Header: Namespace + Name + Badge */}

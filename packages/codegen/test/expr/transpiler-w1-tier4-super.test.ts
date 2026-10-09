@@ -144,7 +144,7 @@ describe('P4 regression debt — chained same-tier comparisons', () => {
     const expr = parse('a > (b > c)');
     const ctx = makeCtx();
     expect(transpileExpression(expr, ctx)).toBe(
-      'runeCompare(data.a, runeCompare(data.b, data.c, (a, b) => a > b, "all"), (a, b) => a > b, "all")'
+      'rune.compare(data.a, rune.compare(data.b, data.c, (a, b) => a > b, "all"), (a, b) => a > b, "all")'
     );
   });
 });

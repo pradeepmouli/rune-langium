@@ -1,0 +1,46 @@
+// SPDX-License-Identifier: MIT
+// Copyright (c) 2026 Pradeep Mouli
+
+namespace test.operations
+version "test"
+
+type Summary:
+    total number (0..1)
+    average number (0..1)
+    itemCount number (0..1)
+    initial number (0..1)
+    final number (0..1)
+    minimum number (0..1)
+    maximum number (0..1)
+    doubled number (0..1)
+    offset number (0..1)
+    constant number (0..1)
+
+func Summarize:
+    inputs:
+        values number (0..*)
+    output:
+        result Summary (1..1)
+
+    alias totalValue: values sum
+
+    set result -> total:
+        totalValue
+    set result -> average:
+        totalValue / (values count)
+    set result -> itemCount:
+        values count
+    set result -> initial:
+        values first
+    set result -> final:
+        values last
+    set result -> minimum:
+        values min
+    set result -> maximum:
+        values max
+    set result -> doubled:
+        totalValue * 2
+    set result -> offset:
+        totalValue + 1
+    set result -> constant:
+        42
