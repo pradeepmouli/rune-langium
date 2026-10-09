@@ -43,6 +43,51 @@ async function context() {
 }
 
 describe('source-bound expression workspace', () => {
+  it.each(['function-body', 'function-condition', 'data-condition'] as const)(
+    'binds the correct same-named declaration for %s',
+    async (mode) => {
+      const text =
+        'namespace test\ntype Shared:\n amount int (1..1)\n condition DataValid: amount > 0\nfunc Shared:\n inputs: factor int (1..1)\n output: out int (1..1)\n condition FunctionValid: factor > 1\n set out: factor + 2';
+      const result = await parse(text);
+      expect(result.parserErrors).toEqual([]);
+      const { props } = await context();
+      const file = { ...props.file, content: text };
+      const writes = vi.fn();
+      const documents = new ExpressionDocument({
+        getGeneration: () => 1,
+        getFile: () => file,
+        onContentChange: writes
+      });
+      const nodeId = makeNodeId('test', 'Shared', mode === 'data-condition' ? 'Data' : 'RosettaFunction');
+      const loadScope = vi.fn(async () => ({ inputs: [], aliases: [], output: null }));
+      const host = render(
+        <ExpressionWorkspace
+          {...props}
+          nodeId={nodeId}
+          file={file}
+          documents={documents}
+          onContentChange={writes}
+          parsed={{ filePath: file.path, model: result.value, source: text }}
+          loadScope={loadScope}
+          target={mode === 'function-body' ? undefined : { nodeId, kind: 'precondition', index: 0 }}
+        />
+      );
+      const editor = await host.findByTestId('implementation-editor');
+      const view = EditorView.findFromDOM(editor.querySelector('.cm-editor')!)!;
+      const expression =
+        mode === 'function-body' ? 'factor + 2' : mode === 'function-condition' ? 'factor > 1' : 'amount > 0';
+      const from = text.indexOf(expression);
+      act(() => view.dispatch({ selection: { anchor: from } }));
+      fireEvent.click(host.getByRole('button', { name: 'Builder' }));
+      await host.findByRole('dialog');
+      expect(loadScope).toHaveBeenCalledExactlyOnceWith({ from, to: from + expression.length });
+      fireEvent.click(host.getByTestId('tab-text'));
+      const draft = EditorView.findFromDOM(host.getByTestId('text-editor').querySelector('.cm-editor')!)!;
+      expect(draft.state.doc.toString()).toBe(expression);
+      expect(writes).not.toHaveBeenCalled();
+    }
+  );
+
   it('reopens and repairs an invalid draft after Inspector disposal', async () => {
     const { props, getFile } = await context();
     const first = render(<ExpressionWorkspace {...props} />);

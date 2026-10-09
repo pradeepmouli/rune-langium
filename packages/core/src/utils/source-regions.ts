@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: MIT
 // Copyright (c) 2026 Pradeep Mouli
 
-import type { Data, RosettaFunction, RosettaExpression } from '../generated/ast.js';
+import type { Data, RosettaFunction, RosettaExpression, RosettaModel } from '../generated/ast.js';
 import type { Dehydrated } from '../serializer/dehydrated.js';
 import { CstUtils, isLeafCstNode } from 'langium';
 
@@ -12,6 +12,20 @@ export type ExpressionRegion = Readonly<{
   index: number;
   expression: RosettaExpression | Dehydrated<RosettaExpression>;
 }>;
+
+/** Resolve an expression owner by declaration identity; ambiguous kindless names fail closed. */
+export function findExpressionOwner(
+  model: Pick<RosettaModel, 'elements'>,
+  identity: { name: string; kind?: string }
+): Data | RosettaFunction | undefined {
+  const matches = model.elements.filter(
+    (element): element is Data | RosettaFunction =>
+      (element.$type === 'Data' || element.$type === 'RosettaFunction') &&
+      element.name === identity.name &&
+      (identity.kind === undefined || element.$type === identity.kind)
+  );
+  return matches.length === 1 ? matches[0] : undefined;
+}
 
 type LocatedNode = {
   $cstNode?: { offset: number; end: number };

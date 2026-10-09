@@ -13,6 +13,7 @@
 import {
   getExpressionScope,
   getExpressionRegions,
+  findExpressionOwner,
   type ExpressionScopeEntry,
   type SourceRegion,
   createRuneDslServices,
@@ -80,6 +81,7 @@ export interface ExpressionScopeRequest {
   id: string;
   uri: string;
   name: string;
+  kind?: string;
   region: SourceRegion;
   files?: ParseWorkspaceRequest['files'];
 }
@@ -568,9 +570,7 @@ async function handleExpressionScope(req: ExpressionScopeRequest): Promise<Expre
     if (!linked.linked) throw new Error('The expression document is not loaded.');
     const doc = activeLangiumDocs.getDocument(URI.parse(req.uri));
     const model = doc?.parseResult.value as RosettaModel | undefined;
-    const owner = model?.elements.find(
-      (node) => (node.$type === 'RosettaFunction' || node.$type === 'Data') && node.name === req.name
-    );
+    const owner = model && findExpressionOwner(model, req);
     if (!owner || (owner.$type !== 'RosettaFunction' && owner.$type !== 'Data'))
       throw new Error('The expression owner is unavailable.');
     const target = getExpressionRegions(owner).find(
