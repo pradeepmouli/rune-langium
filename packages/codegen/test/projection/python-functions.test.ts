@@ -38,6 +38,103 @@ function execute(source: string, cases: readonly { expression: string; data?: un
 }
 
 describe('complete Python function projections', () => {
+  it.each(['draft', 'rune'])('assigns through the allocated shortcut binding %s', async (alias) => {
+    const funcs = await linkedFunctions(`namespace python.shortcut_assignment
+type Foo:
+ amount int (0..1)
+ values int (0..*)
+func Build:
+ output: result Foo (1..1)
+ alias ${alias}: Foo {}
+ set ${alias} -> amount: 1
+ add ${alias} -> values: 2
+ add ${alias} -> values: 3
+ set result: ${alias}
+`);
+    const document = AstUtils.getDocument(funcs[0]!);
+    const python = generatePythonModule([document]);
+    const [typescript] = await generate([document], {
+      target: 'typescript',
+      strict: true,
+      typescript: { layout: 'single-file' }
+    });
+    const exports: Record<string, (data: object) => unknown> = {};
+    const javascript = ts.transpileModule(typescript!.content, {
+      compilerOptions: { target: ts.ScriptTarget.ES2022, module: ts.ModuleKind.CommonJS }
+    }).outputText;
+    new Function('require', 'exports', javascript)(createRequire(import.meta.url), exports);
+    const expected = JSON.parse(JSON.stringify(exports.Build!({})));
+    expect(expected).toEqual({ amount: 1, values: [2, 3] });
+    expect(
+      execute(python.code, [
+        { expression: `${python.bindings.get('python.shortcut_assignment.Build')}(data)`, data: {} }
+      ])
+    ).toEqual([{ value: expected }]);
+  });
+
+  it.each(['collection', 'metadata'])('retains %s facts when assigning through a shortcut', async (shape) => {
+    const metadata = shape === 'metadata' ? '\n  [metadata scheme]' : '';
+    const card = shape === 'collection' ? '1..*' : '1..1';
+    const funcs = await linkedFunctions(`namespace python.shortcut_shape
+annotation metadata:
+ scheme string (0..1)
+metaType scheme string
+type Foo:
+ amount int (0..1)
+ values int (0..*)
+${
+  shape === 'metadata'
+    ? `func Wrap:
+ inputs: original Foo (1..1)
+ output: result Foo (1..1)
+  [metadata scheme]
+ set result: original
+`
+    : ''
+}
+func Build:
+ inputs: original Foo (${card})
+ output: result Foo (${card})${metadata}
+ alias draft: ${shape === 'metadata' ? 'Wrap(original)' : 'original'}
+ set draft -> amount: 1
+ add draft -> values: 2
+ add draft -> values: 3
+ set result: draft
+`);
+    const document = AstUtils.getDocument(funcs[0]!);
+    const python = generatePythonModule([document]);
+    const [typescript] = await generate([document], {
+      target: 'typescript',
+      strict: true,
+      typescript: { layout: 'single-file' }
+    });
+    const exports: Record<string, (data: object) => unknown> = {};
+    const javascript = ts.transpileModule(typescript!.content, {
+      compilerOptions: { target: ts.ScriptTarget.ES2022, module: ts.ModuleKind.CommonJS }
+    }).outputText;
+    new Function('require', 'exports', javascript)(createRequire(import.meta.url), exports);
+    const original =
+      shape === 'collection'
+        ? [
+            { amount: 0, values: [] },
+            { amount: 7, values: [8] }
+          ]
+        : { amount: 0, values: [] };
+    const expected =
+      shape === 'collection'
+        ? [
+            { amount: 1, values: [2, 3] },
+            { amount: 7, values: [8] }
+          ]
+        : { value: { amount: 1, values: [2, 3] }, meta: {} };
+    expect(JSON.parse(JSON.stringify(exports.Build!({ original: structuredClone(original) })))).toEqual(expected);
+    expect(
+      execute(python.code, [
+        { expression: `${python.bindings.get('python.shortcut_shape.Build')}(data)`, data: { original } }
+      ])
+    ).toEqual([{ value: expected }]);
+  });
+
   it.each(['scheme', 'reference'])('preserves absence at %s metadata call and constructor boundaries', async (kind) => {
     const funcs = await linkedFunctions(`namespace python.absence
 annotation metadata:

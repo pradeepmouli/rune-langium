@@ -235,6 +235,17 @@ provenance. Python `to-int` retains negative zero from numeric and string inputs
 including its reciprocal sign. Both had failing runtime comparisons before the
 fix; all 209 projection tests passed afterward.
 
+Shortcut assignments use the allocated Python local binding as their root.
+Shared assignment extraction derives shortcut collection and metadata facts from
+the existing expression helpers, keeping TypeScript and Python traversal aligned.
+Four executable parity regressions cover ordinary and reserved names, collection
+roots and metadata roots created by emitted functions. Removing root registration
+fails all four; removing shared root facts fails both shape regressions. Restored
+code passed 141 Python function tests and 25 Studio workspace/projection/scope
+tests. The final codegen suite passed 2,232 tests, with the existing one skip and
+eight todo cases; the corpus strictly compiled 132 TypeScript files. Workspace
+type checks, lint and the full formatting check passed.
+
 Correctness fixes had failing behavioral regressions followed by passing ones; fixture provenance was reviewed separately.
 The standalone #577 broad gates passed 327 core, 1,536 visual-editor, 2,022 codegen
 and 1,654 Studio tests. Existing skips/todo cases were retained. The middle branch

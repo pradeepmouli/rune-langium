@@ -230,6 +230,7 @@ export function projectPythonFunction(func: RosettaFunction, context: PythonProj
     const text = renderPythonExpression(alias.expression, { ...renderContext, preserveMetadata: true });
     lines.push(`${local} = ${text}`);
     locals.set(alias, local);
+    roots.set(alias.name, local);
   }
   const check = (condition: Condition) => {
     const predicate = renderPythonExpression(condition.expression, {
