@@ -429,3 +429,8 @@ Verified parsed/serialized ownership, both file orders, same-named Data and unre
 - Root coverage: 2790 pass, one skip, eight todo; unchanged thresholds pass.
 - Core, visual-editor and Studio type checks, affected-source lint, and repository formatting pass.
 - User guide changes and `.resources` symlink remain unchanged.
+
+
+## Source-pane reveal
+
+The dispatch browser journey additionally exposed that Inspector's Open in Source button selected the file without revealing a hidden Source pane. The strengthened test failed with Source `aria-pressed=false`. Function and condition editors now use the existing `requestSourceFile` action, which selects the file and lets DockShell reveal Source. Both Chromium file-order journeys pass without a manual Source toggle. Studio types, 48 Explore checks (two existing skips), affected lint and formatting pass. Core/codegen/graph behavior is unchanged from the preceding validated commit.

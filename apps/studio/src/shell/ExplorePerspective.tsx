@@ -472,6 +472,7 @@ export const ExplorePerspective = withInstrumentation(
     const activeEditorFile = useExploreFileNavStore((s) => s.activeEditorFile);
     const setActiveEditorFile = useExploreFileNavStore((s) => s.setActiveEditorFile);
     const storeOpenFileInSource = useExploreFileNavStore((s) => s.openFileInSource);
+    const requestSourceFile = useExploreFileNavStore((s) => s.requestSourceFile);
     const [inspectorFocusNonce, setInspectorFocusNonce] = useState(0);
     const pendingRevealRef = useRef<{ line: number; filePath: string } | null>(null);
     const linkDocumentTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -2028,7 +2029,7 @@ export const ExplorePerspective = withInstrumentation(
           parseCurrent={selectedParseCurrent}
           onContentChange={handleSourceChange}
           onOpenSource={() => {
-            if (selectedSourceFilePath) openFileInSource(selectedSourceFilePath);
+            if (selectedSourceFilePath) requestSourceFile(selectedSourceFilePath);
           }}
           lspClient={lspClient}
           lspReady={lspReady}
@@ -2047,7 +2048,7 @@ export const ExplorePerspective = withInstrumentation(
         selectedParseCurrent,
         handleSourceChange,
         selectedSourceFilePath,
-        openFileInSource,
+        requestSourceFile,
         lspClient,
         lspReady,
         sourceLoadError
@@ -2079,7 +2080,7 @@ export const ExplorePerspective = withInstrumentation(
             parseCurrent={selectedParseCurrent}
             onContentChange={handleSourceChange}
             onOpenSource={() => {
-              if (selectedSourceFilePath) openFileInSource(selectedSourceFilePath);
+              if (selectedSourceFilePath) requestSourceFile(selectedSourceFilePath);
             }}
             lspClient={lspClient}
             lspReady={lspReady}
@@ -2100,7 +2101,7 @@ export const ExplorePerspective = withInstrumentation(
         selectedParseCurrent,
         handleSourceChange,
         selectedSourceFilePath,
-        openFileInSource,
+        requestSourceFile,
         lspClient,
         lspReady,
         sourceLoadError,

@@ -94,7 +94,7 @@ func Compute(kind: Kind -> Cash):
     await expect(dialog.getByTestId('text-editor')).toContainText('amount + 10');
     await dialog.getByRole('button', { name: 'Cancel', exact: true }).click();
     await implementation.getByRole('button', { name: 'Open in Source', exact: true }).click();
-    await page.getByRole('button', { name: 'Source', exact: true }).click();
+    await expect(page.getByRole('button', { name: 'Source', exact: true })).toHaveAttribute('aria-pressed', 'true');
     await page.getByRole('button', { name: 'Inspector', exact: true }).click();
     const source = page.getByTestId('source-editor').filter({ visible: true }).locator('.cm-content');
     await source.press('ControlOrMeta+Home');
