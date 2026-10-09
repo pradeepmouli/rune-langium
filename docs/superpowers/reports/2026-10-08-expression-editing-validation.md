@@ -369,3 +369,13 @@ own and inherited key/template metadata through the canonical classifier.
 Both ownership cases pass after failing on the earlier shape; the complete
 codegen suite passed 2,272 tests (one existing skip/eight todos), with codegen
 types, build and scoped lint passing.
+
+The final master-target review exposed the legacy visual-editor draft validator's
+parenthesis approximation. It now calls core `parseExpression` before committing
+any operation. Ten new regressions failed before the repair: malformed balanced
+text and lexer errors are rejected, string/comment delimiters are accepted, and
+operation 1 edits preserve sibling operations and reparse after serialization.
+Invalid drafts retain their private text. Affected suites passed 59 tests and
+the complete visual-editor suite passed 1,547; package types/build, scoped lint
+and root formatting passed. Earlier assertions were updated to canonical parser
+diagnostics and serializer layout.

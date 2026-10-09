@@ -16,6 +16,7 @@
  * - S-07: Invalid name characters per Rune DSL identifier rules
  */
 
+import { parseExpression } from '@rune-langium/core';
 import type { TypeGraphNode, TypeGraphEdge, ValidationError } from '../types.js';
 
 // ---------------------------------------------------------------------------
@@ -195,11 +196,7 @@ export interface ExpressionValidationResult {
 }
 
 /**
- * Validate an expression string.
- *
- * This is a lightweight client-side check. Full parsing validation
- * runs in the web worker parse pipeline. This function performs basic
- * structural checks (balanced parentheses, non-empty).
+ * Validate expression syntax with the canonical Rune parser, without linking workspace symbols.
  *
  * @param expression - The expression text to validate.
  * @returns Validation result with error message if invalid.
@@ -209,20 +206,13 @@ export function validateExpression(expression: string): ExpressionValidationResu
     return { valid: false, error: 'Expression cannot be empty' };
   }
 
-  // Check balanced parentheses
-  let depth = 0;
-  for (const ch of expression) {
-    if (ch === '(') depth++;
-    if (ch === ')') depth--;
-    if (depth < 0) {
-      return { valid: false, error: 'Unbalanced parentheses: unexpected ")"' };
-    }
-  }
-  if (depth !== 0) {
-    return { valid: false, error: 'Unbalanced parentheses: missing ")"' };
-  }
-
-  return { valid: true };
+  const parsed = parseExpression(expression);
+  return parsed.hasErrors
+    ? {
+        valid: false,
+        error: parsed.lexerErrors[0]?.message ?? parsed.parserErrors[0]?.message ?? 'Invalid Rune expression'
+      }
+    : { valid: true };
 }
 
 // ---------------------------------------------------------------------------

@@ -21,6 +21,8 @@ import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { dirname, resolve } from 'node:path';
 import { parse } from '@rune-langium/core';
+import { renderModel } from '@rune-langium/codegen/rosetta';
+import { modelsToAst } from '../../src/adapters/model-to-ast.js';
 import { createEditorStore } from '../../src/store/editor-store.js';
 import { ExpressionBuilder } from '../../src/components/editors/expression-builder/ExpressionBuilder.js';
 import type { AnyGraphNode, TypeOption, EditorFormActions } from '../../src/types.js';
@@ -235,7 +237,7 @@ describe('FunctionForm', () => {
     fireEvent.change(textarea, { target: { value: '(trade -> price' } });
     fireEvent.blur(textarea);
 
-    expect(screen.getByText(/Unbalanced parentheses/)).toBeInTheDocument();
+    expect(screen.getByText(/expecting|unexpected/i)).toBeInTheDocument();
     expect(actions.updateExpression).not.toHaveBeenCalled();
   });
 
@@ -256,11 +258,11 @@ describe('FunctionForm', () => {
     // Produce error
     fireEvent.change(textarea, { target: { value: '(' } });
     fireEvent.blur(textarea);
-    expect(screen.getByText(/Unbalanced parentheses/)).toBeInTheDocument();
+    expect(screen.getByText(/expecting|unexpected/i)).toBeInTheDocument();
 
     // Resume typing — error should clear
     fireEvent.change(textarea, { target: { value: '(trade)' } });
-    expect(screen.queryByText(/Unbalanced parentheses/)).not.toBeInTheDocument();
+    expect(screen.queryByText(/expecting|unexpected/i)).not.toBeInTheDocument();
   });
 
   it('commits valid expression on blur', () => {
@@ -413,6 +415,39 @@ describe('FunctionForm', () => {
 });
 
 describe('FunctionForm operation locality', () => {
+  it.each([
+    { draft: 'foo +', valid: false },
+    { draft: '"("', valid: true }
+  ])('validates operation 1 draft $draft before serializing it', async ({ draft, valid }) => {
+    const parsed = await parse(`namespace test.operation_draft
+func Format:
+ output: result string (1..1)
+ set result: "first"
+ set result: "second"
+`);
+    expect(parsed.hasErrors).toBe(false);
+    const store = createEditorStore();
+    store.getState().loadModels(parsed.value);
+    const node = store.getState().nodes.find((entry) => entry.data.name === 'Format')!;
+    const before = (node.data as any).operations;
+    render(
+      <FunctionForm nodeId={node.id} meta={node.meta} data={node.data} availableTypes={[]} actions={store.getState()} />
+    );
+    const editor = screen.getByLabelText('Function operation 2');
+    fireEvent.change(editor, { target: { value: draft } });
+    fireEvent.blur(editor);
+    expect(editor).toHaveValue(draft);
+    const state = store.getState();
+    const after = (state.nodes.find((entry) => entry.id === node.id)!.data as any).operations;
+    expect(after[0]).toEqual(before[0]);
+    if (valid) expect(after[1].expression.text).toBe(draft);
+    else expect(after).toEqual(before);
+    const text = renderModel(modelsToAst(state.nodes, state.edges)[0]!);
+    expect((await parse(text)).hasErrors).toBe(false);
+    if (valid) expect(text).toContain(draft);
+    else expect(text).not.toContain(draft);
+  });
+
   it('editing operation 1 leaves operation 0 and sibling operations unchanged', async () => {
     const source = readFileSync(
       resolve(dirname(fileURLToPath(import.meta.url)), '../fixtures/function-multi-operation.rosetta'),
@@ -473,7 +508,7 @@ describe('FunctionForm operation locality', () => {
     expect(editors[0]).toHaveValue('(1');
     expect(actions.updateExpression).toHaveBeenCalledExactlyOnceWith('fn1', '42', 1);
     expect(actions.updateExpression).not.toHaveBeenCalledWith('fn1', '(1', 0);
-    expect(screen.getByText(/unbalanced/i)).toBeVisible();
+    expect(screen.getByText(/expecting|unexpected/i)).toBeVisible();
   });
 });
 
