@@ -48,7 +48,7 @@ vi.mock('@rune-langium/core', () => ({
       shared: {
         workspace: {
           LangiumDocumentFactory: { fromString: fromStringMock, fromModel: fromModelMock },
-          DocumentBuilder: { build: buildMock },
+          DocumentBuilder: { build: buildMock, update: vi.fn(async () => undefined) },
           LangiumDocuments: {
             addDocument: addDocumentMock,
             hasDocument: hasDocumentMock,
@@ -56,7 +56,7 @@ vi.mock('@rune-langium/core', () => ({
             deleteDocument: vi.fn(),
             all: { toArray: () => [] }
           },
-          IndexManager: { registerExports: registerExportsMock }
+          IndexManager: { registerExports: registerExportsMock, allElements: () => [], remove: vi.fn() }
         }
       }
     }

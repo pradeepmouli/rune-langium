@@ -3,8 +3,77 @@
 
 import { describe, it, expect } from 'vitest';
 import { dispatchWorkerRequest } from '../../src/workers/parser-worker.js';
+import { createParserWorkerHarness } from './parser-worker-harness.js';
 
 describe('expression scope snapshot ownership', () => {
+  it('removes deleted declarations from an unchanged owner’s scope', async () => {
+    const owner = 'namespace snapshot\nfunc Calc:\n output: out int (1..1)\n set out: 1';
+    const file = { name: 'file:///owner.rosetta', content: owner };
+    const request = {
+      type: 'expressionScope' as const,
+      id: 'deleted-scope',
+      uri: file.name,
+      name: 'Calc',
+      region: { from: owner.length - 1, to: owner.length }
+    };
+    const previous = await dispatchWorkerRequest({
+      ...request,
+      files: [
+        file,
+        {
+          name: 'file:///removed.rosetta',
+          content:
+            'namespace snapshot\ntype Cash:\n amount int (1..1)\nchoice RemovedChoice:\n Cash\nenum RemovedEnum:\n RemovedValue'
+        }
+      ]
+    });
+    if (previous.type !== 'expressionScopeResult') throw new Error('Unexpected response');
+    expect(previous.error).toBeUndefined();
+    expect(previous.entries).toContainEqual(expect.objectContaining({ name: 'RemovedChoice', kind: 'choice' }));
+    const removed = previous.entries.filter((entry) => entry.declarationId.startsWith('file:///removed.rosetta#'));
+    expect(removed.some((entry) => entry.kind === 'enum')).toBe(true);
+
+    const current = await dispatchWorkerRequest({ ...request, files: [file] });
+    if (current.type !== 'expressionScopeResult') throw new Error('Unexpected response');
+    expect(current.error).toBeUndefined();
+    expect(current.entries.filter((entry) => entry.declarationId.startsWith('file:///removed.rosetta#'))).toEqual([]);
+  });
+
+  it.each(['parseWorkspace', 'hydrate'] as const)(
+    'clears parsed and unmaterialized exports for an empty %s',
+    async (type) => {
+      const worker = createParserWorkerHarness();
+      await worker.send({
+        type: 'parseWorkspace',
+        id: 'old-parsed',
+        files: [{ name: 'file:///old.rosetta', content: 'namespace old\ntype OldParsed:\n value int (1..1)' }]
+      });
+      expect(worker.findExport('OldParsed')).toBeDefined();
+      await worker.send(type === 'hydrate' ? { type, id: 'empty', documents: [] } : { type, id: 'empty', files: [] });
+      expect(worker.findExport('OldParsed')).toBeUndefined();
+
+      await worker.send({
+        type: 'hydrate',
+        id: 'old-deferred',
+        documents: [
+          {
+            uri: 'file:///deferred.rosetta',
+            content: '',
+            serializedModel: worker.serializeSample('old', 'OldDeferred'),
+            exports: [{ name: 'OldDeferred', type: 'Data', path: '/elements@0' }]
+          }
+        ]
+      });
+      expect(worker.findExport('OldDeferred')).toBeDefined();
+      expect(worker.hasDeferredModel('file:///deferred.rosetta')).toBe(true);
+      await worker.send(
+        type === 'hydrate' ? { type, id: 'empty-deferred', documents: [] } : { type, id: 'empty-deferred', files: [] }
+      );
+      expect(worker.findExport('OldDeferred')).toBeUndefined();
+      expect(worker.hasDeferredModel('file:///deferred.rosetta')).toBe(false);
+    }
+  );
+
   it('keeps concurrent scope requests on their submitted source', async () => {
     const source = (input: string) =>
       `namespace snapshot\nfunc Calc:\n inputs: ${input} int (1..1)\n output: out int (1..1)\n set out: ${input} + 1`;

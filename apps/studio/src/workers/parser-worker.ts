@@ -308,21 +308,24 @@ const handleParse = withInstrumentation(
   }
 );
 
+async function resetWorkspace(): Promise<void> {
+  const documents = RuneDsl.shared.workspace.LangiumDocuments.all.toArray();
+  const indexedUris = new Map(
+    indexManager.allElements().map((description) => [description.documentUri.toString(), description.documentUri])
+  );
+  // The builder owns parsed-document cleanup; deferred stubs have no document.
+  await builder.update(
+    [],
+    documents.map((document) => document.uri)
+  );
+  for (const uri of indexedUris.values()) indexManager.remove(uri);
+  deferredModelJson.clear();
+}
+
 // See handleParse's comment above — exported via the grouped statement below.
 const handleParseWorkspace = withInstrumentation(
   async function handleParseWorkspace(req: ParseWorkspaceRequest): Promise<ParseWorkspaceResponse> {
     const errors: Record<string, string[]> = {};
-    if (req.files.length === 0) {
-      return {
-        type: 'parseWorkspaceResult',
-        id: req.id,
-        models: [],
-        parsedModels: [],
-        errors,
-        deferredExports: []
-      };
-    }
-
     try {
       const langiumDocs = RuneDsl.shared.workspace.LangiumDocuments;
       const userDocs: LangiumDocument<AstNode>[] = [];
@@ -330,15 +333,7 @@ const handleParseWorkspace = withInstrumentation(
       const parsedModels: Array<{ filePath: string; model: RosettaModel; serializedModelJson?: string }> = [];
       const deferredExports: DeferredExportEntry[] = [];
 
-      // Drop all corpus JSON from the previous workspace load.
-      deferredModelJson.clear();
-
-      // Clear previously registered documents (prevents "already present" collision).
-      if (langiumDocs.all) {
-        for (const doc of langiumDocs.all.toArray()) {
-          langiumDocs.deleteDocument(doc.uri);
-        }
-      }
+      await resetWorkspace();
 
       for (const file of req.files) {
         const uri = URI.parse(file.name);
@@ -533,21 +528,7 @@ const handleLinkDocument = withInstrumentation(
 
 async function handleHydrate(req: HydrateRequest): Promise<HydrateResponse> {
   try {
-    // Hydrate has REPLACEMENT semantics (mirror handleParseWorkspace's reset).
-    // Without this, switching/reloading workspaces leaves stale entries in
-    // deferredModelJson, the symbol index, and LangiumDocuments — and
-    // linkDocument can still resolve symbols for files that disappeared from
-    // the workspace. Reset state first, then register the new set.
-    const langiumDocs = RuneDsl.shared.workspace.LangiumDocuments;
-    if (langiumDocs.all) {
-      for (const doc of langiumDocs.all.toArray()) {
-        langiumDocs.deleteDocument(doc.uri);
-      }
-    }
-    for (const previousUri of deferredModelJson.keys()) {
-      indexManager.clearExports(URI.parse(previousUri));
-    }
-    deferredModelJson.clear();
+    await resetWorkspace();
 
     // Register each document using a single canonical URI for both the deferred-model
     // store and the symbol index, so deferredProvider.getModel() and registerExports()
