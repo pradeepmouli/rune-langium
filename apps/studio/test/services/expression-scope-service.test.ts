@@ -3,6 +3,7 @@
 
 import { afterEach, expect, it, vi } from 'vitest';
 import { getExpressionRegions } from '@rune-langium/core';
+import { makeNodeId } from '@rune-langium/visual-editor/identifiers';
 import { createParserWorkerHarness } from '../workers/parser-worker-harness.js';
 import {
   _resetParserWorkerForTests,
@@ -31,6 +32,9 @@ it.each([false, true])('opens current builder scope after router fallback with s
   const file = createWorkspaceFile(
     'scope.rosetta',
     `namespace browser.scope
+type Calculate:
+ amount int (1..1)
+ condition Positive: amount > 0
 func Calculate:
  inputs: factor number (1..1)
  output: calculated number (1..1)
@@ -66,7 +70,12 @@ func CurrentDependency:
   const owner = parsed.models[0]!.elements.find((node) => node.$type === 'RosettaFunction')!;
   if (owner.$type !== 'RosettaFunction') throw new Error('fixture owner');
   const region = getExpressionRegions(owner)[0]!.region;
-  const scope = await requestExpressionScope(file.path, owner.name, region, files);
+  const scope = await requestExpressionScope(
+    file.path,
+    makeNodeId('browser.scope', owner.name, owner.$type),
+    region,
+    files
+  );
   expect(scope).toContainEqual(expect.objectContaining({ name: 'factor', kind: 'input' }));
   expect(scope).toContainEqual(expect.objectContaining({ name: 'calculated', kind: 'output' }));
   expect(scope).toContainEqual(
@@ -74,7 +83,18 @@ func CurrentDependency:
   );
   expect(scope.map((entry) => entry.name)).not.toContain('StaleDependency');
   expect(scope.map((entry) => entry.name)).not.toContain('amount');
-  await expect(requestExpressionScope(file.path, owner.name, { from: 0, to: 1 }, files)).rejects.toThrow(
-    'source changed'
+  const data = parsed.models[0]!.elements.find((node) => node.$type === 'Data')!;
+  if (data.$type !== 'Data') throw new Error('fixture Data');
+  const dataScope = await requestExpressionScope(
+    file.path,
+    makeNodeId('browser.scope', data.name, data.$type),
+    getExpressionRegions(data)[0]!.region,
+    files
   );
+  expect(dataScope).toContainEqual(expect.objectContaining({ name: 'amount', kind: 'attribute' }));
+  expect(dataScope.map((entry) => entry.name)).not.toContain('factor');
+  await expect(requestExpressionScope(file.path, owner.name, region, files)).rejects.toThrow('owner is unavailable');
+  await expect(
+    requestExpressionScope(file.path, makeNodeId('browser.scope', owner.name, owner.$type), { from: 0, to: 1 }, files)
+  ).rejects.toThrow('source changed');
 });

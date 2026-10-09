@@ -21,6 +21,7 @@ import { requestCodegenDownload } from './codegen-download-client.js';
 import { sanitizeDownloadFilename } from './export.js';
 import { OperationTimeoutError, withAbortTimeout } from './with-abort-timeout.js';
 import { EmptyFileSystem } from 'langium';
+import { nameFromNodeId, kindFromNodeId } from '@rune-langium/visual-editor/identifiers';
 import type { CuratedSerializedDocument } from '@rune-langium/curated-schema';
 import { CURATED_MODEL_IDS } from '@rune-langium/curated-schema';
 import type { CachedFile } from '../types/model-types.js';
@@ -971,7 +972,7 @@ export const parseWorkspaceViaRouter = withInstrumentation(
 export const requestExpressionScope = withInstrumentation(
   async function requestExpressionScope(
     uri: string,
-    name: string,
+    nodeId: string,
     region: SourceRegion,
     files?: readonly WorkspaceFile[]
   ): Promise<ExpressionScopeEntry[]> {
@@ -987,7 +988,8 @@ export const requestExpressionScope = withInstrumentation(
       type: 'expressionScope',
       id: String(++requestId),
       uri: pathToUri(uri),
-      name,
+      name: nameFromNodeId(nodeId),
+      kind: kindFromNodeId(nodeId),
       region,
       files: snapshot
     });

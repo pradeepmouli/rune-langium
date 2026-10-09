@@ -2009,7 +2009,7 @@ export const ExplorePerspective = withInstrumentation(
           dependencySnapshot={files}
           parsed={selectedParsedModel}
           loadScope={(region) =>
-            requestExpressionScope(selectedExpressionFile!.path, nameFromNodeId(props.nodeId), region, files).then(
+            requestExpressionScope(selectedExpressionFile!.path, props.nodeId, region, files).then(
               expressionScopeFromEntries
             )
           }
@@ -2060,12 +2060,9 @@ export const ExplorePerspective = withInstrumentation(
             dependencySnapshot={files}
             parsed={selectedParsedModel}
             loadScope={(region) =>
-              requestExpressionScope(
-                selectedExpressionFile!.path,
-                nameFromNodeId(props.target!.nodeId),
-                region,
-                files
-              ).then(expressionScopeFromEntries)
+              requestExpressionScope(selectedExpressionFile!.path, props.target!.nodeId, region, files).then(
+                expressionScopeFromEntries
+              )
             }
             documents={expressionDocuments}
             parseCurrent={selectedParseCurrent}

@@ -7,6 +7,7 @@ import {
   isRosettaFunction,
   getFunctionImplementationRegion,
   getExpressionRegions,
+  findExpressionOwner,
   serializeRuneModel,
   createRuneDslServices
 } from '../../src/index.js';
@@ -28,6 +29,18 @@ const implementation = `
 const neighbor = '\n\nfunc Neighbor:\n  output:\n    result int (1..1)\n  set result: 7\n';
 
 describe('source regions', () => {
+  it('resolves same-named owners by kind and rejects ambiguous legacy identities', async () => {
+    const { value } = await parse(
+      'namespace test\ntype Shared:\n amount int (1..1)\nfunc Shared:\n output: out int (1..1)\n set out: 1'
+    );
+    expect(findExpressionOwner(value, { name: 'Shared', kind: 'Data' })?.$type).toBe('Data');
+    expect(findExpressionOwner(value, { name: 'Shared', kind: 'RosettaFunction' })?.$type).toBe('RosettaFunction');
+    expect(findExpressionOwner(value, { name: 'Shared' })).toBeUndefined();
+    expect(findExpressionOwner(value, { name: 'Shared', kind: 'Choice' })).toBeUndefined();
+    expect(findExpressionOwner(value, { name: 'Missing' })).toBeUndefined();
+    expect(findExpressionOwner({ elements: [value.elements[1]!] }, { name: 'Shared' })?.$type).toBe('RosettaFunction');
+  });
+
   it('does not skip a body placed on the same line as its signature', async () => {
     const source =
       'namespace test.regions\nversion "test"\nfunc Compact: output: result int (1..1) set result: 1' + neighbor;

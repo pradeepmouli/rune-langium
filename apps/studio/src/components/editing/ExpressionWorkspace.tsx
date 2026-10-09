@@ -5,10 +5,12 @@
 import { useEffect, useState, useRef } from 'react';
 import type { EditorView } from '@codemirror/view';
 import { isolateHistory } from '@codemirror/commands';
-import { nameFromNodeId, type ExpressionEditorSlotProps, type FunctionScope } from '@rune-langium/visual-editor';
+import type { ExpressionEditorSlotProps, FunctionScope } from '@rune-langium/visual-editor';
+import { nameFromNodeId, kindFromNodeId } from '@rune-langium/visual-editor/identifiers';
 import {
   getFunctionImplementationRegion,
   getExpressionRegions,
+  findExpressionOwner,
   type RosettaFunction,
   type Data,
   type Dehydrated,
@@ -91,11 +93,7 @@ export const ExpressionWorkspace = withInstrumentation(
       if (!file || file.sourceLoaded === false) return;
       const owner =
         parsed && parseCurrent
-          ? parsed.model.elements.find(
-              (element) =>
-                (element.$type === 'RosettaFunction' || element.$type === 'Data') &&
-                element.name === nameFromNodeId(nodeId)
-            )
+          ? findExpressionOwner(parsed.model, { name: nameFromNodeId(nodeId), kind: kindFromNodeId(nodeId) })
           : readOnly
             ? sourceOwner
             : undefined;
@@ -144,10 +142,7 @@ export const ExpressionWorkspace = withInstrumentation(
     );
     const captureTarget = () => {
       if (!active || !file || !parsed || !parseCurrent || readOnly || file.readOnly || active.readOnly) return;
-      const owner = parsed.model.elements.find(
-        (element) =>
-          (element.$type === 'RosettaFunction' || element.$type === 'Data') && element.name === nameFromNodeId(nodeId)
-      );
+      const owner = findExpressionOwner(parsed.model, { name: nameFromNodeId(nodeId), kind: kindFromNodeId(nodeId) });
       if (!owner || (owner.$type !== 'RosettaFunction' && owner.$type !== 'Data')) return;
       const entries = getExpressionRegions(owner);
       const expression = target
