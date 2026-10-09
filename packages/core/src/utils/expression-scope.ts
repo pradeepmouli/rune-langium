@@ -5,6 +5,7 @@ import { AstUtils } from 'langium';
 import {
   isRosettaFunction,
   isRosettaExternalFunction,
+  isRosettaRule,
   isAttribute,
   isShortcutDeclaration,
   type RosettaExpression
@@ -21,6 +22,8 @@ export interface ExpressionScopeEntry {
   cardinality?: string;
   argumentCount?: number;
 }
+
+const callableTypes = new Set(['RosettaFunction', 'RosettaExternalFunction', 'RosettaRule']);
 
 /** Describe the existing language-service scope at an expression, without a second resolver. */
 export function getExpressionScope(expression: RosettaExpression, services: RuneDslServices): ExpressionScopeEntry[] {
@@ -43,9 +46,7 @@ export function getExpressionScope(expression: RosettaExpression, services: Rune
       description,
       node:
         description.node ??
-        (description.type === 'RosettaFunction' || description.type === 'RosettaExternalFunction'
-          ? services.references.Linker.loadAstNode(description)
-          : undefined)
+        (callableTypes.has(description.type) ? services.references.Linker.loadAstNode(description) : undefined)
     }))
     .toArray();
   const owner = AstUtils.getContainerOfType(expression, isRosettaFunction);
@@ -80,8 +81,7 @@ export function getExpressionScope(expression: RosettaExpression, services: Rune
           : signature && getFunctionInputs(signature).includes(node)
             ? 'input'
             : 'attribute';
-    } else if (description.type === 'RosettaFunction' || description.type === 'RosettaExternalFunction')
-      kind = 'callable';
+    } else if (callableTypes.has(description.type)) kind = 'callable';
     else if (description.type === 'RosettaEnumValue') kind = 'enum';
     else if (description.type === 'Choice') kind = 'choice';
     else continue;
@@ -96,7 +96,9 @@ export function getExpressionScope(expression: RosettaExpression, services: Rune
         ? { argumentCount: getFunctionInputs(node, new Set(), declarations).length }
         : node && isRosettaExternalFunction(node)
           ? { argumentCount: node.parameters.length }
-          : {})
+          : node && isRosettaRule(node)
+            ? { argumentCount: node.input ? 1 : 0 }
+            : {})
     });
   }
   return entries;

@@ -434,3 +434,11 @@ Verified parsed/serialized ownership, both file orders, same-named Data and unre
 ## Source-pane reveal
 
 The dispatch browser journey additionally exposed that Inspector's Open in Source button selected the file without revealing a hidden Source pane. The strengthened test failed with Source `aria-pressed=false`. Function and condition editors now use the existing `requestSourceFile` action, which selects the file and lets DockShell reveal Source. Both Chromium file-order journeys pass without a manual Source toggle. Studio types, 48 Explore checks (two existing skips), affected lint and formatting pass. Core/codegen/graph behavior is unchanged from the preceding validated commit.
+
+## Rule callables in Builder scope
+
+The next review found that the scope adapter omitted reporting and eligibility rules even though the language service supplied them. A deferred rule-only file and an imported rule call through the real parser worker both reproduced the omission. One callable-kind set now controls materialization and inclusion; rule entries read their zero-or-one argument count from the AST's optional input. No additional resolver or worker approximation is introduced.
+
+Core's full suite passes 346 tests, including 12 expression-scope cases. The real Studio scope service passes seven cases covering both rule kinds with and without inputs. Deferred rule inspection loads the file exactly once and leaves unrelated Data stubs deferred. Workspace type checks and affected lint pass.
+
+At the preceding Source-pane commit, main CI passed tests and coverage; its delayed schema HMR probe failed once while the same local two-case probe and the prior full CI run passed. The rule-scope commit receives a fresh complete CI run, retaining the existing HMR timing and accessibility gates.

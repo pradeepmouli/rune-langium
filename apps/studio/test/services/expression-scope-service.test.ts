@@ -21,6 +21,55 @@ afterEach(() => {
   vi.unstubAllGlobals();
 });
 
+it('offers imported reporting and eligibility rules through the parser worker', async () => {
+  const harness = createParserWorkerHarness();
+  class HarnessWorker extends EventTarget {
+    postMessage(request: WorkerRequest) {
+      void harness.send(request).then((data) => this.dispatchEvent(new MessageEvent('message', { data })));
+    }
+    terminate() {}
+  }
+  vi.stubGlobal('Worker', HarnessWorker);
+  vi.stubGlobal('fetch', vi.fn().mockRejectedValue(new Error('offline')));
+  const rules = createWorkspaceFile(
+    'rules.rosetta',
+    `namespace browser.rules
+eligibility rule IsPresent from int: item exists
+reporting rule ReadAmount from int: item
+eligibility rule AlwaysEligible: True
+reporting rule ConstantFlag: True
+`
+  );
+  const file = createWorkspaceFile(
+    'scope.rosetta',
+    `namespace browser.scope
+import browser.rules.*
+func Use:
+ inputs: amount int (1..1)
+ output: result int (1..1)
+ set result: ReadAmount(amount)
+`
+  );
+  const files = [file, rules];
+  const parsed = await parseWorkspaceFiles(files);
+  const owner = parsed.models[0]!.elements[0]!;
+  if (owner.$type !== 'RosettaFunction') throw new Error('fixture function');
+  const scope = await requestExpressionScope(
+    file.path,
+    makeNodeId('browser.scope', owner.name, owner.$type),
+    getExpressionRegions(owner)[0]!.region,
+    files
+  );
+  for (const [name, argumentCount] of [
+    ['IsPresent', 1],
+    ['ReadAmount', 1],
+    ['AlwaysEligible', 0],
+    ['ConstantFlag', 0]
+  ] as const) {
+    expect(scope).toContainEqual(expect.objectContaining({ name, kind: 'callable', argumentCount }));
+  }
+});
+
 it('opens the dispatch base Builder scope through the parser worker', async () => {
   const harness = createParserWorkerHarness();
   class HarnessWorker extends EventTarget {
