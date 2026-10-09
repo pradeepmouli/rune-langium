@@ -96,7 +96,7 @@ import {
 import { Maximize2, LayoutGrid, Network } from 'lucide-react';
 import { useStudioToast } from '../components/StudioToastProvider.js';
 import { DockShell } from './DockShell.js';
-import { linkDocument, requestExpressionScope } from '../services/workspace.js';
+import { isUserWorkspaceFile, linkDocument, requestExpressionScope } from '../services/workspace.js';
 import { useLspDiagnosticsBridge } from '../hooks/useLspDiagnosticsBridge.js';
 import { useDiagnosticsStore } from '../store/diagnostics-store.js';
 import { CodePreviewPanel } from '../components/CodePreviewPanel.js';
@@ -985,14 +985,17 @@ export const ExplorePerspective = withInstrumentation(
     const sourceChangeRef = useLatestRef(handleSourceChange);
 
     const namespaceToFile = useMemo(() => {
+      const writablePaths = new Set(files.filter(isUserWorkspaceFile).map((file) => file.path));
       const map = new Map<string, string>();
       for (const entry of resolvedModelFiles) {
         const model = entry.model as { name?: unknown };
         const ns = namespaceFromModelName(model.name) ?? 'unknown';
+        const existingPath = map.get(ns);
+        if (existingPath && writablePaths.has(existingPath) && !writablePaths.has(entry.filePath)) continue;
         map.set(ns, entry.filePath);
       }
       return map;
-    }, [resolvedModelFiles]);
+    }, [resolvedModelFiles, files]);
 
     // Invert namespaceToFile against the current file content so the CST-reuse
     // serializer has the original source text to slice for clean subtrees.

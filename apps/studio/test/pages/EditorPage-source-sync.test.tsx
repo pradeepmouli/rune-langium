@@ -241,26 +241,31 @@ describe('EditorPage — Structure-mode source sync (regression fix/inspector-so
     cleanup();
   });
 
-  it('preserves read-only files sharing a namespace during a user edit', async () => {
+  it.each([
+    ['readOnly', false],
+    ['readOnly', true],
+    ['refOnly', false],
+    ['refOnly', true]
+  ] as const)('syncs edits with %s files in the same namespace (reference first=%s)', async (flag, referenceFirst) => {
     const referenceSources = [
-      'namespace reference\ntype First:\n value int (1..1)\n',
-      'namespace reference\ntype Second:\n value string (1..1)\n'
+      `namespace ${NS}\ntype First:\n value int (1..1)\n`,
+      `namespace ${NS}\ntype Second:\n value string (1..1)\n`
     ];
     const user = await parse(ROSETTA_SOURCE, `inmemory:///${FILE_PATH}`);
     const references = await Promise.all(
       referenceSources.map((source, index) => parse(source, `system://reference/${index}.rosetta`))
     );
-    const files = [
-      { name: FILE_PATH, path: FILE_PATH, content: ROSETTA_SOURCE, dirty: false },
-      ...referenceSources.map((content, index) => ({
-        name: `${index}.rosetta`,
-        path: `system://reference/${index}.rosetta`,
-        content,
-        dirty: false,
-        readOnly: true
-      }))
-    ];
-    const models = [user.value, ...references.map(({ value }) => value)];
+    const referenceFiles = referenceSources.map((content, index) => ({
+      name: `${index}.rosetta`,
+      path: `system://reference/${index}.rosetta`,
+      content,
+      dirty: false,
+      [flag]: true
+    }));
+    const userFile = { name: FILE_PATH, path: FILE_PATH, content: ROSETTA_SOURCE, dirty: false };
+    const referenceModels = references.map(({ value }) => value);
+    const files = referenceFirst ? [...referenceFiles, userFile] : [userFile, ...referenceFiles];
+    const models = referenceFirst ? [...referenceModels, user.value] : [user.value, ...referenceModels];
     const onFilesChange = vi.fn();
     renderEditorPage({
       models,
@@ -275,9 +280,13 @@ describe('EditorPage — Structure-mode source sync (regression fix/inspector-so
     act(() => useEditorStore.getState().updateCardinality(order.id, 'quantity', '(0..*)'));
     await waitFor(() => expect(onFilesChange).toHaveBeenCalled());
     for (const [updated] of onFilesChange.mock.calls) {
-      expect(updated.slice(1)).toEqual(files.slice(1));
+      for (const reference of referenceFiles) {
+        expect(updated.find((file: { path: string }) => file.path === reference.path)).toBe(reference);
+      }
     }
-    expect(onFilesChange.mock.calls.at(-1)![0][0].content).toContain('0..*');
+    const updatedUser = onFilesChange.mock.calls.at(-1)![0].find((file: { path: string }) => file.path === FILE_PATH);
+    expect(updatedUser.dirty).toBe(true);
+    expect(updatedUser.content).toMatch(/quantity\s+int\s+\(?0\.\.\*\)?/);
   });
 
   it('fires onFilesChange with changed content when an attribute is edited in Structure mode (graph pane NOT mounted)', async () => {
