@@ -55,16 +55,23 @@ export function getFunctionImplementationRegion(
 ): SourceRegion {
   const declaration = getNodeSourceRegion(func);
   const statements = [...func.shortcuts, ...func.conditions, ...func.operations, ...func.postConditions];
-  if (statements.length === 0) return { from: declaration.to, to: declaration.to };
-  const first = getNodeSourceRegion(statements[0]!);
+  const trailingComments = source.slice(declaration.to).match(/^(?:\s*(?:\/\*[\s\S]*?\*\/|\/\/[^\r\n]*))+/)?.[0];
+  const to = declaration.to + (trailingComments?.length ?? 0);
+  const firstFrom = statements.length ? getNodeSourceRegion(statements[0]!).from : to;
   const afterHeader = (end: number): SourceRegion => {
     const lineEnd = source.indexOf('\n', end);
-    return { from: lineEnd >= 0 && lineEnd < first.from ? lineEnd + 1 : first.from, to: declaration.to };
+    const sameLineEnd = lineEnd >= 0 ? Math.min(lineEnd, firstFrom) : firstFrom;
+    const comment = source.slice(end, sameLineEnd).search(/\/[/*]/);
+    return {
+      from: comment >= 0 ? end + comment : lineEnd >= 0 && lineEnd < firstFrom ? lineEnd + 1 : firstFrom,
+      to
+    };
   };
+  if (statements.length === 0) return afterHeader(declaration.to);
   if ('$cstNode' in func && func.$cstNode) {
     const headerLeaves = CstUtils.streamCst(func.$cstNode)
       .filter(isLeafCstNode)
-      .filter((leaf) => !leaf.hidden && leaf.end <= first.from)
+      .filter((leaf) => !leaf.hidden && leaf.end <= firstFrom)
       .toArray();
     const headerLeaf = headerLeaves[headerLeaves.length - 1];
     if (headerLeaf) {
@@ -75,12 +82,12 @@ export function getFunctionImplementationRegion(
     .$textRegion;
   const headerAssignments = Object.values(textRegion?.assignments ?? {})
     .flat()
-    .filter((range) => range.end <= first.from);
+    .filter((range) => range.end <= firstFrom);
   if (headerAssignments.length) {
     const headerEnd = Math.max(...headerAssignments.map((range) => range.end));
     return afterHeader(headerEnd);
   }
-  let from = source.lastIndexOf('\n', first.from - 1) + 1;
+  let from = source.lastIndexOf('\n', firstFrom - 1) + 1;
   while (from > declaration.from) {
     const previousEnd = from - 1;
     const previousStart = source.lastIndexOf('\n', previousEnd - 1) + 1;
@@ -88,7 +95,7 @@ export function getFunctionImplementationRegion(
     if (line && !line.startsWith('//')) break;
     from = previousStart;
   }
-  return { from, to: declaration.to };
+  return { from, to };
 }
 
 /** Root expressions in grammar order; indexes address their original owner arrays. */
