@@ -1277,14 +1277,21 @@ func ReadTokens:
     expect(execute(python.code, [{ expression: 'ReadTokens(data)', data: nested }])).toEqual([{ value: [7] }]);
   });
 
-  it('treats declared Data value fields as payloads, including aliases and arrays', async () => {
-    const funcs = await linkedFunctions(`namespace python.rawPayload
+  it.each(['own', 'inherited'])(
+    'treats Data value fields and %s type metadata as payloads, including aliases and arrays',
+    async (placement) => {
+      const funcs = await linkedFunctions(`namespace python.rawPayload
 annotation metadata:
  scheme string (0..1)
  reference string (0..1)
+ key string (0..1)
 metaType scheme string
 metaType reference string
-type Payload:
+metaType key string
+type Parent:
+ ${placement === 'inherited' ? '[metadata key]' : ''}
+type Payload extends Parent:
+ ${placement === 'own' ? '[metadata key]' : ''}
  value number (1..1)
  externalReference string (0..1)
 typeAlias PayloadAlias: Payload
@@ -1304,41 +1311,42 @@ func ReadMany:
  output: result number (0..*)
  set result: objects extract [value]
 `);
-    const doc = AstUtils.getDocument(funcs[0]!);
-    const module = generatePythonModule([doc]);
-    const data = { object: { value: 1, externalReference: 'ordinary field' } };
-    expect(
-      normalizePreviewInputs([doc], 'python.rawPayload.Read', data, {
-        field: (value) => ({ value }),
-        reference: (value) => ({ value })
-      })
-    ).toEqual({ object: { value: data.object } });
-    const envelope = { object: { value: data.object } };
-    expect(
-      normalizePreviewInputs([doc], 'python.rawPayload.Read', envelope, {
-        field: (value) => ({ value }),
-        reference: (value) => ({ value })
-      })
-    ).toEqual(envelope);
-    expect(
-      execute(module.code, [
-        { expression: `${module.bindings.get('python.rawPayload.Read')}(data)`, data },
-        { expression: `${module.bindings.get('python.rawPayload.Forward')}(data)`, data },
-        {
-          expression: `${module.bindings.get('python.rawPayload.Read')}(data)`,
-          data: { object: { value: data.object } }
-        },
-        {
-          expression: `${module.bindings.get('python.rawPayload.Read')}(dict(object=rune.toField(data["object"])))`,
-          data
-        },
-        {
-          expression: `${module.bindings.get('python.rawPayload.ReadMany')}(data)`,
-          data: { objects: [{ value: 0 }, { value: 2 }] }
-        }
-      ])
-    ).toEqual([{ value: 1 }, { value: 1 }, { value: 1 }, { value: 1 }, { value: [0, 2] }]);
-  });
+      const doc = AstUtils.getDocument(funcs[0]!);
+      const module = generatePythonModule([doc]);
+      const data = { object: { value: 1, externalReference: 'ordinary field', meta: { externalKey: 'payload-key' } } };
+      expect(
+        normalizePreviewInputs([doc], 'python.rawPayload.Read', data, {
+          field: (value) => ({ value }),
+          reference: (value) => ({ value })
+        })
+      ).toEqual({ object: { value: data.object } });
+      const envelope = { object: { value: data.object } };
+      expect(
+        normalizePreviewInputs([doc], 'python.rawPayload.Read', envelope, {
+          field: (value) => ({ value }),
+          reference: (value) => ({ value })
+        })
+      ).toEqual(envelope);
+      expect(
+        execute(module.code, [
+          { expression: `${module.bindings.get('python.rawPayload.Read')}(data)`, data },
+          { expression: `${module.bindings.get('python.rawPayload.Forward')}(data)`, data },
+          {
+            expression: `${module.bindings.get('python.rawPayload.Read')}(data)`,
+            data: { object: { value: data.object } }
+          },
+          {
+            expression: `${module.bindings.get('python.rawPayload.Read')}(dict(object=rune.toField(data["object"])))`,
+            data
+          },
+          {
+            expression: `${module.bindings.get('python.rawPayload.ReadMany')}(data)`,
+            data: { objects: [{ value: 0 }, { value: 2 }] }
+          }
+        ])
+      ).toEqual([{ value: 1 }, { value: 1 }, { value: 1 }, { value: 1 }, { value: [0, 2] }]);
+    }
+  );
 
   it('normalizes raw metadata inputs before choosing a dispatch branch', async () => {
     const funcs = await linkedFunctions(`namespace python.dispatchRaw

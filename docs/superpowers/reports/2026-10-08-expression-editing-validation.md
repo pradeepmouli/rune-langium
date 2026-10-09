@@ -362,3 +362,10 @@ and the 32 Studio editor/projection/scope tests passed. Codegen types, build,
 scoped lint, root formatting and generated Python runtime freshness passed.
 The previous 345-test core run and 132-file strict TypeScript corpus remain
 applicable; this repair does not change core linking or TypeScript emission.
+
+A proactive CDM-style regression exposed raw Data payloads that combine a
+`value` field with type-level key metadata. Payload shape facts now include
+own and inherited key/template metadata through the canonical classifier.
+Both ownership cases pass after failing on the earlier shape; the complete
+codegen suite passed 2,272 tests (one existing skip/eight todos), with codegen
+types, build and scoped lint passing.

@@ -1,10 +1,10 @@
 // SPDX-License-Identifier: MIT
 // Copyright (c) 2026 Pradeep Mouli
 
-import { isAttribute, isChoiceOption, type TypeCall } from '@rune-langium/core';
+import { isAttribute, isChoiceOption, isData, type Data, type Choice, type TypeCall } from '@rune-langium/core';
 import { isScalarTypeCall, resolveTypeCallTarget, type TypeIndexLookup } from '../emit/type-ref-resolver.js';
 import { featureName, typeFeatures } from './navigation.js';
-import { fieldMetadataKind } from './metadata-runtime.js';
+import { fieldMetadataKind, hasTypeMetadata } from './metadata-runtime.js';
 
 export type MetadataPayloadShape = Readonly<Record<string, 'scalar' | 'object' | 'array'>> | null;
 
@@ -25,8 +25,8 @@ export function metadataPayloadShape(call: TypeCall | undefined, index: TypeInde
     ''
   );
 
-  function fields(node: Parameters<typeof typeFeatures>[0]): MetadataPayloadShape {
-    return Object.fromEntries(
+  function fields(node: Data | Choice): MetadataPayloadShape {
+    const shape: Record<string, 'scalar' | 'object' | 'array'> = Object.fromEntries(
       typeFeatures(node)
         .filter((field) => isAttribute(field) || isChoiceOption(field))
         .map((field) => [
@@ -38,6 +38,14 @@ export function metadataPayloadShape(call: TypeCall | undefined, index: TypeInde
               : 'scalar'
         ])
     );
+    const seen = new Set<Data | Choice>();
+    let current: Data | Choice | undefined = node;
+    while (current && !seen.has(current)) {
+      seen.add(current);
+      if (hasTypeMetadata(current)) shape.meta ??= 'object';
+      current = isData(current) ? current.superType?.ref : undefined;
+    }
+    return shape;
   }
 }
 
