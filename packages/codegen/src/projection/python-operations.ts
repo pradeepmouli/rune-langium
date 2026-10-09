@@ -33,7 +33,11 @@ export function pythonNormalize(
 ): string {
   if (input === target) return value;
   if (!target) return pythonUnwrap(value, input);
-  return `rune.to${target === 'reference' ? 'Reference' : 'Field'}(${value}, ${pyString(input ?? 'value')})`;
+  return pythonBind(
+    value,
+    '_rune_value',
+    `None if _rune_value is None else rune.to${target === 'reference' ? 'Reference' : 'Field'}(_rune_value, ${pyString(input ?? 'value')})`
+  );
 }
 export function pythonArgument(
   value: string,

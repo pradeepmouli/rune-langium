@@ -2,6 +2,8 @@
 // Copyright (c) 2026 Pradeep Mouli
 
 import { spawnSync } from 'node:child_process';
+import { createRequire } from 'node:module';
+import ts from 'typescript-classic';
 import { beforeAll, describe, expect, it } from 'vitest';
 import { AstUtils, URI, type LangiumDocument } from 'langium';
 import {
@@ -20,6 +22,7 @@ import { referenceCases, referenceFiles } from '../helpers/cdm-reference.js';
 import { linkedFunctions } from './python-test-utils.js';
 import { normalizePreviewInputs } from '../../src/preview-schema.js';
 import { PYTHON_RUNTIME_SOURCE } from '../../src/projection/python-runtime.js';
+import { generate } from '../../src/export.js';
 
 function execute(source: string, cases: readonly { expression: string; data?: unknown }[]) {
   const result = spawnSync(
@@ -35,6 +38,71 @@ function execute(source: string, cases: readonly { expression: string; data?: un
 }
 
 describe('complete Python function projections', () => {
+  it.each(['scheme', 'reference'])('preserves absence at %s metadata call and constructor boundaries', async (kind) => {
+    const funcs = await linkedFunctions(`namespace python.absence
+annotation metadata:
+ scheme string (0..1)
+ reference string (0..1)
+metaType scheme string
+metaType reference string
+type Holder:
+ wrapped number (0..1)
+  [metadata ${kind}]
+func Echo:
+ inputs: value number (0..1)
+  [metadata ${kind}]
+ output: result number (0..1)
+  [metadata ${kind}]
+ set result: value
+func Forward:
+ inputs: value number (0..1)
+ output: result number (0..1)
+  [metadata ${kind}]
+ set result: Echo(value)
+func Required:
+ inputs: value number (1..1)
+  [metadata ${kind}]
+ output: result number (1..1)
+ set result: value
+func RequireFromOptional:
+ inputs: value number (0..1)
+ output: result number (1..1)
+ set result: Required(value)
+func Create:
+ inputs: value number (0..1)
+ output: result Holder (1..1)
+ set result: Holder {wrapped: value}
+`);
+    const doc = AstUtils.getDocument(funcs[0]!);
+    const python = generatePythonModule([doc]);
+    const [typescript] = await generate([doc], {
+      target: 'typescript',
+      strict: true,
+      typescript: { layout: 'single-file' }
+    });
+    const exports: Record<string, (data: { value?: number }) => unknown> = {};
+    const js = ts.transpileModule(typescript!.content, {
+      compilerOptions: { target: ts.ScriptTarget.ES2022, module: ts.ModuleKind.CommonJS }
+    }).outputText;
+    new Function('require', 'exports', js)(createRequire(import.meta.url), exports);
+    expect(exports.Forward!({})).toBeUndefined();
+    const present = exports.Forward!({ value: 0 });
+    expect(present).toEqual(kind === 'scheme' ? { value: 0, meta: {} } : { value: 0 });
+    expect(() => exports.RequireFromOptional!({})).toThrow(/requires a value/);
+    expect((exports.Create!({}) as { wrapped?: unknown }).wrapped).toBeUndefined();
+    const name = (name: string) => python.bindings.get(`python.absence.${name}`)!;
+    const results = execute(python.code, [
+      { expression: `${name('Forward')}(data)`, data: {} },
+      { expression: `${name('Forward')}(data)`, data: { value: 0 } },
+      { expression: `${name('RequireFromOptional')}(data)`, data: {} },
+      { expression: `${name('Create')}(data)["wrapped"]`, data: {} }
+    ]);
+    expect(results[0]).toEqual({ value: null });
+    expect(results[1]).toEqual({ value: present });
+    expect(results[2]?.error).toMatch(/requires a value/);
+    expect(results[3]).toEqual({ value: null });
+  });
+
   it('keeps the equality namespace separate from declaration, output and alias names', async () => {
     const funcs = await linkedFunctions(`namespace python.runtime_names
 func rune:

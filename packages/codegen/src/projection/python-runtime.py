@@ -77,7 +77,7 @@ def rune_normalize_attribute(value, kind, many, normalize, scalar):
         result = _RuneMetadataValue(value)
         if result.get("value") is not None:
             result["value"] = normalize(result["value"])
-        if result.get("meta") == {}:
+        if result.get("meta") == {} and not isinstance(value, _RuneMetadataValue):
             result.pop("meta")
         return result
     normalized = normalize(value)
