@@ -1,13 +1,17 @@
 // SPDX-License-Identifier: FSL-1.1-ALv2
 // Copyright (c) 2026 Pradeep Mouli
 
-import type { FormPreviewSchema } from '@rune-langium/codegen/export';
+import type { FormPreviewSchema, GeneratedProjection, ProjectionSubject } from '@rune-langium/codegen/export';
+import { qualifiedNameFromNodeId } from '@rune-langium/visual-editor/identifiers';
 import {
   createInstanceGenerateSchemaMessage,
   isInstanceGenerateSchemaResultMessage,
   isInstanceGenerateSchemaStaleMessage,
   isPreviewExecuteErrorMessage,
-  isPreviewExecuteResultMessage
+  isPreviewExecuteResultMessage,
+  isProjectionResultMessage,
+  isProjectionErrorMessage,
+  type ProjectionRequest
 } from './codegen-service.js';
 import type { InstanceReadiness } from './instance-readiness.js';
 import { withInstrumentation } from './instrumentation/core.js';
@@ -15,6 +19,13 @@ import { withInstrumentation } from './instrumentation/core.js';
 export interface PreviewSessionClient {
   schema(typeFqn: string, signal: AbortSignal): Promise<FormPreviewSchema>;
   execute(functionFqn: string, inputs: Record<string, unknown>, signal: AbortSignal): Promise<unknown>;
+  project(
+    language: GeneratedProjection['language'],
+    subject: ProjectionSubject,
+    kind: ProjectionRequest['kind'],
+    source: string,
+    signal: AbortSignal
+  ): Promise<GeneratedProjection>;
   dispose(): void;
 }
 
@@ -60,6 +71,8 @@ export const createPreviewSessionClient = withInstrumentation(
       else if (isInstanceGenerateSchemaResultMessage(msg)) settle(msg.requestId, (entry) => entry.resolve(msg.schema));
       else if (isInstanceGenerateSchemaStaleMessage(msg))
         settle(msg.requestId, (entry) => entry.reject(new Error(msg.message)));
+      else if (isProjectionResultMessage(msg)) settle(msg.requestId, (entry) => entry.resolve(msg.projection));
+      else if (isProjectionErrorMessage(msg)) settle(msg.requestId, (entry) => entry.reject(new Error(msg.error)));
     }
     worker.addEventListener('message', onMessage as EventListener);
     function onWorkerFailure(): void {
@@ -114,6 +127,19 @@ export const createPreviewSessionClient = withInstrumentation(
       async execute(functionFqn, inputs, signal) {
         await readiness.ensure(functionFqn, signal);
         return request({ type: 'preview:execute', funcName: functionFqn, inputs }, signal, 120_000);
+      },
+      async project(language, subject, kind, source, signal) {
+        const filesRevision = await readiness.ensure(qualifiedNameFromNodeId(subject.nodeId), signal);
+        const message: ProjectionRequest = {
+          type: 'projection:generate',
+          requestId: '',
+          language,
+          subject,
+          kind,
+          source,
+          filesRevision
+        };
+        return request<GeneratedProjection>(message, signal, 120_000);
       },
       dispose() {
         if (disposed) return;

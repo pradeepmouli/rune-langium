@@ -67,6 +67,15 @@ describe('Phase 0 integration: workspace router → /api/parse handler', () => {
     expect(result.errors['broken.rune']!.length).toBeGreaterThan(0);
   });
 
+  it('keeps the requested source snapshot when callers mutate files during parsing', async () => {
+    const file = { name: 'snapshot.rosetta', content: SIMPLE_RUNE };
+    const pending = parseWorkspaceViaRouter([file]);
+    file.content = 'namespace changed\ntype Different:\n  value int (1..1)';
+    const result = await pending;
+    expect(result.parsedModels[0]!.source).toBe(SIMPLE_RUNE);
+    expect(result.models[0]!.name).toBe('integration.test');
+  });
+
   it('returns an empty hydrationState for an empty file list (no fallback needed)', async () => {
     // The studio's parseWorkspaceFiles calls /api/parse on every debounced
     // edit, including before any user file exists (fresh workspace). The

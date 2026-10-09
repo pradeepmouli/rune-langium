@@ -33,6 +33,8 @@ vi.mock('@codemirror/view', () => ({
     static updateListener = { of: vi.fn(() => []) };
     static domEventHandlers = vi.fn(() => []);
     static lineWrapping = [];
+    static editable = { of: vi.fn(() => []) };
+    static contentAttributes = { of: vi.fn(() => []) };
     constructor({ parent }: { parent?: Element }) {
       if (parent) parent.appendChild(this.dom);
     }
@@ -41,13 +43,7 @@ vi.mock('@codemirror/view', () => ({
   highlightActiveLine: vi.fn(() => []),
   drawSelection: vi.fn(() => [])
 }));
-vi.mock('@codemirror/state', () => ({
-  EditorState: { create: vi.fn(() => ({})), readOnly: { of: vi.fn(() => []) } },
-  Compartment: class {
-    of = vi.fn(() => []);
-    reconfigure = vi.fn(() => ({}));
-  }
-}));
+vi.mock('codemirror', () => ({ basicSetup: [] }));
 vi.mock('@codemirror/language', () => ({
   StreamLanguage: { define: vi.fn(() => []) },
   HighlightStyle: { define: vi.fn(() => ({})) },

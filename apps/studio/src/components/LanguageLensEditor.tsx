@@ -44,30 +44,14 @@
 import { useMemo, useState, useCallback } from 'react';
 import type { ExpressionEditorSlotProps } from '@rune-langium/visual-editor';
 import { parseExpression } from '@rune-langium/core';
-import type { RosettaExpression } from '@rune-langium/core';
 import { renderExpression, treesEquivalent } from '@rune-langium/codegen/rosetta';
-import { renderTs, parseTs, renderPy, parsePy } from '@rune-langium/codegen/lens';
-import type { LensResult } from '@rune-langium/codegen/lens';
 import { cn } from '@rune-langium/design-system/utils';
 import { Button } from '@rune-langium/design-system/ui/button';
-import { getTsWasmBytes } from '../lens/ts-wasm-asset.js';
-import { getPyWasmBytes } from '../lens/py-wasm-asset.js';
+import { FOREIGN_LENSES as LENSES } from '../lens/lens-descriptors.js';
 import { withInstrumentation } from '../services/instrumentation/core.js';
 
 type Language = 'rune' | 'typescript' | 'python';
 type ForeignLanguage = Exclude<Language, 'rune'>;
-
-interface LensDescriptor {
-  label: string;
-  render: (node: RosettaExpression) => string | null;
-  parse: (text: string, wasmBytes: Uint8Array) => Promise<LensResult>;
-  getWasmBytes: () => Promise<Uint8Array>;
-}
-
-const LENSES: Record<ForeignLanguage, LensDescriptor> = {
-  typescript: { label: 'TypeScript', render: renderTs, parse: parseTs, getWasmBytes: getTsWasmBytes },
-  python: { label: 'Python', render: renderPy, parse: parsePy, getWasmBytes: getPyWasmBytes }
-};
 
 export const LanguageLensEditor = withInstrumentation(
   function LanguageLensEditor({ value, onChange, onBlur, error }: ExpressionEditorSlotProps) {

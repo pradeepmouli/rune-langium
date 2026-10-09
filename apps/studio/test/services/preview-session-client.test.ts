@@ -20,6 +20,36 @@ function readiness(): InstanceReadiness {
 }
 
 describe('createPreviewSessionClient', () => {
+  it('projects from the acknowledged linked source and correlates replies', async () => {
+    const worker = new FakeWorker();
+    const ready = readiness();
+    const client = createPreviewSessionClient(worker as unknown as Worker, ready);
+    const subject = {
+      uri: 'file:///test.rosetta',
+      nodeId: 'test.Calculate#RosettaFunction',
+      region: { from: 30, to: 45 }
+    };
+    const result = client.project('typescript', subject, 'function', 'namespace test', new AbortController().signal);
+    await vi.waitFor(() => expect(worker.posted).toHaveLength(1));
+    expect(ready.ensure).toHaveBeenCalledWith('test.Calculate', expect.any(AbortSignal));
+    expect(worker.posted[0]).toMatchObject({
+      type: 'projection:generate',
+      language: 'typescript',
+      subject,
+      source: 'namespace test',
+      filesRevision: 1
+    });
+    const projection = {
+      language: 'typescript',
+      subject,
+      code: 'export function Calculate(): number { return 1; }',
+      sourceMap: [],
+      requiredHelpers: []
+    };
+    worker.reply({ type: 'projection:result', requestId: worker.posted[0].requestId, projection });
+    await expect(result).resolves.toEqual(projection);
+    client.dispose();
+  });
   it('keeps simultaneous execution replies correlated when they arrive in reverse order', async () => {
     const worker = new FakeWorker();
     const first = createPreviewSessionClient(worker as unknown as Worker, readiness());

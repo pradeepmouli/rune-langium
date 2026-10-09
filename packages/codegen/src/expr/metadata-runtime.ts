@@ -52,7 +52,7 @@ export function normalizeMetadataExpression(
   targetKind: FieldMetadataKind | undefined
 ): string {
   if (!targetKind || targetKind === sourceKind) return value;
-  const helper = targetKind === 'reference' ? 'runeToReference' : 'runeToField';
+  const helper = targetKind === 'reference' ? 'rune.toReference' : 'rune.toField';
   return `((value) => value == null ? undefined : ${helper}(value, ${JSON.stringify(sourceKind ?? 'value')}))(${value})`;
 }
 

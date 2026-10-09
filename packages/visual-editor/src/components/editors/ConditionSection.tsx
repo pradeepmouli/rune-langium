@@ -25,7 +25,7 @@
  * @module
  */
 
-import { useCallback, useMemo, useState } from 'react';
+import { useCallback, useMemo, useState, useId } from 'react';
 import type { ReactNode } from 'react';
 import { useFormContext } from 'react-hook-form';
 import { Plus, X, ChevronUp, ChevronDown } from 'lucide-react';
@@ -46,6 +46,8 @@ import { useEditorActionsContext } from '../forms/sections/EditorActionsContext.
 export type ConditionDisplay = ConditionDisplayInfo;
 
 export interface ConditionSectionProps {
+  nodeId?: string;
+  compact?: boolean;
   /** Label for this section (e.g. "Conditions", "Pre-Conditions"). */
   label?: string;
   /**
@@ -93,6 +95,8 @@ export interface ConditionSectionProps {
 // ---------------------------------------------------------------------------
 
 interface ConditionRowProps {
+  target?: ExpressionEditorSlotProps['target'];
+  sourceReadOnly?: boolean;
   condition: ConditionDisplayInfo;
   index: number;
   total: number;
@@ -104,6 +108,8 @@ interface ConditionRowProps {
 }
 
 function ConditionRow({
+  target,
+  sourceReadOnly,
   condition,
   index,
   total,
@@ -116,7 +122,12 @@ function ConditionRow({
   const [isExpanded, setIsExpanded] = useState(true);
 
   return (
-    <div data-slot="condition-row" className="border border-border rounded-md bg-card" role="listitem">
+    <div
+      data-slot="condition-row"
+      className="border border-border rounded-md bg-card"
+      role="group"
+      aria-label={condition.name || `Rule ${index + 1}`}
+    >
       {/* Header */}
       <div className="flex items-center gap-1.5 px-2 py-1.5 bg-muted/30 rounded-t-md">
         <button
@@ -204,7 +215,7 @@ function ConditionRow({
           )}
 
           {/* Expression */}
-          {readOnly ? (
+          {readOnly && !target ? (
             <pre className="studio-scroll text-xs font-mono bg-muted/50 rounded p-2 whitespace-pre-wrap overflow-auto max-h-40">
               {condition.expressionText || '(empty)'}
             </pre>
@@ -215,7 +226,9 @@ function ConditionRow({
               onBlur: () => {},
               error: null,
               placeholder: 'Condition expression...',
-              expressionAst: condition.expressionAst
+              expressionAst: condition.expressionAst,
+              target,
+              readOnly: sourceReadOnly ?? readOnly
             })
           ) : (
             <Textarea
@@ -309,6 +322,8 @@ function AddConditionForm({ onAdd, onCancel, showPostConditionToggle }: AddCondi
 // ---------------------------------------------------------------------------
 
 export function ConditionSection({
+  nodeId,
+  compact,
   label = 'Conditions',
   conditions: rawConditions,
   postConditions: rawPostConditions,
@@ -320,7 +335,9 @@ export function ConditionSection({
   showPostConditionToggle: postToggle,
   renderExpressionEditor: expressionEditor
 }: ConditionSectionProps) {
+  const sectionId = useId();
   const [showAddForm, setShowAddForm] = useState(false);
+  const [selection, setSelection] = useState<{ raw?: unknown; index: number }>({ index: 0 });
 
   // ------ Declarative-path fallbacks (Phase 7 / US5) ----------------------
   //
@@ -339,6 +356,8 @@ export function ConditionSection({
   const effectiveRawConditions = rawConditions ?? conditionsFromForm;
   const effectiveRawPostConditions = rawPostConditions ?? postConditionsFromForm;
   const effectiveReadOnly = readOnly ?? ctx?.readOnly ?? false;
+  const compactRules = compact ?? ctx?.compactConditions ?? false;
+  const targetNodeId = nodeId ?? ctx?.nodeId;
 
   const effectiveOnAdd = useCallback(
     (condition: { name?: string; definition?: string; expressionText: string; isPostCondition?: boolean }) => {
@@ -380,6 +399,10 @@ export function ConditionSection({
     [effectiveRawConditions, effectiveRawPostConditions]
   );
 
+  const rawRules = [...(effectiveRawConditions ?? []), ...(effectiveRawPostConditions ?? [])];
+  const found = rawRules.indexOf(selection.raw);
+  const activeIndex = found >= 0 ? found : Math.min(selection.index, Math.max(0, conditions.length - 1));
+
   const handleAdd = useCallback(
     (condition: { name?: string; definition?: string; expressionText: string; isPostCondition?: boolean }) => {
       effectiveOnAdd(condition);
@@ -409,30 +432,72 @@ export function ConditionSection({
         )}
       </FieldLegend>
 
-      <FieldGroup className="gap-1.5">
-        {conditions.map((condition, i) => (
-          <ConditionRow
-            // Index, NOT useStableKey — updateCondition (editor-store.ts) replaces
-            // the condition object wholesale on every field edit (Mutative's
-            // produce() always finalizes a touched item into a new reference, so
-            // there's no way to mutate-in-place and keep identity). A
-            // reference-identity WeakMap key therefore changes on every keystroke,
-            // remounting this row and dropping focus/expansion state after the
-            // first character (Codex review, P1). Conditions carry no stable
-            // content-independent id to key by instead, so this reverts to index
-            // keying — the accepted tradeoff is state-stealing across REORDER,
-            // not across every edit.
-            key={i}
-            condition={condition}
-            index={i}
-            total={conditions.length}
-            readOnly={effectiveReadOnly}
-            onUpdate={effectiveOnUpdate}
-            onRemove={effectiveOnRemove}
-            onReorder={effectiveOnReorder}
-            renderExpressionEditor={renderExpressionEditor}
-          />
-        ))}
+      {compactRules && conditions.length > 0 && (
+        <div role="tablist" aria-label="Conditions" className="flex flex-wrap gap-1">
+          {conditions.map((condition, index) => (
+            <button
+              type="button"
+              role="tab"
+              key={index}
+              id={`${sectionId}-rule-${index}`}
+              aria-controls={`${sectionId}-panel`}
+              tabIndex={index === activeIndex ? 0 : -1}
+              aria-selected={index === activeIndex}
+              className={`rounded px-2 py-1 text-xs ${index === activeIndex ? 'bg-accent text-accent-foreground' : 'text-muted-foreground hover:bg-muted'}`}
+              onKeyDown={(event) => {
+                let next: number;
+                if (event.key === 'ArrowRight') next = (index + 1) % conditions.length;
+                else if (event.key === 'ArrowLeft') next = (index - 1 + conditions.length) % conditions.length;
+                else if (event.key === 'Home') next = 0;
+                else if (event.key === 'End') next = conditions.length - 1;
+                else return;
+                event.preventDefault();
+                setSelection({ raw: rawRules[next], index: next });
+                document.getElementById(`${sectionId}-rule-${next}`)?.focus();
+              }}
+              onClick={() => setSelection({ raw: rawRules[index], index })}
+            >
+              {condition.name || `Rule ${index + 1}`}
+            </button>
+          ))}
+        </div>
+      )}
+      <FieldGroup
+        className="gap-1.5"
+        role={compactRules && conditions.length ? 'tabpanel' : undefined}
+        id={`${sectionId}-panel`}
+        aria-labelledby={compactRules && conditions.length ? `${sectionId}-rule-${activeIndex}` : undefined}
+      >
+        {conditions.map(
+          (condition, i) =>
+            (!compactRules || i === activeIndex) && (
+              <ConditionRow
+                // Model edits replace object references; the active index keeps its editor mounted while typing.
+                key={i}
+                condition={condition}
+                index={i}
+                total={conditions.length}
+                readOnly={effectiveReadOnly}
+                onUpdate={effectiveOnUpdate}
+                onRemove={effectiveOnRemove}
+                onReorder={(from, to) => {
+                  setSelection({ raw: rawRules[from], index: to });
+                  effectiveOnReorder(from, to);
+                }}
+                renderExpressionEditor={renderExpressionEditor}
+                sourceReadOnly={ctx?.sourceReadOnly}
+                target={
+                  targetNodeId && compactRules
+                    ? {
+                        nodeId: targetNodeId,
+                        kind: condition.isPostCondition ? 'postcondition' : 'precondition',
+                        index: condition.isPostCondition ? i - (effectiveRawConditions?.length ?? 0) : i
+                      }
+                    : undefined
+                }
+              />
+            )
+        )}
 
         {conditions.length === 0 && !showAddForm && (
           <p className="text-xs text-muted-foreground italic py-2 text-center">No conditions defined.</p>

@@ -8,6 +8,8 @@
  */
 
 import {
+  type ExpressionScopeEntry,
+  type SourceRegion,
   parse,
   parseWorkspace,
   createRuneDslServices,
@@ -19,11 +21,14 @@ import { requestCodegenDownload } from './codegen-download-client.js';
 import { sanitizeDownloadFilename } from './export.js';
 import { OperationTimeoutError, withAbortTimeout } from './with-abort-timeout.js';
 import { EmptyFileSystem } from 'langium';
+import { nameFromNodeId, kindFromNodeId } from '@rune-langium/visual-editor/identifiers';
 import type { CuratedSerializedDocument } from '@rune-langium/curated-schema';
 import { CURATED_MODEL_IDS } from '@rune-langium/curated-schema';
 import type { CachedFile } from '../types/model-types.js';
 import type {
   WorkerRequest,
+  ExpressionScopeRequest,
+  ExpressionScopeResponse,
   ParseResponse,
   ParseWorkspaceResponse,
   LinkDocumentRequest,
@@ -37,6 +42,7 @@ import { useOutputStore, fmtLine } from '../store/output-store.js';
 import { routeTelemetryRecord } from './instrumentation/browser-sink.js';
 import { isTelemetryRecordMessage } from './instrumentation/worker-sink.js';
 import { withInstrumentation, Capture } from './instrumentation/core.js';
+import { pathToUri } from '../utils/uri.js';
 
 /** Known curated bundle ids — guards deferredExports filePath prefixes so user
  *  files that happen to live under `${bundleId}/...` aren't mis-grouped. */
@@ -183,6 +189,8 @@ export interface WorkspaceState {
 export interface ParsedWorkspaceModel {
   filePath: string;
   model: RosettaModel;
+  /** Exact input whose coordinates this model describes; absent for deferred source. */
+  source?: string;
   serializedModelJson?: string;
 }
 
@@ -281,6 +289,7 @@ async function parseWorkspaceFilesOnMainThread(
       parsedModels.push({
         filePath: file.path,
         model: result.value,
+        source: file.content,
         serializedModelJson: serializeRuneModel(serializer, result.value)
       });
     }
@@ -336,9 +345,10 @@ function workerRequest(msg: Extract<WorkerRequest, { type: 'parse' }>): Promise<
 function workerRequest(msg: Extract<WorkerRequest, { type: 'parseWorkspace' }>): Promise<ParseWorkspaceResponse>;
 function workerRequest(msg: LinkDocumentRequest): Promise<LinkDocumentResponse>;
 function workerRequest(msg: HydrateRequest): Promise<HydrateResponse>;
+function workerRequest(msg: ExpressionScopeRequest): Promise<ExpressionScopeResponse>;
 function workerRequest(
   msg: WorkerRequest
-): Promise<ParseResponse | ParseWorkspaceResponse | LinkDocumentResponse | HydrateResponse> {
+): Promise<ParseResponse | ParseWorkspaceResponse | LinkDocumentResponse | HydrateResponse | ExpressionScopeResponse> {
   return new Promise((resolve, reject) => {
     const w = getWorker();
     if (!w) {
@@ -381,6 +391,15 @@ function workerRequest(
             return;
           }
           resolve(e.data);
+          return;
+        }
+        if (msg.type === 'expressionScope') {
+          const data = e.data as ExpressionScopeResponse;
+          if (data.type !== 'expressionScopeResult' || !Array.isArray(data.entries)) {
+            reject(new Error('Worker returned an invalid expression scope'));
+            return;
+          }
+          resolve(data);
           return;
         }
         if (msg.type === 'hydrate') {
@@ -577,6 +596,7 @@ export const parseWorkspaceFiles = withInstrumentation(
     files: WorkspaceFile[],
     options: { hydrateNamespaces?: string[]; requireCuratedHydration?: boolean } = {}
   ): Promise<ParseWorkspaceFilesResult> {
+    const capturedFiles = files.map((file) => ({ ...file }));
     const wantsHydration = (options.hydrateNamespaces?.length ?? 0) > 0;
     if (files.length === 0 && !wantsHydration) {
       return { models: [], parsedModels: [], errors: new Map(), parseMode: 'router' };
@@ -590,8 +610,8 @@ export const parseWorkspaceFiles = withInstrumentation(
     // through and got POSTed to /api/parse as bogus files named
     // `[bundleId]/<namespace>`, which Langium rejects with "no services for the
     // extension '.'" → 500, collapsing the curated catalog to the user closure.
-    const userFiles = collectRawWorkspaceSources(files).map(({ path, content }) => ({ name: path, content }));
-    const curatedBundles = collectCuratedBundlesFromWorkspace(files);
+    const userFiles = collectRawWorkspaceSources(capturedFiles).map(({ path, content }) => ({ name: path, content }));
+    const curatedBundles = collectCuratedBundlesFromWorkspace(capturedFiles);
 
     try {
       const response = await parseWorkspaceViaRouter(userFiles, {
@@ -639,7 +659,9 @@ export const parseWorkspaceFiles = withInstrumentation(
       //      Langium's getServices() to throw "no services for the extension ''".
       // Together these mirror the router path's `userFiles` filter so the fallback
       // never dead-ends on mixed workspaces.
-      const parseableFiles = files.filter((f) => !f.serializedModelJson && f.path.toLowerCase().endsWith('.rosetta'));
+      const parseableFiles = capturedFiles.filter(
+        (f) => !f.serializedModelJson && f.path.toLowerCase().endsWith('.rosetta')
+      );
       return parseWorkspaceFilesOnMainThread(parseableFiles, {
         parseMode: 'main-thread-fallback',
         fallbackMessage: formatRouterFallbackMessage(error)
@@ -685,13 +707,15 @@ export const parseWorkspaceViaRouter = withInstrumentation(
       requireCuratedHydration?: boolean;
     } = {}
   ): Promise<ParseWorkspaceResponse> {
+    const capturedFiles = files.map((file) => ({ ...file }));
+    const sourceByPath = new Map(capturedFiles.map((file) => [file.name, file.content]));
     const requestParse = (knownCuratedArtifacts: string[]) =>
       withAbortTimeout(async (signal) => {
         const response = await fetch('/api/parse', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
-            files,
+            files: capturedFiles,
             curatedBundles: options.curatedBundles ?? [],
             hydrateNamespaces: options.hydrateNamespaces ?? [],
             knownCuratedArtifacts
@@ -790,7 +814,7 @@ export const parseWorkspaceViaRouter = withInstrumentation(
     // lazy/deferred-corpus design (the whole reason curated docs serialize to
     // JSON in the first place) and reintroduces multi-megabyte main-thread
     // deserialization on every debounced edit parse.
-    const userFileNames = new Set(files.map((f) => f.name));
+    const userFileNames = new Set(sourceByPath.keys());
     const services = createRuneDslServices(EmptyFileSystem).RuneDsl;
     const models: RosettaModel[] = [];
     const parsedModels: ParsedWorkspaceModel[] = [];
@@ -818,7 +842,12 @@ export const parseWorkspaceViaRouter = withInstrumentation(
         try {
           const model = services.serializer.JsonSerializer.deserialize<RosettaModel>(doc.serializedModel);
           models.push(model);
-          parsedModels.push({ filePath, model, serializedModelJson: doc.serializedModel });
+          parsedModels.push({
+            filePath,
+            model,
+            source: sourceByPath.get(filePath),
+            serializedModelJson: doc.serializedModel
+          });
         } catch (err) {
           console.warn('[workspace] failed to deserialize hydration model for', doc.uri, err);
         }
@@ -938,6 +967,37 @@ export const parseWorkspaceViaRouter = withInstrumentation(
       return { modelCount: result.models.length };
     }
   }
+);
+
+export const requestExpressionScope = withInstrumentation(
+  async function requestExpressionScope(
+    uri: string,
+    nodeId: string,
+    region: SourceRegion,
+    files?: readonly WorkspaceFile[]
+  ): Promise<ExpressionScopeEntry[]> {
+    const snapshot = files
+      ?.filter((file) => !file.path.endsWith(BUNDLE_MARKER_SUFFIX) && (!file.refOnly || file.serializedModelJson))
+      .map((file) => ({
+        name: pathToUri(file.path),
+        content: file.content,
+        serializedModelJson: file.serializedModelJson,
+        exports: file.exports
+      }));
+    const response = await workerRequest({
+      type: 'expressionScope',
+      id: String(++requestId),
+      uri: pathToUri(uri),
+      name: nameFromNodeId(nodeId),
+      kind: kindFromNodeId(nodeId),
+      region,
+      files: snapshot
+    });
+    if (response.type !== 'expressionScopeResult') throw new Error('Unexpected expression scope response');
+    if (response.error) throw new Error(response.error);
+    return response.entries;
+  },
+  { op: 'requestExpressionScope' }
 );
 
 export const linkDocument = withInstrumentation(

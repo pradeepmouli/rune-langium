@@ -19,6 +19,7 @@ import {
   metadataRuntimeSource
 } from '../../src/expr/metadata-runtime.js';
 import type { ExpressionTranspilerContext } from '../../src/expr/transpiler.js';
+import { RUNTIME_HELPER_JS_SOURCE } from '../../src/helpers.js';
 
 function parse(source: string) {
   const result = parseExpression(source);
@@ -71,10 +72,12 @@ describe('metadata expression rendering', () => {
       throw new Error(`unexpected child ${child.$type}`);
     });
 
-    expect(rendered).toBe('runeWithMeta(input.value, { "scheme": "urn:x" }, "value")');
-    const evaluate = Function('input', `${metadataRuntimeSource(false)}; return ${rendered}`) as (input: {
-      value: string;
-    }) => unknown;
+    expect(rendered).toBe('rune.withMeta(input.value, { "scheme": "urn:x" }, "value")');
+    const evaluate = Function(
+      'input',
+      `${RUNTIME_HELPER_JS_SOURCE}
+; return ${rendered}`
+    ) as (input: { value: string }) => unknown;
     expect(evaluate({ value: 'v' })).toEqual({
       value: 'v',
       meta: { scheme: 'urn:x' }
@@ -82,13 +85,15 @@ describe('metadata expression rendering', () => {
 
     const evaluateUndefined = Function(
       'input',
-      `${metadataRuntimeSource(false)}; return runeWithMeta(input.value, { location: undefined })`
+      `${RUNTIME_HELPER_JS_SOURCE}
+; return rune.withMeta(input.value, { location: undefined })`
     ) as (input: { value: undefined }) => unknown;
     expect(evaluateUndefined({ value: undefined })).toBeUndefined();
 
     const evaluateArray = Function(
       'input',
-      `${metadataRuntimeSource(false)}; return runeWithMeta(input.values, { scheme: "urn:x" })`
+      `${RUNTIME_HELPER_JS_SOURCE}
+; return rune.withMeta(input.values, { scheme: "urn:x" })`
     ) as (input: { values: string[] }) => unknown;
     expect(evaluateArray({ values: ['a', 'b'] })).toEqual([
       { value: 'a', meta: { scheme: 'urn:x' } },
@@ -97,7 +102,8 @@ describe('metadata expression rendering', () => {
 
     const evaluateTypes = Function(
       'input',
-      `${metadataRuntimeSource(false)}; return runeWithMeta(input.value, { key: "k", scheme: "urn:x" })`
+      `${RUNTIME_HELPER_JS_SOURCE}
+; return rune.withMeta(input.value, { key: "k", scheme: "urn:x" })`
     ) as (input: { value: { field: string } }) => unknown;
     expect(evaluateTypes({ value: { field: 'v' } })).toEqual({
       value: { field: 'v', meta: { externalKey: 'k' } },
@@ -106,13 +112,15 @@ describe('metadata expression rendering', () => {
 
     const evaluateReference = Function(
       'input',
-      `${metadataRuntimeSource(false)}; return runeWithMeta(input.value, { address: "party-1" })`
+      `${RUNTIME_HELPER_JS_SOURCE}
+; return rune.withMeta(input.value, { address: "party-1" })`
     ) as (input: { value: string }) => unknown;
     expect(evaluateReference({ value: 'party' })).toEqual({ value: 'party', reference: { reference: 'party-1' } });
 
     const evaluateExternalReference = Function(
       'input',
-      `${metadataRuntimeSource(false)}; return runeWithMeta(input.value, { reference: "party-2" })`
+      `${RUNTIME_HELPER_JS_SOURCE}
+; return rune.withMeta(input.value, { reference: "party-2" })`
     ) as (input: { value: string }) => unknown;
     expect(evaluateExternalReference({ value: 'party' })).toEqual({ value: 'party', externalReference: 'party-2' });
   });
@@ -122,10 +130,12 @@ describe('metadata expression rendering', () => {
     const rendered = renderMetadataOperation(expression, context(), (child, ctx) =>
       isRosettaSymbolReference(child) ? `${ctx.selfName}.${child.symbol.$refText}` : 'undefined'
     );
-    expect(rendered).toBe('runeAsKey(input.value, "value")');
-    const evaluate = Function('input', `${metadataRuntimeSource(false)}; return ${rendered}`) as (input: {
-      value: { meta: { globalKey: string; externalKey: string } };
-    }) => unknown;
+    expect(rendered).toBe('rune.asKey(input.value, "value")');
+    const evaluate = Function(
+      'input',
+      `${RUNTIME_HELPER_JS_SOURCE}
+; return ${rendered}`
+    ) as (input: { value: { meta: { globalKey: string; externalKey: string } } }) => unknown;
     expect(evaluate({ value: { meta: { globalKey: 'global', externalKey: 'external' } } })).toEqual({
       globalReference: 'global',
       externalReference: 'external'
@@ -133,7 +143,8 @@ describe('metadata expression rendering', () => {
 
     const evaluateArray = Function(
       'input',
-      `${metadataRuntimeSource(false)}; return runeAsKey(input.values)`
+      `${RUNTIME_HELPER_JS_SOURCE}
+; return rune.asKey(input.values)`
     ) as (input: { values: Array<{ value: { meta: { externalKey: string } } }> }) => unknown;
     expect(
       evaluateArray({ values: [{ value: { meta: { externalKey: 'a' } } }, { value: { meta: { externalKey: 'b' } } }] })
@@ -141,14 +152,23 @@ describe('metadata expression rendering', () => {
 
     const evaluateMissing = Function(
       'input',
-      `${metadataRuntimeSource(false)}; return runeAsKey(input.value)`
+      `${RUNTIME_HELPER_JS_SOURCE}
+; return rune.asKey(input.value)`
     ) as (input: { value: undefined }) => unknown;
     expect(evaluateMissing({ value: undefined })).toEqual({});
   });
 
   it('converts wrapper kinds in the JavaScript runtime and rejects unresolved field payloads', () => {
-    const field = Function('value', `${metadataRuntimeSource(false)}; return runeToField(value, 'reference')`);
-    const reference = Function('value', `${metadataRuntimeSource(false)}; return runeToReference(value, 'field')`);
+    const field = Function(
+      'value',
+      `${RUNTIME_HELPER_JS_SOURCE}
+; return runeToField(value, 'reference')`
+    );
+    const reference = Function(
+      'value',
+      `${RUNTIME_HELPER_JS_SOURCE}
+; return runeToReference(value, 'field')`
+    );
     const values = [{ value: 0 }, { value: 2, meta: { scheme: 'unit' } }];
     expect(field(values)).toEqual([{ value: 0, meta: {} }, values[1]]);
     expect(reference([{ value: 0, meta: {} }, values[1]])).toEqual([{ value: 0, meta: {} }, values[1]]);
@@ -159,7 +179,8 @@ describe('metadata expression rendering', () => {
   it('normalizes values for field and reference metadata attributes', () => {
     const evaluate = Function(
       'input',
-      `${metadataRuntimeSource(false)}; return [runeToField(input.field, 'field'), runeToReference(input.reference), runeToReference(input.pure, 'reference'), runeToField(input.pure)]`
+      `${RUNTIME_HELPER_JS_SOURCE}
+; return [runeToField(input.field, 'field'), runeToReference(input.reference), runeToReference(input.pure, 'reference'), runeToField(input.pure)]`
     ) as (input: { field: string; reference: number; pure: { externalReference: string } }) => unknown;
     const existingField = { value: 'existing', meta: { scheme: 'urn:x' } };
     const existingReference = { externalReference: 'ref' };
@@ -172,7 +193,8 @@ describe('metadata expression rendering', () => {
 
     const evaluateArray = Function(
       'input',
-      `${metadataRuntimeSource(false)}; return [runeToField(input.values), runeToReference(input.references)]`
+      `${RUNTIME_HELPER_JS_SOURCE}
+; return [runeToField(input.values), runeToReference(input.references)]`
     ) as (input: { values: string[]; references: number[] }) => unknown;
     expect(evaluateArray({ values: ['a', 'b'], references: [1, 2] })).toEqual([
       [

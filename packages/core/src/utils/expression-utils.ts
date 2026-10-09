@@ -55,10 +55,22 @@ export function setGeneratedInputIfAbsent(node: RosettaExpression): boolean {
 }
 
 /**
- * Get all input attributes from a RosettaFunction.
+ * Get effective input attributes, including inheritance and dispatch signatures.
  */
-export function getFunctionInputs(func: RosettaFunction) {
-  return func.inputs ?? [];
+export function getFunctionInputs(
+  func: RosettaFunction,
+  seen: Set<RosettaFunction> = new Set(),
+  declarations?: Iterable<RosettaFunction>
+): Attribute[] {
+  if (func.inputs.length > 0 || seen.has(func)) return func.inputs;
+  seen.add(func);
+  const parent = func.superFunction?.ref;
+  const signature = getFunctionSignature(func, declarations);
+  return parent
+    ? getFunctionInputs(parent, seen, declarations)
+    : signature !== func
+      ? getFunctionInputs(signature, seen, declarations)
+      : [];
 }
 
 /**

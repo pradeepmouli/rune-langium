@@ -32,6 +32,11 @@ jobs:
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
 
+      - name: Use Python 3.13 for projection execution tests
+        uses: actions/setup-python@v7
+        with:
+          python-version: '3.13'
+
       - name: Determine CDM fixture cache key
         id: fixture-versions
         run: |

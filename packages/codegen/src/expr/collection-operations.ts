@@ -50,8 +50,8 @@ export function renderCollectionOperation(
         ? render(fn.body, inlineContext(fn, ctx, [param], metadata))
         : param;
     return isFilterOperation(expr)
-      ? `runeList(${argument}).filter((${param}) => ${arrowBody(body)})`
-      : `runeList(${argument}).flatMap((${param}) => runeList(${body}))`;
+      ? `rune.list(${argument}).filter((${param}) => ${arrowBody(body)})`
+      : `rune.list(${argument}).flatMap((${param}) => rune.list(${body}))`;
   }
   if (isSortOperation(expr)) {
     const a = freshLocal(ctx, '__sortA');
@@ -60,7 +60,7 @@ export function renderCollectionOperation(
     const keyB = freshLocal(ctx, '__keyB');
     const ka = key(a);
     const kb = key(b);
-    return `runeList(${argument}).slice().sort((${a}, ${b}) => { const ${keyA} = (${ka}); const ${keyB} = (${kb}); return runeOrder(${keyA}, ${keyB}, (a, b) => a < b ? -1 : a > b ? 1 : 0); })`;
+    return `rune.list(${argument}).slice().sort((${a}, ${b}) => { const ${keyA} = (${ka}); const ${keyB} = (${kb}); return rune.order(${keyA}, ${keyB}, (a, b) => a < b ? -1 : a > b ? 1 : 0); })`;
   }
   if (isMinOperation(expr) || isMaxOperation(expr)) {
     const item = freshLocal(ctx, '__item');
@@ -69,7 +69,7 @@ export function renderCollectionOperation(
     const itemKey = key(item);
     const bestKey = key(best);
     const sign = isMinOperation(expr) ? '<' : '>';
-    return `(() => { const ${values} = runeList(${argument}); if (${values}.length === 0) return undefined; return ${values}.slice(1).reduce((${best}, ${item}) => runeOrder((${itemKey}), (${bestKey}), (a, b) => a < b ? -1 : a > b ? 1 : 0, ${isMinOperation(expr)}) ${sign} 0 ? ${item} : ${best}, ${values}[0]); })()`;
+    return `(() => { const ${values} = rune.list(${argument}); if (${values}.length === 0) return undefined; return ${values}.slice(1).reduce((${best}, ${item}) => rune.order((${itemKey}), (${bestKey}), (a, b) => a < b ? -1 : a > b ? 1 : 0, ${isMinOperation(expr)}) ${sign} 0 ? ${item} : ${best}, ${values}[0]); })()`;
   }
   return undefined;
 }

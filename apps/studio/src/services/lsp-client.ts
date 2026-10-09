@@ -45,6 +45,8 @@ export interface LspClientService {
   disconnect(): Promise<void>;
   /** Get a CM extension for a document URI. Returns null before connect. */
   getPlugin(uri: string): Extension | null;
+  /** Focus selects one didChange owner among views of the same full document. */
+  claimDocumentView(uri: string, view: EditorView, configurePlugin: (extension: Extension | null) => void): () => void;
   /** Whether the client is fully initialised. */
   isInitialized(): boolean;
   /** Subscribe to diagnostics (for graph bridge). Returns unsubscribe fn. */
@@ -152,6 +154,8 @@ export class StudioWorkspace extends Workspace {
   }
 
   closeFile(uri: string, view: EditorView): void {
+    const file = this.files.find((candidate) => candidate.uri === uri);
+    if (!file || file.view !== view) return;
     // Flush any edits autoSync's 500ms debounce hasn't drained yet. closeFile
     // runs synchronously from within LSPPlugin's own destroy() — confirmed
     // via @codemirror/view's updatePlugins that the PluginInstance's `.value`
@@ -173,7 +177,6 @@ export class StudioWorkspace extends Workspace {
       });
       plugin.clear();
     }
-    const file = this.getFile(uri);
     if (file) {
       this.files = this.files.filter((f) => f !== file);
     }
@@ -214,6 +217,11 @@ export const createLspClientService = withInstrumentation(
     let _pendingRefreshId: ReturnType<typeof setTimeout> | null = null;
 
     const diagnosticHandlers: ((uri: string, diagnostics: LspDiagnostic[]) => void)[] = [];
+    type DocumentView = { view: EditorView; configure: (extension: Extension | null) => void; focus: () => void };
+    const documentViews = new Map<string, { views: DocumentView[]; owner?: DocumentView }>();
+    const detachDocumentPlugins = () => {
+      for (const entry of documentViews.values()) entry.owner?.configure(null);
+    };
 
     // Task 7: displayFile handler for cross-file go-to-definition
     let displayFileHandler: DisplayFileHandler | null = null;
@@ -300,6 +308,7 @@ export const createLspClientService = withInstrumentation(
       openedUris.clear();
       target.connect(transport);
       initialized = true;
+      for (const [uri, entry] of documentViews) entry.owner?.configure(target.plugin(uri));
       sentModels.clear();
       await syncModels();
 
@@ -321,6 +330,7 @@ export const createLspClientService = withInstrumentation(
     const service: LspClientService = {
       async connect(): Promise<void> {
         if (client) {
+          detachDocumentPlugins();
           client.disconnect();
           client = null;
         }
@@ -330,6 +340,7 @@ export const createLspClientService = withInstrumentation(
 
       async disconnect(): Promise<void> {
         cancelPendingRefresh();
+        detachDocumentPlugins();
         if (client) {
           client.disconnect();
           client = null;
@@ -340,6 +351,31 @@ export const createLspClientService = withInstrumentation(
       getPlugin(uri: string): Extension | null {
         if (!client || !initialized) return null;
         return client.plugin(URI.parse(uri).toString());
+      },
+
+      claimDocumentView(uri, view, configure) {
+        uri = URI.parse(uri).toString();
+        const entry = documentViews.get(uri) ?? { views: [] as DocumentView[], owner: undefined };
+        documentViews.set(uri, entry);
+        const select = (next: DocumentView | undefined) => {
+          if (entry.owner === next) return;
+          // Reconfiguration destroys the old plugin synchronously, flushing it
+          // through StudioWorkspace.closeFile before the new owner opens.
+          entry.owner?.configure(null);
+          entry.owner = next;
+          const plugin = service.getPlugin(uri);
+          if (next && plugin) next.configure(plugin);
+        };
+        const item: DocumentView = { view, configure, focus: () => select(item) };
+        entry.views.push(item);
+        view.dom.addEventListener('focusin', item.focus);
+        if (!entry.owner || view.hasFocus) select(item);
+        return () => {
+          view.dom.removeEventListener('focusin', item.focus);
+          entry.views = entry.views.filter((candidate) => candidate !== item);
+          if (entry.owner === item) select(entry.views[entry.views.length - 1]);
+          if (entry.views.length === 0) documentViews.delete(uri);
+        };
       },
 
       isInitialized(): boolean {
@@ -475,6 +511,7 @@ export const createLspClientService = withInstrumentation(
       },
 
       async reconnect(): Promise<void> {
+        detachDocumentPlugins();
         if (client) {
           client.disconnect();
           client = null;
@@ -486,6 +523,10 @@ export const createLspClientService = withInstrumentation(
 
       dispose(): void {
         cancelPendingRefresh();
+        detachDocumentPlugins();
+        for (const entry of documentViews.values())
+          for (const item of entry.views) item.view.dom.removeEventListener('focusin', item.focus);
+        documentViews.clear();
         if (client) {
           client.disconnect();
           client = null;

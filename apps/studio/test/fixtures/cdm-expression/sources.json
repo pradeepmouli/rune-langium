@@ -1,0 +1,48 @@
+{
+  "license": "Apache-2.0",
+  "source": "https://github.com/finos/common-domain-model/tree/7.0.0-dev.83/rosetta-source/src/main/rosetta",
+  "runeVersion": "9.76.2",
+  "cdmVersion": "7.0.0-dev.83",
+  "files": [
+    {
+      "name": "annotations.rosetta",
+      "sourceSha256": "7e9f1bdf8e22d585f67665ddc16fee1e444ff930f98541f696c587a74e1cfcf1",
+      "sha256": "94167056f6dc1b67fcf246468daa2476ed69255084e1bf7dbf0a268fb07954fb"
+    },
+    {
+      "name": "basictypes.rosetta",
+      "sourceSha256": "7c608118f1e594187a2e891de73aed5a2e5e898c86ec4980cdf6749224d4ccf4",
+      "sha256": "c495feff8502e000a4600ba3db8de285cac3802affbe1d5b3eb459c7bd94a194"
+    },
+    {
+      "name": "base-datetime-enum.rosetta",
+      "sourceSha256": "0ccbb56829627261de63a949cdea752bd00cb696585b4a31fdee58934add7fd9",
+      "sha256": "2ebcf554b5e06cd56d6c81dd0e9b5108418cc3da63b711348d3744f45a114c89"
+    },
+    {
+      "name": "base-datetime-func.rosetta",
+      "sourceSha256": "b82f1525195ffce83e935e6d298105749fefafafb9d3704d36d3ac7ce2bb298e",
+      "sha256": "4ce26dc5650418425ccac93a9aff0b651a50c04faff05140ec90c578e21dce2f"
+    },
+    {
+      "name": "base-datetime-type.rosetta",
+      "sourceSha256": "e94bee09195bbea00994b2134c0f46e4c5be268b9e902e61f9ca4479506e9f66",
+      "sha256": "e16ea69e87d5fbf0b8fcd424081d75ad47c4cb82fa4c25fd013e1ca650288a53"
+    },
+    {
+      "name": "base-desc.rosetta",
+      "sourceSha256": "f3f7562a743aeb8459e48d8414deb797cf962d915953300e014259fab90875ed",
+      "sha256": "73602aa3927884cf55581d586a69f1d0c53704d86502cf5f717371c74cd43e16"
+    },
+    {
+      "name": "base-staticdata-codelist-func.rosetta",
+      "sourceSha256": "10c082a46cce0c519182988f23433c1d018c26bb1e22a99880fa8c7a485a3777",
+      "sha256": "dafb9ca61a783d93e300ecc1fa4c1431036d9ce4e2e08dcdb4a30ffcac512505"
+    },
+    {
+      "name": "base-staticdata-codelist-type.rosetta",
+      "sourceSha256": "af0d0edbe8b0975bdb9a93ef21ef19e5e641e1bab777e644d7c970588577551f",
+      "sha256": "df7bbed9b7c0535bb919c467477493df648cf5261ee0283414d9375bc5869b19"
+    }
+  ]
+}

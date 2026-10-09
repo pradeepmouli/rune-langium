@@ -15,6 +15,8 @@ export interface EditorActionsContextValue {
   nodeId: string;
   actions: CommonFormActions & Partial<Pick<EnumFormActions, 'addEnumValueSynonym' | 'removeEnumValueSynonym'>>;
   readOnly?: boolean;
+  sourceReadOnly?: boolean;
+  compactConditions?: boolean;
   availableAnnotations?: string[];
   synonymSourceOptions?: SourceRefOption[];
   renderExpressionEditor?: (props: ExpressionEditorSlotProps) => ReactNode;

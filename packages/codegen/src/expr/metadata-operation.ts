@@ -42,11 +42,11 @@ export function renderMetadataOperation(
         return `${JSON.stringify(key ?? '?')}: ${render(entry.value, ctx)}`;
       })
       .join(', ');
-    return `runeWithMeta(${argument}, { ${entries} }, ${JSON.stringify(expressionMetadataKind(expr.argument) ?? 'value')})`;
+    return `rune.withMeta(${argument}, { ${entries} }, ${JSON.stringify(expressionMetadataKind(expr.argument) ?? 'value')})`;
   }
 
   if (isAsKeyOperation(expr)) {
-    return `runeAsKey(${render(expr.argument, ctx)}, ${JSON.stringify(expressionMetadataKind(expr.argument) ?? 'value')})`;
+    return `rune.asKey(${render(expr.argument, ctx)}, ${JSON.stringify(expressionMetadataKind(expr.argument) ?? 'value')})`;
   }
 
   return undefined;
