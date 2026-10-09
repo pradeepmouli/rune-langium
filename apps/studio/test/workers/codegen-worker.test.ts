@@ -135,6 +135,7 @@ vi.mock('@rune-langium/core', () => {
 
 vi.mock('@rune-langium/codegen/export', () => ({
   generate: generateMock,
+  resolveExportSelection: (documents: unknown[]) => ({ documents }),
   selectTypeScriptProjection: selectProjectionMock,
   generatePythonModule: generatePythonMock,
   selectPythonProjection: selectPythonProjectionMock,

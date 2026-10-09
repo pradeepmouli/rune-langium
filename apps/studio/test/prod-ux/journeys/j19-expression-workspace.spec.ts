@@ -8,7 +8,12 @@ import AxeBuilder from '@axe-core/playwright';
 import { expressionReferenceFiles } from '../../../../../packages/codegen/test/helpers/cdm-reference.js';
 import { checkout as test, expect, loadCdm } from '../fixtures.js';
 import { REPORT_DIR } from '../evidence.js';
-import { loadPinnedFunction, openBuilder } from '../../helpers/expression-workspace.js';
+import {
+  loadPinnedFunction,
+  openBuilder,
+  expectCenterPaneBounds,
+  enlargeDialogText
+} from '../../helpers/expression-workspace.js';
 import { typeNavigationButton } from '../../helpers/type-navigation.js';
 
 test.describe('J19 — Expression workspace production acceptance', () => {
@@ -78,6 +83,11 @@ test.describe('J19 — Expression workspace production acceptance', () => {
       `J19 split-file dispatch resolves the base with base first=${baseFirst}`,
       { annotation: { type: 'journey-subid', description: `dispatch-${baseFirst ? 'base' : 'variant'}-first` } },
       async ({ page, evidence }) => {
+        const clientErrors: string[] = [];
+        page.on('pageerror', (error) => clientErrors.push(error.message));
+        page.on('console', (message) => {
+          if (message.type() === 'error') clientErrors.push(message.text());
+        });
         await page.goto('./');
         const base = {
           name: 'base.rosetta',
@@ -121,6 +131,9 @@ func Compute(kind: Kind -> Cash):
           await expect(implementation.getByRole('alert')).toHaveCount(0);
           await evidence.checkpoint(`dispatch-${language.toLowerCase()}`);
         }
+        const inspector = page.locator('[data-testid="center-stack"] [data-pane="inspector"]');
+        await expect(inspector).toContainText('Inputs (2)');
+        await expect(inspector).not.toContainText('No output type');
         await implementation.getByRole('button', { name: 'Open in Source', exact: true }).click();
         await expect(page.getByRole('button', { name: 'Source', exact: true })).toHaveAttribute('aria-pressed', 'true');
         await page.getByRole('button', { name: 'Inspector', exact: true }).click();
@@ -129,6 +142,9 @@ func Compute(kind: Kind -> Cash):
         await expect(source).toContainText('amount + 10');
         await expect(source).not.toContainText('Compute(kind:');
         await evidence.checkpoint('source-reveals-edited-base');
+        expect(
+          clientErrors.filter((message) => /completionResultRange|undelivered notifications/.test(message))
+        ).toEqual([]);
       }
     );
   }
@@ -214,7 +230,9 @@ func Compute(kind: Kind -> Cash):
       const font = page.getByRole('button', { name: /Pane font size:/ }).first();
       while ((await font.getAttribute('data-font-scale-current')) !== 'lg') await font.click();
       await evidence.checkpoint('compact-large-font-inspector');
+      await expectCenterPaneBounds(page);
       const dialog = await openBuilder(page);
+      await enlargeDialogText(page, dialog);
       const bounds = await dialog.boundingBox();
       expect(bounds!.x).toBeGreaterThanOrEqual(0);
       expect(bounds!.x + bounds!.width).toBeLessThanOrEqual(800);

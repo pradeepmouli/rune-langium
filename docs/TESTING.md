@@ -79,7 +79,12 @@ J19 adds seven expression workspace cases: private Builder drafts, Apply/Undo,
 independent Data conditions, both split-file dispatch orders with trailing
 comments and Source navigation, a pinned ten-operation CDM implementation,
 hosted curated read-only projections, and the compact Builder at the largest
-font size. Local acceptance and production share the editor setup helpers and
+pane font size, with an additional 125% root text scale for the portal dialog.
+The helper verifies computed text growth before accessibility and viewport scans.
+Dispatch cases assert the retained signature and absence of completion/resize
+exceptions. J8 correlates attribute, cardinality and rename saves before verifying
+the renamed declaration after reload; it does not claim graph undo coverage.
+Local acceptance and production share the editor setup helpers and
 integrity-checked upstream fixtures. Each case has a distinct manifest ID;
 dialog axe results are retained under `report/axe/J19/attempt<N>/`.
 

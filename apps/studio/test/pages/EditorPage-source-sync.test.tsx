@@ -241,6 +241,45 @@ describe('EditorPage — Structure-mode source sync (regression fix/inspector-so
     cleanup();
   });
 
+  it('preserves read-only files sharing a namespace during a user edit', async () => {
+    const referenceSources = [
+      'namespace reference\ntype First:\n value int (1..1)\n',
+      'namespace reference\ntype Second:\n value string (1..1)\n'
+    ];
+    const user = await parse(ROSETTA_SOURCE, `inmemory:///${FILE_PATH}`);
+    const references = await Promise.all(
+      referenceSources.map((source, index) => parse(source, `system://reference/${index}.rosetta`))
+    );
+    const files = [
+      { name: FILE_PATH, path: FILE_PATH, content: ROSETTA_SOURCE, dirty: false },
+      ...referenceSources.map((content, index) => ({
+        name: `${index}.rosetta`,
+        path: `system://reference/${index}.rosetta`,
+        content,
+        dirty: false,
+        readOnly: true
+      }))
+    ];
+    const models = [user.value, ...references.map(({ value }) => value)];
+    const onFilesChange = vi.fn();
+    renderEditorPage({
+      models,
+      parsedModels: models.map((model, index) => ({ model, filePath: files[index]!.path })),
+      files,
+      onFilesChange
+    });
+    await act(async () => {
+      await new Promise((resolve) => setTimeout(resolve, 0));
+    });
+    const order = useEditorStore.getState().nodes.find((node) => node.data.name === 'Order')!;
+    act(() => useEditorStore.getState().updateCardinality(order.id, 'quantity', '(0..*)'));
+    await waitFor(() => expect(onFilesChange).toHaveBeenCalled());
+    for (const [updated] of onFilesChange.mock.calls) {
+      expect(updated.slice(1)).toEqual(files.slice(1));
+    }
+    expect(onFilesChange.mock.calls.at(-1)![0][0].content).toContain('0..*');
+  });
+
   it('fires onFilesChange with changed content when an attribute is edited in Structure mode (graph pane NOT mounted)', async () => {
     // 1. Parse a real Rosetta source so loadModels produces real TypeGraphNodes.
     const parseResult = await parse(ROSETTA_SOURCE, `inmemory:///${FILE_PATH}`);

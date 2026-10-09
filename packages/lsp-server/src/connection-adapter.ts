@@ -20,6 +20,8 @@
  */
 
 import { type LSPServer, ServerState, type ServerCapabilities } from '@lspeasy/server';
+import { ResponseError } from '@lspeasy/core';
+import { ResponseError as VscodeResponseError } from 'vscode-languageserver';
 
 // ────────────────────────────────────────────────────────────────────────────
 // Method-name → LSP-method-string maps
@@ -97,7 +99,15 @@ function createRequestRegistrar(
 ): (handler: (...args: any[]) => any) => { dispose(): void } {
   return (handler: (...args: any[]) => any) => {
     return server.onRequest(method as any, async (params: any, token: any) => {
-      return handler(params, token);
+      try {
+        const result = await handler(params, token);
+        // vscode's Connection accepts returned errors; lspeasy expects them thrown.
+        if (result instanceof VscodeResponseError) throw result;
+        return result;
+      } catch (error) {
+        if (error instanceof VscodeResponseError) throw new ResponseError(error.code, error.message, error.data);
+        throw error;
+      }
     });
   };
 }
@@ -161,12 +171,9 @@ function createWorkspaceProxy(server: LSPServer<ServerCapabilities>): any {
     onDidDeleteFiles: (handler: any) =>
       server.onNotification('workspace/didDeleteFiles' as any, (p: any) => handler(p)),
     // File-operation request handlers (willCreate/willRename/willDelete)
-    onWillCreateFiles: (handler: any) =>
-      server.onRequest('workspace/willCreateFiles' as any, async (p: any, t: any) => handler(p, t)),
-    onWillRenameFiles: (handler: any) =>
-      server.onRequest('workspace/willRenameFiles' as any, async (p: any, t: any) => handler(p, t)),
-    onWillDeleteFiles: (handler: any) =>
-      server.onRequest('workspace/willDeleteFiles' as any, async (p: any, t: any) => handler(p, t)),
+    onWillCreateFiles: createRequestRegistrar(server, 'workspace/willCreateFiles'),
+    onWillRenameFiles: createRequestRegistrar(server, 'workspace/willRenameFiles'),
+    onWillDeleteFiles: createRequestRegistrar(server, 'workspace/willDeleteFiles'),
 
     textDocumentContent: {
       on: createRequestRegistrar(server, 'workspace/textDocumentContent')
@@ -300,9 +307,7 @@ export function createConnectionAdapter(server: LSPServer<ServerCapabilities>): 
       if (method === 'initialize') {
         return registerInitializeHandler(server, h);
       }
-      return server.onRequest(method, async (params: any, token: any) => {
-        return h(params, token);
-      });
+      return createRequestRegistrar(server, method)(h);
     },
 
     // ── Generic sendRequest ──────────────────────────────────────────
@@ -371,10 +376,7 @@ export function createConnectionAdapter(server: LSPServer<ServerCapabilities>): 
         if (method === 'initialize') {
           return (handler: any) => registerInitializeHandler(server, handler);
         }
-        return (handler: any) =>
-          server.onRequest(method as any, async (params: any, token: any) => {
-            return handler(params, token);
-          });
+        return createRequestRegistrar(server, method);
       }
 
       // Typed notification-handler shortcuts (e.g. connection.onDidOpenTextDocument)

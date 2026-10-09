@@ -53,6 +53,7 @@ import {
   RUNTIME_HELPER_JS_SOURCE,
   normalizePreviewInputs,
   selectTypeScriptProjection,
+  resolveExportSelection,
   generatePythonModule,
   selectPythonProjection
 } from '@rune-langium/codegen/export';
@@ -886,7 +887,7 @@ async function runProjection(request: ProjectionRequest): Promise<void> {
       currentPreviewFiles.some((file) => file.uri === request.subject.uri && file.content === request.source);
     if (!current()) throw new Error('The source changed. Refresh the generated view.');
     const { version, value: documents } = await buildDocuments();
-    let subject = request.subject;
+    let subject = { ...request.subject, uri: URI.parse(request.subject.uri).toString() };
     if (request.kind === 'function') {
       const owner = getExpressionOwners(documents.map((doc) => doc.parseResult.value as RosettaModel)).find((node) => {
         const doc = AstUtils.getDocument(node);
@@ -903,12 +904,21 @@ async function runProjection(request: ProjectionRequest): Promise<void> {
         throw new Error('The function source region changed. Refresh the generated view.');
       subject = { ...subject, region: getNodeSourceRegion(owner) };
     }
+    const fqn = qualifiedNameFromNodeId(subject.nodeId);
+    const separator = fqn.lastIndexOf('.');
+    const selectedDocuments = resolveExportSelection(documents, {
+      declarations: [
+        { namespace: fqn.slice(0, separator), name: fqn.slice(separator + 1), kind: subject.nodeId.split('#')[1]! }
+      ],
+      namespaces: []
+    }).documents;
+    const cacheKey = JSON.stringify(['projection', request.language, subject.nodeId]);
     if (request.language === 'python') {
       const { value: module } = await getOrComputeAsync(
         previewPythonCache,
-        'generate:python',
+        cacheKey,
         () => version,
-        () => Promise.resolve(generatePythonModule(documents))
+        () => Promise.resolve(generatePythonModule(selectedDocuments))
       );
       if (version !== previewFilesVersion || !current())
         throw new Error('The source changed. Refresh the generated view.');
@@ -921,9 +931,9 @@ async function runProjection(request: ProjectionRequest): Promise<void> {
     }
     const { value: outputs } = await getOrComputeAsync(
       previewGenerateCache,
-      'generate:typescript',
+      cacheKey,
       () => version,
-      () => generate(documents, { target: 'typescript' })
+      () => generate(selectedDocuments, { target: 'typescript' })
     );
     if (version !== previewFilesVersion || !current())
       throw new Error('The source changed. Refresh the generated view.');

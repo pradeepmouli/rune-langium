@@ -2,9 +2,28 @@
 // Copyright (c) 2026 Pradeep Mouli
 
 import { Buffer } from 'node:buffer';
-import { expect, type Page } from '@playwright/test';
+import { expect, type Locator, type Page } from '@playwright/test';
 import { referenceFiles } from '../../../../packages/codegen/test/helpers/cdm-reference.js';
 import { typeNavigationButton } from './type-navigation.js';
+
+export async function expectCenterPaneBounds(page: Page) {
+  const center = page.getByTestId('center-stack');
+  const bounds = (await center.boundingBox())!;
+  expect(bounds.x).toBeGreaterThanOrEqual(0);
+  expect(bounds.x + bounds.width).toBeLessThanOrEqual(page.viewportSize()!.width);
+  for (const pane of await center.locator('[data-pane]').all()) {
+    const box = (await pane.boundingBox())!;
+    expect(box.x).toBeGreaterThanOrEqual(bounds.x - 1);
+    expect(box.x + box.width).toBeLessThanOrEqual(bounds.x + bounds.width + 1);
+  }
+  const toolbar = page.getByTestId('studio-paneswitch');
+  const toolbarBounds = (await toolbar.boundingBox())!;
+  for (const button of await toolbar.getByRole('button').all()) {
+    const box = (await button.boundingBox())!;
+    expect(box.x).toBeGreaterThanOrEqual(toolbarBounds.x - 1);
+    expect(box.x + box.width).toBeLessThanOrEqual(toolbarBounds.x + toolbarBounds.width + 1);
+  }
+}
 
 export async function loadPinnedFunction(page: Page) {
   await page.goto('./');
@@ -41,4 +60,16 @@ export async function openBuilder(page: Page) {
     )
     .toBe(true);
   return dialog;
+}
+
+export async function enlargeDialogText(page: Page, dialog: Locator) {
+  const cancel = dialog.getByRole('button', { name: 'Cancel', exact: true });
+  const originalSize = await cancel.evaluate((el) => parseFloat(getComputedStyle(el).fontSize));
+  await page.evaluate(() => {
+    const root = document.documentElement;
+    root.style.fontSize = `${parseFloat(getComputedStyle(root).fontSize) * 1.25}px`;
+  });
+  await expect
+    .poll(() => cancel.evaluate((el) => parseFloat(getComputedStyle(el).fontSize)))
+    .toBeGreaterThanOrEqual(originalSize * 1.25);
 }

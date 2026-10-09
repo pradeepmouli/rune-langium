@@ -38,6 +38,36 @@ describe('HydrateResponse type', () => {
 });
 
 describe('hydrate handler', () => {
+  it('links user documents without publishing duplicate graph models, and still publishes curated documents', async () => {
+    const { createParserWorkerHarness } = await import('./parser-worker-harness.js');
+    const harness = createParserWorkerHarness();
+    await harness.send({
+      type: 'hydrate',
+      id: 'owned',
+      documents: [
+        {
+          uri: 'file:///user.rosetta',
+          content: '',
+          serializedModel: harness.serializeSample('user', 'User'),
+          exports: []
+        },
+        {
+          uri: 'file:///[cdm]/curated.rosetta',
+          content: '',
+          bundleId: 'cdm',
+          serializedModel: harness.serializeSample('curated', 'Curated'),
+          exports: []
+        }
+      ]
+    });
+    const user = await harness.send({ type: 'linkDocument', id: 'user', uri: 'file:///user.rosetta' });
+    expect(user).toMatchObject({ linked: true, newModels: [] });
+    const curated = await harness.send({ type: 'linkDocument', id: 'curated', uri: 'file:///[cdm]/curated.rosetta' });
+    expect(curated.type).toBe('linkDocumentResult');
+    if (curated.type !== 'linkDocumentResult') throw new Error('Unexpected response');
+    expect(curated.newModels).toHaveLength(1);
+    expect(curated.newModels[0]?.name).toBe('curated');
+  });
   it("registers serialized models and exports in the worker's shared state", async () => {
     const { createParserWorkerHarness } = await import('./parser-worker-harness.js');
     const harness = createParserWorkerHarness();

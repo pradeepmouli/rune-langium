@@ -166,11 +166,17 @@ describe('linked expression projections', () => {
       );
     }
   );
-  it.each(['typescript', 'python'] as const)(
-    'projects serialized curated declarations as %s with original source coordinates',
-    async (language) => {
+  it.each([
+    ['typescript', 'file:///test.rosetta'],
+    ['python', 'file:///test.rosetta'],
+    ['typescript', 'file:///[cdm]/math functions.rosetta'],
+    ['python', 'file:///[cdm]/math functions.rosetta']
+  ] as const)(
+    'projects serialized curated declarations as %s at %s with original source coordinates',
+    async (language, uri) => {
       const { scope, dispatch } = await loadRealWorker();
       const request = await requestFixture(language);
+      request.subject.uri = uri;
       const parsed = await parse(source);
       const { RuneDsl } = createRuneDslServices();
       const serializedModelJson = serializeRuneModel(RuneDsl.serializer.JsonSerializer, parsed.value);
@@ -185,6 +191,70 @@ describe('linked expression projections', () => {
           expect.objectContaining({ type: 'projection:result', requestId: 'curated' })
         )
       );
+    }
+  );
+  it.each(['typescript', 'python'] as const)(
+    'isolates the selected %s declaration while reporting failures in a selected broken declaration',
+    async (language) => {
+      const fixture = source + 'func Broken:\n output: result number (1..1)\n set result: Missing {}\n';
+      const parsed = await parse(fixture);
+      expect(parsed.parserErrors).toEqual([]);
+      const { RuneDsl } = createRuneDslServices();
+      const { scope, dispatch } = await loadRealWorker();
+      const uri = 'file:///[cdm]/math functions.rosetta';
+      dispatch({
+        type: 'preview:setFiles',
+        filesRevision: 1,
+        files: [
+          {
+            uri,
+            content: fixture,
+            serializedModelJson: serializeRuneModel(RuneDsl.serializer.JsonSerializer, parsed.value)
+          }
+        ]
+      });
+      dispatch({
+        type: 'projection:generate',
+        requestId: 'valid-selected',
+        language,
+        kind: 'function',
+        source: fixture,
+        subject: {
+          uri,
+          nodeId: 'test.Calculate#RosettaFunction',
+          region: getFunctionImplementationRegion(parsed.value.elements[0]!, fixture)
+        },
+        filesRevision: 1
+      });
+      await vi.waitFor(() =>
+        expect(scope.postMessage).toHaveBeenCalledWith(
+          expect.objectContaining({ type: 'projection:result', requestId: 'valid-selected' })
+        )
+      );
+      if (language === 'python') {
+        dispatch({
+          type: 'projection:generate',
+          requestId: 'broken-selected',
+          language,
+          kind: 'function',
+          source: fixture,
+          subject: {
+            uri,
+            nodeId: 'test.Broken#RosettaFunction',
+            region: getFunctionImplementationRegion(parsed.value.elements[1]!, fixture)
+          },
+          filesRevision: 1
+        });
+        await vi.waitFor(() =>
+          expect(scope.postMessage).toHaveBeenCalledWith(
+            expect.objectContaining({
+              type: 'projection:error',
+              requestId: 'broken-selected',
+              error: expect.stringContaining('linked type')
+            })
+          )
+        );
+      }
     }
   );
 });

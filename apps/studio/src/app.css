@@ -2251,6 +2251,7 @@ html {
 @container (max-width: 900px) {
   .studio-app .studio-center-stack:is([data-count='3'], [data-count='4']) {
     display: grid;
+    grid-template-columns: minmax(0, 1fr);
     grid-auto-rows: minmax(280px, 1fr);
     overflow: auto;
   }
@@ -2261,8 +2262,22 @@ html {
 }
 
 @container (max-width: 600px) {
+  .studio-app .studio-center-stack__bar .studio-paneswitch {
+    flex-wrap: wrap;
+    height: auto;
+    max-width: 100%;
+    gap: var(--space-1);
+    border-radius: var(--radius-md);
+  }
+
+  .studio-app .studio-center-stack__bar .studio-paneswitch > [role='group'] {
+    height: 26px;
+    min-width: 0;
+  }
+
   .studio-app .studio-center-stack[data-count='2'] {
     display: grid;
+    grid-template-columns: minmax(0, 1fr);
     grid-auto-rows: minmax(280px, 1fr);
     overflow: auto;
   }

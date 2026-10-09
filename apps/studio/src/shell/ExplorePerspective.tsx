@@ -1001,7 +1001,7 @@ export const ExplorePerspective = withInstrumentation(
       const map = new Map<string, string>();
       for (const [ns, filePath] of namespaceToFile) {
         const file = fileByPath.get(filePath);
-        if (file && (!file.refOnly || file.sourceLoaded || file.content.length > 0)) map.set(ns, file.content);
+        if (file && !file.readOnly && !file.refOnly) map.set(ns, file.content);
       }
       return map;
     }, [files, namespaceToFile]);
@@ -1456,6 +1456,7 @@ export const ExplorePerspective = withInstrumentation(
         // full merged file text — no separate mergeSerializedIntoSource step.
         const filesAtStart = filesRef.current;
         const merged = filesAtStart.map((f) => {
+          if (f.readOnly || f.refOnly) return f;
           for (const [ns, text] of serialized) {
             if (namespaceToFile.get(ns) !== f.path) continue;
             if (text === f.content) return f;
@@ -2126,7 +2127,10 @@ export const ExplorePerspective = withInstrumentation(
             renderExpressionEditor={renderExpressionEditor}
             renderFunctionBodyEditor={renderFunctionBodyEditor}
             structuralEditsDisabled={
-              (selectedNodeType === 'RosettaFunction' || selectedNodeType === 'Data') && !selectedParseCurrent
+              !selectedNodeIsRefOnly &&
+              !selectedExpressionFile?.readOnly &&
+              (selectedNodeType === 'RosettaFunction' || selectedNodeType === 'Data') &&
+              !selectedParseCurrent
             }
             compactConditions
             onClose={() => {
@@ -2151,6 +2155,7 @@ export const ExplorePerspective = withInstrumentation(
         renderFunctionBodyEditor,
         selectedNodeType,
         selectedParseCurrent,
+        selectedExpressionFile,
         navigateToNode
       ]
     );
