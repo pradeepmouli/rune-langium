@@ -94,6 +94,10 @@ const cases = [
     [{ amount: 0 }]
   ],
   ['constructor', '', 'Leaf {amount: 7}', {}, { amount: 7 }],
+  ['joinAbsentSeparator', 'separator string (0..1)', '["a", "b"] join separator', {}, 'a,b'],
+  ['joinEmptySeparator', 'separator string (0..1)', '["a", "b"] join separator', { separator: '' }, 'ab'],
+  ['joinPresentSeparator', 'separator string (0..1)', '["a", "b"] join separator', { separator: '|' }, 'a|b'],
+  ['joinDefaultSeparator', '', '["a", "b"] join', {}, 'ab'],
   ['enum', 'text string (1..1)', 'text to-enum Color', { text: 'Red' }, 'Red'],
   ['enumBad', 'text string (1..1)', 'text to-enum Color', { text: 'Missing' }, null],
   ['implicit', 'objects Leaf (0..*)', 'objects extract [amount]', { objects: [{ amount: 0 }, { amount: 3 }] }, [0, 3]],

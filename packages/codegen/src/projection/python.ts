@@ -327,7 +327,12 @@ export function renderPythonExpression(expression: RosettaExpression, context: P
     case 'JoinOperation': {
       const separator = expression.right ? render(expression.right, valueContext) : '""';
       const item = pythonFresh(context, 'item');
-      return `rune.string(${separator}).join("" if ${item} is None else rune.string(${item}) for ${item} in rune.list(${expression.left ? render(expression.left, valueContext) : argument(false)}))`;
+      const boundSeparator = pythonFresh(context, 'separator');
+      return pythonBind(
+        separator,
+        boundSeparator,
+        `("," if ${boundSeparator} is None else rune.string(${boundSeparator})).join("" if ${item} is None else rune.string(${item}) for ${item} in rune.list(${expression.left ? render(expression.left, valueContext) : argument(false)}))`
+      );
     }
     case 'ToStringOperation':
       return `rune.toString(${argument(false)})`;
