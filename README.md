@@ -222,6 +222,7 @@ This repository uses a split licensing model:
 The core grammar, language server, codegen, CLI, visual editor, and design-system packages are and will remain MIT-licensed. Rune Studio is **source-available**, not open source.
 
 See [NOTICE](./NOTICE) for third-party attribution.
+Pinned [third-party test fixtures](./test/fixtures/third-party/README.md) retain their upstream licenses.
 
 ## Contributing
 

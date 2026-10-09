@@ -4,8 +4,7 @@
 import { afterEach, expect, it, vi } from 'vitest';
 import { getExpressionRegions, createRuneDslServices, addLegacyAnnotations } from '@rune-langium/core';
 import { URI } from 'langium';
-import { resolve } from 'node:path';
-import { referenceFiles } from '../../../../packages/codegen/test/helpers/cdm-reference.js';
+import { expressionReferenceFiles } from '../../../../packages/codegen/test/helpers/cdm-reference.js';
 import { makeNodeId } from '@rune-langium/visual-editor/identifiers';
 import { createParserWorkerHarness } from '../workers/parser-worker-harness.js';
 import {
@@ -63,7 +62,7 @@ func Compute:
 it('links the pinned ten-operation browser fixture with all of its original dependencies', async () => {
   const { RuneDsl } = createRuneDslServices();
   const factory = RuneDsl.shared.workspace.LangiumDocumentFactory;
-  const docs = referenceFiles(resolve(import.meta.dirname, '../fixtures/cdm-expression')).map(({ uri, content }) => {
+  const docs = expressionReferenceFiles().map(({ uri, content }) => {
     const doc = factory.fromString(content, URI.parse(uri));
     return uri.endsWith('/annotations.rosetta') ? addLegacyAnnotations(doc, factory) : doc;
   });

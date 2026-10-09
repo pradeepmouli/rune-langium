@@ -1,0 +1,9 @@
+# Third-party test fixtures
+
+This area contains pinned upstream corpora used as test inputs. These fixtures
+retain their upstream licenses rather than the MIT/FSL licenses of authored
+Rune-langium and Studio code. Keep upstream headers, license and notice files,
+source versions and integrity manifests alongside each cohort.
+
+- [CDM expression editor cohort](cdm-expression/README.md): the ten-operation
+  function and linked declarations used by Studio's browser and scope tests.

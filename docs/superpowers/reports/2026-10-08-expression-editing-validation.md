@@ -405,3 +405,13 @@ integration budget, retaining all strict diagnostics and runtime assertions.
 The package invocation passes all three cases; full root coverage again passes
 2,790 tests at the same coverage totals and thresholds. Scoped lint, formatting
 and codegen type checking pass.
+
+The final license-policy review moved the eight pinned FINOS expression slices
+from Studio's authored-source tree into `test/fixtures/third-party/cdm-expression`.
+All source and manifest bytes match their existing integrity hashes. Pinned
+CDM/Rune license and notice files are included verbatim, with the area documented
+in AGENTS, workflow guidance and attribution. Both consumers use one shared
+`expressionReferenceFiles` entry point and the existing hash verifier. The
+32 Studio editor/scope/projection tests pass, and the ten-operation CDM browser
+journey passes in Chromium (5.7 seconds). Codegen and Studio types, scoped lint
+and root formatting pass.

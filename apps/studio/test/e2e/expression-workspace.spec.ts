@@ -3,9 +3,8 @@
 
 import { test, expect, type Page } from '@playwright/test';
 import AxeBuilder from '@axe-core/playwright';
-import { referenceFiles } from '../../../../packages/codegen/test/helpers/cdm-reference.js';
+import { expressionReferenceFiles, referenceFiles } from '../../../../packages/codegen/test/helpers/cdm-reference.js';
 import { typeNavigationButton } from '../helpers/type-navigation.js';
-import { resolve } from 'node:path';
 
 async function loadPinnedFunction(page: Page) {
   await page.goto('./');
@@ -47,7 +46,7 @@ async function openBuilder(page: Page) {
 test('ten-operation CDM function stays one editable implementation with complete projections', async ({ page }) => {
   await page.goto('./');
   await page.locator('input[type="file"][accept=".rosetta"]').setInputFiles(
-    referenceFiles(resolve(import.meta.dirname, '../fixtures/cdm-expression')).map(({ uri, content }) => ({
+    expressionReferenceFiles().map(({ uri, content }) => ({
       name: uri.split('/').at(-1)!,
       mimeType: 'text/plain',
       buffer: Buffer.from(content)
@@ -60,9 +59,7 @@ test('ten-operation CDM function stays one editable implementation with complete
   const editor = page.getByTestId('implementation-editor').locator('.cm-content');
   await expect(editor).toHaveCount(1);
   await editor.press('ControlOrMeta+a');
-  const source = referenceFiles(resolve(import.meta.dirname, '../fixtures/cdm-expression')).find((f) =>
-    f.uri.endsWith('/base-datetime-func.rosetta')
-  )!.content;
+  const source = expressionReferenceFiles().find((f) => f.uri.endsWith('/base-datetime-func.rosetta'))!.content;
   const body = source.slice(source.indexOf('    alias relativeDate:')).trimEnd();
   const draft =
     body

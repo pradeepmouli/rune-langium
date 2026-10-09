@@ -30,3 +30,7 @@ export function referenceFiles(fixtureDirectory = directory) {
     return { uri: `file:///cdm-reference/${name}`, content };
   });
 }
+
+export function expressionReferenceFiles() {
+  return referenceFiles(resolve(import.meta.dirname, '../../../../test/fixtures/third-party/cdm-expression'));
+}
