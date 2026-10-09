@@ -157,7 +157,7 @@ did not pass and package publication needs that separate configuration repair.
 
 ## PR review follow-up
 
-Thirteen actionable findings across #576–#578 have regression fixes. The
+Eighteen actionable findings across #576–#578 have regression fixes. The
 correctness branch forwards the complete indexed-operation action through the
 Studio adapter, and its operation regression uses an original MIT `Summarize`
 fixture. The separately pinned CDM browser fixture and its dependency cohort remain
@@ -174,6 +174,14 @@ symbols flow through core scope, the presentation adapter and the picker; the
 picker requires known callable arity and retains confirmed zero-input calls.
 Visual-editor reuses core's scope-kind type.
 
+Deferred callable descriptions now materialize through the shared Rune linker
+before signatures are read; unreferenced inherited/external functions are available
+on the first Builder invocation, with one materialization per document. Unrelated
+model stubs remain deferred. Source and Inspector preserve CRLF through actual
+Enter, paste and undo/redo commands while retaining full-file offsets. Unfilled
+Builder slots use an invalid preview marker, so Apply rejects them even after
+switching to Text; the real identifier `___` remains valid.
+
 The Python branch preserves signed zero, unwraps implicit metadata feature
 bindings, narrows collections element by element and shares declaration-based
 scalar classification with the TypeScript input adapter. Internally created
@@ -183,6 +191,13 @@ function normalization idempotent while leaving ordinary `value` and
 companions use the same central runtime-name allocator as other declarations;
 strict compilation and execution cover all three TypeScript layouts.
 
+Optional Python metadata arguments and constructor fields retain absence before
+conversion, required parameters reject missing values, and falsy zero stays
+present. Internally created wrappers preserve their empty metadata across nested
+calls. Explicit absent join separators use the TypeScript comma default; omitted,
+empty and present separators retain their distinct behavior. These regressions
+execute the authoritative TypeScript and Python output against the same inputs.
+
 Correctness fixes had failing behavioral regressions followed by passing ones; fixture provenance was reviewed separately.
 The standalone #577 broad gates passed 327 core, 1,536 visual-editor, 2,022 codegen
 and 1,654 Studio tests. Existing skips/todo cases were retained. The middle branch
@@ -190,11 +205,15 @@ also includes the preview mock updates so the shared CodeMirror state API is
 exercised without incomplete state-module mocks. Its pre-push hook passed all
 workspace type checks.
 
-On the final stack, codegen passed 2,226 tests using supported Python 3.13
+On the final stack, codegen passed 2,228 tests using supported Python 3.13
 (`PYTHON_BINARY`), with the existing one skip and eight todo cases. The pinned
 codegen corpus strictly compiled 132 emitted TypeScript files. Workspace type
 checks, lint, package builds and generated Python runtime freshness passed;
-existing lint warnings remain. The final full Studio suite passed 1,665 tests with two intentional skips.
+existing lint warnings remain. The latest standalone workspace gates passed
+328 core, 71 LSP, 1,537 visual-editor and 1,657 Studio tests, with two intentional
+Studio skips. The final combined Studio suite passed 1,668 tests with the same
+two intentional skips; all tracked suites were included. Workspace type checks,
+lint, changed-source formatting, package builds and runtime freshness passed.
 
 Full Studio runs exclude the ignored local reproduction under
 `test/prod-ux/report/**`, which asserts the former bug; every tracked Studio suite

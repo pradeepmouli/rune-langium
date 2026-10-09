@@ -3,8 +3,7 @@
 
 import { describe, it, expect, vi } from 'vitest';
 import { URI, EmptyFileSystem } from 'langium';
-import type { RuneDslIndexManager} from '../../src/index.js';
-import { createRuneDslServices, getExpressionScope, type RosettaModel } from '../../src/index.js';
+import { type RuneDslIndexManager,createRuneDslServices,getExpressionScope,type RosettaModel } from '../../src/index.js';
 
 async function scope(source: string | string[], name: string, aliasIndex?: number) {
   const { RuneDsl } = createRuneDslServices();
