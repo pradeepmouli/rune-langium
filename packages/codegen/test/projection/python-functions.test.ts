@@ -53,7 +53,7 @@ async function executableFunctions<T extends Record<string, unknown> = Record<st
     compilerOptions: { target: ts.ScriptTarget.ES2022, module: ts.ModuleKind.CommonJS }
   }).outputText;
   new Function('require', 'exports', javascript)(createRequire(import.meta.url), exports);
-  return { python, exports };
+  return { python, exports, document };
 }
 
 describe('complete Python function projections', () => {
@@ -1206,6 +1206,77 @@ func Compute(kind: Kind -> Credit):
     ).toEqual([{ value: null }, { value: { value: '', meta: {} } }, { value: 1 }, { value: 2 }]);
   });
 
+  it.each(['scheme', 'reference'])('normalizes JSON Data %s envelopes once at every input boundary', async (kind) => {
+    const { python, exports, document } = await executableFunctions(`namespace python.data_envelopes
+annotation metadata:
+ scheme string (0..1)
+ reference string (0..1)
+metaType scheme string
+metaType reference string
+type Token:
+ value number (1..1)
+ externalReference string (0..1)
+type Parent:
+ amount number (0..1)
+type Payload extends Parent:
+ token Token (0..1)
+  [metadata reference]
+typeAlias PayloadAlias: Payload
+func Read:
+ inputs: object PayloadAlias (0..1)
+  [metadata ${kind}]
+ output: result number (0..*)
+ set result: object -> amount
+func Forward:
+ inputs: objects PayloadAlias (0..*)
+  [metadata ${kind}]
+ output: result PayloadAlias (0..*)
+  [metadata ${kind}]
+ set result: objects
+func ReadTokens:
+ inputs: objects PayloadAlias (0..*)
+  [metadata ${kind}]
+ output: result number (0..*)
+ set result: objects -> token -> value
+`);
+    const cases = [
+      { value: { amount: 1 }, meta: { scheme: 'external' } },
+      { value: { amount: 0 }, meta: {} },
+      { value: { amount: 2 } },
+      ...(kind === 'reference'
+        ? [{ externalReference: 'id', globalReference: 'global', reference: { reference: 'scoped' } }]
+        : [])
+    ];
+    const nested = {
+      objects: [{ value: { amount: 3, token: { value: { value: 7, externalReference: 'raw' }, meta: {} } }, meta: {} }]
+    };
+    const data = { objects: cases };
+    for (const [target, input] of [
+      ['Read', { object: cases[0] }],
+      ['Forward', data],
+      ['ReadTokens', nested]
+    ] as const) {
+      expect(
+        normalizePreviewInputs([document], `python.data_envelopes.${target}`, input, {
+          field: (value) => ({ value }),
+          reference: (value) => ({ value })
+        })
+      ).toEqual(input);
+    }
+    const amounts = kind === 'reference' ? [[1], [0], [2], []] : [[1], [0], [2]];
+    expect(cases.map((object) => exports.Read!({ object }))).toEqual(amounts);
+    expect(
+      execute(
+        python.code,
+        cases.map((object) => ({ expression: 'Read(data)', data: { object } }))
+      )
+    ).toEqual(amounts.map((value) => ({ value })));
+    expect(exports.Forward!(data)).toEqual(cases);
+    expect(execute(python.code, [{ expression: 'Forward(data)', data }])).toEqual([{ value: cases }]);
+    expect(exports.ReadTokens!(nested)).toEqual([7]);
+    expect(execute(python.code, [{ expression: 'ReadTokens(data)', data: nested }])).toEqual([{ value: [7] }]);
+  });
+
   it('treats declared Data value fields as payloads, including aliases and arrays', async () => {
     const funcs = await linkedFunctions(`namespace python.rawPayload
 annotation metadata:
@@ -1242,10 +1313,21 @@ func ReadMany:
         reference: (value) => ({ value })
       })
     ).toEqual({ object: { value: data.object } });
+    const envelope = { object: { value: data.object } };
+    expect(
+      normalizePreviewInputs([doc], 'python.rawPayload.Read', envelope, {
+        field: (value) => ({ value }),
+        reference: (value) => ({ value })
+      })
+    ).toEqual(envelope);
     expect(
       execute(module.code, [
         { expression: `${module.bindings.get('python.rawPayload.Read')}(data)`, data },
         { expression: `${module.bindings.get('python.rawPayload.Forward')}(data)`, data },
+        {
+          expression: `${module.bindings.get('python.rawPayload.Read')}(data)`,
+          data: { object: { value: data.object } }
+        },
         {
           expression: `${module.bindings.get('python.rawPayload.Read')}(dict(object=rune.toField(data["object"])))`,
           data
@@ -1255,7 +1337,7 @@ func ReadMany:
           data: { objects: [{ value: 0 }, { value: 2 }] }
         }
       ])
-    ).toEqual([{ value: 1 }, { value: 1 }, { value: 1 }, { value: [0, 2] }]);
+    ).toEqual([{ value: 1 }, { value: 1 }, { value: 1 }, { value: 1 }, { value: [0, 2] }]);
   });
 
   it('normalizes raw metadata inputs before choosing a dispatch branch', async () => {

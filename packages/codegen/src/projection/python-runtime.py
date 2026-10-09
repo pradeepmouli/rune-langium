@@ -66,19 +66,36 @@ def rune_normalize_object(value, fields):
     return {key: fields[key](item) if key in fields else item for key, item in value.items()}
 
 
-def rune_normalize_attribute(value, kind, many, normalize, scalar):
+def rune_is_metadata_input(value, shape):
+    if not isinstance(value, dict) or not any(key in value for key in ("value", "reference", "externalReference", "globalReference")):
+        return False
+    if shape is None:
+        return True
+    if not all(key in ("value", "meta", "reference", "externalReference", "globalReference") for key in value):
+        return False
+    def matches(key, item):
+        if key not in shape:
+            return False
+        if item is None:
+            return True
+        if shape[key] == "array":
+            return isinstance(item, list)
+        if shape[key] == "object":
+            return isinstance(item, dict)
+        return not isinstance(item, (dict, list))
+    return not all(matches(key, item) for key, item in value.items())
+
+
+def rune_normalize_attribute(value, kind, many, normalize, payload_shape):
     if value is None:
         return None
     if many and isinstance(value, list):
-        return [rune_normalize_attribute(item, kind, False, normalize, scalar) for item in value]
-    wrapped = kind != "value" and (isinstance(value, _RuneMetadataValue) or (scalar and isinstance(value, dict) and any(
-        key in value for key in ("value", "externalReference", "globalReference", "reference"))))
+        return [rune_normalize_attribute(item, kind, False, normalize, payload_shape) for item in value]
+    wrapped = kind != "value" and (isinstance(value, _RuneMetadataValue) or rune_is_metadata_input(value, payload_shape))
     if wrapped:
         result = _RuneMetadataValue(value)
         if result.get("value") is not None:
             result["value"] = normalize(result["value"])
-        if result.get("meta") == {} and not isinstance(value, _RuneMetadataValue):
-            result.pop("meta")
         return result
     normalized = normalize(value)
     return _RuneMetadataValue(value=normalized) if kind != "value" else normalized

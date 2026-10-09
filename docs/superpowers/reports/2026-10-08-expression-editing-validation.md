@@ -347,3 +347,18 @@ Rule input fields preserve lexical closure-parameter shadowing; a targeted
 regression caught the shadowed binding before the final guard, and executed
 TypeScript/Python map cases retain the parameter values. The pinned corpus
 strictly compiled all 132 emitted TypeScript files.
+
+JSON metadata input envelopes now use one declaration-derived payload shape
+for preview adaptation and Python generation, including inherited fields and
+aliases. Externally supplied Data wrappers normalize their payload once,
+retain empty metadata and reference-only identities, and remain stable through
+arrays and nested function inputs. Ordinary Data fields named `value` and
+`externalReference` keep their payload interpretation; matching payload records
+take precedence for ambiguous shapes. The original Python and preview paths
+independently failed the new execution regressions before the repair.
+
+The complete codegen suite passed 2,271 tests (one existing skip/eight todos),
+and the 32 Studio editor/projection/scope tests passed. Codegen types, build,
+scoped lint, root formatting and generated Python runtime freshness passed.
+The previous 345-test core run and 132-file strict TypeScript corpus remain
+applicable; this repair does not change core linking or TypeScript emission.
