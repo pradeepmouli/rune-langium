@@ -4,6 +4,7 @@
 import type { Data, RosettaFunction, RosettaExpression, RosettaModel } from '../generated/ast.js';
 import type { Dehydrated } from '../serializer/dehydrated.js';
 import { CstUtils, isLeafCstNode } from 'langium';
+import { namespaceFromModelName } from '../naming/namespace.js';
 
 export type SourceRegion = Readonly<{ from: number; to: number }>;
 export type ExpressionRegion = Readonly<{
@@ -24,10 +25,32 @@ export function findExpressionOwner(
       element.name === identity.name &&
       (identity.kind === undefined || element.$type === identity.kind)
   );
-  if (matches.length === 1) return matches[0];
+  if (matches.length === 1 && matches[0]!.$type === 'Data') return matches[0];
   if (!matches.every((element) => element.$type === 'RosettaFunction')) return undefined;
   const bases = matches.filter((element) => !element.dispatchAttribute);
   return bases.length === 1 ? bases[0] : undefined;
+}
+
+/** Unique owners across files, grouped by namespace, declaration name and kind. */
+export function getExpressionOwners(
+  models: readonly Pick<RosettaModel, 'name' | 'elements'>[]
+): (Data | RosettaFunction)[] {
+  const groups = new Map<string, (Data | RosettaFunction)[]>();
+  for (const model of models) {
+    const namespace = namespaceFromModelName(model.name) ?? 'unknown';
+    for (const element of model.elements ?? []) {
+      if (element.$type !== 'Data' && element.$type !== 'RosettaFunction') continue;
+      const key = JSON.stringify([namespace, element.name, element.$type]);
+      const group = groups.get(key) ?? [];
+      group.push(element);
+      groups.set(key, group);
+    }
+  }
+  return [...groups.values()].flatMap((elements) => {
+    const identity = elements[0]!;
+    const owner = findExpressionOwner({ elements }, { name: identity.name, kind: identity.$type });
+    return owner ? [owner] : [];
+  });
 }
 
 type LocatedNode = {

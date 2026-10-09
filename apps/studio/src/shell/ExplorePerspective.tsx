@@ -72,6 +72,7 @@ import { namespaceFromModelName } from '@rune-langium/core';
 import { SourceEditor } from '../components/SourceEditor.js';
 import { ExpressionWorkspace } from '../components/editing/ExpressionWorkspace.js';
 import { ExpressionDocument } from '../services/expression-document.js';
+import { buildExpressionOwnerFiles } from './expression-owner-files.js';
 import type { SourceEditorRef } from '../components/SourceEditor.js';
 import { ConnectionStatus } from '../components/ConnectionStatus.js';
 import { LspConnectionBadge } from '../components/LspConnectionBadge.js';
@@ -657,6 +658,8 @@ export const ExplorePerspective = withInstrumentation(
       });
     }, [files, models, parsedModels]);
 
+    const expressionOwnerFiles = useMemo(() => buildExpressionOwnerFiles(resolvedModelFiles), [resolvedModelFiles]);
+
     useEffect(() => {
       workspaceIdRef.current = workspaceId;
     }, [workspaceId]);
@@ -1013,8 +1016,12 @@ export const ExplorePerspective = withInstrumentation(
         for (const element of model.elements ?? []) {
           const name = element.name ?? 'unknown';
           const nodeId = makeNodeId(ns, name, element.$type);
+          if (expressionOwnerFiles.has(nodeId)) continue;
           if (!map.has(nodeId)) map.set(nodeId, entry.filePath);
         }
+      }
+      for (const [nodeId, entry] of expressionOwnerFiles) {
+        if (entry) map.set(nodeId, entry.filePath);
       }
       // Include deferred corpus entries so linkDocument can resolve their file paths.
       for (const entry of deferredExports) {
@@ -1025,11 +1032,15 @@ export const ExplorePerspective = withInstrumentation(
         }
       }
       return map;
-    }, [resolvedModelFiles, deferredExports]);
+    }, [resolvedModelFiles, deferredExports, expressionOwnerFiles]);
 
     const resolveNodeFile = useCallback(
       (nodeData: AnyGraphNode, meta: GraphNodeMeta | undefined): string | undefined => {
         const d = nodeData as any;
+        if (meta?.namespace) {
+          const nodeId = makeNodeId(meta.namespace, d.name, d.$type);
+          if (expressionOwnerFiles.has(nodeId)) return expressionOwnerFiles.get(nodeId)?.filePath;
+        }
         const docPath = d.$container?.$document?.uri?.path as string | undefined;
         if (docPath) {
           const match = files.find((f) => f.path === docPath || f.path.endsWith(docPath) || docPath.endsWith(f.path));
@@ -1044,7 +1055,7 @@ export const ExplorePerspective = withInstrumentation(
         const nodeId = makeNodeId(meta.namespace, d.name, typeof d.$type === 'string' ? d.$type : undefined);
         return nodeIdToFilePath.get(nodeId);
       },
-      [files, nodeIdToFilePath]
+      [files, nodeIdToFilePath, expressionOwnerFiles]
     );
     // Ref for the full deferredExports list so the hydration relink effect can
     // link ALL files for the selected namespace, not just the one the per-type

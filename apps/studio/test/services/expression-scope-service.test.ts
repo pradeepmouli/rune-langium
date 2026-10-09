@@ -59,6 +59,55 @@ func Compute:
   expect(scope).toContainEqual(expect.objectContaining({ name: 'result', kind: 'output' }));
 });
 
+it.each([false, true])(
+  'opens split-file dispatch base scope and rejects variant coordinates, base first=%s',
+  async (baseFirst) => {
+    const harness = createParserWorkerHarness();
+    class HarnessWorker extends EventTarget {
+      postMessage(request: WorkerRequest) {
+        void harness.send(request).then((data) => this.dispatchEvent(new MessageEvent('message', { data })));
+      }
+      terminate() {}
+    }
+    vi.stubGlobal('Worker', HarnessWorker);
+    vi.stubGlobal('fetch', vi.fn().mockRejectedValue(new Error('offline')));
+    const base = createWorkspaceFile(
+      'base.rosetta',
+      `namespace browser.scope
+enum Kind:
+ Cash
+func Compute:
+ inputs: kind Kind (1..1)
+          amount int (1..1)
+ output: result int (1..1)
+ set result: amount
+`
+    );
+    const variant = createWorkspaceFile(
+      'variant.rosetta',
+      `namespace browser.scope
+func Compute(kind: Kind -> Cash):
+ set result: amount + 1
+`
+    );
+    const files = baseFirst ? [base, variant] : [variant, base];
+    const parsed = await parseWorkspaceFiles(files);
+    const baseModel = parsed.parsedModels.find((entry) => entry.filePath === base.path)!.model;
+    const variantModel = parsed.parsedModels.find((entry) => entry.filePath === variant.path)!.model;
+    const baseOwner = baseModel.elements.find((node) => node.$type === 'RosettaFunction')!;
+    const variantOwner = variantModel.elements.find((node) => node.$type === 'RosettaFunction')!;
+    if (baseOwner.$type !== 'RosettaFunction' || variantOwner.$type !== 'RosettaFunction')
+      throw Error('fixture functions');
+    const nodeId = makeNodeId('browser.scope', 'Compute', 'RosettaFunction');
+    const scope = await requestExpressionScope(base.path, nodeId, getExpressionRegions(baseOwner)[0]!.region, files);
+    expect(scope).toContainEqual(expect.objectContaining({ name: 'amount', kind: 'input' }));
+    expect(scope).toContainEqual(expect.objectContaining({ name: 'result', kind: 'output' }));
+    await expect(
+      requestExpressionScope(variant.path, nodeId, getExpressionRegions(variantOwner)[0]!.region, files)
+    ).rejects.toThrow('owner is unavailable');
+  }
+);
+
 it('links the pinned ten-operation browser fixture with all of its original dependencies', async () => {
   const { RuneDsl } = createRuneDslServices();
   const factory = RuneDsl.shared.workspace.LangiumDocumentFactory;

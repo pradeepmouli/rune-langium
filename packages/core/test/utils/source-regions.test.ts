@@ -101,6 +101,9 @@ describe('source regions', () => {
       expect(
         findExpressionOwner({ elements: functions.filter((func) => func.dispatchAttribute) }, { name: 'Compute' })
       ).toBeUndefined();
+      expect(
+        findExpressionOwner({ elements: [functions.find((func) => func.dispatchAttribute)!] }, { name: 'Compute' })
+      ).toBeUndefined();
       expect(findExpressionOwner({ elements: [...functions, baseFunction] }, { name: 'Compute' })).toBeUndefined();
       const data = (await parse('namespace test\ntype Compute:\n amount int (1..1)')).value.elements[0]!;
       const mixed = { elements: [...functions, data] };

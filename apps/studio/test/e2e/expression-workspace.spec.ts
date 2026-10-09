@@ -43,6 +43,67 @@ async function openBuilder(page: Page) {
   return dialog;
 }
 
+for (const baseFirst of [false, true]) {
+  test(`split-file dispatch edits and projects the base with base first=${baseFirst}`, async ({ page }) => {
+    await page.goto('./');
+    const base = {
+      name: 'base.rosetta',
+      mimeType: 'text/plain',
+      buffer: Buffer.from(`namespace test.dispatch
+enum Kind:
+ Cash
+func Compute:
+ inputs: kind Kind (1..1)
+          amount int (1..1)
+ output: result int (1..1)
+ set result: amount
+`)
+    };
+    const variant = {
+      name: 'variant.rosetta',
+      mimeType: 'text/plain',
+      buffer: Buffer.from(`namespace test.dispatch
+func Compute(kind: Kind -> Cash):
+ set result: amount + 1
+`)
+    };
+    await page
+      .locator('input[type="file"][accept=".rosetta"]')
+      .setInputFiles(baseFirst ? [base, variant] : [variant, base]);
+    await page.getByTestId('namespace-search').fill('Compute');
+    await typeNavigationButton(page, 'test.dispatch.Compute', 'RosettaFunction').click();
+    await page.getByRole('button', { name: 'Inspector', exact: true }).click();
+    const implementation = page.getByRole('region', { name: 'Function implementation' });
+    const editor = implementation.getByTestId('implementation-editor').locator('.cm-content');
+    await expect(editor).toContainText('set result: amount');
+    await expect(editor).not.toContainText('amount + 1');
+    await editor.press('ControlOrMeta+a');
+    await page.keyboard.insertText(' set result: amount + 10');
+    await expect(editor).toContainText('amount + 10');
+    for (const language of ['TypeScript', 'Python']) {
+      await implementation.getByRole('button', { name: language, exact: true }).click();
+      const projection = implementation.getByRole('textbox', { name: `Generated ${language.toLowerCase()}` });
+      await projection.press(language === 'TypeScript' || !baseFirst ? 'ControlOrMeta+End' : 'ControlOrMeta+Home');
+      if (language === 'Python' && baseFirst) await projection.press('PageDown');
+      await expect(projection).toContainText('10');
+      await expect(implementation.getByRole('alert')).toHaveCount(0);
+    }
+    await implementation.getByRole('button', { name: 'Rune', exact: true }).click();
+    const dialog = await openBuilder(page);
+    await dialog.getByTestId('tab-text').click();
+    await expect(dialog.getByTestId('text-editor')).toContainText('amount + 10');
+    await dialog.getByRole('button', { name: 'Cancel', exact: true }).click();
+    await implementation.getByRole('button', { name: 'Open in Source', exact: true }).click();
+    await page.getByRole('button', { name: 'Source', exact: true }).click();
+    await page.getByRole('button', { name: 'Inspector', exact: true }).click();
+    const source = page.getByTestId('source-editor').filter({ visible: true }).locator('.cm-content');
+    await source.press('ControlOrMeta+Home');
+    await expect(source).toContainText('func Compute:');
+    await expect(source).toContainText('amount + 10');
+    await expect(source).not.toContainText('Compute(kind:');
+  });
+}
+
 test('ten-operation CDM function stays one editable implementation with complete projections', async ({ page }) => {
   await page.goto('./');
   await page.locator('input[type="file"][accept=".rosetta"]').setInputFiles(

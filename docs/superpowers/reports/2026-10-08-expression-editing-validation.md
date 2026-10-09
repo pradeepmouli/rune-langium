@@ -415,3 +415,17 @@ in AGENTS, workflow guidance and attribution. Both consumers use one shared
 32 Studio editor/scope/projection tests pass, and the ten-operation CDM browser
 journey passes in Chromium (5.7 seconds). Codegen and Studio types, scoped lint
 and root formatting pass.
+
+
+## Split-file dispatch ownership
+
+Review #576 found that a variant-first file mapped the shared function node to its variant rather than its base. The original browser regression opened `amount + 1` instead of the base body; core also incorrectly accepted a lone variant (two red cases). Core now exposes `getExpressionOwners` to group candidates across namespace files and reuse `findExpressionOwner`. The graph adapter selects the same base as Studio's owner/file lookup; incomplete groups remain visible but cannot acquire a base expression binding or Builder scope.
+
+Verified parsed/serialized ownership, both file orders, same-named Data and unrelated namespaces, missing/duplicate bases, and the existing standalone-variant serialization contract. The real parser worker opens scope at the base file and rejects variant coordinates. Two Chromium journeys edit the base, show the edit in TypeScript/Python, open Builder and reveal the base Source file.
+
+- Core: 345 tests pass.
+- Visual-editor: 1549 tests pass.
+- Studio owner/editor/scope/projection seams: 36 tests pass; broader Explore seams: 84 pass, two existing skips.
+- Root coverage: 2790 pass, one skip, eight todo; unchanged thresholds pass.
+- Core, visual-editor and Studio type checks, affected-source lint, and repository formatting pass.
+- User guide changes and `.resources` symlink remain unchanged.

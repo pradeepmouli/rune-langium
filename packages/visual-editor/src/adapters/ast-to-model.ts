@@ -21,7 +21,8 @@ import {
   isRosettaTypeAlias,
   isAnnotation,
   parsedAdapter,
-  curatedAdapter
+  curatedAdapter,
+  getExpressionOwners
 } from '@rune-langium/core';
 import type { RosettaModel, RosettaRootElement } from '@rune-langium/core';
 import type { TypeGraphNode, TypeGraphEdge, GraphNodeMeta, GraphFilters, TypeKind } from '../types.js';
@@ -169,6 +170,14 @@ function getAttributeEdges(
  */
 export function astToModel(models: unknown, options?: AstToModelOptions): AstToModelResult {
   const modelArray = Array.isArray(models) ? models : [models];
+  const expressionOwners = new Set<RosettaRootElement>(getExpressionOwners(modelArray));
+  const expressionOwnerIds = new Set<string>();
+  for (const model of modelArray) {
+    for (const element of (model as RosettaModel).elements ?? []) {
+      if ((isData(element) || isRosettaFunction(element)) && expressionOwners.has(element))
+        expressionOwnerIds.add(makeNodeId(getNamespace(model), element.name, element.$type));
+    }
+  }
   const filters = options?.filters;
 
   const nodes: TypeGraphNode[] = [];
@@ -189,6 +198,7 @@ export function astToModel(models: unknown, options?: AstToModelOptions): AstToM
 
       if (!passesFilter(kind, namespace, name, filters)) continue;
       const nodeId = makeNodeId(namespace, name, element.$type);
+      if (expressionOwnerIds.has(nodeId) && !expressionOwners.has(element)) continue;
       if (nodeIdSet.has(nodeId)) continue;
 
       if (

@@ -9,7 +9,7 @@
  */
 
 import { describe, it, expect } from 'vitest';
-import { parse } from '@rune-langium/core';
+import { parse, createRuneDslServices, serializeRuneModel } from '@rune-langium/core';
 import { astToModel } from '../../src/adapters/ast-to-model.js';
 import { AST_TYPE_TO_NODE_TYPE } from '../../src/adapters/model-helpers.js';
 import type { Dehydrated } from '../../src/types.js';
@@ -24,6 +24,32 @@ import {
 } from '../helpers/fixture-loader.js';
 
 describe('astToModel', () => {
+  it.each([false, true])(
+    'uses the unique split dispatch base regardless of file order, serialized=%s',
+    async (serialized) => {
+      const { RuneDsl } = createRuneDslServices();
+      const sources = [
+        'namespace test\nfunc Compute(kind: Kind -> Cash):\n set result: amount + 1',
+        'namespace test\nfunc Compute:\n inputs: amount int (1..1)\n output: result int (1..1)\n set result: amount'
+      ];
+      const models = await Promise.all(
+        sources.map(async (source) => {
+          const { value, parserErrors } = await parse(source);
+          expect(parserErrors).toEqual([]);
+          return serialized ? JSON.parse(serializeRuneModel(RuneDsl.serializer.JsonSerializer, value)) : value;
+        })
+      );
+      for (const order of [models, [...models].reverse()]) {
+        const functions = astToModel(order).nodes.filter((node) => node.data.$type === 'RosettaFunction');
+        expect(functions).toHaveLength(1);
+        expect(functions[0]!.data).not.toHaveProperty('dispatchAttribute');
+        expect(functions[0]!.data).not.toHaveProperty('$container');
+        expect(functions[0]!.data).toMatchObject({ inputs: [{ name: 'amount' }] });
+      }
+      expect(astToModel([models[0]]).nodes[0]!.data).toHaveProperty('dispatchAttribute');
+    }
+  );
+
   describe('Data types', () => {
     it('creates nodes for Data types', async () => {
       const result = await parse(SIMPLE_INHERITANCE_SOURCE);
