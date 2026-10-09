@@ -23,7 +23,7 @@ describe('expressionNodeToDehydrated', () => {
       right: { $type: 'RosettaBooleanLiteral', id, value: true }
     } as never;
     const out = expressionNodeToDehydrated(node, { allowPlaceholders: true });
-    expect(renderExpression(out as never)).toBe('___ and True');
+    expect(renderExpression(out as never)).toBe('(<?>) and True');
   });
 
   it('throws on Placeholder when placeholders are not allowed', () => {

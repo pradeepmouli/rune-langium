@@ -102,7 +102,7 @@ Studio's Inspector reuses SourceEditor and `documentExtensions` for continuous f
 The Inspector Builder opens a private expression draft dialog from the current
 function caret or selected Data condition. Apply validates the captured workspace,
 file revision and original expression bytes, then commits one CodeMirror undo
-transaction; Cancel and Escape never write. Reordering/deleting a condition or
+transaction; Cancel and Escape never write. Unfilled Builder slots render a preview-only invalid Rune marker, so Apply cannot commit them, including after switching to Text. The strict shared serializer rejects placeholders. Reordering/deleting a condition or
 editing Source makes an open draft stale. The parser worker exposes core's
 canonical expression scope, including dispatch signatures, inherited fields,
 earlier aliases, Choice symbols and callable argument counts. Visual-editor reuses the core scope-kind type and omits callables without authoritative arity from its picker. Confirmed zero-input calls remain available. The dialog's Text surface reuses

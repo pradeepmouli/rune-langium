@@ -59,7 +59,7 @@ describe('Expression round-trip (T029)', () => {
       // ExpressionNode → DSL text
       const dslText = expressionNodeToDsl(exprNode);
       expect(dslText).toBeTruthy();
-      expect(dslText).not.toBe('___'); // Not a placeholder
+      expect(dslText).not.toBe('<?>'); // Not a placeholder
     }
   });
 
