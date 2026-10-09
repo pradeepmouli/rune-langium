@@ -252,6 +252,15 @@ before the rendering fix and passed afterward; a field-metadata absence control
 stayed passing. All 144 Python function tests and the full 2,235-test codegen
 suite passed, retaining the existing skip and todo cases.
 
+Headless `one-of` predicates count authoritative root fields, including inherited
+Data attributes and actual function output locals. The condition context retains
+its owning type, and `one-of`/`only-exists` reuse a shared root-field helper.
+Five failing parity regressions cover the pinned CDM `UnitType`, inherited/falsy
+fields, zero-field types and function pre/postconditions. All 149 Python function
+tests and 2,240 codegen tests passed after the fixes, with existing skip/todo cases
+retained. The rebuilt generator, type checks and scoped lint passed; its shared
+helper has a portable return type derived from `typeFeatures`.
+
 Correctness fixes had failing behavioral regressions followed by passing ones; fixture provenance was reviewed separately.
 The standalone #577 broad gates passed 327 core, 1,536 visual-editor, 2,022 codegen
 and 1,654 Studio tests. Existing skips/todo cases were retained. The middle branch

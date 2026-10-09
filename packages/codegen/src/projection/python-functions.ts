@@ -278,6 +278,7 @@ export function projectPythonCondition(condition: Condition, context: PythonProj
     ...context,
     locals,
     self: 'data',
+    implicit: { name: 'data', type: owner },
     resultMode: 'condition',
     state: { next: 0 }
   });

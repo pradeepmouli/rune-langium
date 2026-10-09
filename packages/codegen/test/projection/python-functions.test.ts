@@ -587,6 +587,122 @@ func Identity:
     ).toEqual([{ value: true }, { value: false }]);
   });
 
+  it('counts inherited root fields for a headless one-of condition', async () => {
+    const funcs = await linkedFunctions(`namespace python.headless_oneof
+type Parent:
+ left number (0..1)
+type Terms extends Parent:
+ right boolean (0..1)
+ labels string (0..*)
+ condition Selection: one-of
+func Identity:
+ inputs: terms Terms (1..1)
+ output: result Terms (1..1)
+ set result: terms
+`);
+    const document = AstUtils.getDocument(funcs[0]!);
+    const python = generatePythonModule([document]);
+    const condition = python.projections.find((entry) => entry.kind === 'condition')!;
+    const name = /^def (\w+)/.exec(condition.code)![1]!;
+    const [typescript] = await generate([document], {
+      target: 'typescript',
+      strict: true,
+      typescript: { layout: 'single-file' }
+    });
+    const exports: Record<string, new (data: object) => { validateSelection(): { valid: boolean } }> = {};
+    const javascript = ts.transpileModule(typescript!.content, {
+      compilerOptions: { target: ts.ScriptTarget.ES2022, module: ts.ModuleKind.CommonJS }
+    }).outputText;
+    new Function('require', 'exports', javascript)(createRequire(import.meta.url), exports);
+    const cases = [
+      { data: {}, expected: false },
+      { data: { left: 0 }, expected: true },
+      { data: { right: false }, expected: true },
+      { data: { labels: [] }, expected: false },
+      { data: { labels: [''] }, expected: true },
+      { data: { left: 0, right: false }, expected: false },
+      { data: { unknown: 1 }, expected: false }
+    ];
+    const expected = cases.map(({ data, expected }) => {
+      const result = new exports.Terms!(data).validateSelection().valid;
+      expect(result).toBe(expected);
+      return { value: result };
+    });
+    expect(
+      execute(
+        python.code,
+        cases.map(({ data }) => ({ expression: `${name}(data)`, data }))
+      )
+    ).toEqual(expected);
+  });
+
+  it('rejects a headless one-of on a type with no fields', async () => {
+    const funcs = await linkedFunctions(`namespace python.empty_oneof
+type Empty:
+ condition Selection: one-of
+func Anchor:
+ output: result number (1..1)
+ set result: 0
+`);
+    const document = AstUtils.getDocument(funcs[0]!);
+    const python = generatePythonModule([document]);
+    const condition = python.projections.find((entry) => entry.kind === 'condition')!;
+    const name = /^def (\w+)/.exec(condition.code)![1]!;
+    const [typescript] = await generate([document], {
+      target: 'typescript',
+      strict: true,
+      typescript: { layout: 'single-file' }
+    });
+    const exports: Record<string, new (data: object) => { validateSelection(): { valid: boolean } }> = {};
+    const javascript = ts.transpileModule(typescript!.content, {
+      compilerOptions: { target: ts.ScriptTarget.ES2022, module: ts.ModuleKind.CommonJS }
+    }).outputText;
+    new Function('require', 'exports', javascript)(createRequire(import.meta.url), exports);
+    expect(new exports.Empty!({}).validateSelection().valid).toBe(false);
+    expect(execute(python.code, [{ expression: `${name}(data)`, data: {} }])).toEqual([{ value: false }]);
+  });
+
+  it.each(['condition', 'post-condition'])('counts root fields for function %s one-of', async (kind) => {
+    const funcs = await linkedFunctions(`namespace python.function_oneof
+func Validate:
+ inputs: left number (0..1) right boolean (0..1)
+ output: result number (0..1)
+ ${kind === 'condition' ? 'condition Selection: one-of' : ''}
+ set result: 0
+ ${kind === 'post-condition' ? 'post-condition Selection: one-of' : ''}
+`);
+    const document = AstUtils.getDocument(funcs[0]!);
+    const python = generatePythonModule([document]);
+    const [typescript] = await generate([document], {
+      target: 'typescript',
+      strict: true,
+      typescript: { layout: 'single-file' }
+    });
+    const exports: Record<string, (data: object) => unknown> = {};
+    const javascript = ts.transpileModule(typescript!.content, {
+      compilerOptions: { target: ts.ScriptTarget.ES2022, module: ts.ModuleKind.CommonJS }
+    }).outputText;
+    new Function('require', 'exports', javascript)(createRequire(import.meta.url), exports);
+    const cases = [{}, { left: 0 }, { right: false }, { left: 0, right: false }];
+    const results = execute(
+      python.code,
+      cases.map((data) => ({
+        expression: `${python.bindings.get('python.function_oneof.Validate')}(data)`,
+        data
+      }))
+    );
+    cases.forEach((data, index) => {
+      const valid = kind === 'condition' ? index === 1 || index === 2 : index === 0;
+      if (valid) {
+        expect(exports.Validate!(data)).toBe(0);
+        expect(results[index]).toEqual({ value: 0 });
+      } else {
+        expect(() => exports.Validate!(data)).toThrow(/Selection/);
+        expect(results[index]?.error).toContain('Selection');
+      }
+    });
+  });
+
   it('projects bare only-exists fields with inherited siblings in Data condition scope', async () => {
     const funcs = await linkedFunctions(`namespace python.onlyexists
 type Parent:
@@ -816,14 +932,16 @@ func Precise:
 
 describe('pinned CDM Python backend execution', () => {
   let outputs: Array<{ value?: unknown; error?: string }>;
+  let documents: LangiumDocument[];
+  let module: ReturnType<typeof generatePythonModule>;
   beforeAll(async () => {
     const { RuneDsl } = createRuneDslServices();
-    const documents: LangiumDocument[] = referenceFiles().map(({ uri, content }) =>
+    documents = referenceFiles().map(({ uri, content }) =>
       RuneDsl.shared.workspace.LangiumDocumentFactory.fromString(content, URI.parse(uri))
     );
     await RuneDsl.shared.workspace.DocumentBuilder.build(documents, { validation: false });
     assertValidDocuments(documents);
-    const module = generatePythonModule(documents);
+    module = generatePythonModule(documents);
     outputs = execute(
       module.code,
       referenceCases.map((testCase) => ({
@@ -831,6 +949,37 @@ describe('pinned CDM Python backend execution', () => {
         data: testCase.inputs
       }))
     );
+  });
+  it('matches the CDM UnitType one-of predicate for absent and multiple fields', async () => {
+    const projection = module.projections.find((entry) => entry.code.includes('data: UnitType)'))!;
+    const name = /^def (\w+)/.exec(projection.code)![1]!;
+    const [typescript] = await generate(documents, {
+      target: 'typescript',
+      strict: true,
+      typescript: { layout: 'single-file' }
+    });
+    const exports: Record<string, new (data: object) => { validateUnitType(): { valid: boolean } }> = {};
+    const javascript = ts.transpileModule(typescript!.content, {
+      compilerOptions: { target: ts.ScriptTarget.ES2022, module: ts.ModuleKind.CommonJS }
+    }).outputText;
+    new Function('require', 'exports', javascript)(createRequire(import.meta.url), exports);
+    const cases = [
+      { data: {}, expected: false },
+      { data: { financialUnit: 'Share' }, expected: true },
+      { data: { currency: { value: 'USD', meta: {} } }, expected: true },
+      { data: { financialUnit: 'Share', currency: { value: 'USD', meta: {} } }, expected: false }
+    ];
+    const expected = cases.map(({ data, expected }) => {
+      const result = new exports.UnitType!(data).validateUnitType().valid;
+      expect(result).toBe(expected);
+      return { value: result };
+    });
+    expect(
+      execute(
+        module.code,
+        cases.map(({ data }) => ({ expression: `${name}(data)`, data }))
+      )
+    ).toEqual(expected);
   });
   it.each(referenceCases)('$id ($function)', (testCase) => {
     const output = outputs[referenceCases.indexOf(testCase)]!;

@@ -29,6 +29,7 @@ import {
   pythonBind,
   pythonFresh,
   pythonRead,
+  pythonRootFields,
   pythonUnwrap,
   pythonNormalize,
   pyBool,
@@ -140,9 +141,7 @@ export function pythonOnlyExists(
   render: PythonRender
 ): string | undefined {
   if (expression.$type !== 'RosettaOnlyExistsExpression') return undefined;
-  const rootFields = context.implicit?.type
-    ? typeFeatures(context.implicit.type)
-    : [...context.locals.keys()].filter((node) => isAttribute(node) || isChoiceOption(node));
+  const rootFields = pythonRootFields(context);
   const selected = onlyExistsSelection(expression, rootFields.map(featureName), (node) => render(node, context));
   if (!selected || !selected.attributes.length) throw new Error('only-exists requires a linked common parent');
   if (!selected.parent) {

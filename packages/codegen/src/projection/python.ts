@@ -32,6 +32,7 @@ import {
   pythonInline,
   pythonNormalize,
   pythonRead,
+  pythonRootFields,
   pythonUnwrap,
   pyBool,
   pyString,
@@ -387,13 +388,16 @@ export function renderPythonExpression(expression: RosettaExpression, context: P
     case 'ChoiceOperation': {
       const root = pythonFresh(context, 'choice'),
         type = arg ? expressionType(arg) : context.implicit?.type;
+      const fields = arg ? typeFeatures(type) : pythonRootFields(context);
+      const bindings = new Map(fields.map((field) => [featureName(field), context.locals.get(field)]));
       const names =
         expression.$type === 'ChoiceOperation'
           ? expression.attributes.map((ref) => (isChoiceOption(ref.ref) ? featureName(ref.ref) : ref.$refText))
-          : typeFeatures(type).map(featureName);
-      const values = names.length
-        ? `[${names.map((name) => pythonRead(root, [name])).join(', ')}]`
-        : `rune.list(${root})`;
+          : fields.map(featureName);
+      const values =
+        names.length || !arg
+          ? `[${names.map((name) => (!arg ? (bindings.get(name) ?? pythonRead(root, [name])) : pythonRead(root, [name]))).join(', ')}]`
+          : `rune.list(${root})`;
       const value = pythonFresh(context, 'value');
       const count = `sum(1 for ${value} in ${values} if rune.exists(${value}))`;
       const predicate = `${count} ${expression.$type === 'ChoiceOperation' && expression.necessity === 'optional' ? '<= 1' : '== 1'}`;

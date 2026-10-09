@@ -1,7 +1,13 @@
 // SPDX-License-Identifier: MIT
 // Copyright (c) 2026 Pradeep Mouli
 
-import type { RosettaExpression, Attribute, InlineFunction } from '@rune-langium/core';
+import {
+  isAttribute,
+  isChoiceOption,
+  type RosettaExpression,
+  type Attribute,
+  type InlineFunction
+} from '@rune-langium/core';
 import { expressionIsMany, expressionType, typeFeatures, featureName } from '../expr/navigation.js';
 import { expressionMetadataKind } from '../expr/metadata-type.js';
 import { fieldMetadataKind, type FieldMetadataKind } from '../expr/metadata-runtime.js';
@@ -14,6 +20,11 @@ export interface PythonRenderContext extends PythonProjectionContext {
 export type PythonRender = (expression: RosettaExpression, context: PythonRenderContext) => string;
 export const pyString = (value: string) => JSON.stringify(value);
 export const pyBool = (value: boolean) => (value ? 'True' : 'False');
+export function pythonRootFields(context: PythonProjectionContext): ReturnType<typeof typeFeatures> {
+  return context.implicit?.type
+    ? typeFeatures(context.implicit.type)
+    : [...context.locals.keys()].filter((node) => isAttribute(node) || isChoiceOption(node));
+}
 export function pythonFresh(context: PythonRenderContext, label: string): string {
   return `_rune_${label}_${context.state.next++}`;
 }
