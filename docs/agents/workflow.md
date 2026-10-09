@@ -6,7 +6,7 @@ Read root and affected-package `package.json` scripts before choosing commands.
 Use the pinned pnpm version and preserve overrides/patches in
 `pnpm-workspace.yaml` during dependency changes.
 
-- The pre-commit hook runs `lint-staged`, formatting staged JS/TS/JSON-family files with oxfmt. The pre-push hook runs type checking. Prefer the existing `simple-git-hooks` / `lint-staged` setup for hook changes.
+- The pre-commit hook runs `lint-staged`, applying Oxlint fixes before formatting staged JS/TS files with oxfmt; JSON-family files are formatted directly. Formatting runs last so import rewrites cannot leave CI style drift. The pre-push hook runs type checking. Prefer the existing `simple-git-hooks` / `lint-staged` setup for hook changes.
 - `SKIP_SIMPLE_GIT_HOOKS=1` bypasses hooks; report skipped verification when relevant.
 - After codegen render changes, run `pnpm --filter @rune-langium/codegen run build` so consumers receive updated dist output.
 - After switching stacked branches, force affected TypeScript builds with `pnpm --filter <package> exec tsc -b --force` before testing consumers. Incremental build caches can leave `dist` from the previous branch; source-only tests do not verify those exports.

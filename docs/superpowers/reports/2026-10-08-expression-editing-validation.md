@@ -208,6 +208,12 @@ All five original comment regressions failed before the fix. The expanded
 source-range suite passed 16 tests; the final core suite passed 338 tests and
 22 affected Studio workspace/projection tests passed. Workspace types and scoped
 lint passed against forced core exports.
+The trailing-comment boundary now excludes following top-level documentation
+while retaining same-line or indented body comments. Three parsed/serialized
+LF/CRLF regressions failed before that boundary fix. All 19 source-range tests,
+341 core tests and 22 affected Studio tests passed afterward, along with workspace
+types and scoped lint. The commit hook now formats after lint auto-fixes so import
+rewrites cannot leave formatting drift.
 
 The Python branch preserves signed zero, unwraps implicit metadata feature
 bindings, narrows collections element by element and shares declaration-based
