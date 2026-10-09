@@ -29,6 +29,25 @@ const implementation = `
 const neighbor = '\n\nfunc Neighbor:\n  output:\n    result int (1..1)\n  set result: 7\n';
 
 describe('source regions', () => {
+  it.each(['', ' output: result int (1..1)\n  set result: 1', ' /* body */'])(
+    'protects the next declaration’s documentation after body %j',
+    async (body) => {
+      for (const newline of ['\n', '\r\n']) {
+        const next = '\n\n/** Neighbor documentation */\nfunc Neighbor:\n output: result int (1..1)\n set result: 2';
+        const source = ('namespace test.regions\nfunc Previous:' + body + next).replaceAll('\n', newline);
+        const parsed = await parse(source);
+        expect(parsed.parserErrors).toEqual([]);
+        const func = parsed.value.elements.find(isRosettaFunction)!;
+        const range = getFunctionImplementationRegion(func, source);
+        expect(source.slice(range.from, range.to)).not.toContain('Neighbor documentation');
+        expect(range.to).toBe(source.indexOf(next.replaceAll('\n', newline)));
+        const services = createRuneDslServices();
+        const serialized = JSON.parse(serializeRuneModel(services.RuneDsl.serializer.JsonSerializer, parsed.value));
+        expect(getFunctionImplementationRegion(serialized.elements[0], source)).toEqual(range);
+      }
+    }
+  );
+
   it.each([
     ['func Inline: output: result int (1..1) ', '/* inline */\n  set result: 1'],
     ['func Multiline: output: result int (1..1) ', '/* inline\n     continuation */\n  set result: 1'],

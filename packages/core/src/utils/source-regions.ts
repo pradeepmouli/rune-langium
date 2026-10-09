@@ -55,8 +55,19 @@ export function getFunctionImplementationRegion(
 ): SourceRegion {
   const declaration = getNodeSourceRegion(func);
   const statements = [...func.shortcuts, ...func.conditions, ...func.operations, ...func.postConditions];
-  const trailingComments = source.slice(declaration.to).match(/^(?:\s*(?:\/\*[\s\S]*?\*\/|\/\/[^\r\n]*))+/)?.[0];
-  const to = declaration.to + (trailingComments?.length ?? 0);
+  const declarationIndent = declaration.from - (source.lastIndexOf('\n', declaration.from - 1) + 1);
+  const trailingComment = /\s*(\/\*[\s\S]*?\*\/|\/\/[^\r\n]*)/y;
+  let to = declaration.to;
+  for (;;) {
+    trailingComment.lastIndex = to;
+    const match = trailingComment.exec(source);
+    if (!match) break;
+    const commentStart = match.index + match[0].length - match[1]!.length;
+    const lineStart = source.lastIndexOf('\n', commentStart - 1) + 1;
+    // Later top-level comments belong to the following declaration, not this body.
+    if (lineStart > to && commentStart - lineStart <= declarationIndent) break;
+    to = trailingComment.lastIndex;
+  }
   const firstFrom = statements.length ? getNodeSourceRegion(statements[0]!).from : to;
   const afterHeader = (end: number): SourceRegion => {
     const lineEnd = source.indexOf('\n', end);
