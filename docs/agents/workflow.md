@@ -19,6 +19,20 @@ Use the pinned pnpm version and preserve overrides/patches in
 
 Keep `@zod-to-form/vite` exactly pinned to `0.5.0` in Studio and visual-editor for the unified configuration contract. Babel 8 requires Node `^22.18.0 || >=24.11.0`; the current jsdom 30.1 test toolchain requires the higher range `^22.22.2 || ^24.15.0 || >=26.0.0`. Workspace and package engine declarations use that combined supported range. Older Node 22/24 releases and Node 23/25 are unsupported. The previous `0.4.8` plugin compatibility pin applied to the old Node 22.13 floor.
 
+## Dependency Compatibility and Audit Exceptions
+
+`@lspeasy/core@3.0.1` imports `type-fest` in its published declarations without declaring the dependency. The workspace package extension supplies `type-fest@5.10.0` so type checking cannot pick up an incompatible hoisted copy from another tool. [Upstream issue #307](https://github.com/pradeepmouli/lspeasy/issues/307) tracks removal after the package declares its own dependency.
+
+`patchedDependencies` applies a nesting/AST traversal guard to every transitive `braces@3.0.3` copy used by development tooling. The patch backports only the structural guards from [upstream PR #82 at commit `1f11eb5`](https://github.com/micromatch/braces/pull/82/commits/1f11eb558be9ea0cda87861408bb766e2e714086); it does not include that PR's separate range or parent-queue changes. Parsing permits at most 128 nested brace/parenthesis containers. Recursive walkers reject child depth over 128, child cycles and more than 65,536 visits with `SyntaxError` / `ERR_BRACES_COMPLEXITY`. Shared acyclic children remain valid. Terminal nodes add an edge, so 127 parsed containers leave room for a literal leaf in subsequent traversal. These bounds do not limit Cartesian expansion cardinality or arbitrary AST property getters.
+
+Run `node --test scripts/braces-patch.test.mjs` after install or dependency changes; CI verifies the patch through the actual Stylelint dependency. The test's optional `BRACES_TEST_PACKAGE` path allows comparison against an unpatched package without changing workspace resolution.
+
+The audit still identifies the patched package as version 3.0.3, so `auditConfig.ignoreGhsas` remains limited to `GHSA-vfj7-8cjw-p6xm`. This version-based exception accompanies a local runtime mitigation; it does not mean npm has published a fixed release. [Issue #572](https://github.com/pradeepmouli/rune-langium/issues/572) tracks replacing the backport and removing the exception when that release is available. Use `pnpm audit --prod` to check the production tree separately.
+
+Keep TypeScript `6.0.3` in docs and the `typescript-classic` alias in codegen: TypeDoc's peer range and codegen's compiler API need that release, while normal workspace compilation uses TypeScript 7.
+
+After CodeMirror updates, run `pnpm dedupe` and check `pnpm why -r @codemirror/state @codemirror/view`. Studio and its LSP client must resolve the same state/view classes; duplicate copies make editor extensions and workspace overrides incompatible. Force affected TypeScript builds afterward to invalidate cached module resolutions.
+
 ## Generated Sources
 
 Do not hand-edit generated AST, Zod, editable-domain, or conformance files.

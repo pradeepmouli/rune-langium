@@ -27,7 +27,7 @@ allowBuilds:
   workerd: false
 
 minimumReleaseAgeExclude:
-  - langium-zod@0.12.0
+  - langium-zod@0.12.2
   - '@zod-to-form/core@0.12.0'
   - '@zod-to-form/react@0.13.0'
   - '@zod-to-form/vite@0.5.0'
@@ -57,9 +57,9 @@ overrides:
   # react-dom's dev build hard-asserts exact-same-version, which aborts every
   # React test suite at load (CI: "Failed Suites 51"). The override forces both
   # to one version regardless of the peer ranges.
-  react: 19.2.8
-  react-dom: 19.2.8
-  langium-zod: 0.12.0
+  react: 19.3.0
+  react-dom: 19.3.0
+  langium-zod: 0.12.2
   x-to-zod: ^0.8.0
   '@zod-to-form/core': 0.12.0
   '@zod-to-form/react': 0.13.0
@@ -71,14 +71,26 @@ overrides:
   # GHSA-ph9p-34f9-6g65 / CVE-2026-44705: path traversal via unsanitized prefix/postfix
   # in tmp < 0.2.6; purely transitive (no first-party imports).
   tmp: '>=0.2.6'
-  # GHSA-4cwx-7wf7-3272 / GHSA-8xcm-r25x-g524 / GHSA-m8rv-5g2x-5cg5 / GHSA-jr45-8vmc-qm54 /
-  # GHSA-v3r7-h72x-cjcm: five undici < 7.29.0 CVEs, pulled in transitively via
-  # miniflare (a deliberately-pinned stable version — see the minimumReleaseAgeExclude
-  # comment history; do not resolve by bumping miniflare to the 5.x-alpha line).
-  # Scoped to miniflare's own dependency, NOT a blanket `undici: '>=7.29.0'` override:
-  # an unbounded override unifies every undici consumer (including jsdom/vitest, which
-  # independently needs 8.x) onto one globally-resolved version, silently major-bumping
-  # undici to 8.10.1 under miniflare too — which required Node >=22.19.0, above the
-  # then-supported workspace >=22.13.0 floor (caught via PR #504 Copilot review). Purely
-  # transitive (no first-party imports).
-  'miniflare>undici': '7.29.0'
+  # Keep patched Undici 7 scoped to Miniflare without unifying Undici 8 consumers.
+  'miniflare>undici': '7.30.0'
+  # GHSA-wq5f-xc86-pv6w: patched librsvg in Miniflare's image tooling.
+  'miniflare>sharp': '0.35.5'
+  # GHSA-pqg4-j6r4-53mv: patched command quoting in the dev process runner.
+  'concurrently>shell-quote': '1.12.0'
+
+# Local braces security patch retains version 3.0.3; audit cannot inspect it.
+# Remove this single version-based exception with the upstream release (#572).
+auditConfig:
+  ignoreGhsas:
+    - GHSA-vfj7-8cjw-p6xm
+
+# Published declaration files import type-fest without declaring it.
+# Remove after https://github.com/pradeepmouli/lspeasy/issues/307 is fixed.
+packageExtensions:
+  '@lspeasy/core@3.0.1':
+    dependencies:
+      type-fest: 5.10.0
+
+# GHSA-vfj7-8cjw-p6xm: structural guards backported from micromatch/braces#82.
+patchedDependencies:
+  braces@3.0.3: patches/braces@3.0.3.patch

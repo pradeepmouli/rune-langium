@@ -3,7 +3,7 @@
 ## Core
 
 ### `RuneDslParser`
-Custom Langium parser for the Rune DSL that pre-processes input text to insert
+Custom Langium parser for the Rune DSL that normalizes lexer input to insert
 implicit `[` and `]` brackets around bare expressions after `extract`,
 `filter`, and `reduce` operators.
 *extends `LangiumParser`*
@@ -17,8 +17,8 @@ constructor(services: LangiumCoreServices): RuneDslParser
 - `allRules: Map<string, RuleResult>`
 - `mainRule: RuleResult`
 **Methods:**
-- `parse<T>(input: string, options?: ParserOptions): ParseResult<T>`
 - `rule(rule: ParserRule | InfixRule, impl: RuleImpl): RuleResult`
+- `parse<T>(input: string, options?: ParserOptions): ParseResult<T>`
 - `consume(idx: number, tokenType: TokenType, feature: AbstractElement): void`
 - `subrule(idx: number, rule: RuleResult, fragment: boolean, feature: AbstractElement, args: Args): void`
 - `action($type: string, action: Action): void`
