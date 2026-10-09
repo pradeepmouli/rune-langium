@@ -563,7 +563,10 @@ async function handleExpressionScope(req: ExpressionScopeRequest): Promise<Expre
   try {
     if (req.files) {
       const parsed = await handleParseWorkspace({ type: 'parseWorkspace', id: req.id, files: req.files });
-      const errors = Object.values(parsed.errors).flat();
+      const uri = URI.parse(req.uri).toString();
+      const errors = Object.entries(parsed.errors).flatMap(([file, errors]) =>
+        file === '__worker__' || URI.parse(file).toString() === uri ? errors : []
+      );
       if (errors.length) throw new Error(errors.join('\n'));
     }
     const linked = await handleLinkDocument({ type: 'linkDocument', id: req.id, uri: req.uri });

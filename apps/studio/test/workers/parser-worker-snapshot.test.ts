@@ -1,11 +1,63 @@
 // SPDX-License-Identifier: FSL-1.1-ALv2
 // Copyright (c) 2026 Pradeep Mouli
 
-import { describe, it, expect } from 'vitest';
-import { dispatchWorkerRequest } from '../../src/workers/parser-worker.js';
+import { describe, it, expect, vi } from 'vitest';
+import { dispatchWorkerRequest, _testInternals } from '../../src/workers/parser-worker.js';
 import { createParserWorkerHarness } from './parser-worker-harness.js';
 
 describe('expression scope snapshot ownership', () => {
+  it.each([false, true])('blocks syntax errors only in the owning document, owner error=%s', async (ownerError) => {
+    const source =
+      'namespace snapshot\nfunc Calc:\n inputs: amount int (1..1)\n output: out int (1..1)\n set out: amount + 1';
+    const invalid = '\ntype Broken:\n field ???';
+    const response = await dispatchWorkerRequest({
+      type: 'expressionScope',
+      id: 'syntax-scope',
+      uri: 'file:///owner.rosetta',
+      name: 'Calc',
+      region: { from: source.indexOf('amount + 1'), to: source.length },
+      files: [
+        { name: 'file:///owner.rosetta', content: source + (ownerError ? invalid : '') },
+        { name: 'file:///draft.rosetta', content: 'namespace draft' + invalid }
+      ]
+    });
+    if (response.type !== 'expressionScopeResult') throw new Error('Unexpected response');
+    if (ownerError) {
+      expect(response.error).toBeTruthy();
+      expect(response.entries).toEqual([]);
+    } else {
+      expect(response.error).toBeUndefined();
+      expect(response.entries).toContainEqual(expect.objectContaining({ name: 'amount', kind: 'input' }));
+    }
+  });
+
+  it('still blocks a failed workspace snapshot build', async () => {
+    const build = vi.spyOn(_testInternals().services.shared.workspace.DocumentBuilder, 'build');
+    const log = vi.spyOn(console, 'error').mockImplementation(() => {});
+    build.mockRejectedValueOnce(new Error('snapshot build failed'));
+    try {
+      const response = await dispatchWorkerRequest({
+        type: 'expressionScope',
+        id: 'failed-snapshot',
+        uri: 'file:///owner.rosetta',
+        name: 'Calc',
+        region: { from: 0, to: 1 },
+        files: [
+          {
+            name: 'file:///owner.rosetta',
+            content: 'namespace snapshot\nfunc Calc:\n output: out int (1..1)\n set out: 1'
+          }
+        ]
+      });
+      expect(response).toEqual(
+        expect.objectContaining({ entries: [], error: expect.stringContaining('snapshot build failed') })
+      );
+    } finally {
+      build.mockRestore();
+      log.mockRestore();
+    }
+  });
+
   it('removes deleted declarations from an unchanged owner’s scope', async () => {
     const owner = 'namespace snapshot\nfunc Calc:\n output: out int (1..1)\n set out: 1';
     const file = { name: 'file:///owner.rosetta', content: owner };

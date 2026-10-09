@@ -110,6 +110,16 @@ canonical expression scope, including dispatch signatures, inherited fields,
 earlier aliases, Choice symbols and callable argument counts. Visual-editor reuses the core scope-kind type and omits callables without authoritative arity from its picker. Confirmed zero-input calls remain available. The dialog's Text surface reuses
 SourceEditor with a private buffer and no live LSP owner.
 
+Before requesting builder scope, Studio normalizes the owning workspace path to
+its URI and sends the current source/dependency snapshot through the parser
+worker's existing parse/link pipeline. This also seeds that worker after a router
+request falls back to main-thread parsing; it does not create a second resolver.
+The worker serializes complete requests over its mutable document/index services,
+including scope's parse/link/read sequence. Failed snapshot builds and syntax
+errors in the owning document fail the scope request. Unrelated files' syntax
+errors do not block a valid owner; no request continues against another
+request's documents.
+
 Generated expression views use codegen's recorded projection metadata and the
 existing preview worker/session client. TypeScript functions display the exact
 emitted declaration; condition fragments are captured during the same emitter
