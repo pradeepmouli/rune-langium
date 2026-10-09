@@ -379,3 +379,12 @@ Invalid drafts retain their private text. Affected suites passed 59 tests and
 the complete visual-editor suite passed 1,547; package types/build, scoped lint
 and root formatting passed. Earlier assertions were updated to canonical parser
 diagnostics and serializer layout.
+
+Master-target CI's full test step passed, but its root coverage invocation
+exposed a working-directory assumption in the Python-runtime freshness test.
+The generator script now resolves from the test module URL, preserving the
+authoritative byte-equality and deterministic-regeneration checks. The original
+root invocation failed locally; both root and package invocations pass after
+the repair. Full root coverage passed 2,790 tests (one existing skip/eight todos),
+with statements 54.23%, branches 61.20%, functions 35.90% and lines 55.78%, all
+above the unchanged configured thresholds. Scoped lint and root formatting pass.

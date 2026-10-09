@@ -3,6 +3,7 @@
 
 import { spawnSync } from 'node:child_process';
 import { readFileSync } from 'node:fs';
+import { fileURLToPath } from 'node:url';
 import { describe, expect, it } from 'vitest';
 import { Temporal } from '@js-temporal/polyfill';
 import { PYTHON_RUNTIME_SOURCE } from '../../src/projection/python-runtime.js';
@@ -170,7 +171,8 @@ describe('Python runtime contracts', () => {
     expect(PYTHON_RUNTIME_SOURCE).toBe(
       readFileSync(new URL('../../src/projection/python-runtime.py', import.meta.url), 'utf8')
     );
-    const result = spawnSync(process.execPath, ['scripts/generate-python-runtime.mjs', '--check'], {
+    const script = fileURLToPath(new URL('../../scripts/generate-python-runtime.mjs', import.meta.url));
+    const result = spawnSync(process.execPath, [script, '--check'], {
       encoding: 'utf8'
     });
     expect(result.status, result.stderr).toBe(0);
