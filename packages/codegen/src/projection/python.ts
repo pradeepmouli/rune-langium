@@ -370,6 +370,7 @@ export function renderPythonExpression(expression: RosettaExpression, context: P
       return context.preserveMetadata ? value : pythonUnwrap(value, 'reference', expressionIsMany(expression));
     }
     case 'WithMetaOperation': {
+      const source = arg?.$type === 'ListLiteral' && !arg.elements.length ? 'None' : argument(true);
       const entries = expression.entries.map((entry) => {
         const name = entry.key.$refText;
         const property = ['key', 'template', 'address', 'reference'].includes(name)
@@ -377,7 +378,7 @@ export function renderPythonExpression(expression: RosettaExpression, context: P
           : metadataPropertyPath(name).slice(-1)[0]!;
         return `${pyString(property)}: ${render(entry.value, valueContext)}`;
       });
-      const value = `rune.withMeta(${argument(true)}, {${entries.join(', ')}}, ${pyString(expressionMetadataKind(arg) ?? 'value')})`;
+      const value = `rune.withMeta(${source}, {${entries.join(', ')}}, ${pyString(expressionMetadataKind(arg) ?? 'value')})`;
       return context.preserveMetadata
         ? value
         : pythonUnwrap(value, expressionMetadataKind(expression), expressionIsMany(expression));

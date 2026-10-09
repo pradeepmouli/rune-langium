@@ -246,6 +246,12 @@ tests. The final codegen suite passed 2,232 tests, with the existing one skip an
 eight todo cases; the corpus strictly compiled 132 TypeScript files. Workspace
 type checks, lint and the full formatting check passed.
 
+Python `with-meta` treats the literal `empty` as an absent scalar payload,
+matching the TypeScript renderer. Paired reference/address-only cases failed
+before the rendering fix and passed afterward; a field-metadata absence control
+stayed passing. All 144 Python function tests and the full 2,235-test codegen
+suite passed, retaining the existing skip and todo cases.
+
 Correctness fixes had failing behavioral regressions followed by passing ones; fixture provenance was reviewed separately.
 The standalone #577 broad gates passed 327 core, 1,536 visual-editor, 2,022 codegen
 and 1,654 Studio tests. Existing skips/todo cases were retained. The middle branch

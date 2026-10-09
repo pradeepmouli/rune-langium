@@ -38,6 +38,51 @@ function execute(source: string, cases: readonly { expression: string; data?: un
 }
 
 describe('complete Python function projections', () => {
+  it.each([
+    { entry: 'reference', expected: { value: null, externalReference: 'id' } },
+    { entry: 'address', expected: { value: null, reference: { reference: 'id' } } },
+    { entry: 'scheme', expected: null }
+  ])('retains $entry metadata when applied to empty', async ({ entry, expected }) => {
+    const funcs = await linkedFunctions(`namespace python.empty_metadata
+annotation metadata:
+ scheme string (0..1)
+ reference string (0..1)
+ address string (0..1)
+metaType scheme string
+metaType reference string
+metaType address string
+func Build:
+ inputs: id string (1..1)
+ output: result string (0..1)
+  [metadata ${entry === 'scheme' ? 'scheme' : 'reference'}]
+ set result: empty with-meta {${entry}: id}
+`);
+    const document = AstUtils.getDocument(funcs[0]!);
+    const python = generatePythonModule([document]);
+    const [typescript] = await generate([document], {
+      target: 'typescript',
+      strict: true,
+      typescript: { layout: 'single-file' }
+    });
+    const exports: Record<string, (data: object) => unknown> = {};
+    const javascript = ts.transpileModule(typescript!.content, {
+      compilerOptions: { target: ts.ScriptTarget.ES2022, module: ts.ModuleKind.CommonJS }
+    }).outputText;
+    new Function('require', 'exports', javascript)(createRequire(import.meta.url), exports);
+    const value = exports.Build!({ id: 'id' });
+    expect(value === undefined ? null : JSON.parse(JSON.stringify(value, (_key, value) => value ?? null))).toEqual(
+      expected
+    );
+    expect(
+      execute(python.code, [
+        {
+          expression: `${python.bindings.get('python.empty_metadata.Build')}(data)`,
+          data: { id: 'id' }
+        }
+      ])
+    ).toEqual([{ value: expected }]);
+  });
+
   it.each(['draft', 'rune'])('assigns through the allocated shortcut binding %s', async (alias) => {
     const funcs = await linkedFunctions(`namespace python.shortcut_assignment
 type Foo:
