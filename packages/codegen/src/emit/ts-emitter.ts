@@ -30,7 +30,7 @@ import {
 } from '@rune-langium/core';
 import { emittedTypeScriptProjection } from '../projection/typescript.js';
 import type { EmittedProjection } from '../projection/types.js';
-import { expressionIsMany, featureIsMany, typeFeatures } from '../expr/navigation.js';
+import { expressionIsMany, featureIsMany, typeFeatures, resolveType } from '../expr/navigation.js';
 import { expressionMetadataKind } from '../expr/metadata-type.js';
 import { groupFuncDispatches, renderFuncDispatchGroup } from './func-dispatch.js';
 import { AstUtils, isMultiReference, type AstNode } from 'langium';
@@ -1424,20 +1424,15 @@ export class TsNamespaceEmitter extends BaseNamespaceEmitter {
       : 'Record<string, unknown>';
     const paramName = inputTypeName ? inputTypeName.charAt(0).toLowerCase() + inputTypeName.slice(1) : 'input';
 
-    const attributeTypes = new Map<string, string>();
-    if (inputTypeRef && isData(inputTypeRef)) {
-      for (const attr of inputTypeRef.attributes) {
-        const attrType = this.resolveTypeExprAsTs(attr);
-        attributeTypes.set(attr.name, attrType);
-      }
-    }
-
+    const inputType = resolveType(rule.input);
+    const dataContext = isData(inputType) ? this.buildTsTranspilerContext(inputType, name) : undefined;
     const transpilerCtx: ExpressionTranspilerContext = {
+      ...dataContext,
       selfName: paramName,
       emitMode: rule.eligibility ? 'ts-method' : 'ts-expression',
       conditionName: name,
       typeName: inputTypeName ?? name,
-      attributeTypes,
+      attributeTypes: dataContext?.attributeTypes ?? new Map<string, string>(),
       diagnostics: this.ctx.diagnostics,
       callableName: this.callableName,
       typeNameResolver: this.typeName

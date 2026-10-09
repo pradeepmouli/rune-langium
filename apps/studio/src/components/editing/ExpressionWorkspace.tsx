@@ -66,6 +66,8 @@ export const ExpressionWorkspace = withInstrumentation(
     target,
     dependencySnapshot
   }: ExpressionWorkspaceProps) {
+    const dependenciesRef = useRef(dependencySnapshot);
+    dependenciesRef.current = dependencySnapshot;
     const [binding, setBinding] = useState<DocumentBinding | null>(null);
     const viewRef = useRef<EditorView | null>(null);
     const [selection, setSelection] = useState<SourceRegion | null>(null);
@@ -73,12 +75,14 @@ export const ExpressionWorkspace = withInstrumentation(
       binding: DocumentBinding;
       target: ExpressionRegion;
       scope: FunctionScope;
+      dependencies: ExpressionWorkspaceProps['dependencySnapshot'];
     } | null>(null);
     const [builderPending, setBuilderPending] = useState(false);
     const [foreign, setForeign] = useState<{
       binding: DocumentBinding;
       region: SourceRegion;
       language: 'typescript' | 'python';
+      dependencies: ExpressionWorkspaceProps['dependencySnapshot'];
     } | null>(null);
     const [builderError, setBuilderError] = useState<string>();
     const requestRef = useRef(0);
@@ -161,13 +165,13 @@ export const ExpressionWorkspace = withInstrumentation(
       }
       const captured = documents.capture(active.uri, nodeId, active.region);
       if (!captured || captured.source !== parsed.source) return;
-      return { binding: captured, target: expression };
+      return { binding: captured, target: expression, dependencies: dependencySnapshot };
     };
     const openBuilder = async () => {
       if (!loadScope) return;
       const selected = captureTarget();
       if (!selected) return;
-      const { binding: captured, target: expression } = selected;
+      const { binding: captured, target: expression, dependencies } = selected;
       const request = ++requestRef.current;
       setBuilderPending(true);
       setBuilderError(undefined);
@@ -178,21 +182,22 @@ export const ExpressionWorkspace = withInstrumentation(
         if (
           !current ||
           current.workspaceGeneration !== captured.workspaceGeneration ||
-          current.revision !== captured.revision
+          current.revision !== captured.revision ||
+          dependenciesRef.current !== dependencies
         ) {
           setBuilderError('The source changed. Reopen the builder to apply this draft.');
           return;
         }
-        setBuilder({ binding: captured, target: expression, scope });
+        setBuilder({ binding: captured, target: expression, scope, dependencies });
       } catch (error) {
         if (request === requestRef.current) setBuilderError(error instanceof Error ? error.message : String(error));
       } finally {
         if (request === requestRef.current) setBuilderPending(false);
       }
     };
-    const applyExpressionEdit = (edit: DocumentEdit) => {
+    const applyExpressionEdit = (edit: DocumentEdit, dependencies: ExpressionWorkspaceProps['dependencySnapshot']) => {
       const view = viewRef.current;
-      if (!view || view.state.doc.toString() !== edit.binding.source)
+      if (!view || view.state.doc.toString() !== edit.binding.source || dependenciesRef.current !== dependencies)
         return { ok: false as const, reason: 'stale' as const };
       return documents.applyDocumentEdit(edit, () =>
         view.dispatch({
@@ -226,7 +231,13 @@ export const ExpressionWorkspace = withInstrumentation(
                 disabled={!active || !parseCurrent || readOnly || file?.readOnly || active?.readOnly}
                 onClick={() => {
                   const selected = captureTarget();
-                  if (selected) setForeign({ binding: selected.binding, region: selected.target.region, language });
+                  if (selected)
+                    setForeign({
+                      binding: selected.binding,
+                      region: selected.target.region,
+                      language,
+                      dependencies: selected.dependencies
+                    });
                 }}
               >
                 Edit expression…
@@ -314,13 +325,13 @@ export const ExpressionWorkspace = withInstrumentation(
               setBuilder(null);
               returnFocus();
             }}
-            onApply={applyExpressionEdit}
+            onApply={(edit) => applyExpressionEdit(edit, builder.dependencies)}
           />
         )}
         {foreign && (
           <ForeignExpressionDialog
             {...foreign}
-            onApply={applyExpressionEdit}
+            onApply={(edit) => applyExpressionEdit(edit, foreign.dependencies)}
             onClose={() => {
               setForeign(null);
               returnFocus();

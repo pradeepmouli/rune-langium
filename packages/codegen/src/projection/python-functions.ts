@@ -23,7 +23,7 @@ import {
 } from '../types/func.js';
 import { expressionMetadataKind } from '../expr/metadata-type.js';
 import { fieldMetadataKind, metadataPropertyPath } from '../expr/metadata-runtime.js';
-import { typeFeatures, featureName } from '../expr/navigation.js';
+import { typeFeatures, featureName, resolveType, type ExpressionType } from '../expr/navigation.js';
 import { recordedProjection, findProjectionFragment } from './provenance.js';
 import { renderPythonExpression } from './python.js';
 import {
@@ -257,6 +257,19 @@ export function projectPythonFunction(func: RosettaFunction, context: PythonProj
   return projection(func, context, code, 'function');
 }
 
+function pythonDataContext(context: PythonProjectionContext, type: ExpressionType | undefined): PythonRenderContext {
+  const locals = new Map(context.locals);
+  for (const field of typeFeatures(type)) locals.set(field, pythonRead('data', [featureName(field)]));
+  return {
+    ...context,
+    locals,
+    self: 'data',
+    implicit: { name: 'data', type },
+    resultMode: 'condition',
+    state: { next: 0 }
+  };
+}
+
 export function projectPythonCondition(condition: Condition, context: PythonProjectionContext): GeneratedProjection {
   const owner = condition.$container;
   if (isRosettaFunction(owner)) {
@@ -271,17 +284,7 @@ export function projectPythonCondition(condition: Condition, context: PythonProj
     return projection(condition, context, guard, 'condition');
   }
   if (!isData(owner) && !isChoice(owner)) throw new Error(`Unsupported Python condition owner '${owner.$type}'.`);
-  const locals = new Map(context.locals);
-  if (isData(owner) || isChoice(owner))
-    for (const field of typeFeatures(owner)) locals.set(field, pythonRead('data', [featureName(field)]));
-  const code = renderPythonExpression(condition.expression, {
-    ...context,
-    locals,
-    self: 'data',
-    implicit: { name: 'data', type: owner },
-    resultMode: 'condition',
-    state: { next: 0 }
-  });
+  const code = renderPythonExpression(condition.expression, pythonDataContext(context, owner));
   const name = context.name(condition);
   return projection(
     condition,
@@ -363,13 +366,7 @@ export function generatePythonModule(documents: readonly LangiumDocument[]): Pyt
       }
     if (node.$type === 'RosettaRule') {
       const name = context.name(node),
-        code = renderPythonExpression(node.expression, {
-          ...context,
-          self: 'data',
-          locals: new Map(),
-          resultMode: 'condition',
-          state: { next: 0 }
-        });
+        code = renderPythonExpression(node.expression, pythonDataContext(context, resolveType(node.input)));
       sections.push(`def ${name}(data=None):\n    return ${code}\n`);
     }
     if (node.$type === 'RosettaExternalFunction')

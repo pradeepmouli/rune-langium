@@ -7,6 +7,7 @@ import {
   type RuneDslIndexManager,
   createRuneDslServices,
   getExpressionScope,
+  BASICTYPES_ROSETTA,
   type RosettaModel
 } from '../../src/index.js';
 
@@ -34,6 +35,39 @@ async function scope(source: string | string[], name: string, aliasIndex?: numbe
 }
 
 describe('authoritative expression scope descriptions', () => {
+  it.each(['eligibility', 'reporting'])('links %s rule predicates to their inherited input fields', async (kind) => {
+    const { RuneDsl } = createRuneDslServices();
+    const factory = RuneDsl.shared.workspace.LangiumDocumentFactory;
+    const basics = factory.fromString(BASICTYPES_ROSETTA, URI.parse('file:///basics.rosetta'));
+    const doc = factory.fromString<RosettaModel>(
+      `namespace test.rule_scope
+type Parent:
+ scalar number (0..1)
+type Terms extends Parent:
+ flag boolean (0..1)
+type Decoy:
+ scalar number (0..1)
+ flag boolean (0..1)
+${kind} rule Choose from Terms: required choice scalar, flag
+${kind} rule OnlyFlag from Terms: flag only exists
+reporting rule Shadow from Terms: [1, 2] extract flag [flag]
+`,
+      URI.parse('file:///rules.rosetta')
+    );
+    await RuneDsl.shared.workspace.DocumentBuilder.build([basics, doc]);
+    expect(doc.parseResult.parserErrors).toEqual([]);
+    expect(doc.references.filter((reference) => reference.error)).toEqual([]);
+    const parent = doc.parseResult.value.elements.find((node) => node.name === 'Parent');
+    const terms = doc.parseResult.value.elements.find((node) => node.name === 'Terms');
+    for (const reference of doc.references.filter((reference) => ['scalar', 'flag'].includes(reference.$refText))) {
+      if (reference.ref?.$type === 'ClosureParameter') expect(reference.ref.$container.$type).toBe('InlineFunction');
+      else expect(reference.ref?.$container).toBe(reference.$refText === 'scalar' ? parent : terms);
+    }
+    const flags = doc.references.filter((reference) => reference.$refText === 'flag');
+    expect(flags.some((reference) => reference.ref?.$type === 'ClosureParameter')).toBe(true);
+    expect(doc.references.filter((reference) => ['scalar', 'flag'].includes(reference.$refText))).toHaveLength(4);
+  });
+
   it('materializes unreferenced deferred callables once before describing their signatures', async () => {
     const models = new Map<string, string>();
     const getModel = vi.fn((uri: string) => {

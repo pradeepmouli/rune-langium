@@ -57,6 +57,56 @@ async function executableFunctions<T extends Record<string, unknown> = Record<st
 }
 
 describe('complete Python function projections', () => {
+  it.each(['eligibility', 'reporting'])('binds inherited metadata fields in %s rule root predicates', async (kind) => {
+    for (const predicate of ['one-of', 'required choice scalar, many, flag', 'flag only exists']) {
+      const { python, exports } = await executableFunctions(`namespace python.rule_fields
+annotation metadata:
+ reference string (0..1)
+metaType reference string
+type Parent:
+ scalar number (0..1)
+  [metadata reference]
+ many number (0..*)
+  [metadata reference]
+type Terms extends Parent:
+ flag boolean (0..1)
+${kind} rule Check from Terms: ${predicate}
+reporting rule Mapped from Terms: [1, 2] extract flag [flag]
+func Probe:
+ inputs: terms Terms (1..1)
+ output: result boolean (1..1)
+ set result: Check(terms)
+func MapProbe:
+ inputs: terms Terms (1..1)
+ output: result number (0..*)
+ set result: Mapped(terms)
+`);
+      const inputs = [
+        {},
+        { scalar: { externalReference: 'id' } },
+        { flag: false },
+        { scalar: { value: 0 } },
+        { many: [{ value: 0 }] },
+        { flag: false, scalar: { value: 0 } }
+      ];
+      const expected =
+        predicate === 'flag only exists'
+          ? [true, true, true, false, false, false]
+          : [false, false, true, true, true, false];
+      expect(
+        execute(
+          python.code,
+          inputs.map((terms) => ({ expression: 'Probe(data)', data: { terms } }))
+        )
+      ).toEqual(expected.map((value) => ({ value })));
+      expect(inputs.map((terms) => exports.Probe!({ terms }))).toEqual(expected);
+      expect(execute(python.code, [{ expression: 'MapProbe(data)', data: { terms: { flag: false } } }])).toEqual([
+        { value: [1, 2] }
+      ]);
+      expect(exports.MapProbe!({ terms: { flag: false } })).toEqual([1, 2]);
+    }
+  });
+
   it.each(['one-of', 'required choice scalar, many, flag', 'flag only exists'])(
     'reads metadata payloads in inherited root Data condition %s',
     async (predicate) => {

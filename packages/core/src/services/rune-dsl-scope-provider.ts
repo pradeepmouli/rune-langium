@@ -18,6 +18,7 @@ import {
   isEqualityOperation,
   isData,
   isRosettaFunction,
+  isRosettaRule,
   isRosettaEnumeration,
   isRosettaEnumValue,
   isRosettaBasicType,
@@ -1017,6 +1018,12 @@ export class RuneDslScopeProvider extends DefaultScopeProvider {
     }
     const extra: AstNodeDescription[] = [];
 
+    const rule = AstUtils.getContainerOfType(node, isRosettaRule);
+    const ruleInput = rule && this.resolveTypeCallToData(rule.input);
+    if (ruleInput)
+      for (const field of this.buildTypedScope(ruleInput, node).getAllElements())
+        if (baseScope.getElement(field.name)?.type !== 'ClosureParameter') extra.push(field);
+
     // (a) Inherited attributes from the enclosing Data type's supertype chain
     const dataOwner = AstUtils.getContainerOfType(node, isData);
     if (dataOwner?.superType?.ref) {
@@ -1466,7 +1473,11 @@ export class RuneDslScopeProvider extends DefaultScopeProvider {
     }
     // Fall back to enclosing Data type
     const data = AstUtils.getContainerOfType(node, isData);
-    if (!data) return EMPTY_SCOPE;
+    if (!data) {
+      const rule = AstUtils.getContainerOfType(node, isRosettaRule);
+      const input = rule && this.resolveTypeCallToData(rule.input);
+      return input ? this.buildTypedScope(input, node) : EMPTY_SCOPE;
+    }
     const attrs = this.collectDataAttributes(data);
     if (attrs.length === 0) return EMPTY_SCOPE;
     const descriptions = attrs.map((a) => this.createDescription(a, a.name));

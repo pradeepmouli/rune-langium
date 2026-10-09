@@ -5,7 +5,7 @@ import { afterEach, describe, it, expect, vi } from 'vitest';
 import { render, act, cleanup, waitFor, fireEvent } from '@testing-library/react';
 import { undo, redo } from '@codemirror/commands';
 import { EditorView } from '@codemirror/view';
-import { makeNodeId } from '@rune-langium/visual-editor';
+import { makeNodeId, type FunctionScope } from '@rune-langium/visual-editor';
 import {
   parse,
   serializeRuneModel,
@@ -43,6 +43,60 @@ async function context() {
 }
 
 describe('source-bound expression workspace', () => {
+  it('rejects scope loaded for a superseded dependency snapshot', async () => {
+    const { props, sibling, writes } = await context();
+    let finish!: (scope: FunctionScope) => void;
+    const loadScope = vi.fn(
+      () =>
+        new Promise<FunctionScope>((resolve) => {
+          finish = resolve;
+        })
+    );
+    const host = render(
+      <ExpressionWorkspace {...props} dependencySnapshot={[props.file, sibling]} loadScope={loadScope} />
+    );
+    const editor = await host.findByTestId('implementation-editor');
+    const view = EditorView.findFromDOM(editor.querySelector('.cm-editor')!)!;
+    act(() => view.dispatch({ selection: { anchor: source.indexOf('1\n') } }));
+    fireEvent.click(host.getByRole('button', { name: 'Builder' }));
+    expect(loadScope).toHaveBeenCalledOnce();
+    host.rerender(<ExpressionWorkspace {...props} dependencySnapshot={[props.file]} loadScope={loadScope} />);
+    await act(async () => finish({ inputs: [], aliases: [], output: null }));
+    expect(host.queryByRole('dialog')).toBeNull();
+    expect(host.getByRole('alert')).toHaveTextContent('The source changed');
+    expect(writes).not.toHaveBeenCalled();
+  });
+
+  it.each(['modified', 'added', 'removed'])(
+    'keeps a private draft when a dependency is %s before Apply',
+    async (change) => {
+      const { props, sibling, writes } = await context();
+      const loadScope = async () => ({ inputs: [], aliases: [], output: null });
+      const host = render(
+        <ExpressionWorkspace {...props} dependencySnapshot={[props.file, sibling]} loadScope={loadScope} />
+      );
+      const editor = await host.findByTestId('implementation-editor');
+      const view = EditorView.findFromDOM(editor.querySelector('.cm-editor')!)!;
+      act(() => view.dispatch({ selection: { anchor: source.indexOf('1\n') } }));
+      fireEvent.click(host.getByRole('button', { name: 'Builder' }));
+      await host.findByRole('dialog');
+      fireEvent.click(host.getByTestId('tab-text'));
+      const draft = EditorView.findFromDOM(host.getByTestId('text-editor').querySelector('.cm-editor')!)!;
+      act(() => draft.dispatch({ changes: { from: 0, to: draft.state.doc.length, insert: 'Sibling()' } }));
+      const dependencies =
+        change === 'removed'
+          ? [props.file]
+          : change === 'added'
+            ? [props.file, sibling, { ...sibling, path: '/third.rosetta' }]
+            : [props.file, { ...sibling, content: source.replace('Calculate', 'Changed') }];
+      host.rerender(<ExpressionWorkspace {...props} dependencySnapshot={dependencies} loadScope={loadScope} />);
+      fireEvent.click(host.getByRole('button', { name: 'Apply' }));
+      expect(writes).not.toHaveBeenCalled();
+      expect(host.getByText('The source changed. Reopen the builder to apply this draft.')).toBeVisible();
+      expect(draft.state.doc.toString()).toBe('Sibling()');
+    }
+  );
+
   it.each([false, true])('binds the dispatch base implementation with serialized=%s', async (serialized) => {
     const text =
       'namespace test\nenum Kind:\n Cash\nfunc Compute(kind: Kind -> Cash):\n set result: amount + 1\nfunc Compute:\n inputs: kind Kind (1..1)\n          amount int (1..1)\n output: result int (1..1)\n set result: amount\n';

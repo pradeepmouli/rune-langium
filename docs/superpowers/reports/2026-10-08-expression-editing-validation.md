@@ -325,3 +325,25 @@ and real worker Builder scope. Duplicate bases, missing bases and mixed-kind
 legacy identities still fail closed. The complete core suite passed 343 tests;
 28 Studio editor/projection/scope tests passed. Forced core build and scoped
 lint passed.
+
+Rule predicates now share implicit input-field context with Data conditions,
+including inherited fields and metadata in both Python and TypeScript. The
+linked execution cases exposed and repaired core rule-input scoping for bare
+fields and argumentless choice predicates, using existing typed-scope helpers.
+Replaying the original Python context, TypeScript context and rule scope made
+the new regressions fail; the repaired paths pass known expected results for
+one-of, choice and only-exists on eligibility/reporting rules, reference-only
+wrappers and zero/false payloads. Full codegen passed 2,269 tests, retaining the
+one existing skip/eight todos; full core passed 345.
+
+Builder captures the existing immutable workspace dependency snapshot through
+asynchronous scope loading and Apply. Four failing-then-passing UI regressions
+cover changes during loading and modification/addition/removal after opening;
+stale Apply retains its private draft without writing the source. Foreign
+expression drafts share the Apply guard. All 32 Studio workspace/projection/
+scope tests pass. Forced package builds, scoped lint, codegen/Studio types and
+format checks pass.
+Rule input fields preserve lexical closure-parameter shadowing; a targeted
+regression caught the shadowed binding before the final guard, and executed
+TypeScript/Python map cases retain the parameter values. The pinned corpus
+strictly compiled all 132 emitted TypeScript files.
