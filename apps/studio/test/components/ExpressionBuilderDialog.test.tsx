@@ -50,6 +50,26 @@ function draft(host: ReturnType<typeof render>, text: string) {
 }
 
 describe('isolated expression builder dialog', () => {
+  it('keeps an unfinished visual operand local until it is filled', () => {
+    const s = session();
+    const host = render(<ExpressionBuilderDialog {...s.props} />);
+    const operand = host.getByTestId('expression-builder').querySelector('[data-block="literal"]')!;
+    fireEvent.click(operand.closest('[data-node-id]')!);
+    fireEvent.keyDown(host.getByTestId('expression-builder'), { key: 'Delete' });
+    expect(host.getByTestId('expression-builder').querySelector('[data-block="placeholder"]')).toBeTruthy();
+    fireEvent.click(host.getByRole('button', { name: 'Apply' }));
+    expect(s.writes).not.toHaveBeenCalled();
+    expect(s.props.onClose).not.toHaveBeenCalled();
+    expect(host.getByRole('alert')).toHaveTextContent('Invalid Rune expression');
+    fireEvent.click(host.getByTestId('tab-text'));
+    fireEvent.click(host.getByRole('button', { name: 'Apply' }));
+    expect(s.writes).not.toHaveBeenCalled();
+    draft(host, '1 + 3');
+    fireEvent.click(host.getByRole('button', { name: 'Apply' }));
+    expect(s.source()).toBe('prefix 1 + 3 suffix');
+    expect(s.props.onClose).toHaveBeenCalledOnce();
+  });
+
   it('keeps Cancel and Escape local with zero source writes', () => {
     const s = session();
     const host = render(<ExpressionBuilderDialog {...s.props} />);
