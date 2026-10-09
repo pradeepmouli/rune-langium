@@ -110,7 +110,7 @@ describe('zod-emitter — Data extends Choice (emitted source text)', () => {
     // — so the transpiled predicate MUST read `data.cash`, not `data.Cash`
     // (which would always be undefined at runtime — a silent false-negative
     // this exact assertion caught on first implementation).
-    expect(output.content).toContain('runeAttrExists(data.cash)');
+    expect(output.content).toContain('rune.exists(data.cash)');
     expect(output.content).not.toContain('data.Cash');
   });
 });
@@ -202,7 +202,7 @@ describe('zod-emitter — Data extends Choice (emitted-runtime behavior, real zo
     // otherwise valid (case 1's shape, just with `cash` instead of
     // `commodity`). This is the exact case that silently passed as a
     // false positive before the attrAccessorNames fix (the condition read
-    // `data.Cash`, always undefined, so `!runeAttrExists(undefined)` was
+    // `data.Cash`, always undefined, so `!rune.exists(undefined)` was
     // always true and the condition never fired).
     const result = schema.safeParse({ cash: { amount: 5 }, weight: 2 });
     expect(result.success).toBe(false);

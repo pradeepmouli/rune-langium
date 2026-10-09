@@ -132,14 +132,16 @@ function BlockRendererInner({
     (child: ExpressionNode | undefined) => {
       if (!child) return null;
       return (
-        <BlockRenderer
-          node={child}
-          selectedNodeId={selectedNodeId}
-          onSelect={onSelect}
-          onActivatePlaceholder={onActivatePlaceholder}
-          onDragNode={onDragNode}
-          depth={depth + 1}
-        />
+        <span role="group" className="contents">
+          <BlockRenderer
+            node={child}
+            selectedNodeId={selectedNodeId}
+            onSelect={onSelect}
+            onActivatePlaceholder={onActivatePlaceholder}
+            onDragNode={onDragNode}
+            depth={depth + 1}
+          />
+        </span>
       );
     },
     [selectedNodeId, onSelect, onActivatePlaceholder, onDragNode, depth]

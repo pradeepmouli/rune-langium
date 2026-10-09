@@ -34,6 +34,7 @@ describe('authoritative TypeScript projections', () => {
         const subject = { uri: doc.uri.toString(), nodeId: `selected:${node.name}`, region: getNodeSourceRegion(node) };
         const projected = selectTypeScriptProjection(outputs, subject, 'function');
         expect(projected.code, node.name).toBe(generated.fileContents);
+        if (projected.code.includes('rune.equals(')) expect(projected.requiredHelpers).toContain('rune');
         expect(projected.subject).toEqual(subject);
         expect(projected.sourceMap.length).toBeGreaterThan(0);
         count++;
@@ -52,6 +53,7 @@ describe('authoritative TypeScript projections', () => {
           const subject = { uri: doc.uri.toString(), nodeId: 'selected:data-rule', region };
           const projected = selectTypeScriptProjection(outputs, subject, 'condition');
           expect(outputs.some((output) => output.content.includes(projected.code))).toBe(true);
+          if (projected.code.includes('rune.equals(')) expect(projected.requiredHelpers).toContain('rune');
           expect(projected.sourceMap[0]!.sourceUri).toBe(subject.uri);
           count++;
         }

@@ -18,7 +18,13 @@ export const editorExtensions = withInstrumentation(
       EditorView.lineWrapping,
       ...studioEditorExtensions,
       language,
-      ...(readOnly ? [EditorState.readOnly.of(true), EditorView.editable.of(false)] : []),
+      ...(readOnly
+        ? [
+            EditorState.readOnly.of(true),
+            EditorView.editable.of(false),
+            EditorView.contentAttributes.of({ tabindex: '0' })
+          ]
+        : []),
       EditorState.transactionFilter.of((tr) => {
         if (!tr.docChanged || tr.annotation(externalDocumentChange)) return tr;
         if (tr.startState.facet(EditorState.readOnly)) return [];

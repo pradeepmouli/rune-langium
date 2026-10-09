@@ -8,6 +8,7 @@ import {
   isRosettaFeatureCall,
   isRosettaIntLiteral,
   isRosettaNumberLiteral,
+  isRosettaFunction,
   isRosettaStringLiteral,
   isRosettaSymbolReference,
   isShortcutDeclaration,
@@ -35,6 +36,14 @@ export function requiredScalarKind(
     if (isRosettaSymbolReference(expression)) {
       const declaration = expression.symbol.ref;
       if (isShortcutDeclaration(declaration)) return requiredScalarKind(declaration.expression, visiting);
+      // Output cardinality is enforced at return, after potentially absent writes.
+      // It cannot prove that the accumulator (or an alias of it) is initialized.
+      if (
+        isAttribute(declaration) &&
+        isRosettaFunction(declaration.$container) &&
+        declaration.$containerProperty === 'output'
+      )
+        return undefined;
       return isAttribute(declaration) && featureIsRequired(declaration) && !hasFieldMetadata(declaration)
         ? primitive
         : undefined;

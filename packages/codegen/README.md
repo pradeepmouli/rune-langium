@@ -27,6 +27,28 @@ used for emission, plus a kind-aware `requiredBy` map from each dependency to
 its explicit roots, without resolving the workspace a second time. Studio
 stores that receipt in its downloadable artifact envelope.
 
+## Python projections
+
+The browser-safe `@rune-langium/codegen/export` surface exposes
+`generatePythonModule(documents)` and `selectPythonProjection(module, subject, kind)`.
+The module contains complete functions, typed input/Data records, enum literals,
+runtime helpers and source-addressed function/condition fragments. Python 3.13
+uses standard-library `TypedDict` and `Literal`; optional fields use `NotRequired`,
+collection fields use lists, and Rune numeric values use binary64 floats. Functions
+retain ordered aliases, preconditions, set/add operations and postconditions.
+Native declarations require `rune.bind(qualifiedName, callable)` before execution;
+missing bindings raise an explicit error. Studio displays projections read-only
+and retains the narrower reverse-expression lens.
+
+Python syntax/runtime checks require Python >=3.13. Set `PYTHON_BINARY` when the
+shell's `python3` is older. The checked-in 117-case CDM execution battery and AST
+grammar census run without downloads. An optional linked `.resources` scan compiles
+staged CDM/FpML/Rune bodies and records versions, content hashes, expression counts,
+syntax/linking exclusions and rendering failures in `dist/python-projection-coverage.json`.
+Corpus syntax coverage is distinct from execution parity. Both targets share linked
+type/cardinality/metadata resolution and `only exists` selection; Python switch
+arms remain lazy without nested-ternary depth limits.
+
 ## TypeScript functions
 
 Rune functions emit named exports with a single typed input object and an explicit
@@ -50,6 +72,15 @@ Scalar/list normalization is shared across functions, validators, and previews.
 multiple values. Arithmetic returns no value when an operand is absent or has more
 than one value. Ordered comparisons involving absent operands are false. Sorting
 places absent keys last; min/max choose populated keys when present.
+
+Generated expression runtime calls use `rune.*`: for example, `rune.exists(value)`,
+`rune.count(value)`, `rune.distinct(values)`, `rune.contains(left, right)` and
+`rune.toDate(value)`. Structural and collection equality uses `rune.equals`;
+metadata calls include `rune.withMeta`, `rune.toField` and `rune.toReference`.
+Native operators and standard-library calls remain compact where equivalent.
+Inline modules, shared runtime sidecars and executable previews use the same
+runtime source builder; namespace methods preserve generic types and type guards.
+Existing flat implementation exports remain available to runtime consumers.
 
 Studio function previews resolve inherited and dispatch input signatures.
 `normalizePreviewInputs` adapts plain form values to metadata wrappers using the

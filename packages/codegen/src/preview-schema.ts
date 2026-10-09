@@ -29,7 +29,7 @@ import type {
 } from './types.js';
 import { choiceOptionFieldName, decodeCardinality } from './emit/base-namespace-emitter.js';
 import { buildTypeReferenceGraph, findCyclicTypes } from './cycle-detector.js';
-import { resolveTypeCallTarget } from './emit/type-ref-resolver.js';
+import { resolveTypeCallTarget, isScalarTypeCall } from './emit/type-ref-resolver.js';
 import { functionInputs, functionOutput, functionSignature } from './types/func.js';
 import { fieldMetadataKind, type FieldMetadataKind } from './expr/metadata-runtime.js';
 
@@ -1525,18 +1525,7 @@ export function normalizePreviewInputs(
             // A primitive/enum cannot have an object payload. Its declared metadata
             // wrapper can therefore be retained without guessing at data shapes.
             if (kind && typeof item === 'object' && !Array.isArray(item) && 'value' in item) {
-              const primitive = resolveTypeCallTarget(
-                attr.typeCall,
-                typeIndex,
-                {
-                  onPrimitive: () => true,
-                  onEnum: () => true,
-                  onData: () => false,
-                  onChoice: () => false,
-                  onUnresolved: () => false
-                },
-                ''
-              );
+              const primitive = isScalarTypeCall(attr.typeCall, typeIndex);
               if (primitive) return { ...item, value: normalizeType(attr.typeCall, item.value) };
             }
             const normalized = normalizeType(attr.typeCall, item);

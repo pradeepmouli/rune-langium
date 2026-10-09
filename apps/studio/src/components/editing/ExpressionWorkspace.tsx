@@ -28,6 +28,7 @@ import { GeneratedExpressionView } from './GeneratedExpressionView.js';
 import { useExpressionProjection } from './use-expression-projection.js';
 import { ForeignExpressionDialog } from './ForeignExpressionDialog.js';
 import { withInstrumentation } from '../../services/instrumentation/core.js';
+import { protectedRegion } from '../../lang/document-extensions.js';
 
 export interface ExpressionWorkspaceProps {
   nodeId: string;
@@ -89,6 +90,7 @@ export const ExpressionWorkspace = withInstrumentation(
       []
     );
     const [coordinateError, setCoordinateError] = useState<string | undefined>();
+    const regionKey = target ? `${target.kind}:${target.index}` : 'implementation';
     useEffect(() => {
       if (!file || file.sourceLoaded === false) return;
       const owner =
@@ -101,7 +103,11 @@ export const ExpressionWorkspace = withInstrumentation(
         if (parseCurrent) {
           setBinding(null);
           setCoordinateError('The selected declaration is no longer present in the current source.');
+          return;
         }
+        const recovered = documents.recoverRegion(pathToUri(file.path), nodeId, regionKey);
+        setBinding(recovered);
+        if (recovered) setCoordinateError(undefined);
         return;
       }
       try {
@@ -117,6 +123,7 @@ export const ExpressionWorkspace = withInstrumentation(
         }
         const next = documents.capture(pathToUri(file.path), nodeId, region);
         if (next) {
+          documents.retainRegion(next, regionKey);
           setBinding(next);
           setCoordinateError(undefined);
         } else setCoordinateError('Source coordinates do not match this file. Open the file in Source.');
@@ -252,7 +259,11 @@ export const ExpressionWorkspace = withInstrumentation(
               binding={{ ...active, readOnly: readOnly || Boolean(file.readOnly) || active.readOnly }}
               path={file.path}
               source={file.content}
-              onContentChange={onContentChange}
+              onContentChange={(path, source) => {
+                const region = viewRef.current?.state.field(protectedRegion, false);
+                if (region) documents.retainRegion(active, regionKey, source, region);
+                onContentChange(path, source);
+              }}
               lspClient={lspClient}
               lspReady={lspReady}
               onViewCreated={(view) => {

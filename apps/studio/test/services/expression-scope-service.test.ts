@@ -2,7 +2,10 @@
 // Copyright (c) 2026 Pradeep Mouli
 
 import { afterEach, expect, it, vi } from 'vitest';
-import { getExpressionRegions } from '@rune-langium/core';
+import { getExpressionRegions, createRuneDslServices, addLegacyAnnotations } from '@rune-langium/core';
+import { URI } from 'langium';
+import { resolve } from 'node:path';
+import { referenceFiles } from '../../../../packages/codegen/test/helpers/cdm-reference.js';
 import { makeNodeId } from '@rune-langium/visual-editor/identifiers';
 import { createParserWorkerHarness } from '../workers/parser-worker-harness.js';
 import {
@@ -17,6 +20,24 @@ import type { WorkerRequest } from '../../src/workers/parser-worker.js';
 afterEach(() => {
   _resetParserWorkerForTests();
   vi.unstubAllGlobals();
+});
+
+it('links the pinned ten-operation browser fixture with all of its original dependencies', async () => {
+  const { RuneDsl } = createRuneDslServices();
+  const factory = RuneDsl.shared.workspace.LangiumDocumentFactory;
+  const docs = referenceFiles(resolve(import.meta.dirname, '../fixtures/cdm-expression')).map(({ uri, content }) => {
+    const doc = factory.fromString(content, URI.parse(uri));
+    return uri.endsWith('/annotations.rosetta') ? addLegacyAnnotations(doc, factory) : doc;
+  });
+  await RuneDsl.shared.workspace.DocumentBuilder.build(docs, { validation: false });
+  expect(docs.flatMap((doc) => [...doc.parseResult.parserErrors, ...doc.parseResult.lexerErrors])).toEqual([]);
+  expect(docs.flatMap((doc) => doc.references.filter((ref) => ref.error).map((ref) => ref.error!.message))).toEqual([]);
+  const func = docs
+    .flatMap((doc) => doc.parseResult.value.elements)
+    .find((node) => node.$type === 'RosettaFunction' && node.name === 'ConvertToAdjustableOrRelativeDate');
+  if (func?.$type !== 'RosettaFunction') throw Error('Missing fixture function');
+  expect(func.operations).toHaveLength(10);
+  expect(func.shortcuts).toHaveLength(1);
 });
 
 it.each([false, true])('opens current builder scope after router fallback with stale worker=%s', async (stale) => {

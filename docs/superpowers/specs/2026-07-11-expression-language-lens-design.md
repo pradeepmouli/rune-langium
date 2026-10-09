@@ -1,5 +1,9 @@
 # Feature Specification: Expression Language Lens
 
+The [expression editing redesign](2026-10-08-expression-editing-design.md)
+supersedes this spec's display boundary and function-body UI. The proved inverse
+lens subset and guarded foreign-language write-back contract still apply.
+
 **Feature Branch**: `020-expression-language-lens`
 **Created**: 2026-05-29
 **Revised**: 2026-07-04 (against HEAD `720f8c6`: PRs #363–#372. The transpiler-parity work (#364–#367) closed the TS expression-coverage gap that defined the lens's day-one read-only boundary — `ThenOperation`, `SwitchOperation`, `ToEnumOperation`, `RosettaOnlyExistsExpression` and ~12 more now transpile; transpiler grew 1,178 → 1,600 lines with 70 dispatch branches. PR #371 added a schema-validity gate to `cst-reuse-renderer` — a new, load-bearing integration constraint for lens write-back. Corpus test ceilings not yet ratcheted.)

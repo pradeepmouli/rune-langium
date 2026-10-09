@@ -480,6 +480,7 @@ const renderSourceEditor = withInstrumentation(
       (filePath: string, isReadOnly: boolean, lspCompartment: Compartment): Extension[] => {
         const exts: Extension[] = documentExtensions(regionRef.current);
         exts.push(
+          EditorView.contentAttributes.of({ 'aria-label': 'Rune source editor' }),
           EditorView.updateListener.of((update) => {
             if (update.selectionSet || update.docChanged) {
               const selection = update.state.selection.main;

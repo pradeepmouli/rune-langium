@@ -70,12 +70,12 @@ describe('ts-emitter — Choice emission (W2)', () => {
     expect(output.content).toContain('export function isAsset(x: unknown): x is Asset {');
   });
 
-  it('the type guard checks exactly-one-of the option keys via runeCheckOneOf', async () => {
+  it('the type guard checks exactly-one-of the option keys via rune.checkOneOf', async () => {
     const doc = await parseSource(FIXTURE);
     const model = walkNamespace([doc], 'test.choice');
     const output = emitNamespace(model, {});
     expect(output.content).toContain(
-      'return runeCheckOneOf([(x as Record<string, unknown>).cash, (x as Record<string, unknown>).commodity]);'
+      'return rune.checkOneOf([(x as Record<string, unknown>).cash, (x as Record<string, unknown>).commodity]);'
     );
   });
 

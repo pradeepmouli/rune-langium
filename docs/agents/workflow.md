@@ -6,9 +6,10 @@ Read root and affected-package `package.json` scripts before choosing commands.
 Use the pinned pnpm version and preserve overrides/patches in
 `pnpm-workspace.yaml` during dependency changes.
 
-- The pre-commit hook runs `lint-staged`, formatting staged JS/TS/JSON-family files with oxfmt. The pre-push hook runs type checking. Prefer the existing `simple-git-hooks` / `lint-staged` setup for hook changes.
+- The pre-commit hook runs `lint-staged`, applying Oxlint fixes before formatting staged JS/TS files with oxfmt; JSON-family files are formatted directly. Formatting runs last so import rewrites cannot leave CI style drift. The pre-push hook runs type checking. Prefer the existing `simple-git-hooks` / `lint-staged` setup for hook changes.
 - `SKIP_SIMPLE_GIT_HOOKS=1` bypasses hooks; report skipped verification when relevant.
 - After codegen render changes, run `pnpm --filter @rune-langium/codegen run build` so consumers receive updated dist output.
+- After switching stacked branches, force affected TypeScript builds with `pnpm --filter <package> exec tsc -b --force` before testing consumers. Incremental build caches can leave `dist` from the previous branch; source-only tests do not verify those exports.
 - The Cloudflare combined build rebuilds `@rune-langium/instrumentation-core` and `@rune-langium/core` before bundling Studio and Pages Functions; both consumers resolve those packages through their compiled exports.
 - For temporary Pages diagnostics, set the non-secret `INSTRUMENTATION_*` values in the build environment. The combined build writes only those values to the generated root `wrangler.toml`; rebuild and redeploy to enable or remove them. Keep secrets in Cloudflare.
 
@@ -50,6 +51,7 @@ SQL node types derive from the exactly pinned `@l1xnan/tree-sitter-sql` grammar.
 - Real CDM/Rune/FpML fixtures live under hidden `.resources/`. Prefer them for corpus repros, and guard or skip corpus-dependent tests when absent.
 - Verify fixture revisions before claiming upstream parity. The September 12 refresh found a February Rune reference checkout; current production CDM/FpML needed `as` narrowing and schema declarations. A successful parse or ZIP download does not establish that the entire generated corpus passes strict TypeScript compilation.
 - Studio Playwright tests must wait for visible readiness, not `networkidle`, when workers or LSP traffic remain active.
+- Expression editing: `pnpm --filter @rune-langium/studio exec playwright test test/e2e/expression-workspace.spec.ts --retries=0` checks the pinned CDM function and Data-condition slices, generated views, builder draft/undo, dialog accessibility and narrow layouts at the largest pane font setting. Source/Inspector network ownership additionally requires `PLAYWRIGHT_EXPRESSION_LSP=1` and a local LSP Worker, with Studio's `VITE_LSP_SESSION_URL` and `VITE_LSP_WS_URL` pointing at it. That case skips explicitly without the Worker; unit tests still cover read-only, stale revision and workspace-change guards. Hosted curated read-only and the production J10 journey require a deployed build and are separate from local acceptance.
 - Production smoke: `pnpm --filter @rune-langium/studio run test:prod-smoke`. Endpoint and fuller UX checks are documented in [TESTING.md](../TESTING.md).
 - Tailwind IntelliSense uses `.vscode/settings.json`: `tailwindCSS.experimental.configFile` maps `apps/studio/src/app.css` to Studio, design-system, and visual-editor source trees.
 
@@ -184,3 +186,23 @@ Verified on the supported Node **22.22.2** floor:
 Full workspace type checks and explicit bundler-resolution TypeScript checks of both config files also pass. Rebuild Studio's dependencies before type checking when their compiled exports are stale.
 
 Compilation remains disabled. All five hand-authored EditorForms enable L1 through a shared policy and schema-derived Controller validation bridge. Regression checks cover canonical identifier unions, optional values, independent field validation, and array reorder/remove/add. Safe L2 adoption is tracked in [issue #574](https://github.com/pradeepmouli/rune-langium/issues/574).
+
+## Python projection checks
+
+Codegen builds regenerate the browser-safe runtime string from
+`packages/codegen/src/projection/python-runtime.py`. Edit that Python source;
+never hand-edit `projection/generated/python-runtime-source.ts`.
+`pnpm --filter @rune-langium/codegen run generate:python-runtime` regenerates it;
+`node packages/codegen/scripts/generate-python-runtime.mjs --check` verifies it.
+Python projection tests require Python >=3.13 and fail explicitly if it is absent.
+Set `PYTHON_BINARY` to the supported interpreter when the shell's `python3` is older.
+The standard-library driver checks Python 3.13 syntax and compares runtime behavior
+with the shared TypeScript helpers; it does not run Python inside Studio.
+
+The `Python Projections` workflow runs the grammar census, syntax/runtime tests,
+pinned CDM execution battery and both inverse round-trip suites on every PR; it
+has no path filter. Main CI also installs Python 3.13 before package tests.
+The staged corpus scan reuses core's fixture loader and links all three bundles
+together. Its ignored `packages/codegen/dist/python-projection-coverage.json`
+records versions, content hashes, counts and syntax/linking exclusions. The
+checked-in census and execution battery remain required when `.resources` is absent.

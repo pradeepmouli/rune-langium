@@ -118,7 +118,7 @@ describe('W1 Tier 2 — simple mappings', () => {
     const expr = parse('items only-element');
     const ctx = makeCtx();
     expect(transpileExpression(expr, ctx)).toBe(
-      '((__oe) => (__oe.length === 1 ? __oe[0] : undefined))(runeList(data.items))'
+      '((__oe) => (__oe.length === 1 ? __oe[0] : undefined))(rune.list(data.items))'
     );
   });
 
@@ -175,25 +175,25 @@ describe('W1 Tier 3 — conversions', () => {
   it('ToDateOperation: validate-shape-and-passthrough (YYYY-MM-DD)', () => {
     const expr = parse('a to-date');
     const ctx = makeCtx();
-    expect(transpileExpression(expr, ctx)).toBe('runeToDate(data.a)');
+    expect(transpileExpression(expr, ctx)).toBe('rune.toDate(data.a)');
   });
 
   it('ToTimeOperation: validate-shape-and-passthrough (HH:MM:SS)', () => {
     const expr = parse('a to-time');
     const ctx = makeCtx();
-    expect(transpileExpression(expr, ctx)).toBe('runeToTime(data.a)');
+    expect(transpileExpression(expr, ctx)).toBe('rune.toTime(data.a)');
   });
 
   it('ToDateTimeOperation: validate-shape-and-passthrough (ISO-8601 local)', () => {
     const expr = parse('a to-date-time');
     const ctx = makeCtx();
-    expect(transpileExpression(expr, ctx)).toBe('runeToDateTime(data.a)');
+    expect(transpileExpression(expr, ctx)).toBe('rune.toDateTime(data.a)');
   });
 
   it('ToZonedDateTimeOperation: validate-shape-and-passthrough (ISO-8601 with zone)', () => {
     const expr = parse('a to-zoned-date-time');
     const ctx = makeCtx();
-    expect(transpileExpression(expr, ctx)).toBe('runeToZonedDateTime(data.a)');
+    expect(transpileExpression(expr, ctx)).toBe('rune.toZonedDateTime(data.a)');
   });
 });
 

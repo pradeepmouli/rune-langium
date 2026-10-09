@@ -14,7 +14,7 @@ export default defineConfig({
     globals: true,
     environment: 'jsdom',
     include: ['test/**/*.test.{ts,tsx}', 'functions/test/**/*.test.ts'],
-    exclude: ['test/e2e/**'],
+    exclude: ['test/e2e/**', 'test/prod-ux/report/**'],
     setupFiles: ['./test/setup.ts'],
     server: {
       deps: {

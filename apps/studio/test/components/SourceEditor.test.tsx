@@ -45,6 +45,7 @@ vi.mock('@codemirror/view', () => {
     focus = mockEditorViewFocus;
     destroy = mockEditorViewDestroy;
     static updateListener = { of: vi.fn().mockReturnValue([]) };
+    static contentAttributes = { of: vi.fn().mockReturnValue([]) };
     static domEventHandlers = vi.fn().mockReturnValue([]);
     static theme = vi.fn().mockReturnValue([]);
     static scrollIntoView = vi.fn((anchor: number) => ({ anchor }));
