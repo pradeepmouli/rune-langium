@@ -189,6 +189,14 @@ real-worker regressions passed after the shared reset, and all 20 parser/scope
 checks passed. The Python-tab finding on the middle PR is fulfilled by integrating
 the implemented projection from the top PR.
 
+Expression owners retain their declaration kind across binding, capture and scope
+requests. Same-named Data and function declarations resolve independently; ambiguous
+legacy names fail closed. The shared core lookup serves Studio and its worker.
+Core passed 329 tests and the focused Studio ownership checks passed 22 tests.
+Builder scope permits syntax errors in unrelated files while rejecting owner errors
+and failed snapshot builds. A failing unrelated-draft regression turned green;
+all 12 snapshot/service/scope tests, Studio type checks and scoped lint passed.
+
 The Python branch preserves signed zero, unwraps implicit metadata feature
 bindings, narrows collections element by element and shares declaration-based
 scalar classification with the TypeScript input adapter. Internally created
@@ -204,6 +212,10 @@ present. Internally created wrappers preserve their empty metadata across nested
 calls. Explicit absent join separators use the TypeScript comma default; omitted,
 empty and present separators retain their distinct behavior. These regressions
 execute the authoritative TypeScript and Python output against the same inputs.
+Implicit switch feature reads unwrap metadata without discarding branch wrapper
+provenance. Python `to-int` retains negative zero from numeric and string inputs,
+including its reciprocal sign. Both had failing runtime comparisons before the
+fix; all 209 projection tests passed afterward.
 
 Correctness fixes had failing behavioral regressions followed by passing ones; fixture provenance was reviewed separately.
 The standalone #577 broad gates passed 327 core, 1,536 visual-editor, 2,022 codegen
@@ -218,9 +230,12 @@ codegen corpus strictly compiled 132 emitted TypeScript files. Workspace type
 checks, lint, package builds and generated Python runtime freshness passed;
 existing lint warnings remain. The latest standalone workspace gates passed
 328 core, 71 LSP, 1,537 visual-editor and 1,657 Studio tests, with two intentional
-Studio skips. The final combined Studio suite passed 1,671 tests with the same
+Studio skips. The final combined Studio suite passed 1,674 tests with the same
 two intentional skips; all tracked suites were included. Workspace type checks,
 lint, changed-source formatting, package builds and runtime freshness passed.
+The final builds were forced after discovering stale compiled core output from
+stack branch switches; the inherited dispatch fixture then passed against the
+rebuilt exports. The 2,228-test codegen run includes the latest Python fixes.
 
 Full Studio runs exclude the ignored local reproduction under
 `test/prod-ux/report/**`, which asserts the former bug; every tracked Studio suite
