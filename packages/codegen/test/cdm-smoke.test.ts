@@ -28,7 +28,7 @@ import { existsSync, readdirSync, readFileSync } from 'node:fs';
 import { writeFile, mkdir, readFile } from 'node:fs/promises';
 import { join, resolve, dirname } from 'node:path';
 import { tmpdir } from 'node:os';
-import { describe, it, expect } from 'vitest';
+import { beforeAll, describe, it, expect } from 'vitest';
 import { createRuneDslServices } from '@rune-langium/core';
 import { URI } from 'langium';
 import { z } from 'zod';
@@ -702,9 +702,14 @@ async function loadCdmDocs() {
 }
 
 describe.skipIf(!CDM_EXISTS)('Prototype Workspace Phase 1 — CDM smoke', () => {
+  let corpus: Awaited<ReturnType<typeof loadCdmDocs>>;
+
+  beforeAll(async () => {
+    corpus = await loadCdmDocs();
+  }, 120_000);
+
   it('generates a full preview schema for a deep real CDM type without hanging', async () => {
-    const { docs } = await loadCdmDocs();
-    const [schema] = generatePreviewSchemas(docs, { targetId: 'cdm.event.common.TradeState' });
+    const [schema] = generatePreviewSchemas(corpus.docs, { targetId: 'cdm.event.common.TradeState' });
     expect(schema).toBeDefined();
     expect(schema!.fields.length).toBeGreaterThan(0);
     // The eager pipeline's own maxDepth/seenTypes cycle guard (preview-schema.ts,

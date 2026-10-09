@@ -388,3 +388,11 @@ root invocation failed locally; both root and package invocations pass after
 the repair. Full root coverage passed 2,790 tests (one existing skip/eight todos),
 with statements 54.23%, branches 61.20%, functions 35.90% and lines 55.78%, all
 above the unchanged configured thresholds. Scoped lint and root formatting pass.
+
+The next master-target CI run passed normal tests but timed out while the CDM
+preview smoke test loaded and linked the entire corpus inside its 60-second
+test budget. Corpus loading now uses the neighboring CDM suite's 120-second
+setup-hook convention. The preview test retains its 60-second budget, real
+TradeState target and populated-schema assertions. Full root coverage again
+passed 2,790 tests with the same coverage totals and unchanged thresholds;
+codegen type checking, scoped lint and formatting passed.
