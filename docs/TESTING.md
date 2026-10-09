@@ -60,7 +60,7 @@ The current smoke flow:
 ### Full checkout harness (`test:prod-ux`)
 
 ```bash
-# Run the full 19-journey (J00-J18) checkout harness against the default deploy.
+# Run the full 20-journey (J00-J19) checkout harness against the default deploy.
 pnpm --filter @rune-langium/studio run test:prod-ux
 
 # Against a preview/staging deployment.
@@ -74,6 +74,14 @@ above does not. It writes an evidence bundle — `run-manifest.json`
 traces, and axe results — to `apps/studio/test/prod-ux/report/`, meant to be
 read by the `prod-ux-review` agent skill (`.agents/skills/prod-ux-review/`),
 not by eye.
+
+J19 adds seven expression workspace cases: private Builder drafts, Apply/Undo,
+independent Data conditions, both split-file dispatch orders with trailing
+comments and Source navigation, a pinned ten-operation CDM implementation,
+hosted curated read-only projections, and the compact Builder at the largest
+font size. Local acceptance and production share the editor setup helpers and
+integrity-checked upstream fixtures. Each case has a distinct manifest ID;
+dialog axe results are retained under `report/axe/J19/attempt<N>/`.
 
 J17 retains full axe JSON for each checkpoint under
 `report/axe/J17/attempt<N>/`; the manifest records its verdict and soft
