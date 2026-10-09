@@ -269,6 +269,8 @@ def rune_number(value, integer=False):
             result = float(value)
         if math.isnan(result) or (integer and (not math.isfinite(result) or not result.is_integer())):
             return None
+        if result == 0 and math.copysign(1, result) < 0:
+            return result
         return int(result) if integer else result
     except (ValueError, TypeError, OverflowError):
         return None

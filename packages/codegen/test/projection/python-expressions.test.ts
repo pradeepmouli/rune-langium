@@ -87,10 +87,19 @@ describe('forward Python expression projections', () => {
     );
     expect(output).toEqual(semanticCases.map(([, , value]) => ({ value })));
   });
-  it('retains decimal negative zero and its reciprocal sign', async () => {
-    const expressions = await linkedExpressions(['-0.0', '1 / -0.0']);
+  it('retains literal and converted negative zero and their reciprocal signs', async () => {
+    const expressions = await linkedExpressions([
+      '-0.0',
+      '1 / -0.0',
+      '-0.0 to-int',
+      '"-0" to-int',
+      '1 / ("-0" to-int)'
+    ]);
     const python = expressions.map((expression) => projectPythonExpression(expression, pythonContext()).code);
     expect(runPython(python.map((expression) => ({ expression: `math.copysign(1, ${expression})` })))).toEqual([
+      { value: -1 },
+      { value: -1 },
+      { value: -1 },
       { value: -1 },
       { value: -1 }
     ]);
@@ -107,6 +116,9 @@ describe('forward Python expression projections', () => {
     });
     expect(Object.is(values[0], -0)).toBe(true);
     expect(values[1]).toBe(-Infinity);
+    expect(Object.is(values[2], -0)).toBe(true);
+    expect(Object.is(values[3], -0)).toBe(true);
+    expect(values[4]).toBe(-Infinity);
   });
 
   it('uses native scalar operators where the shared type proof permits them', async () => {

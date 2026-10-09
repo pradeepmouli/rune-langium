@@ -140,10 +140,11 @@ export function renderPythonExpression(expression: RosettaExpression, context: P
       }
       if (isRosettaEnumValue(target)) return pyString(target.name);
       if (isRosettaType(target)) return context.name(target);
-      const calendar = pythonCalendarField(target, context.self, context.implicit?.many);
+      const self = pythonUnwrap(context.self, context.implicit?.metadata, context.implicit?.many);
+      const calendar = pythonCalendarField(target, self, context.implicit?.many);
       if (calendar) return calendar;
       const name = isChoiceOption(target) ? featureName(target) : expression.symbol.$refText;
-      return pythonDeclarationValue(pythonRead(context.self, [name], context.implicit?.many), context, expression);
+      return pythonDeclarationValue(pythonRead(self, [name], context.implicit?.many), context, expression);
     }
     case 'RosettaFeatureCall':
     case 'RosettaDeepFeatureCall':

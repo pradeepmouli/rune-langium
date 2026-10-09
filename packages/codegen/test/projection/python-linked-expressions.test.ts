@@ -156,6 +156,27 @@ const cases = [
   ],
   ['metadataSet', 'value number (1..1)', 'value with-meta {scheme:"x"}', { value: 0 }, 0],
   [
+    'metadataSwitchField',
+    'object BaseLeaf (1..1) [metadata scheme]',
+    'object switch DerivedLeaf then amount, BaseLeaf then baseValue, default 0',
+    { object: { value: { amount: 0, baseValue: 2 }, meta: { scheme: 'x' } } },
+    0
+  ],
+  [
+    'metadataSwitchReference',
+    'object BaseLeaf (1..1) [metadata reference]',
+    'object switch DerivedLeaf then amount, BaseLeaf then baseValue, default 0',
+    { object: { value: { amount: 3, baseValue: 2 }, externalReference: 'x' } },
+    3
+  ],
+  [
+    'metadataSwitchDefault',
+    'object BaseLeaf (1..1) [metadata scheme]',
+    'object switch DerivedLeaf then amount, BaseLeaf then baseValue, default 0',
+    { object: { value: { baseValue: 2 }, meta: { scheme: 'x' } } },
+    2
+  ],
+  [
     'metadataImplicitExtract',
     'objects Leaf (0..*) [metadata scheme]',
     'objects extract [amount]',
