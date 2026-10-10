@@ -864,7 +864,7 @@ async function runProjection(request: ProjectionRequest): Promise<void> {
       scope.postMessage({
         type: 'projection:result',
         requestId: request.requestId,
-        projection: { ...selectPythonProjection(module, subject, request.kind), subject: request.subject }
+        projection: { ...selectPythonProjection(module, subject, request.kind, 'body'), subject: request.subject }
       });
       return;
     }
@@ -876,7 +876,10 @@ async function runProjection(request: ProjectionRequest): Promise<void> {
     );
     if (version !== previewFilesVersion || !current())
       throw new Error('The source changed. Refresh the generated view.');
-    const projection = { ...selectTypeScriptProjection(outputs, subject, request.kind), subject: request.subject };
+    const projection = {
+      ...selectTypeScriptProjection(outputs, subject, request.kind, 'body'),
+      subject: request.subject
+    };
     scope.postMessage({ type: 'projection:result', requestId: request.requestId, projection });
   } catch (error) {
     scope.postMessage({
@@ -986,7 +989,7 @@ async function executeFunction(funcName: string, inputs: Record<string, unknown>
       type: 'preview:execute-result',
       requestId,
       funcName,
-      output
+      output: output === undefined ? undefined : JSON.parse(JSON.stringify(output))
     });
   } catch (e) {
     scope.postMessage({
