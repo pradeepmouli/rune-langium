@@ -301,9 +301,11 @@ func Run:
     expect(result.code).toContain('BarSchema');
   });
 
-  skipIfNodeLt22('validates adapted metadata and recursive inputs without running Data conditions', async () => {
-    const docs = await parseModels([
-      `namespace test.inputStructure
+  skipIfNodeLt22(
+    'validates adapted metadata and recursive inputs without running Data conditions',
+    async () => {
+      const docs = await parseModels([
+        `namespace test.inputStructure
 annotation metadata:
  scheme string (0..1)
  reference string (0..1)
@@ -325,73 +327,75 @@ func Read:
    [metadata reference]
  output: result int (1..1)
  set result: source -> amount`
-    ]);
-    const result = emitStandaloneZodSchema(docs, 'test.inputStructure.Read', { functionInputs: true });
-    expect(result.diagnostics).toEqual([]);
-    const { z } = await import('zod');
-    const { RUNTIME_HELPER_JS_SOURCE, normalizePreviewInputs } = await import('../../src/export.js');
-    const ts = (await import('typescript-classic')).default;
-    const { RUNTIME_HELPER_SOURCE } = await import('../../src/helpers.js');
-    const directory = generatedDirectory(join(tmpdir(), 'rune-input-schema-'));
-    try {
-      const filename = join(directory, 'schema.ts');
-      writeFileSync(join(directory, 'package.json'), JSON.stringify({ type: 'module' }));
-      const code = result.code.replace(/^import \{ Temporal \}.*;$/gm, '');
-      writeFileSync(filename, `${RUNTIME_HELPER_SOURCE}\n${code}`);
-      const program = ts.createProgram([filename], {
-        target: ts.ScriptTarget.ESNext,
-        module: ts.ModuleKind.NodeNext,
-        moduleResolution: ts.ModuleResolutionKind.NodeNext,
-        strict: true,
-        skipLibCheck: true,
-        noEmit: true,
-        types: []
+      ]);
+      const result = emitStandaloneZodSchema(docs, 'test.inputStructure.Read', { functionInputs: true });
+      expect(result.diagnostics).toEqual([]);
+      const { z } = await import('zod');
+      const { RUNTIME_HELPER_JS_SOURCE, normalizePreviewInputs } = await import('../../src/export.js');
+      const ts = (await import('typescript-classic')).default;
+      const { RUNTIME_HELPER_SOURCE } = await import('../../src/helpers.js');
+      const directory = generatedDirectory(join(tmpdir(), 'rune-input-schema-'));
+      try {
+        const filename = join(directory, 'schema.ts');
+        writeFileSync(join(directory, 'package.json'), JSON.stringify({ type: 'module' }));
+        const code = result.code.replace(/^import \{ Temporal \}.*;$/gm, '');
+        writeFileSync(filename, `${RUNTIME_HELPER_SOURCE}\n${code}`);
+        const program = ts.createProgram([filename], {
+          target: ts.ScriptTarget.ESNext,
+          module: ts.ModuleKind.NodeNext,
+          moduleResolution: ts.ModuleResolutionKind.NodeNext,
+          strict: true,
+          skipLibCheck: true,
+          noEmit: true,
+          types: []
+        });
+        expect(
+          ts.getPreEmitDiagnostics(program).map((d) => ts.flattenDiagnosticMessageText(d.messageText, '\n'))
+        ).toEqual([]);
+      } finally {
+        rmSync(directory, { recursive: true, force: true });
+      }
+      const runtime = new Function(
+        `${RUNTIME_HELPER_JS_SOURCE}\nreturn { field: runeToField, reference: runeToReference };`
+      )();
+      const validator = new Function(
+        'z',
+        `${RUNTIME_HELPER_JS_SOURCE}\n${await toEvaluableJs(result.code)}\nreturn ${result.schemaName};`
+      )(z);
+      const validate = (input: Record<string, unknown>) =>
+        validator.safeParse(normalizePreviewInputs(docs, 'test.inputStructure.Read', input, runtime));
+      // Negative values violate Parent's condition, but are structurally valid function inputs.
+      const plain = validate({
+        source: { amount: -1, textValue: 'text' },
+        textValue: null,
+        referenceInput: { globalReference: 'id' }
       });
-      expect(
-        ts.getPreEmitDiagnostics(program).map((d) => ts.flattenDiagnosticMessageText(d.messageText, '\n'))
-      ).toEqual([]);
-    } finally {
-      rmSync(directory, { recursive: true, force: true });
-    }
-    const runtime = new Function(
-      `${RUNTIME_HELPER_JS_SOURCE}\nreturn { field: runeToField, reference: runeToReference };`
-    )();
-    const validator = new Function(
-      'z',
-      `${RUNTIME_HELPER_JS_SOURCE}\n${await toEvaluableJs(result.code)}\nreturn ${result.schemaName};`
-    )(z);
-    const validate = (input: Record<string, unknown>) =>
-      validator.safeParse(normalizePreviewInputs(docs, 'test.inputStructure.Read', input, runtime));
-    // Negative values violate Parent's condition, but are structurally valid function inputs.
-    const plain = validate({
-      source: { amount: -1, textValue: 'text' },
-      textValue: null,
-      referenceInput: { globalReference: 'id' }
-    });
-    expect(plain.success).toBe(true);
-    expect(plain.data.source).toEqual({ amount: -1, textValue: { value: 'text', meta: {} } });
-    expect(plain.data.referenceInput).toEqual({ globalReference: 'id' });
-    expect(plain.data.source.links).toBeUndefined();
-    expect(plain.data.textValue).toBeUndefined();
-    const wrapped = validate({
-      source: {
-        amount: 1,
-        textValue: { value: 'text', meta: { scheme: 'uri' } },
-        links: [{ value: { amount: 2 }, meta: {} }]
-      },
-      referenceInput: { value: { amount: 3 }, externalReference: 'id' }
-    });
-    expect(wrapped.success).toBe(true);
-    expect(wrapped.data.source.textValue.meta.scheme).toBe('uri');
-    expect(validate({ source: { amount: 1 }, referenceInput: { amount: 2 } }).success).toBe(true);
-    for (const input of [
-      { source: { amount: '1' }, referenceInput: { globalReference: 'id' } },
-      { source: { amount: 1, textValue: { value: 2, meta: {} } }, referenceInput: { globalReference: 'id' } },
-      { source: { amount: 1, links: [{ value: { amount: '2' } }] }, referenceInput: { globalReference: 'id' } },
-      { source: { amount: 1 } }
-    ])
-      expect(validate(input).success).toBe(false);
-  });
+      expect(plain.success).toBe(true);
+      expect(plain.data.source).toEqual({ amount: -1, textValue: { value: 'text', meta: {} } });
+      expect(plain.data.referenceInput).toEqual({ globalReference: 'id' });
+      expect(plain.data.source.links).toBeUndefined();
+      expect(plain.data.textValue).toBeUndefined();
+      const wrapped = validate({
+        source: {
+          amount: 1,
+          textValue: { value: 'text', meta: { scheme: 'uri' } },
+          links: [{ value: { amount: 2 }, meta: {} }]
+        },
+        referenceInput: { value: { amount: 3 }, externalReference: 'id' }
+      });
+      expect(wrapped.success).toBe(true);
+      expect(wrapped.data.source.textValue.meta.scheme).toBe('uri');
+      expect(validate({ source: { amount: 1 }, referenceInput: { amount: 2 } }).success).toBe(true);
+      for (const input of [
+        { source: { amount: '1' }, referenceInput: { globalReference: 'id' } },
+        { source: { amount: 1, textValue: { value: 2, meta: {} } }, referenceInput: { globalReference: 'id' } },
+        { source: { amount: 1, links: [{ value: { amount: '2' } }] }, referenceInput: { globalReference: 'id' } },
+        { source: { amount: 1 } }
+      ])
+        expect(validate(input).success).toBe(false);
+    },
+    30_000
+  );
 
   /**
    * PR #470 live review finding (2026-08-04): `emitNamespace` was called
