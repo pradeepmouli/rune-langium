@@ -2,7 +2,7 @@
 // Copyright (c) 2026 Pradeep Mouli
 
 import type { LangiumDocument } from 'langium';
-import { isData, isChoice, isRosettaEnumeration } from '@rune-langium/core';
+import { isData, isChoice, isRosettaEnumeration, getFunctionInputs } from '@rune-langium/core';
 import type { Data, Choice, RosettaEnumeration, RosettaTypeAlias } from '@rune-langium/core';
 import { buildNamespaceIndexes, type NamespaceIndex } from '../preview-schema.js';
 import { resolveTypeCallTarget, nodeSourceUri } from './type-ref-resolver.js';
@@ -392,10 +392,31 @@ const CROSS_NAMESPACE_IMPORT_LINE = /^import \{[^}]*\} from '[^']*\.zod\.js';(\r
  */
 export function emitStandaloneZodSchema(
   documents: LangiumDocument[],
-  targetId: string
-): { code: string; diagnostics: GeneratorDiagnostic[] } {
+  targetId: string,
+  options: { functionInputs?: boolean } = {}
+): { code: string; diagnostics: GeneratorDiagnostic[]; schemaName?: string } {
   const namespaceIndexes = buildNamespaceIndexes(documents);
-  const target = findTargetNode(namespaceIndexes, targetId);
+  let target = options.functionInputs ? undefined : findTargetNode(namespaceIndexes, targetId);
+  if (options.functionInputs) {
+    for (const ns of namespaceIndexes) {
+      for (const [name, entry] of ns.funcByName) {
+        if (`${ns.namespace}.${name}` !== targetId) continue;
+        // Reuse the Data emitter and dependency closure for the input object.
+        // '$' cannot occur in a Rune declaration name, so this root cannot collide.
+        const node: Data = {
+          $type: 'Data',
+          $container: entry.node.$container,
+          name: '$Rune$FunctionInputs',
+          attributes: getFunctionInputs(entry.node),
+          annotations: [],
+          conditions: [],
+          references: [],
+          synonyms: []
+        };
+        target = { kind: 'data', node, sourceUri: entry.sourceUri };
+      }
+    }
+  }
   if (!target) {
     const ambiguousKind = namespaceIndexes.some((ns) =>
       Array.from(ns.duplicateDataNames).some((name) => `${ns.namespace}.${name}` === targetId)
@@ -470,7 +491,7 @@ export function emitStandaloneZodSchema(
   // `RUNTIME_HELPER_JS_SOURCE` — after type-erasure both declare the same
   // `const` helper names, and `new Function()` throws "Identifier has
   // already been declared".
-  const emitOptions: NamespaceEmitterOptions = { suppressBoilerplate: true };
+  const emitOptions: NamespaceEmitterOptions = { suppressBoilerplate: true, functionInputs: options.functionInputs };
   const result = emitNamespace(syntheticModel, emitOptions, { namespaces: new Map() });
   const stripped = result.content.replace(CROSS_NAMESPACE_IMPORT_LINE, '');
   // `runeExtendChoice` backs Data-extends-Choice emission and is NOT part
@@ -492,5 +513,9 @@ export function emitStandaloneZodSchema(
         (header) => `${header}\n${RUNE_EXTEND_CHOICE_HELPER_JS_SOURCE}\n`
       )
     : stripped;
-  return { code, diagnostics: [...closure.diagnostics, ...result.diagnostics] };
+  return {
+    code,
+    diagnostics: [...closure.diagnostics, ...result.diagnostics],
+    ...(options.functionInputs ? { schemaName: `${target.node.name}Schema` } : {})
+  };
 }

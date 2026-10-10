@@ -960,10 +960,59 @@ describe('codegen-worker previewGenerateCache (executeFunction)', () => {
     fromStringMock.mockClear();
     generateMock.mockClear();
     generateMock.mockReturnValue([]);
+    emitStandaloneZodSchemaMock.mockReset();
+    emitStandaloneZodSchemaMock.mockReturnValue({
+      code: 'export const $Rune$FunctionInputsSchema = z.record(z.string(), z.unknown());',
+      diagnostics: [],
+      schemaName: '$Rune$FunctionInputsSchema'
+    });
   });
 
   afterEach(() => {
     vi.unstubAllGlobals();
+  });
+
+  it('validates inputs before calling a lean function and caches the input schema', async () => {
+    generateMock.mockReturnValue([
+      {
+        relativePath: 'alpha.ts',
+        content: 'export function Run(input) { return input.count + 1; }',
+        diagnostics: [],
+        funcs: [{ name: 'Run', fileContents: '' }]
+      }
+    ]);
+    emitStandaloneZodSchemaMock.mockReturnValue({
+      code: 'export const $Rune$FunctionInputsSchema: z.ZodType<{count: number}> = z.object({count: z.number().int()});\nexport type $Rune$FunctionInputs = z.infer<typeof $Rune$FunctionInputsSchema>;',
+      diagnostics: [],
+      schemaName: '$Rune$FunctionInputsSchema'
+    });
+    const { scope, dispatch } = await loadWorkerModule();
+    dispatch({
+      type: 'preview:setFiles',
+      filesRevision: 1,
+      files: [{ uri: 'file:///run.rosetta', content: 'namespace alpha' }]
+    });
+    await flushWorker();
+    dispatch({ type: 'preview:execute', funcName: 'alpha.Run', inputs: { count: 'bad' }, requestId: 'invalid' });
+    await flushWorker();
+    expect(scope.postMessage).toHaveBeenLastCalledWith(
+      expect.objectContaining({
+        type: 'preview:execute-error',
+        requestId: 'invalid',
+        error: expect.stringContaining('count:')
+      })
+    );
+    dispatch({ type: 'preview:execute', funcName: 'alpha.Run', inputs: { count: 2 }, requestId: 'valid' });
+    await flushWorker();
+    expect(scope.postMessage).toHaveBeenLastCalledWith(
+      expect.objectContaining({
+        type: 'preview:execute-result',
+        requestId: 'valid',
+        output: 3
+      })
+    );
+    expect(emitStandaloneZodSchemaMock).toHaveBeenCalledTimes(1);
+    expect(emitStandaloneZodSchemaMock).toHaveBeenCalledWith(expect.any(Array), 'alpha.Run', { functionInputs: true });
   });
 
   it('resolves a qualified function name on a fresh worker, without codegen:generate ever having run', async () => {
@@ -1827,7 +1876,7 @@ describe('codegen-worker validateInstance (real standalone Zod validator)', () =
     // The trailing `export type Trade = z.infer<typeof TradeSchema>;` line
     // matches zod-emitter.ts's emitInferAlias, which real
     // emitStandaloneZodSchema output always includes for a non-cyclic Data
-    // type — stripModuleTypeAnnotations must drop it entirely (it's
+    // type — The shared TypeScript compiler must erase it entirely (it's
     // TypeScript-only syntax `new Function` cannot parse), not merely strip
     // `export` off it.
     emitStandaloneZodSchemaMock.mockReturnValue({

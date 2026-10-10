@@ -206,13 +206,12 @@ export function isWrapper(x: unknown): x is Wrapper {
 
 
 export function UsePayload(input: { wrapper: RuneFuncData<WrapperShape> }): string {
-  input = { ...input, wrapper: ((value) => { if (value == null) throw new Error("Argument 'wrapper' requires a value"); return value; })(rune.single(input.wrapper)) };
   let result: string | undefined;
   const payload = input.wrapper?.payload;
   if (!rune.exists(payload)) {
     throw new Error('Diagnostic: PayloadExists: payload must be present in UsePayload');
   }
-  result = rune.single(payload);
+  result = payload;
   if (result == null) throw new Error("Function 'UsePayload' produced no result");
   return result;
 }

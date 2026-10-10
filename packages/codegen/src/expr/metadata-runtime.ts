@@ -41,6 +41,24 @@ export function metadataType(type: string, kind: FieldMetadataKind | undefined):
   return kind ? `${kind === 'reference' ? 'RuneReferenceWithMeta' : 'RuneFieldWithMeta'}<${type}>` : type;
 }
 
+/** Structural metadata types also serve standalone schemas without runtime type imports. */
+export function metadataObjectType(
+  type: string,
+  kind: FieldMetadataKind | undefined,
+  metadata = 'RuneMetadata'
+): string {
+  if (!kind) return type;
+  return kind === 'field'
+    ? `{ value: ${type}; meta: ${metadata} }`
+    : `{
+  value?: ${type};
+  meta?: ${metadata};
+  reference?: { reference?: unknown; scope?: unknown; pointsTo?: unknown };
+  externalReference?: unknown;
+  globalReference?: unknown;
+}`;
+}
+
 export function unwrapMetadata(value: string, many: boolean): string {
   return many ? `(${value} ?? []).map((field) => field.value).filter((value) => value != null)` : `(${value})?.value`;
 }
@@ -94,14 +112,8 @@ export function metadataRuntimeSource(typescript: boolean, exported = false): st
   const prefix = exported ? 'export ' : '';
   const types = typescript
     ? `${prefix}type RuneMetadata = Record<string, unknown>;
-${prefix}type RuneFieldWithMeta<T> = { value: T; meta: RuneMetadata };
-${prefix}type RuneReferenceWithMeta<T> = {
-  value?: T;
-  meta?: RuneMetadata;
-  reference?: { reference?: unknown; scope?: unknown; pointsTo?: unknown };
-  externalReference?: unknown;
-  globalReference?: unknown;
-};
+${prefix}type RuneFieldWithMeta<T> = ${metadataObjectType('T', 'field')};
+${prefix}type RuneReferenceWithMeta<T> = ${metadataObjectType('T', 'reference')};
 ${prefix}type RuneMetadataInputKind = 'value' | 'field' | 'reference';
 ${prefix}type RuneUnwrapMeta<T> = T extends readonly (infer I)[] ? RuneUnwrapMeta<I>[] : T extends { value?: infer V } ? V : T;
 ${prefix}type RuneWithMetaResult<T, K extends string = string, S extends RuneMetadataInputKind = 'value'> =

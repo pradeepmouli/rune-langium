@@ -2,6 +2,93 @@
 // Copyright (c) 2026 Pradeep Mouli
 
 import type { RuneFuncParam } from '../types/func.js';
+import {
+  isAttribute,
+  isChoiceOption,
+  isRosettaFeatureCall,
+  isRosettaFunction,
+  isRosettaSymbolReference,
+  isShortcutDeclaration,
+  isListLiteral,
+  isRosettaConditionalExpression,
+  isThenOperation,
+  type RosettaExpression
+} from '@rune-langium/core';
+import { expressionIsMany } from './navigation.js';
+import { expressionIsPresent, attributeReferenceIsValidated } from './scalar-operators.js';
+import { hasFieldMetadata } from './metadata-runtime.js';
+
+/** Reuse linked bounds when passing already validated values to another declaration. */
+export function expressionFitsCardinality(
+  expression: RosettaExpression | undefined,
+  cardinality: RuneFuncParam['cardinality'],
+  visiting = new Set<RosettaExpression>()
+): boolean {
+  if (!expression || visiting.has(expression)) return false;
+  visiting.add(expression);
+  try {
+    const many = cardinality.upper === null || cardinality.upper > 1;
+    if (expressionIsMany(expression) !== many) return false;
+    if (!many && cardinality.lower <= 1 && (cardinality.upper ?? 1) >= 1 && expressionIsPresent(expression))
+      return true;
+    const feature = isRosettaSymbolReference(expression)
+      ? expression.symbol.ref
+      : isRosettaFeatureCall(expression)
+        ? expression.feature?.ref
+        : undefined;
+    if (isShortcutDeclaration(feature)) return expressionFitsCardinality(feature.expression, cardinality, visiting);
+    if (!isAttribute(feature) && !isChoiceOption(feature)) return false;
+    if (isAttribute(feature) && isRosettaFunction(feature.$container) && feature.$containerProperty === 'output')
+      return false;
+    if (!('card' in feature)) return false;
+    const card = feature.card;
+    const lower =
+      hasFieldMetadata(feature) ||
+      (isRosettaSymbolReference(expression) &&
+        isAttribute(feature) &&
+        !attributeReferenceIsValidated(expression, feature)) ||
+      (isRosettaFeatureCall(expression) && !expressionIsPresent(expression.receiver))
+        ? 0
+        : card.inf;
+    return (
+      lower >= cardinality.lower &&
+      (cardinality.upper === null || (!card.unbounded && (card.sup ?? 1) <= cardinality.upper))
+    );
+  } finally {
+    visiting.delete(expression);
+  }
+}
+
+export function adaptCardinalityValue(
+  value: string,
+  cardinality: RuneFuncParam['cardinality'],
+  label: string,
+  expression?: RosettaExpression
+): string {
+  if (expressionFitsCardinality(expression, cardinality)) {
+    return expressionIsMany(expression) ? collectionValue(value, expression) : value;
+  }
+  return normalizeCardinalityValue(value, cardinality, label);
+}
+
+/** Collection-producing operations already return arrays; optional fields can be absent. */
+export function collectionValue(value: string, expression: RosettaExpression | undefined): string {
+  const present = (node: RosettaExpression | undefined): boolean => {
+    if (!node) return false;
+    if (isListLiteral(node)) return node.elements.length > 0;
+    if (isThenOperation(node)) return present(node.function?.body ?? node.argument);
+    if (isRosettaConditionalExpression(node)) return present(node.ifthen) && present(node.elsethen);
+    return [
+      'MapOperation',
+      'FilterOperation',
+      'SortOperation',
+      'ReverseOperation',
+      'DistinctOperation',
+      'FlattenOperation'
+    ].includes(node.$type);
+  };
+  return present(expression) ? value : `(${value} ?? [])`;
+}
 
 /** Shared runtime bounds for function arguments, outputs, and nested assignments. */
 export function renderCardinalityChecks(

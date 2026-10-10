@@ -3,9 +3,10 @@
 
 import { metadataPropertyPath } from '../expr/metadata-runtime.js';
 import { expressionMetadataKind } from '../expr/metadata-type.js';
-import { renderCardinalityChecks } from '../expr/cardinality.js';
+import { collectionValue, expressionFitsCardinality, renderCardinalityChecks } from '../expr/cardinality.js';
+import { expressionIsMany } from '../expr/navigation.js';
 import { freshLocal } from '../expr/inline-function.js';
-import { isRosettaExpression } from '@rune-langium/core';
+import { isListLiteral, isRosettaExpression } from '@rune-langium/core';
 import type { FuncBodyContext, RuneFuncAssignment } from '../types/func.js';
 
 export function renderFuncAssignment(
@@ -18,7 +19,16 @@ export function renderFuncAssignment(
   let target = root;
   const lines: string[] = [];
   const targetMany = assignment.targetMany ?? (path.length === 0 && ctx.outputAccumulator === 'array');
-  let expr = `${targetMany ? 'rune.list' : 'rune.single'}(${renderExpression(assignment.exprNode)})`;
+  const expression = isRosettaExpression(assignment.exprNode) ? assignment.exprNode : undefined;
+  const sourceMany = expression ? expressionIsMany(expression) : undefined;
+  let expr = renderExpression(assignment.exprNode);
+  const emptyList = expression && isListLiteral(expression) && !expression.elements.length;
+  expr =
+    sourceMany === targetMany && !emptyList
+      ? targetMany
+        ? collectionValue(expr, expression)
+        : expr
+      : `${targetMany ? 'rune.list' : 'rune.single'}(${expr})`;
   const bounds = assignment.targetCardinality;
   const checksFor = (value: string, arraySize?: string) =>
     bounds
@@ -32,7 +42,7 @@ export function renderFuncAssignment(
         )
       : [];
   if (assignment.kind === 'set') {
-    const checks = checksFor('value');
+    const checks = !path.length && bounds && expressionFitsCardinality(expression, bounds) ? [] : checksFor('value');
     if (checks.length) expr = `((value) => { ${checks.join(' ')} return value; })(${expr})`;
   }
   if (assignment.metadataKind) {

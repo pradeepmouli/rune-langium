@@ -12,6 +12,8 @@ import {
   isRosettaExternalFunction,
   isRosettaRule,
   isRosettaSymbolReference,
+  isRosettaExpression,
+  isRosettaConstructorExpression,
   isData,
   type Choice,
   type Condition,
@@ -35,7 +37,7 @@ import { expressionMetadataKind } from '../expr/metadata-type.js';
 import { groupFuncDispatches, renderFuncDispatchGroup } from './func-dispatch.js';
 import { AstUtils, isMultiReference, type AstNode } from 'langium';
 import { renderFuncAssignment } from './func-assignment.js';
-import { renderCardinalityChecks, normalizeCardinalityValue } from '../expr/cardinality.js';
+import { expressionFitsCardinality, renderCardinalityChecks } from '../expr/cardinality.js';
 import { fieldMetadataKind, metadataType, hasFieldMetadata, hasTypeMetadata } from '../expr/metadata-runtime.js';
 
 /**
@@ -1996,13 +1998,27 @@ export class TsNamespaceEmitter extends BaseNamespaceEmitter {
    */
   private static emitFuncBody(func: RuneFunc, ctx: FuncBodyContext): string[] {
     const bodyLines: string[] = [];
-    const checkedInputs = func.inputs.flatMap((parameter) => {
-      const value = `input.${parameter.name}`;
-      const normalized = normalizeCardinalityValue(value, parameter.cardinality, `Argument '${parameter.name}'`);
-      return normalized === value ? [] : [`${parameter.name}: ${normalized}`];
-    });
-    if (checkedInputs.length) bodyLines.push(`  input = { ...input, ${checkedInputs.join(', ')} };`);
-
+    const assignment = func.assignments[0];
+    if (
+      func.assignments.length === 1 &&
+      assignment?.kind === 'set' &&
+      !assignment.path?.length &&
+      (!assignment.target || assignment.target === func.output.name) &&
+      !func.output.metadataKind &&
+      !func.aliases.length &&
+      !func.preConditions.length &&
+      !func.postConditions.length &&
+      isRosettaExpression(assignment.exprNode) &&
+      expressionFitsCardinality(assignment.exprNode, func.output.cardinality)
+    ) {
+      const statement = TsNamespaceEmitter.emitFuncSet(assignment, ctx);
+      if (statement.startsWith('  result = ') && !statement.includes('\n')) {
+        // A local preserves structural assignment for constructor literals with additional fields.
+        return isRosettaConstructorExpression(assignment.exprNode)
+          ? [statement.replace('  result = ', '  const result = '), '  return result;']
+          : [statement.replace('  result = ', '  return ')];
+      }
+    }
     if (func.isAbstract) {
       // Same alias-before-precondition ordering as the non-abstract path
       // below — an abstract func (no set/add body) can still declare

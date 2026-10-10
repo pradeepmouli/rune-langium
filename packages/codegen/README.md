@@ -56,7 +56,13 @@ return type. Data values use `RuneFuncData<TypeShape>`, which preserves nested
 fields while excluding class validation methods. Required inputs are required properties; optional inputs use `?`;
 collection inputs and outputs use arrays. An optional scalar output returns
 `T | undefined`. These types describe values and collection shape; TypeScript
-arrays do not encode every Rune minimum or maximum cardinality. Generated
+arrays do not encode every Rune minimum or maximum cardinality. Exported functions
+expect prevalidated JSON inputs and preserve them without copying or coercion.
+Validate external payloads before calling them; Studio does this once using
+`emitStandaloneZodSchema(documents, targetId, { functionInputs: true })`, which
+reuses the Data schema emitter and dependency closure. This input schema accepts the
+adapted metadata contract, permits omitted zero-minimum arrays, and leaves Data
+conditions to their separate validation flow. Generated
 functions enforce declared output bounds at runtime, including absent-only `(0..0)` outputs.
 Required metadata assignment fields reject absent values. Metadata helper discovery
 follows linked declarations, including imported constructor and assignment fields.
@@ -67,7 +73,10 @@ while model classes use Temporal instances. Shared helpers convert class argumen
 at function calls, read calendar fields, construct validated calendar values, and
 perform date arithmetic. Studio supplies the same polyfill to executable previews.
 
-Scalar/list normalization is shared across functions, validators, and previews.
+Scalar/list adaptation is shared across functions, validators, and previews.
+Assignments and calls use direct values when linked bounds and shapes already fit;
+optional fields use `?.` and optional collections use `?? []`. Actual shape changes
+and computed values with unproven bounds retain the shared runtime checks.
 `extract` and list literals flatten one collection level; scalar assignments reject
 multiple values. Arithmetic returns no value when an operand is absent or has more
 than one value. Ordered comparisons involving absent operands are false. Sorting
@@ -75,14 +84,17 @@ places absent keys last; min/max choose populated keys when present.
 
 Generated expression runtime calls use `rune.*`: for example, `rune.exists(value)`,
 `rune.count(value)`, `rune.distinct(values)`, `rune.contains(left, right)` and
-`rune.toDate(value)`. Structural and collection equality uses `rune.equals`;
+`rune.toDate(value)`. Validated scalar values use `===` / `!==`. Structured values
+compare canonical `rune.valueKey` results; collection comparisons use `rune.equals`.
+Computed numeric expressions can produce NaN and retain canonical value comparison;
 metadata calls include `rune.withMeta`, `rune.toField` and `rune.toReference`.
 Native operators and standard-library calls remain compact where equivalent.
 Inline modules, shared runtime sidecars and executable previews use the same
 runtime source builder; namespace methods preserve generic types and type guards.
 Existing flat implementation exports remain available to runtime consumers.
 
-Studio function previews resolve inherited and dispatch input signatures.
+Studio function previews resolve inherited and dispatch input signatures and
+adapt plain form values and metadata envelopes, then validate their structure once before execution.
 `normalizePreviewInputs` adapts plain form values to metadata wrappers using the
 shared type resolver and runtime helpers, including nested and recursive values
 beyond the form renderer's expansion depth.

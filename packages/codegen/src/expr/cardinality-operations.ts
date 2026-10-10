@@ -37,7 +37,7 @@ export function renderCardinalityOperation(
     if (node.$type === 'RosettaSymbolReference') {
       const name = node.symbol.$refText ?? '';
       const type = ctx.attributeTypes.get(name) ?? '';
-      return type.includes('[]') || type.includes('undefined');
+      return type.includes('[]');
     }
     return false;
   };

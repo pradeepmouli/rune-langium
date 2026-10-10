@@ -34,7 +34,7 @@ export const studioEditorTheme = EditorView.theme(
     '.cm-content': {
       caretColor: 'var(--primary)',
       ...editorTextStyle,
-      padding: '2px 0'
+      padding: '8px 0'
     },
     '.cm-cursor, .cm-dropCursor': {
       borderLeftColor: 'var(--primary)'
@@ -46,12 +46,7 @@ export const studioEditorTheme = EditorView.theme(
       backgroundColor: 'color-mix(in srgb, var(--accent) 34%, transparent)'
     },
     '.cm-gutters': {
-      // Match .cm-content's mono font, size, and line-height so the line
-      // numbers are monospace and vertically aligned with the code lines.
-      // The gutter is a sibling of (not nested in) .cm-content, so it does
-      // NOT inherit the content font — without this it falls back to the body
-      // UI font (Inter), rendering proportional and misaligned against the
-      // JetBrains Mono content.
+      // Gutters are siblings of the content and need the same metrics for alignment.
       ...editorTextStyle,
       backgroundColor: 'color-mix(in srgb, var(--card) 92%, var(--background))',
       color: 'var(--muted-foreground)',
@@ -63,13 +58,12 @@ export const studioEditorTheme = EditorView.theme(
       color: 'var(--muted-foreground)'
     },
     '.cm-lineNumbers .cm-gutterElement': {
-      padding: '0 4px 0 6px'
+      padding: '0 2px 0 4px',
+      minWidth: '0'
     },
-    '.cm-line': { padding: '0 4px' },
-    '.cm-foldGutter': { width: '14px' },
-    '.cm-foldGutter .cm-gutterElement': {
-      color: 'var(--muted-foreground)'
-    },
+    '.cm-line': { padding: '0 8px' },
+    '.cm-foldGutter': { width: '10px' },
+    '.cm-foldGutter .cm-gutterElement': { padding: '0', color: 'var(--muted-foreground)' },
     '.cm-tooltip': {
       backgroundColor: 'color-mix(in srgb, var(--card) 88%, var(--background))',
       border: '1px solid var(--border)',

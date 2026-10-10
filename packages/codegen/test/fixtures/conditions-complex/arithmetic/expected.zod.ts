@@ -204,7 +204,7 @@ export const NumericCheckSchema = z
         path: ['ValueBelowThreshold']
       });
     }
-    if (!(!rune.equals(data.value, 0))) {
+    if (!((rune.valueKey(data.value) !== rune.valueKey(0)))) {
       ctx.addIssue({
         code: 'custom',
         message: 'ValueNotZero: condition failed in NumericCheck',

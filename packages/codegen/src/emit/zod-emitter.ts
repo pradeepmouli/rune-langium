@@ -40,6 +40,7 @@ import {
 } from './base-namespace-emitter.js';
 import { getTargetRelativePath, type NamespaceWalkResult } from './namespace-walker.js';
 import { resolveTypeCallTarget, type TypeIndexEntry, type TypeIndexLookup } from './type-ref-resolver.js';
+import { fieldMetadataKind, metadataObjectType } from '../expr/metadata-runtime.js';
 import { zodProfile } from './zod-profile.js';
 import { typescriptProfile } from './typescript-profile.js';
 import { debug } from '../instrument.js';
@@ -252,6 +253,7 @@ export class ZodNamespaceEmitter extends BaseNamespaceEmitter {
   private readonly ctx: EmissionContext;
   private readonly typeIndex: TypeIndexLookup;
   private readonly sections: string[] = [];
+  private readonly functionInputs: boolean;
 
   constructor(
     model: NamespaceWalkResult,
@@ -259,6 +261,7 @@ export class ZodNamespaceEmitter extends BaseNamespaceEmitter {
     registry: NamespaceRegistry = { namespaces: new Map() }
   ) {
     super(model, options, registry);
+    this.functionInputs = options.functionInputs ?? false;
     this.ctx = buildEmissionContext(model, registry, this.diagnostics);
     this.typeIndex = toTypeIndexLookup(this.ctx);
   }
@@ -609,9 +612,20 @@ export class ZodNamespaceEmitter extends BaseNamespaceEmitter {
    * FR-003 (cardinality), FR-009 (reserved-word quoting).
    */
   private emitAttribute(attr: Attribute, ownerName: string): string {
-    const baseTypeExpr = this.resolveTypeExpr(attr, ownerName);
+    let baseTypeExpr = this.resolveTypeExpr(attr, ownerName);
+    const kind = this.functionInputs ? fieldMetadataKind(attr) : undefined;
+    if (kind) {
+      const metadata = 'z.record(z.string(), z.unknown())';
+      baseTypeExpr =
+        kind === 'field'
+          ? `z.object({ value: ${baseTypeExpr}, meta: ${metadata} })`
+          : `z.object({ value: ${baseTypeExpr}.optional(), meta: ${metadata}.optional(), reference: z.object({ reference: z.unknown().optional(), scope: z.unknown().optional(), pointsTo: z.unknown().optional() }).optional(), externalReference: z.unknown().optional(), globalReference: z.unknown().optional() })`;
+    }
     const card = attr.card;
-    const zodExpr = ZodNamespaceEmitter.applyCardinality(card, baseTypeExpr);
+    let zodExpr = ZodNamespaceEmitter.applyCardinality(card, baseTypeExpr);
+    if (this.functionInputs && card.inf === 0 && (card.unbounded || (card.sup ?? 1) > 1)) {
+      zodExpr += '.optional()';
+    }
     const key = ZodNamespaceEmitter.quoteKey(attr.name);
     return `  ${key}: ${zodExpr}`;
   }
@@ -930,9 +944,12 @@ export class ZodNamespaceEmitter extends BaseNamespaceEmitter {
     const fields: string[] = [];
 
     for (const attr of data.attributes) {
-      const baseTypeExpr = this.resolveTypeExprAsTs(attr);
+      const type = this.resolveTypeExprAsTs(attr);
+      const baseTypeExpr = this.functionInputs
+        ? metadataObjectType(type, fieldMetadataKind(attr), 'Record<string, unknown>')
+        : type;
       const card = attr.card;
-      const tsField = ZodNamespaceEmitter.applyCardinalityTs(card, baseTypeExpr, attr.name);
+      const tsField = ZodNamespaceEmitter.applyCardinalityTs(card, baseTypeExpr, attr.name, this.functionInputs);
       fields.push(`  ${tsField};`);
     }
 
@@ -1019,6 +1036,7 @@ export class ZodNamespaceEmitter extends BaseNamespaceEmitter {
    * to the schema expression. Returns empty string if no conditions.
    */
   private emitConditionBlock(data: Data): string {
+    if (this.functionInputs) return '';
     // Filter out conditions that have no expression or are unsupported
     const activeConds = activeConditions(data);
     if (activeConds.length === 0) return '';
@@ -1342,7 +1360,12 @@ export class ZodNamespaceEmitter extends BaseNamespaceEmitter {
   /**
    * Apply cardinality to a TypeScript type expression for interface fields.
    */
-  private static applyCardinalityTs(card: RosettaCardinality, baseType: string, name: string): string {
+  private static applyCardinalityTs(
+    card: RosettaCardinality,
+    baseType: string,
+    name: string,
+    optionalArrays = false
+  ): string {
     const { lower, upper } = decodeCardinality(card);
     const key = ZodNamespaceEmitter.quoteKey(name);
 
@@ -1355,7 +1378,7 @@ export class ZodNamespaceEmitter extends BaseNamespaceEmitter {
     if (upper === 1 && lower === 0) return `${key}?: ${baseType}`;
 
     // Array forms
-    return `${key}: ${baseType}[]`;
+    return `${key}${optionalArrays && lower === 0 ? '?' : ''}: ${baseType}[]`;
   }
 
   /**

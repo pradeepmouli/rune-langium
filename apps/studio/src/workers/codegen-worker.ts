@@ -348,8 +348,14 @@ interface StandaloneValidatorResult {
  * have no `await` anywhere in this call — so its cache (below) uses the
  * sync `getOrCompute`, not `getOrComputeAsync`.
  */
-function compileStandaloneValidator(documents: LangiumDocument[], typeFqn: string): StandaloneValidatorResult {
-  const { code, diagnostics } = emitStandaloneZodSchema(documents, typeFqn);
+function compileStandaloneValidator(
+  documents: LangiumDocument[],
+  typeFqn: string,
+  functionInputs = false
+): StandaloneValidatorResult {
+  const { code, diagnostics, schemaName } = functionInputs
+    ? emitStandaloneZodSchema(documents, typeFqn, { functionInputs: true })
+    : emitStandaloneZodSchema(documents, typeFqn);
   if (diagnostics.some((d) => d.severity === 'error')) {
     return { validator: undefined, diagnostics };
   }
@@ -358,8 +364,13 @@ function compileStandaloneValidator(documents: LangiumDocument[], typeFqn: strin
   // typeFqn's own bare name (its final `.`-segment) is exactly that name.
   const targetName = typeFqn.slice(typeFqn.lastIndexOf('.') + 1);
   try {
-    const stripped = stripModuleTypeAnnotations(code);
-    const validator = runInWorkerSandbox(stripped, 'z', z, `${targetName}Schema`) as z.ZodTypeAny;
+    const stripped = transpileGeneratedTypeScript(code.replace(/^import .*;$/gm, ''), `${typeFqn}.zod.ts`);
+    const validator = runInWorkerSandbox(
+      `const exports = {};\n${stripped}`,
+      'z',
+      z,
+      `exports[${JSON.stringify(schemaName ?? `${targetName}Schema`)}]`
+    ) as z.ZodTypeAny;
     return { validator, diagnostics };
   } catch (err) {
     return {
@@ -679,78 +690,6 @@ function transpileGeneratedTypeScript(tsCode: string, moduleName: string): strin
   }
 }
 
-// Balanced-brace scan (not regex — a cyclic type's interface body could in
-// principle nest braces, e.g. a field typed as an inline object) for
-// `export interface <Name> { ... }` blocks — emitStandaloneZodSchema
-// predeclares these for cyclic targets (zod-emitter.ts's
-// emitCyclicInterface).
-function stripInterfaceBlocks(tsCode: string): string {
-  const marker = 'export interface ';
-  let result = '';
-  let i = 0;
-  while (i < tsCode.length) {
-    const idx = tsCode.indexOf(marker, i);
-    if (idx === -1) {
-      result += tsCode.slice(i);
-      break;
-    }
-    result += tsCode.slice(i, idx);
-    const braceStart = tsCode.indexOf('{', idx);
-    let depth = 0;
-    let j = braceStart;
-    for (; j < tsCode.length; j++) {
-      if (tsCode[j] === '{') depth++;
-      else if (tsCode[j] === '}') {
-        depth--;
-        if (depth === 0) break;
-      }
-    }
-    i = j + 1;
-    if (tsCode[i] === '\n') i++;
-  }
-  return result;
-}
-
-/**
- * Turns `emitStandaloneZodSchema`'s returned TypeScript module into plain,
- * `runInWorkerSandbox`-evaluable JavaScript: drops any cyclic-type
- * `export interface` predeclaration block, drops the `import { z } from
- * 'zod';` header line (the caller binds `z` as an explicit sandbox
- * parameter instead — `new Function` bodies cannot contain `import`
- * statements), drops every `export type <Name> = ...;` alias line entirely
- * (zod-emitter.ts's `emitInferAlias`/`emitEnum`/`emitTypeAliasSchema` emit
- * one of these — always `z.infer<typeof ...>` or a resolved primitive — for
- * EVERY non-cyclic Data, Choice, Enum, and RosettaTypeAlias in the closure;
- * merely stripping `export` off them left a bare `type X = ...;` statement,
- * which is TypeScript-only syntax `new Function` cannot parse at all — so
- * every real (non-trivial) standalone schema failed to compile and
- * `validateInstance` always fell back to "Structural validation
- * unavailable", even though the hand-authored test fixtures — which never
- * included one of these lines — all passed), drops `export ` on each
- * remaining top-level declaration, and strips a top-level variable's own
- * type annotation (`export const XSchema: z.ZodType<X> = ...` — the
- * cyclic-type case, per zod-emitter.ts's `emitCyclicInterface` pairing).
- *
- * This schema-only path deliberately remains separate from the TypeScript
- * compiler path above: it binds the worker's explicit `z` parameter and
- * removes only standalone schema declarations that cannot be evaluated by
- * `new Function`.
- */
-function stripModuleTypeAnnotations(tsCode: string): string {
-  const withoutInterfaces = stripInterfaceBlocks(tsCode);
-  const withoutDroppedLines = withoutInterfaces
-    .split('\n')
-    .filter((line) => !/^import .*;$/.test(line) && !/^export type \w+ = .*;$/.test(line))
-    .join('\n');
-  return withoutDroppedLines
-    .split('\n')
-    .map((line) => {
-      const withoutExport = line.replace(/^export\s+/, '');
-      return withoutExport.replace(/^((?:const|let|var)\s+\w+)\s*:\s*[\w.<>()[\] |&?,]+\s*(=|;)/, '$1 $2');
-    })
-    .join('\n');
-}
-
 // ---------------------------------------------------------------------------
 // Hardened `new Function(...)` execution — shared sandbox wrapper
 // ---------------------------------------------------------------------------
@@ -1003,6 +942,28 @@ async function executeFunction(funcName: string, inputs: Record<string, unknown>
       return;
     }
 
+    const { value: compiled } = getOrCompute(
+      standaloneValidatorCache,
+      `function-inputs:${selectedTargetId}`,
+      documentsVersion,
+      () => compileStandaloneValidator(documents, selectedTargetId, true)
+    );
+    if (!compiled.validator) {
+      throw new Error(`Input validation unavailable: ${compiled.diagnostics[0]?.message ?? 'unknown error'}`);
+    }
+    const adaptedInputs = runInWorkerSandbox(
+      '',
+      '$rune$inputs',
+      { inputs, documents, targetId: selectedTargetId, normalizePreviewInputs },
+      '$rune$inputs.normalizePreviewInputs($rune$inputs.documents, $rune$inputs.targetId, $rune$inputs.inputs, { field: runeToField, reference: runeToReference })'
+    );
+    const validation = compiled.validator.safeParse(adaptedInputs);
+    if (!validation.success) {
+      throw new Error(
+        validation.error.issues.map((issue) => `${formatIssuePath(issue.path)}: ${issue.message}`).join('; ')
+      );
+    }
+
     // Load the complete generated module so function calls, metadata helpers,
     // and imports from sibling generated modules share one module graph.
     // Execution still goes through runInWorkerSandbox — see its threat-model
@@ -1017,8 +978,8 @@ async function executeFunction(funcName: string, inputs: Record<string, unknown>
     const output = runInWorkerSandbox(
       '',
       '$rune$function',
-      { functionValue, inputs, documents, targetId: selectedTargetId, normalizePreviewInputs },
-      '$rune$function.functionValue($rune$function.normalizePreviewInputs($rune$function.documents, $rune$function.targetId, $rune$function.inputs, { field: runeToField, reference: runeToReference }))'
+      { functionValue, inputs: validation.data },
+      '$rune$function.functionValue($rune$function.inputs)'
     );
 
     scope.postMessage({

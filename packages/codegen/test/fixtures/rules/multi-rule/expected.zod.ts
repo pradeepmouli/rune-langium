@@ -198,7 +198,7 @@ export const validateIsActive = AccountSchema.refine(
 );
 
 export const validateIsPremium = AccountSchema.refine(
-  (data) => rune.equals(data.Account?.tier, 'premium'),
+  (data) => (rune.valueKey(data.Account?.tier) === rune.valueKey('premium')),
   'IsPremium'
 );
 
