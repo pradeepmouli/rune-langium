@@ -191,21 +191,21 @@ export const WithLiteralsSchema = z
     active: z.boolean().optional()
   })
   .superRefine((data, ctx) => {
-    if (!rune.equals(data.score, 42)) {
+    if (!((rune.valueKey(data.score) === rune.valueKey(42)))) {
       ctx.addIssue({
         code: 'custom',
         message: 'ScoreCheck: condition failed in WithLiterals',
         path: ['ScoreCheck']
       });
     }
-    if (!rune.equals(data.name, 'hello')) {
+    if (!((rune.valueKey(data.name) === rune.valueKey('hello')))) {
       ctx.addIssue({
         code: 'custom',
         message: 'NameCheck: condition failed in WithLiterals',
         path: ['NameCheck']
       });
     }
-    if (!rune.equals(data.active, true)) {
+    if (!((rune.valueKey(data.active) === rune.valueKey(true)))) {
       ctx.addIssue({
         code: 'custom',
         message: 'ActiveCheck: condition failed in WithLiterals',

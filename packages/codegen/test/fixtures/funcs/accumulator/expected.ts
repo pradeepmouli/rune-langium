@@ -181,7 +181,6 @@ const rune = {
 
 
 export function CollectItems(input: { value: number }): number[] {
-  input = { ...input, value: ((value) => { if (value == null) throw new Error("Argument 'value' requires a value"); return value; })(rune.single(input.value)) };
   let result: number[] = [];
   {
     const __assignmentValue = rune.list(input.value);

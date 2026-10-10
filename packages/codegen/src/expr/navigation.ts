@@ -348,6 +348,12 @@ export function renderNavigation(
     const paths = deepNavigationPaths(expr);
     if (paths.length === 0) return undefined;
     const many = expressionIsMany(expr);
+    if (!many && paths.every((path) => path.every((feature) => !isChoiceOption(feature)))) {
+      const read = (root: string, path: Feature[]) =>
+        `${root}${path.map((feature) => `?.${featureName(feature)}`).join('')}`;
+      if (paths.length === 1) return read(receiver, paths[0]!);
+      return `((__root) => ${paths.map((path) => read('__root', path)).join(' ?? ')})(${receiver})`;
+    }
     const projections = paths.map((path) => renderFeaturePath('__root', path.map(featureName), many));
     const projected = many ? `[${projections.map((value) => `...${value}`).join(', ')}]` : projections.join(' ?? ');
     return `((__root) => ${projected})(${receiver})`;

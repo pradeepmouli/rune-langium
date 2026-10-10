@@ -12,6 +12,49 @@ import {
   enlargeDialogText
 } from '../helpers/expression-workspace.js';
 
+test('lean function projections retain schema validation and shared editor spacing', async ({ page }, testInfo) => {
+  await page.goto('./');
+  await page.locator('input[type="file"][accept=".rosetta"]').setInputFiles({
+    name: 'compact.rosetta',
+    mimeType: 'text/plain',
+    buffer: Buffer.from(`namespace compact
+func Run:
+ inputs: amount int (1..1)
+ output: result int (1..1)
+ set result: 42
+`)
+  });
+  await page.getByTestId('namespace-search').fill('Run');
+  await typeNavigationButton(page, 'compact.Run', 'RosettaFunction').click();
+  await page.getByRole('button', { name: 'Inspector', exact: true }).click();
+  const implementation = page.getByRole('region', { name: 'Function implementation' });
+  const editor = implementation.getByTestId('implementation-editor');
+  const spacing = await editor.evaluate((element) => ({
+    content: getComputedStyle(element.querySelector('.cm-content')!).paddingTop,
+    line: getComputedStyle(element.querySelector('.cm-line')!).paddingLeft,
+    gutter: element.querySelector('.cm-gutters')!.getBoundingClientRect().width
+  }));
+  expect(spacing.content).toBe('8px');
+  expect(spacing.line).toBe('8px');
+  expect(spacing.gutter).toBeLessThan(30);
+  await page.getByTestId('panel-formPreview').getByRole('button', { name: 'Run', exact: true }).click();
+  await expect(page.locator('.execution-error')).toContainText('amount:');
+  await page.getByLabel('Amount', { exact: true }).fill('2');
+  await page.getByTestId('panel-formPreview').getByRole('button', { name: 'Run', exact: true }).click();
+  await expect(page.locator('.execution-result')).toContainText('42');
+  await implementation.getByRole('button', { name: 'TypeScript', exact: true }).click();
+  const projection = implementation.getByRole('textbox', { name: 'Generated typescript' });
+  await expect(projection).toContainText('return 42;');
+  await expect(projection).not.toContainText('input =');
+  await expect(projection).not.toContainText('rune.single');
+  await implementation.getByRole('button', { name: 'Rune', exact: true }).click();
+  await implementation.getByRole('button', { name: 'Open in Source', exact: true }).click();
+  await page.getByRole('button', { name: 'Inspector', exact: true }).click();
+  const source = page.getByTestId('source-editor').filter({ visible: true });
+  await expect(source.locator('.cm-content')).toContainText('namespace compact');
+  await testInfo.attach('compact-editor', { body: await page.screenshot(), contentType: 'image/png' });
+});
+
 for (const baseFirst of [false, true]) {
   test(`split-file dispatch edits and projects the base with base first=${baseFirst}`, async ({ page }) => {
     await page.goto('./');

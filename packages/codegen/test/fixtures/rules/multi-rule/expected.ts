@@ -218,7 +218,7 @@ export function validateIsActive(account: RuneFuncData<AccountShape>): boolean {
 }
 
 export function validateIsPremium(account: RuneFuncData<AccountShape>): boolean {
-  return rune.equals(account.Account?.tier, 'premium');
+  return (rune.valueKey(account.Account?.tier) === rune.valueKey('premium'));
 }
 
 export const runeReportRules = {

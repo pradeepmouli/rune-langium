@@ -239,17 +239,11 @@ export function isBox(x: unknown): x is Box {
 
 
 export function MakePoint(input: { x: number; y: number }): RuneFuncData<PointShape> {
-  input = { ...input, x: ((value) => { if (value == null) throw new Error("Argument 'x' requires a value"); return value; })(rune.single(input.x)), y: ((value) => { if (value == null) throw new Error("Argument 'y' requires a value"); return value; })(rune.single(input.y)) };
-  let result: RuneFuncData<PointShape> | undefined;
-  result = rune.single({ x: ((value) => { if (value == null) throw new Error("Argument 'x' requires a value"); return value; })(rune.single(input.x)), y: ((value) => { if (value == null) throw new Error("Argument 'y' requires a value"); return value; })(rune.single(input.y)) });
-  if (result == null) throw new Error("Function 'MakePoint' produced no result");
+  const result = { x: input.x, y: input.y };
   return result;
 }
 
 export function MakeEmptyBox(input: { w: number }): RuneFuncData<BoxShape> {
-  input = { ...input, w: ((value) => { if (value == null) throw new Error("Argument 'w' requires a value"); return value; })(rune.single(input.w)) };
-  let result: RuneFuncData<BoxShape> | undefined;
-  result = rune.single({ origin: ((value) => { if (value == null) throw new Error("Argument 'origin' requires a value"); return value; })(rune.single({})), width: ((value) => { if (value == null) throw new Error("Argument 'width' requires a value"); return value; })(rune.single(input.w)) });
-  if (result == null) throw new Error("Function 'MakeEmptyBox' produced no result");
+  const result = { origin: {}, width: input.w };
   return result;
 }

@@ -181,17 +181,15 @@ const rune = {
 
 
 export function Double(input: { n: number }): number {
-  input = { ...input, n: ((value) => { if (value == null) throw new Error("Argument 'n' requires a value"); return value; })(rune.single(input.n)) };
   let result: number | undefined;
-  result = rune.single(rune.binary(input.n, input.n, (a, b) => a + b));
+  result = rune.binary(input.n, input.n, (a, b) => a + b);
   if (result == null) throw new Error("Function 'Double' produced no result");
   return result;
 }
 
 export function Triple(input: { n: number }): number {
-  input = { ...input, n: ((value) => { if (value == null) throw new Error("Argument 'n' requires a value"); return value; })(rune.single(input.n)) };
   let result: number | undefined;
-  result = rune.single(rune.binary(rune.binary(input.n, input.n, (a, b) => a + b), input.n, (a, b) => a + b));
+  result = rune.binary(rune.binary(input.n, input.n, (a, b) => a + b), input.n, (a, b) => a + b);
   if (result == null) throw new Error("Function 'Triple' produced no result");
   return result;
 }

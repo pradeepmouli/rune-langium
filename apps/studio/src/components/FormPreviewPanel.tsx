@@ -263,10 +263,8 @@ export const FormPreviewPanel = withInstrumentation(
           return;
         }
         if (schema.kind === 'function') {
-          // A function is not a Data/Choice instance. Its generated callable
-          // checks the input contract when Run executes; sending its FQN to
-          // instance:validate asks the standalone Data schema emitter for a
-          // target it cannot resolve.
+          // Run validates function inputs in the worker before execution.
+          // instance:validate remains the Data/Choice validation entry point.
           updateSampleValues(schema.targetId, nextValues, false);
           return;
         }

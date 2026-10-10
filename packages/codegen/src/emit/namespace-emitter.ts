@@ -31,6 +31,8 @@ import type { NamespaceWalkResult } from './namespace-walker.js';
  */
 export interface NamespaceEmitterOptions extends GeneratorOptions {
   suppressBoilerplate?: boolean;
+  /** Validate the adapted function input structure without evaluating Data conditions. */
+  functionInputs?: boolean;
 }
 
 export interface NamespaceEmitter {

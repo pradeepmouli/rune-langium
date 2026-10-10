@@ -2,7 +2,7 @@
 // Copyright (c) 2026 Pradeep Mouli
 
 import { describe, it, expect } from 'vitest';
-import { parseExpression } from '@rune-langium/core';
+import { parseExpression, isData, isRosettaModel } from '@rune-langium/core';
 import { transpileExpression, type ExpressionTranspilerContext } from '../../src/expr/transpiler.js';
 import { RUNTIME_HELPER_JS_SOURCE } from '../../src/helpers.js';
 import ts from 'typescript-classic';
@@ -37,6 +37,24 @@ function evaluate(text: string, data: unknown = {}) {
 }
 
 describe('native operators in the canonical emitter', () => {
+  it('keeps required fields of the current validated Data record native', async () => {
+    const [func] = await linkedFunctions(`namespace native.data
+ type Value:
+  amount int (1..1)
+  condition Increment: amount + 1 > amount
+ func Anchor:
+  output: result int (1..1)
+  set result: 1
+`);
+    const model = AstUtils.getDocument(func!).parseResult.value;
+    if (!isRosettaModel(model)) throw new Error('Expected a model');
+    const data = model.elements.find(isData)!;
+    const expression = transpileExpression(data.conditions[0]!.expression!, context);
+    expect(expression).not.toContain('rune.binary');
+    expect(expression).not.toContain('rune.compare');
+    expect(new Function('data', `return ${expression};`)({ amount: 2 })).toBe(true);
+  });
+
   it('lifts required outputs and aliases because declaration cardinality does not prove initialization', async () => {
     const [func] = await linkedFunctions(`namespace native.initialization
 func RequiredOutput:
@@ -103,7 +121,7 @@ func RequiredOutput:
     expect(evaluate('[1, 2] = [2, 1]')).toBe(false);
     expect(evaluate('a = b', { a: { value: 1 }, b: { value: 1 } })).toBe(true);
     expect(evaluate('a = b', { a: undefined, b: null })).toBe(true);
-    expect(render('a = b')).toBe('rune.equals(data.a, data.b)');
+    expect(render('a = b')).toBe('(rune.valueKey(data.a) === rune.valueKey(data.b))');
     expect(render('[1, 2] = [1, 2]')).toMatch(/^rune\.equals\([^]*, "all"\)$/);
     expect(render('[1, 2] = [1, 2]')).not.toContain('=>');
   });

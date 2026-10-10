@@ -77,7 +77,7 @@ import {
   type FieldMetadataKind
 } from './metadata-runtime.js';
 import { renderMetadataOperation } from './metadata-operation.js';
-import { normalizeCardinalityValue } from './cardinality.js';
+import { adaptCardinalityValue } from './cardinality.js';
 import { decodeCardinality } from '../emit/base-namespace-emitter.js';
 import { expressionMetadataKind, choiceSelectionMetadata } from './metadata-type.js';
 import { functionOutput, resolveFuncValueTypeTs, type FuncTypeNameResolver } from '../types/func.js';
@@ -100,7 +100,7 @@ import { renderResolvedFunctionCall } from './function-call.js';
 import { renderCollectionOperation } from './collection-operations.js';
 import { callableExportName, type CallableDeclaration } from '../emit/callable-names.js';
 import type { GeneratorDiagnostic } from '../types.js';
-import { nativeEqualityOperands, nativeScalarOperands } from './scalar-operators.js';
+import { nativeEqualityOperands, nativeScalarOperands, scalarEqualityOperands } from './scalar-operators.js';
 
 // ---------------------------------------------------------------------------
 // Operator precedence table — copied from expression-node-to-dsl.ts (prior art).
@@ -894,10 +894,11 @@ export function transpileComparison(expr: RosettaExpression, ctx: ExpressionTran
     const right = transpileExpression(expr.right, ctx);
     if (nativeEqualityOperands(expr.left, expr.right)) {
       // Widen the proven primitive so nested predicates do not trigger TS2367.
-      const kind = nativeScalarOperands(expr.left, expr.right)!;
-      return `((${left} as ${kind}) ${expr.operator === '<>' ? '!==' : '==='} ${right})`;
+      const kind = scalarEqualityOperands(expr.left, expr.right)!;
+      const type = nativeScalarOperands(expr.left, expr.right) ? kind : `${kind} | undefined`;
+      return `((${left} as ${type}) ${expr.operator === '<>' ? '!==' : '==='} ${right})`;
     }
-    return `${expr.operator === '<>' ? '!' : ''}rune.equals(${left}, ${right})`;
+    return `(rune.valueKey(${left}) ${expr.operator === '<>' ? '!==' : '==='} rune.valueKey(${right}))`;
   }
   if (isComparisonOperation(expr)) {
     const left = expr.left ? transpileExpression(expr.left, ctx) : ctx.selfName;
@@ -1371,7 +1372,12 @@ function prepareFunctionArgument(
     : ctx.implicitMetadata?.kind;
   if (!argument && sourceKind && !kind) value = unwrapMetadata(value, ctx.implicitMetadata?.many ?? false);
   if (ctx.emitMode.startsWith('ts-') && (cardinality || (sourceKind === 'reference' && !kind))) {
-    value = normalizeCardinalityValue(value, cardinality ?? { lower: 1, upper: 1 }, `Argument '${parameter.name}'`);
+    value = adaptCardinalityValue(
+      value,
+      cardinality ?? { lower: 1, upper: 1 },
+      `Argument '${parameter.name}'`,
+      argument
+    );
   } else if (many) {
     value = `((value) => value == null ? [] : Array.isArray(value) ? value : [value])(${value})`;
   }

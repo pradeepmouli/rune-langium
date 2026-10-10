@@ -181,10 +181,9 @@ const rune = {
 
 
 export function AliasFunc(input: { value: number }): number {
-  input = { ...input, value: ((value) => { if (value == null) throw new Error("Argument 'value' requires a value"); return value; })(rune.single(input.value)) };
   let result: number | undefined;
   const x = input.value;
-  result = rune.single(x);
+  result = x;
   if (result == null) throw new Error("Function 'AliasFunc' produced no result");
   return result;
 }

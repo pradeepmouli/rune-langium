@@ -181,9 +181,8 @@ const rune = {
 
 
 export function AddTwo(input: { a: number; b: number }): number {
-  input = { ...input, a: ((value) => { if (value == null) throw new Error("Argument 'a' requires a value"); return value; })(rune.single(input.a)), b: ((value) => { if (value == null) throw new Error("Argument 'b' requires a value"); return value; })(rune.single(input.b)) };
   let result: number | undefined;
-  result = rune.single(rune.binary(input.a, input.b, (a, b) => a + b));
+  result = rune.binary(input.a, input.b, (a, b) => a + b);
   if (result == null) throw new Error("Function 'AddTwo' produced no result");
   return result;
 }

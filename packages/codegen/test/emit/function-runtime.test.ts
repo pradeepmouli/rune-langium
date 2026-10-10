@@ -10,7 +10,12 @@ import { Temporal } from '@js-temporal/polyfill';
 import { generate } from '../../src/export.js';
 import { mixedChoiceSource, mixedChoiceCases } from '../helpers/mixed-choice.js';
 
-async function compile(source: string | string[], typeAssertions = '', checkLinks = false) {
+async function compile(
+  source: string | string[],
+  typeAssertions = '',
+  checkLinks = false,
+  onSource?: (source: string) => void
+) {
   const { RuneDsl } = createRuneDslServices();
   const docs = (Array.isArray(source) ? source : [source]).map((content, index) =>
     RuneDsl.shared.workspace.LangiumDocumentFactory.fromString(
@@ -24,6 +29,7 @@ async function compile(source: string | string[], typeAssertions = '', checkLink
   const outputs = await generate(docs, { target: 'typescript', typescript: { layout: 'single-file' } });
   expect(outputs.flatMap((output) => output.diagnostics.filter((d) => d.severity === 'error'))).toEqual([]);
   const code = outputs[0]!.content;
+  onSource?.(code);
   const fileName = resolve(import.meta.dirname, 'generated-function-runtime.ts');
   const options: ts.CompilerOptions = {
     strict: true,
@@ -49,6 +55,94 @@ async function compile(source: string | string[], typeAssertions = '', checkLink
 }
 
 describe('generated TypeScript function execution', () => {
+  it('operates directly on validated JSON, preserving optional access and structural/collection equality', async () => {
+    const declarations = new Map<string, string>();
+    const funcs = await compile(
+      `namespace test.validatedJson
+enum Kind:
+ A
+ B
+type Child:
+ value int (1..1)
+type Root:
+ child Child (0..1)
+func Read:
+ inputs: source Root (1..1)
+ output: result int (0..1)
+ set result: source -> child -> value
+func ReadDeep:
+ inputs: source Root (1..1)
+ output: result int (0..1)
+ set result: source ->> value
+func Equal:
+ inputs: left Child (1..1) right Child (1..1)
+ output: result boolean (1..1)
+ set result: left -> value = right -> value
+func OptionalEqual:
+ inputs: left int (0..1) right int (0..1)
+ output: result boolean (1..1)
+ set result: left = right
+func EnumEqual:
+ inputs: left Kind (1..1) right Kind (1..1)
+ output: result boolean (1..1)
+ set result: left = right
+func Echo:
+ inputs: source Child (1..1)
+ output: result Child (1..1)
+ set result: source
+func Forward:
+ inputs: source Child (1..1)
+ output: result Child (1..1)
+ set result: Echo(source)
+func SameObject:
+ inputs: left Root (1..1) right Root (1..1)
+ output: result boolean (1..1)
+ set result: left = right
+func SameList:
+ inputs: left int (0..*) right int (0..*)
+ output: result boolean (1..1)
+ set result: left = right
+func ComputedNaN:
+ output: result boolean (1..1)
+ set result: (0 / 0) = (0 / 0)
+`,
+      '',
+      false,
+      (source) => {
+        const file = ts.createSourceFile('generated.ts', source, ts.ScriptTarget.ES2022, true);
+        for (const statement of file.statements) {
+          if (ts.isFunctionDeclaration(statement) && statement.name)
+            declarations.set(statement.name.text, statement.getText(file));
+        }
+      }
+    );
+    for (const name of ['Read', 'ReadDeep', 'Equal', 'OptionalEqual', 'EnumEqual', 'Echo', 'Forward']) {
+      const emitted = declarations.get(name)!;
+      expect(emitted).not.toMatch(/input =|rune\.(single|list|equals|normalize\w*|get)\(/);
+    }
+    expect(declarations.get('Read')).toContain('input.source?.child?.value');
+    expect(declarations.get('ReadDeep')).toContain('input.source?.child?.value');
+    expect(declarations.get('Echo')).toContain('return input.source;');
+    expect(declarations.get('Equal')).toContain('===');
+    expect(declarations.get('SameObject')).toContain('rune.valueKey');
+    expect(declarations.get('SameObject')).not.toContain('rune.equals');
+    expect(declarations.get('SameList')).toContain('rune.equals');
+    const child = Object.freeze({ value: 10 });
+    expect(funcs.Read!({ source: { child } })).toBe(10);
+    expect(funcs.Read!({ source: {} })).toBeUndefined();
+    expect(funcs.ReadDeep!({ source: {} })).toBeUndefined();
+    expect(funcs.Echo!(Object.freeze({ source: child }))).toBe(child);
+    expect(funcs.Forward!({ source: child })).toBe(child);
+    expect(funcs.Equal!({ left: child, right: { value: 10 } })).toBe(true);
+    expect(funcs.Equal!({ left: child, right: { value: 11 } })).toBe(false);
+    expect(funcs.OptionalEqual!({})).toBe(true);
+    expect(funcs.OptionalEqual!({ left: 10 })).toBe(false);
+    expect(funcs.EnumEqual!({ left: 'A', right: 'B' })).toBe(false);
+    expect(funcs.SameObject!({ left: { child }, right: { child: { value: 10 } } })).toBe(true);
+    expect(funcs.SameList!({ left: [1, 2], right: [2, 1] })).toBe(false);
+    expect(funcs.SameList!({ left: [1, 2], right: [1, 2] })).toBe(true);
+    expect(funcs.ComputedNaN!({})).toBe(true);
+  });
   it('selects basic, calendar, enum and alias Choice arms while retaining enum-value switches', async () => {
     const funcs = await compile(
       [
@@ -197,6 +291,21 @@ func Amount:
     ]);
     expect(funcs.Amount!({ index: { rate: { amount: 7 } } })).toBe(7);
     expect(funcs.Amount!({ index: { fixed: { amount: 2 } } })).toBe(0);
+  });
+
+  it('checks required constructor fields read through implicit collection lookups', async () => {
+    const funcs = await compile(`namespace test.constructedBounds
+type Entry:
+ amount int (1..1)
+type Result:
+ amount int (1..1)
+func Map:
+ inputs: entries Entry (0..*)
+ output: result Result (0..*)
+ set result: entries extract Result { amount: amount }
+`);
+    expect(funcs.Map!({ entries: [{ amount: 2 }] })).toEqual([{ amount: 2 }]);
+    expect(() => funcs.Map!({ entries: [{}] })).toThrow("Argument 'amount' requires a value");
   });
 
   it('retains element types through nested collection projections', async () => {
@@ -709,9 +818,11 @@ func Pick:
         ] as const
       ).map(([lower, upper]) => ({ annotation, lower, upper }))
     )
-  )('checks function inputs lower=$lower upper=$upper ($annotation)', async ({ annotation, lower, upper }) => {
-    const many = upper === null || upper > 1;
-    const funcs = await compile(`namespace test.inputBounds
+  )(
+    'trusts validated inputs and checks computed arguments lower=$lower upper=$upper ($annotation)',
+    async ({ annotation, lower, upper }) => {
+      const many = upper === null || upper > 1;
+      const funcs = await compile(`namespace test.inputBounds
 func Bounded:
  inputs: values int (${lower}..${upper ?? '*'})
  ${annotation ? `[metadata ${annotation}]` : ''}
@@ -722,41 +833,42 @@ func Call:
  ${annotation ? `[metadata ${annotation}]` : ''}
  output: result int (1..1)
  set result: Bounded(values${many ? ' filter [item = 1]' : ''})`);
-    const wrap = (value: number) =>
-      annotation === 'scheme' ? { value, meta: {} } : annotation === 'reference' ? { value } : value;
-    for (const name of ['Bounded', 'Call']) {
-      const fn = funcs[name]!;
-      if (upper === 0) {
-        expect(fn({})).toBe(42);
-        expect(() => fn({ values: wrap(1) })).toThrow();
-        continue;
-      }
-      const values = many ? Array(Math.max(lower, 1)).fill(1).map(wrap) : wrap(1);
-      const input = Object.freeze({ values });
-      expect(fn(input)).toBe(42);
-      expect(input.values).toBe(values);
-      if (lower > 0) {
-        expect(() => fn({})).toThrow();
-        if (many)
+      const wrap = (value: number) =>
+        annotation === 'scheme' ? { value, meta: {} } : annotation === 'reference' ? { value } : value;
+      for (const name of ['Bounded', 'Call']) {
+        const fn = funcs[name]!;
+        if (upper === 0) {
+          expect(fn({})).toBe(42);
+          if (name === 'Call') expect(() => fn({ values: wrap(1) })).toThrow();
+          continue;
+        }
+        const values = many ? Array(Math.max(lower, 1)).fill(1).map(wrap) : wrap(1);
+        const input = Object.freeze({ values });
+        expect(fn(input)).toBe(42);
+        expect(input.values).toBe(values);
+        if (lower > 0 && name === 'Call') {
+          expect(() => fn({})).toThrow();
+          if (many)
+            expect(() =>
+              fn({
+                values: Array(lower - 1)
+                  .fill(1)
+                  .map(wrap)
+              })
+            ).toThrow();
+        } else if (lower === 0) expect(fn({})).toBe(42);
+        if (many && upper !== null && name === 'Call')
           expect(() =>
             fn({
-              values: Array(lower - 1)
+              values: Array(upper + 1)
                 .fill(1)
                 .map(wrap)
             })
           ).toThrow();
-      } else expect(fn({})).toBe(42);
-      if (many && upper !== null)
-        expect(() =>
-          fn({
-            values: Array(upper + 1)
-              .fill(1)
-              .map(wrap)
-          })
-        ).toThrow();
+      }
+      if (many && lower > 0) expect(() => funcs.Call!({ values: [wrap(-1), wrap(-2)] })).toThrow();
     }
-    if (many && lower > 0) expect(() => funcs.Call!({ values: [wrap(-1), wrap(-2)] })).toThrow();
-  });
+  );
 
   it.each(
     ['', 'scheme', 'reference'].flatMap((annotation) =>
