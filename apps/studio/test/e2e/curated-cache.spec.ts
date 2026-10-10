@@ -18,10 +18,7 @@ async function fixtures() {
     { name: 'example', namespace, content: source }
   ];
   const documents = files.map((file) =>
-    RuneDsl.shared.workspace.LangiumDocumentFactory.fromString(
-      file.content,
-      URI.parse(`file:///cdm/${file.name}.rosetta`)
-    )
+    RuneDsl.shared.workspace.LangiumDocumentFactory.fromString(file.content, URI.parse(`cdm/${file.name}.rosetta`))
   );
   await RuneDsl.shared.workspace.DocumentBuilder.build(documents);
   expect(documents.flatMap((doc) => doc.diagnostics ?? [])).toEqual([]);
@@ -48,10 +45,11 @@ async function load(page: Page) {
         requireCuratedHydration: true
       });
       const linked = await workspace.linkDocument('cdm/example.rosetta');
+      const linkedBase = await workspace.linkDocument('cdm/base.rosetta');
       const loadedSource = await workspace.loadCuratedNamespaceSource('cdm', 'latest', namespace, artifactKey);
       return {
-        linked: linked.linked,
-        errors: linked.errors,
+        linked: linked.linked && linkedBase.linked,
+        errors: [...linked.errors, ...linkedBase.errors],
         paths: result.curatedRefOnlyFiles.cdm.map((file: { path: string }) => file.path),
         source: loadedSource.documents
       };
@@ -148,3 +146,32 @@ test('a lost persisted payload causes a normal refetch and preserves cross-names
   expect(await load(page)).toEqual(first);
   expect(requests.map((request) => request.returned)).toEqual([2, 0, 2]);
 });
+
+for (const { poisonedNamespace, serializedModel } of [
+  { poisonedNamespace: namespace, serializedModel: '{broken' },
+  { poisonedNamespace: 'cached.base', serializedModel: '{broken' },
+  { poisonedNamespace: namespace, serializedModel: '{"$type":"Data","name":"WrongRoot","attributes":[]}' }
+]) {
+  test(`a corrupt deferred model ${serializedModel} in ${poisonedNamespace} is evicted and refetched on first link`, async ({
+    page,
+    context
+  }) => {
+    const documents = await fixtures();
+    const { requests } = await serveArtifacts(context, documents);
+    await page.goto('./');
+    const first = await load(page);
+    await page.evaluate(
+      async ({ document, serializedModel }) => {
+        const modulePath = '/src/services/curated-artifact-cache.ts';
+        const { curatedArtifactCache } = await import(modulePath);
+        await curatedArtifactCache.putDocuments(document.artifactKey, [{ ...document, serializedModel }]);
+      },
+      { document: documents.find((doc) => doc.namespace === poisonedNamespace)!, serializedModel }
+    );
+    await page.reload();
+    expect(await load(page)).toEqual(first);
+    await page.reload();
+    expect(await load(page)).toEqual(first);
+    expect(requests.map((request) => request.returned)).toEqual([2, 0, 2, 0]);
+  });
+}

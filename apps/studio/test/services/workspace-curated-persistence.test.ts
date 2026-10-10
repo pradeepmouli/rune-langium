@@ -7,10 +7,13 @@ import { afterEach, beforeEach, expect, it, vi } from 'vitest';
 import { curatedArtifactCache } from '../../src/services/curated-artifact-cache.js';
 import {
   loadCuratedNamespaceSource,
+  linkDocument,
   parseWorkspaceViaRouter,
-  resetCuratedDocumentCache
+  resetCuratedDocumentCache,
+  subscribeCuratedCacheRecovery,
+  _resetParserWorkerForTests
 } from '../../src/services/workspace.js';
-import type { HydrateRequest } from '../../src/workers/parser-worker.js';
+import type { HydrateRequest, WorkerRequest } from '../../src/workers/parser-worker.js';
 
 const keyFor = (digest = 'a'.repeat(12), namespace = 'cached.example') =>
   JSON.stringify([
@@ -41,15 +44,110 @@ const knownKeys = (mock: ReturnType<typeof vi.fn>, call = 0): string[] =>
   JSON.parse(mock.mock.calls[call]![1].body).knownCuratedArtifacts;
 
 beforeEach(async () => {
+  _resetParserWorkerForTests();
   await curatedArtifactCache.close();
   await deleteDB('rune-curated-artifacts');
   resetCuratedDocumentCache();
 });
 
 afterEach(async () => {
+  _resetParserWorkerForTests();
   resetCuratedDocumentCache();
   await curatedArtifactCache.close();
   vi.unstubAllGlobals();
+});
+
+function deferredWorker() {
+  const received: WorkerRequest[] = [];
+  class DeferredWorker extends EventTarget {
+    documents: HydrateRequest['documents'] = [];
+    postMessage(request: WorkerRequest) {
+      received.push(request);
+      if (request.type === 'hydrate') this.documents = request.documents;
+      const invalid = this.documents.filter((doc) => doc.serializedModel === '{broken');
+      queueMicrotask(() =>
+        this.dispatchEvent(
+          new MessageEvent('message', {
+            data:
+              request.type === 'hydrate'
+                ? { type: 'hydrateResult', id: request.id, ok: true }
+                : {
+                    type: 'linkDocumentResult',
+                    id: request.id,
+                    linked: invalid.length === 0,
+                    errors: invalid.length ? ['Invalid serialized model'] : [],
+                    newModels: [],
+                    invalidArtifactKeys: invalid.map((doc) => doc.artifactKey)
+                  }
+          })
+        )
+      );
+    }
+    terminate() {}
+  }
+  vi.stubGlobal('Worker', DeferredWorker);
+  return received;
+}
+
+it('coalesces concurrent deferred-link failures into one refetch and publishes the repaired workspace', async () => {
+  const key = keyFor();
+  await curatedArtifactCache.putDocuments(key, [{ ...document(key), serializedModel: '{broken' }]);
+  const received = deferredWorker();
+  const fetch = vi
+    .fn()
+    .mockResolvedValueOnce(response(key))
+    .mockResolvedValueOnce(response(key, [document(key)]));
+  vi.stubGlobal('fetch', fetch);
+  const recovered = vi.fn();
+  const unsubscribe = subscribeCuratedCacheRecovery(recovered);
+  try {
+    await parseWorkspaceViaRouter([], options);
+    const links = await Promise.all([linkDocument(document(key).uri), linkDocument(document(key).uri)]);
+    expect(links.every((result) => result.linked)).toBe(true);
+    expect(fetch).toHaveBeenCalledTimes(2);
+    expect(knownKeys(fetch, 1)).toEqual([]);
+    expect(received.filter((request) => request.type === 'hydrate')).toHaveLength(2);
+    expect(recovered).toHaveBeenCalledTimes(1);
+    expect(recovered.mock.calls[0]![0].curatedRefOnlyFiles.cdm[0].serializedModelJson).toBe(
+      document(key).serializedModel
+    );
+    expect(await curatedArtifactCache.documents(key)).toEqual([document(key)]);
+  } finally {
+    unsubscribe();
+  }
+});
+
+it('does not hydrate or publish an old workspace when it changes during a cache-recovery fetch', async () => {
+  const key = keyFor();
+  await curatedArtifactCache.putDocuments(key, [{ ...document(key), serializedModel: '{broken' }]);
+  const received = deferredWorker();
+  const pending = Promise.withResolvers<Response>();
+  const fetch = vi.fn().mockResolvedValueOnce(response(key)).mockReturnValueOnce(pending.promise);
+  vi.stubGlobal('fetch', fetch);
+  const recovered = vi.fn();
+  const unsubscribe = subscribeCuratedCacheRecovery(recovered);
+  try {
+    await parseWorkspaceViaRouter([], options);
+    const linking = linkDocument(document(key).uri);
+    await vi.waitFor(() => expect(fetch).toHaveBeenCalledTimes(2));
+    resetCuratedDocumentCache();
+    pending.resolve(response(key, [document(key)]));
+    expect((await linking).linked).toBe(false);
+    expect(received.filter((request) => request.type === 'hydrate')).toHaveLength(1);
+    expect(recovered).not.toHaveBeenCalled();
+  } finally {
+    unsubscribe();
+  }
+});
+
+it('does not retry a deferred failure from freshly downloaded models as a cache failure', async () => {
+  deferredWorker();
+  const key = keyFor();
+  const fetch = vi.fn().mockResolvedValue(response(key, [{ ...document(key), serializedModel: '{broken' }]));
+  vi.stubGlobal('fetch', fetch);
+  await parseWorkspaceViaRouter([], options);
+  expect((await linkDocument(document(key).uri)).linked).toBe(false);
+  expect(fetch).toHaveBeenCalledTimes(1);
 });
 
 it('advertises stored receipts after a tab-memory reset and reconstructs the required document set', async () => {
