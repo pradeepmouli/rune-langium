@@ -20,7 +20,8 @@ import {
   mergeModelFiles,
   mergeCuratedRefOnlyFiles,
   loadCuratedNamespaceSource,
-  subscribeCuratedCacheRecovery
+  subscribeCuratedCacheRecovery,
+  invalidateCuratedCacheRecovery
 } from './services/workspace.js';
 import { useModelStore } from './store/model-store.js';
 import { usePreviewStore } from './store/preview-store.js';
@@ -347,6 +348,7 @@ function AppContent() {
   }, [pendingHydration, files, applyParseResult, reportWorkspaceError, showLoadingToast, dismissToast]);
 
   const invalidateWorkspaceParses = useCallback(() => {
+    invalidateCuratedCacheRecovery();
     workspaceEpochRef.current += 1;
     editParseTokenRef.current += 1;
     modelParseTokenRef.current += 1;

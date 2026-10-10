@@ -94,13 +94,22 @@ function routedWorkspaceResult(response: ParseWorkspaceResponse): ParseWorkspace
   };
 }
 
+/** Cancels workspace-owned recovery while retaining reusable immutable artifacts. */
+export const invalidateCuratedCacheRecovery = withInstrumentation(
+  function invalidateCuratedCacheRecovery(): void {
+    routedParseRevision += 1;
+    curatedLinkRecovery = undefined;
+  },
+  { op: 'invalidateCuratedCacheRecovery' }
+);
+
 export const resetCuratedDocumentCache = withInstrumentation(
   function resetCuratedDocumentCache(): void {
     curatedCacheEpoch += 1;
+    invalidateCuratedCacheRecovery();
     curatedDocumentCache.clear();
     curatedSourceCache.clear();
     restoredCuratedKeys.clear();
-    curatedLinkRecovery = undefined;
   },
   { op: 'resetCuratedDocumentCache' }
 );
@@ -646,8 +655,7 @@ export const parseWorkspaceFiles = withInstrumentation(
     files: WorkspaceFile[],
     options: { hydrateNamespaces?: string[]; requireCuratedHydration?: boolean } = {}
   ): Promise<ParseWorkspaceFilesResult> {
-    routedParseRevision += 1;
-    curatedLinkRecovery = undefined;
+    invalidateCuratedCacheRecovery();
     const capturedFiles = files.map((file) => ({ ...file }));
     const wantsHydration = (options.hydrateNamespaces?.length ?? 0) > 0;
     if (files.length === 0 && !wantsHydration) {
@@ -746,8 +754,8 @@ export const parseWorkspaceViaRouter = withInstrumentation(
     retryCachedHydration = true
   ): Promise<ParseWorkspaceResponse> {
     const cacheEpoch = curatedCacheEpoch;
-    const revision = ++routedParseRevision;
-    curatedLinkRecovery = undefined;
+    invalidateCuratedCacheRecovery();
+    const revision = routedParseRevision;
     const assertCurrentRecovery = () => {
       if (!retryCachedHydration && (revision !== routedParseRevision || cacheEpoch !== curatedCacheEpoch)) {
         throw new Error('Curated cache recovery was superseded by a newer workspace parse');

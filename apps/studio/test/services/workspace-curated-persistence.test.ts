@@ -10,10 +10,11 @@ import {
   linkDocument,
   parseWorkspaceViaRouter,
   resetCuratedDocumentCache,
+  invalidateCuratedCacheRecovery,
   subscribeCuratedCacheRecovery,
   _resetParserWorkerForTests
 } from '../../src/services/workspace.js';
-import type { HydrateRequest, WorkerRequest } from '../../src/workers/parser-worker.js';
+import { deferredCuratedWorker } from '../setup/deferred-curated-worker.js';
 
 const keyFor = (digest = 'a'.repeat(12), namespace = 'cached.example') =>
   JSON.stringify([
@@ -57,42 +58,10 @@ afterEach(async () => {
   vi.unstubAllGlobals();
 });
 
-function deferredWorker() {
-  const received: WorkerRequest[] = [];
-  class DeferredWorker extends EventTarget {
-    documents: HydrateRequest['documents'] = [];
-    postMessage(request: WorkerRequest) {
-      received.push(request);
-      if (request.type === 'hydrate') this.documents = request.documents;
-      const invalid = this.documents.filter((doc) => doc.serializedModel === '{broken');
-      queueMicrotask(() =>
-        this.dispatchEvent(
-          new MessageEvent('message', {
-            data:
-              request.type === 'hydrate'
-                ? { type: 'hydrateResult', id: request.id, ok: true }
-                : {
-                    type: 'linkDocumentResult',
-                    id: request.id,
-                    linked: invalid.length === 0,
-                    errors: invalid.length ? ['Invalid serialized model'] : [],
-                    newModels: [],
-                    invalidArtifactKeys: invalid.map((doc) => doc.artifactKey)
-                  }
-          })
-        )
-      );
-    }
-    terminate() {}
-  }
-  vi.stubGlobal('Worker', DeferredWorker);
-  return received;
-}
-
 it('coalesces concurrent deferred-link failures into one refetch and publishes the repaired workspace', async () => {
   const key = keyFor();
   await curatedArtifactCache.putDocuments(key, [{ ...document(key), serializedModel: '{broken' }]);
-  const received = deferredWorker();
+  const received = deferredCuratedWorker();
   const fetch = vi
     .fn()
     .mockResolvedValueOnce(response(key))
@@ -120,7 +89,7 @@ it('coalesces concurrent deferred-link failures into one refetch and publishes t
 it('does not hydrate or publish an old workspace when it changes during a cache-recovery fetch', async () => {
   const key = keyFor();
   await curatedArtifactCache.putDocuments(key, [{ ...document(key), serializedModel: '{broken' }]);
-  const received = deferredWorker();
+  const received = deferredCuratedWorker();
   const pending = Promise.withResolvers<Response>();
   const fetch = vi.fn().mockResolvedValueOnce(response(key)).mockReturnValueOnce(pending.promise);
   vi.stubGlobal('fetch', fetch);
@@ -140,8 +109,34 @@ it('does not hydrate or publish an old workspace when it changes during a cache-
   }
 });
 
+it('retains session artifacts and selected source when workspace recovery is invalidated', async () => {
+  const key = keyFor();
+  deferredCuratedWorker();
+  const fetch = vi
+    .fn()
+    .mockResolvedValueOnce(response(key, [document(key)]))
+    .mockResolvedValueOnce(
+      Response.json({ artifactKey: key, documents: [{ uri: document(key).uri, content: 'original' }] })
+    )
+    .mockResolvedValueOnce(response(key));
+  vi.stubGlobal('fetch', fetch);
+  await parseWorkspaceViaRouter([], options);
+  await loadCuratedNamespaceSource('cdm', 'latest', 'cached.example', key);
+  const read = vi.spyOn(curatedArtifactCache, 'documents');
+  try {
+    invalidateCuratedCacheRecovery();
+    const restored = await parseWorkspaceViaRouter([], options);
+    expect(knownKeys(fetch, 2)).toEqual([key]);
+    expect(read).not.toHaveBeenCalled();
+    expect(restored.curatedRefOnlyFiles?.cdm?.[0]).toMatchObject({ content: 'original', sourceLoaded: true });
+    expect((await linkDocument(document(key).uri)).linked).toBe(true);
+  } finally {
+    read.mockRestore();
+  }
+});
+
 it('does not retry a deferred failure from freshly downloaded models as a cache failure', async () => {
-  deferredWorker();
+  deferredCuratedWorker();
   const key = keyFor();
   const fetch = vi.fn().mockResolvedValue(response(key, [{ ...document(key), serializedModel: '{broken' }]));
   vi.stubGlobal('fetch', fetch);
